@@ -191,9 +191,10 @@ this is project for work related to my personal workflows. that means whatever p
 > 
 > ### Done/01-pwf/stepsDone
 > A record of steps completed so far.
-> [[Prods/01-pwf/pwf.view|pwf.view]]
+> [[pwf.views|pwf.views]]
 > [[Prods/01-pwf/pwf.TODO|pwf.TODO]]
-> [[Prods/01-pwf/stepsDone|stepsDone]]
+> [[pwf.TODO|pwf.TODO]]
 > 
 > ```
 > 
+
