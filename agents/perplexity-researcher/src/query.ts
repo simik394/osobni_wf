@@ -27,9 +27,9 @@ export async function runQuery(queryText: string) {
 
     try {
         await page.goto(config.url);
-        await page.waitForLoadState('networkidle');
+        // await page.waitForLoadState('networkidle'); // Too slow
 
-        // Wait for input
+        // Wait for input - faster check
         console.log('Looking for query input...');
 
         const selectors = Array.isArray(config.selectors.queryInput)
@@ -39,13 +39,13 @@ export async function runQuery(queryText: string) {
         let inputSelector = '';
         for (const selector of selectors) {
             try {
-                console.log(`Trying selector: ${selector}`);
-                await page.waitForSelector(selector, { timeout: 5000 });
+                // Reduced timeout for faster failover
+                await page.waitForSelector(selector, { timeout: 2000 });
                 inputSelector = selector;
                 console.log(`Found input with selector: ${selector}`);
                 break;
             } catch (e) {
-                console.log(`Selector ${selector} not found.`);
+                // Continue to next selector
             }
         }
 
@@ -60,12 +60,46 @@ export async function runQuery(queryText: string) {
         await page.keyboard.press('Enter');
         console.log('Query submitted. Waiting for answer...');
 
-        // Wait for answer container
-        await page.waitForSelector(config.selectors.answerContainer, { timeout: 60000 });
+        // Wait for answer container to appear
+        await page.waitForSelector(config.selectors.answerContainer, { timeout: 30000 });
 
-        // Wait for generation to finish
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(5000); // Extra buffer
+        // Faster completion detection:
+        // 1. Check for "Stop generating" button disappearance (primary signal)
+        // 2. Fallback to text stability check
+        console.log('Waiting for answer generation to complete...');
+
+        try {
+            // If "Stop generating" button exists, wait for it to detach
+            const stopButton = await page.$('button:has-text("Stop generating")');
+            if (stopButton) {
+                console.log('Found "Stop generating" button, waiting for it to disappear...');
+                await page.waitForSelector('button:has-text("Stop generating")', { state: 'detached', timeout: 60000 });
+                console.log('Generation complete (button disappeared).');
+            } else {
+                // Fallback: wait a bit and check stability
+                console.log('No "Stop generating" button found, using stability check...');
+                let lastText = '';
+                let stableCount = 0;
+                const maxRetries = 60;
+
+                for (let i = 0; i < maxRetries; i++) {
+                    const currentText = await page.textContent(config.selectors.answerContainer);
+                    if (currentText && currentText === lastText && currentText.length > 50) {
+                        stableCount++;
+                        if (stableCount >= 2) { // Stable for 1 second (faster than before)
+                            console.log('Answer stabilized.');
+                            break;
+                        }
+                    } else {
+                        stableCount = 0;
+                        lastText = currentText || '';
+                    }
+                    await page.waitForTimeout(500);
+                }
+            }
+        } catch (e) {
+            console.log('Error during completion check, assuming done:', e);
+        }
 
         const answer = await page.textContent(config.selectors.answerContainer);
 

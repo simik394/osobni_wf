@@ -8,10 +8,12 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-      # X11 Forwarding for Linux
-      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./entrypoint.sh:/entrypoint.sh
+    ports:
+      - "5900:5900"
+    entrypoint: ["/entrypoint.sh"]
     environment:
-      - DISPLAY=${DISPLAY}
+      - DISPLAY=:99
       # Playwright specific
       - DEBUG=pw:api
     # IPC host needed for some X11 setups
