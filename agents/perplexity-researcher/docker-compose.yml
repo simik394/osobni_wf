@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    image: perplexity-researcher
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      # X11 Forwarding for Linux
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY}
+      # Playwright specific
+      - DEBUG=pw:api
+    # IPC host needed for some X11 setups
+    ipc: host
+    # User mapping to avoid permission issues on Linux
+    user: "${UID:-1000}:${GID:-1000}"

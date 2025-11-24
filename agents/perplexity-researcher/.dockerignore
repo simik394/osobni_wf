@@ -1,0 +1,5 @@
+node_modules
+playwright/.browser-data
+playwright/.auth
+data/results
+*.log

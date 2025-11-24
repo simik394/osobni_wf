@@ -1,0 +1,25 @@
+{
+  "name": "perplexity-researcher",
+  "version": "1.0.0",
+  "description": "Perplexity.ai automation for academic research",
+  "main": "src/index.ts",
+  "scripts": {
+    "auth": "ts-node src/index.ts auth",
+    "query": "ts-node src/index.ts query",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-core": "^21.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.2"
+  }
+}
