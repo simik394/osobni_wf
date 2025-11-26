@@ -1,0 +1,467 @@
+# Perplexity Researcher - API Documentation
+
+## Table of Contents
+1. [[#quick-start|Quick Start]]
+2. [[#running-with-docker|Running with Docker]]
+3. [[#api-reference|API Reference]]
+4. [[#authentication-setup|Authentication Setup]]
+5. [[#advanced-usage|Advanced Usage]]
+6. [[#troubleshooting|Troubleshooting]]
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Docker and Docker Compose installed
+- OR: Node.js 18+ and npm
+
+### Docker (Recommended)
+
+```bash
+# 1. Build the image
+docker-compose build
+
+# 2. First-time setup: Authenticate with Perplexity
+docker-compose run --rm perplexity-server npm run auth
+# Follow the browser prompts to log in, then close the browser
+
+# 3. Start the server
+docker-compose up -d
+
+# 4. Test the API
+curl -X POST http://localhost:3000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What is the capital of France?"}'
+```
+
+### Local (Without Docker)
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Authenticate
+npm run auth
+
+# 3. Start server
+npm run serve
+```
+
+---
+
+## Running with Docker
+
+### Architecture
+
+The Docker setup provides:
+- **Isolated environment**: No dependencies on host OS
+- **Persistent browser profile**: Authentication state saved in Docker volume
+- **VNC access**: Connect to `localhost:5900` to see the browser (password: none)
+- **Auto-restart**: Container restarts automatically if it crashes
+
+### Docker Commands
+
+#### Build and Start
+```bash
+# Build the image
+docker-compose build
+
+# Start in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+```
+
+#### One-Time Authentication
+```bash
+# Run auth in a temporary container
+docker-compose run --rm perplexity-server npm run auth
+```
+
+This opens a browser window. Log in to Perplexity, then close the browser. Your session is saved in the `browser-data` volume.
+
+#### Viewing the Browser (VNC)
+
+Connect with any VNC client to `localhost:5900` (no password):
+```bash
+# Using TigerVNC on Linux
+vncviewer localhost:5900
+
+# Using macOS built-in VNC
+open vnc://localhost:5900
+```
+
+#### Headless Mode
+
+To run without VNC (recommended for production):
+```bash
+# Edit docker-compose.yml
+environment:
+  - HEADLESS=true
+
+# Restart
+docker-compose restart
+```
+
+---
+
+## API Reference
+
+### Base URL
+```
+http://localhost:3000
+```
+
+### 1. Health Check
+
+Check if the service is running.
+
+**Endpoint:** `GET /health`
+
+**Request:**
+```bash
+curl http://localhost:3000/health
+```
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
+```
+
+---
+
+### 2. Submit Query
+
+Send a query to Perplexity.ai and get the response.
+
+**Endpoint:** `POST /query`
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Request Body:**
+```json
+{
+  "query": "Your question here"
+}
+```
+
+**Example Request:**
+```bash
+curl -X POST http://localhost:3000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the latest developments in quantum computing?"
+  }'
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "query": "What are the latest developments in quantum computing?",
+    "answer": "Recent developments in quantum computing include...",
+    "timestamp": "2025-11-26T19:30:45.123Z",
+    "url": "https://www.perplexity.ai/search/..."
+  }
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "success": false,
+  "error": "Query execution failed"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Query parameter is required and must be a string"
+}
+```
+
+---
+
+## Authentication Setup
+
+### Initial Login
+
+**Local:**
+```bash
+npm run auth
+```
+
+**Docker:**
+```bash
+docker-compose run --rm perplexity-server npm run auth
+```
+
+A browser window will open. Steps:
+1. Navigate to Perplexity.ai
+2. Click "Sign In" and log in with your account
+3. Wait for login to complete
+4. Close the browser window
+
+Your session is now saved and will persist across restarts.
+
+### Re-authentication
+
+If your session expires, repeat the auth process:
+```bash
+# Docker
+docker-compose run --rm perplexity-server npm run auth
+
+# Local
+npm run auth
+```
+
+---
+
+## Advanced Usage
+
+### Scripting Multiple Queries
+
+**Bash Script:**
+```bash
+#!/bin/bash
+
+QUERIES=(
+  "What is AI?"
+  "Explain quantum entanglement"
+  "Best practices for Docker"
+)
+
+for query in "${QUERIES[@]}"; do
+  echo "Querying: $query"
+  curl -s -X POST http://localhost:3000/query \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":\"$query\"}" | jq -r '.data.answer'
+  echo "---"
+done
+```
+
+**Python Script:**
+```python
+import requests
+
+API_URL = "http://localhost:3000/query"
+
+queries = [
+    "What is machine learning?",
+    "Explain neural networks",
+    "What is GPT?"
+]
+
+for query in queries:
+    response = requests.post(
+        API_URL,
+        json={"query": query}
+    )
+    
+    if response.status_code == 200:
+        data = response.json()
+        print(f"Q: {data['data']['query']}")
+        print(f"A: {data['data']['answer']}")
+        print("---")
+    else:
+        print(f"Error: {response.status_code}")
+```
+
+**Node.js Script:**
+```javascript
+const axios = require('axios');
+
+const queries = [
+  "What is React?",
+  "Explain async/await",
+  "What is TypeScript?"
+];
+
+async function runQueries() {
+  for (const query of queries) {
+    try {
+      const response = await axios.post('http://localhost:3000/query', {
+        query
+      });
+      
+      console.log(`Q: ${response.data.data.query}`);
+      console.log(`A: ${response.data.data.answer}`);
+      console.log('---');
+    } catch (error) {
+      console.error('Error:', error.message);
+    }
+  }
+}
+
+runQueries();
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP server port |
+| `DISPLAY` | `:99` | X11 display for browser |
+| `HEADLESS` | `false` | Run browser in headless mode |
+
+Override in `docker-compose.yml`:
+```yaml
+environment:
+  - PORT=8080
+  - HEADLESS=true
+```
+
+### Persistent Data
+
+**Browser Profile:**
+- Stored in Docker volume: `browser-data`
+- Contains authentication cookies
+
+**Query Results:**
+- Saved to: `./data/result-*.json`
+- Mounted from host in Docker
+
+---
+
+## Troubleshooting
+
+### Browser Not Opening
+
+**Symptom:** "Browser profile not found" error
+
+**Solution:**
+```bash
+# Run auth command
+docker-compose run --rm perplexity-server npm run auth
+```
+
+---
+
+### Port Already in Use
+
+**Symptom:** "Error: listen EADDRINUSE: address already in use :::3000"
+
+**Solution:**
+```bash
+# Change port in docker-compose.yml
+ports:
+  - "8080:3000"  # Use port 8080 on host
+```
+
+---
+
+### VNC Connection Failed
+
+**Symptom:** Cannot connect to VNC
+
+**Solution:**
+```bash
+# Ensure port is exposed
+docker-compose ps
+
+# Check if x11vnc is running
+docker-compose exec perplexity-server ps aux | grep x11vnc
+```
+
+---
+
+### Query Times Out
+
+**Symptom:** Request hangs or returns 500 after long wait
+
+**Possible Causes:**
+1. Session expired - Re-authenticate
+2. Perplexity.ai changed their UI - Selectors may need updating
+3. Network issues
+
+**Debug:**
+```bash
+# View server logs
+docker-compose logs -f
+
+# Connect via VNC to see browser
+vncviewer localhost:5900
+```
+
+---
+
+### Clean Restart
+
+If something goes wrong, reset everything:
+
+```bash
+# Stop and remove containers
+docker-compose down
+
+# Remove volumes (WARNING: Deletes saved authentication)
+docker volume rm perplexity-researcher_browser-data
+
+# Rebuild
+docker-compose build
+
+# Re-authenticate
+docker-compose run --rm perplexity-server npm run auth
+
+# Start fresh
+docker-compose up -d
+```
+
+---
+
+## Performance Notes
+
+### Latency
+
+- **First query:** 10-15 seconds (includes navigation)
+- **Subsequent queries:** 5-8 seconds (browser stays open)
+
+### Resource Usage
+
+- **RAM:** ~800MB (Chromium browser)
+- **CPU:** Moderate during query, idle otherwise
+- **Disk:** ~500MB (image) + results
+
+### Scaling
+
+For high throughput, consider:
+- Multiple container instances
+- Load balancer (nginx/HAProxy)
+- Query queue system (Redis/RabbitMQ)
+
+---
+
+## Security Notes
+
+> [!WARNING]
+> **No Authentication by Default**
+> 
+> The HTTP API has no authentication. If exposing publicly:
+> 1. Add API key middleware
+> 2. Use reverse proxy with SSL (nginx/Caddy)
+> 3. Implement rate limiting
+
+**Example nginx config:**
+```nginx
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+    }
+}
+```

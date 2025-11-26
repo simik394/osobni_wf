@@ -1,6 +1,39 @@
-node_modules
-playwright/.browser-data
-playwright/.browser-data-fresh
-playwright/.auth
-data/results
-*.log
+# Build artifacts
+dist/
+node_modules/
+
+# Data files
+data/
+*.json
+
+# Local environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Test files
+test-service.sh
+
+# Documentation (already in image)
+*.md
+!README.md
+
+# Debian package
+*.deb
+
+# Progress tracking
+_progress/
+
+# Playwright cache (installed in base image)
+.cache/

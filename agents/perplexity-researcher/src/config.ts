@@ -1,3 +1,6 @@
+import * as path from 'path';
+import * as os from 'os';
+
 export const config = {
     url: 'https://www.perplexity.ai',
     selectors: {
@@ -9,10 +12,10 @@ export const config = {
         followUpInput: 'textarea[placeholder*="Ask follow-up"]',
     },
     auth: {
-        browserDataPath: 'playwright/.browser-data',
+        browserDataPath: path.join(os.homedir(), '.config', 'perplexity-researcher', 'browser-data'),
     },
     paths: {
-        resultsDir: 'data/results',
-        queriesFile: 'data/queries.json',
+        resultsDir: path.join(process.cwd(), 'perplexity_results'),
+        queriesFile: path.join(process.cwd(), 'queries.json'),
     }
 };

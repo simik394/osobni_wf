@@ -1,5 +1,6 @@
 import { login } from './auth';
 import { runQuery } from './query';
+import { startServer } from './server';
 import * as fs from 'fs';
 import { config } from './config';
 
@@ -9,6 +10,8 @@ const command = args[0];
 async function main() {
     if (command === 'auth') {
         await login();
+    } else if (command === 'serve') {
+        await startServer();
     } else if (command === 'query') {
         const query = args[1];
         if (query) {
@@ -31,9 +34,10 @@ async function main() {
         }
     } else {
         console.log('Usage:');
-        console.log('  npm run auth            - Login to Perplexity');
+        console.log('  npm run auth             - Login to Perplexity');
+        console.log('  npm run serve            - Start HTTP server (long-running service)');
         console.log('  npm run query "Question" - Run a single query');
-        console.log('  npm run query           - Run queries from data/queries.json');
+        console.log('  npm run query            - Run queries from data/queries.json');
     }
 }
 
