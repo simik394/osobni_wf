@@ -1,0 +1,35 @@
+views:
+  - type: table
+    name: Table
+    filters:
+      and:
+        - file.inFolder("Prods/01-pwf")
+    order:
+      - file.name
+      - file.ctime
+      - about
+      - aim
+      - completed
+    sort:
+      - property: file.ctime
+        direction: DESC
+    columnSize:
+      file.ctime: 58
+      note.about: 244
+      note.aim: 360
+  - type: table
+    name: View
+    filters:
+      and:
+        - file.inFolder("Prods/01-pwf/_progress/goals")
+    order:
+      - file.name
+      - aim
+      - completed
+      - more_important
+      - less_important
+      - priority
+      - tags
+    rowHeight: medium
+    columnSize:
+      note.aim: 208

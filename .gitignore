@@ -4904,12 +4904,6 @@ agents/perplexity-researcher/node_modules/vary/index.js
 agents/perplexity-researcher/node_modules/vary/LICENSE
 agents/perplexity-researcher/node_modules/vary/package.json
 agents/perplexity-researcher/node_modules/vary/README.md
-agents/perplexity-researcher/dist/auth.js
-agents/perplexity-researcher/dist/client.js
-agents/perplexity-researcher/dist/config.js
-agents/perplexity-researcher/dist/debug.js
-agents/perplexity-researcher/dist/index.js
-agents/perplexity-researcher/dist/query.js
-agents/perplexity-researcher/dist/server.js
-agents/perplexity-researcher/data/results/result-1764163429559.json
+agents/perplexity-researcher/dist/*
+agents/perplexity-researcher/data/results/*
 **.deb

@@ -1,0 +1,63 @@
+.TH PERPLEXITY-RESEARCHER 1 "November 2025" "1.0.0" "User Commands"
+.SH NAME
+perplexity-researcher \- AI-powered research automation tool using Perplexity.ai
+.SH SYNOPSIS
+.B perplexity-researcher
+.I command
+[
+.I arguments
+]
+.SH DESCRIPTION
+.B perplexity-researcher
+is a command-line tool that automates interactions with Perplexity.ai. It allows you to perform research queries and save the results locally. It uses a persistent browser session to maintain authentication state.
+
+.SH COMMANDS
+.TP
+.B auth
+Opens a browser window for you to log in to Perplexity.ai.
+.br
+Once logged in, close the browser window. Your session cookies and local storage will be saved to \fB~/.config/perplexity-researcher/browser-data\fR.
+.br
+You only need to run this once, or whenever your session expires.
+
+.TP
+.B query "\fIquestion\fR"
+Runs a single research query.
+.br
+The tool will launch a browser (visible by default), navigate to Perplexity, input your question, wait for the answer to generate, and save the result.
+.br
+.B Example:
+.br
+\fBperplexity-researcher query "What is the history of the internet?"\fR
+
+.TP
+.B query
+(Without arguments)
+.br
+Reads queries from a \fBqueries.json\fR file in the current directory.
+.br
+The file must contain a JSON array of strings.
+.br
+.B Example queries.json:
+.br
+["What is quantum computing?", "Who won the 1994 World Cup?"]
+
+.SH FILES
+.TP
+.B ~/.config/perplexity-researcher/browser-data
+Directory where browser profile (cookies, cache) is stored.
+.TP
+.B ./perplexity_results/
+Directory where query results are saved as JSON files. Created in the current working directory.
+.TP
+.B ./queries.json
+Optional input file for batch queries.
+
+.SH NOTES
+.IP \[bu] 2
+The tool uses Playwright with a headful (visible) browser by default to avoid detection.
+.IP \[bu]
+Do not interact with the browser window while the query is running, as it might interfere with the automation.
+
+.SH AUTHOR
+Sim <sim@example.com>
