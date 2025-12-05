@@ -6,7 +6,7 @@ APP_NAME="perplexity-researcher"
 SRC_DIR="/home/sim/Obsi/Prods/01-pwf/agents/perplexity-researcher"
 WORK_DIR="/tmp/${APP_NAME}_build"
 CACHE_DIR="/tmp/${APP_NAME}_cache"
-VERSION="1.0.0" # Could extract from package.json
+VERSION="1.0.18" # Could extract from package.json
 
 # Colors
 GREEN='\033[0;32m'
@@ -61,66 +61,202 @@ mkdir -p "$WORK_DIR/opt/$APP_NAME"
 mkdir -p "$WORK_DIR/usr/bin"
 mkdir -p "$WORK_DIR/DEBIAN"
 
-# 2. Build Project
-log_info "Building project..."
-cd "$SRC_DIR"
-
-# Install dependencies and build
-# We use sudo -u $SUDO_USER to build as the user, not root, to avoid permission issues in the src dir
-sudo -u "$SUDO_USER" npm install
-sudo -u "$SUDO_USER" npm run build
+# 2. Build Project (Not needed for Docker-based install, we package source)
+# We just need to ensure we have the source files
 
 # 3. Copy Files
-log_info "Copying files..."
-cp package.json "$WORK_DIR/opt/$APP_NAME/"
-cp -r dist "$WORK_DIR/opt/$APP_NAME/"
-cp -r node_modules "$WORK_DIR/opt/$APP_NAME/"
+log_info "Copying source files..."
+mkdir -p "$WORK_DIR/opt/$APP_NAME"
 
-# 4. Install Playwright Browsers (into the package)
-log_info "Installing Playwright browsers..."
-export PLAYWRIGHT_BROWSERS_PATH="$WORK_DIR/opt/$APP_NAME/browsers"
-mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-chown -R "$SUDO_USER:$SUDO_USER" "$WORK_DIR/opt/$APP_NAME"
+# Copy essential files
+cp "$SRC_DIR/package.json" "$WORK_DIR/opt/$APP_NAME/"
+cp "$SRC_DIR/package-lock.json" "$WORK_DIR/opt/$APP_NAME/" 2>/dev/null || true
+cp "$SRC_DIR/docker-compose.yml" "$WORK_DIR/opt/$APP_NAME/"
+cp "$SRC_DIR/Dockerfile" "$WORK_DIR/opt/$APP_NAME/"
+cp "$SRC_DIR/tsconfig.json" "$WORK_DIR/opt/$APP_NAME/"
+cp -r "$SRC_DIR/src" "$WORK_DIR/opt/$APP_NAME/"
+cp -r "$SRC_DIR/browser" "$WORK_DIR/opt/$APP_NAME/"
 
-# Check if browsers are cached
-BROWSER_CACHE="$CACHE_DIR/browsers"
-if [ -d "$BROWSER_CACHE" ] && [ -n "$(ls -A $BROWSER_CACHE 2>/dev/null)" ]; then
-    log_info "Using cached browsers from $BROWSER_CACHE"
-    cp -r "$BROWSER_CACHE"/* "$PLAYWRIGHT_BROWSERS_PATH/"
-else
-    log_info "Downloading browsers (this will be cached for future runs)..."
-    mkdir -p "$CACHE_DIR"
-    
-    cd "$SRC_DIR"
-    sudo -u "$SUDO_USER" PLAYWRIGHT_BROWSERS_PATH="$WORK_DIR/opt/$APP_NAME/browsers" npx playwright install chromium
-    
-    # Cache the downloaded browsers
-    log_info "Caching browsers for future installations..."
-    mkdir -p "$BROWSER_CACHE"
-    cp -r "$PLAYWRIGHT_BROWSERS_PATH"/* "$BROWSER_CACHE/"
-fi
+# Create data directory
+mkdir -p "$WORK_DIR/opt/$APP_NAME/data"
+chmod 777 "$WORK_DIR/opt/$APP_NAME/data" # Ensure writable by Docker
 
-# Restore ownership to root for the package
-chown -R root:root "$WORK_DIR/opt/$APP_NAME"
+# Install dependencies
+log_info "Installing dependencies..."
+cd "$WORK_DIR/opt/$APP_NAME"
+npm install
+cd -
 
-# 5. Create Wrapper Script
+# 4. Create Wrapper Script
 log_info "Creating wrapper script..."
 cat <<EOF > "$WORK_DIR/usr/bin/$APP_NAME"
 #!/bin/bash
-export PLAYWRIGHT_BROWSERS_PATH="/opt/$APP_NAME/browsers"
-# Do not cd to /opt, so we preserve CWD for output files
-exec node /opt/$APP_NAME/dist/index.js "\$@"
+PROJECT_DIR="/opt/$APP_NAME"
+ORIGINAL_PWD="\$PWD"
+cd "\$PROJECT_DIR"
+
+# Ensure docker compose is available
+if ! docker compose version &> /dev/null; then
+    echo "Error: docker compose is not available."
+    exit 1
+fi
+
+# Ensure config directory exists
+CONFIG_DIR="\$HOME/.config/perplexity-researcher"
+if [ ! -d "\$CONFIG_DIR" ]; then
+    mkdir -p "\$CONFIG_DIR"
+fi
+
+case "\$1" in
+  start)
+    echo "Starting Perplexity Researcher services..."
+    docker compose up -d
+    echo "Services started. API available at http://localhost:3000"
+    ;;
+  stop)
+    echo "Stopping services..."
+    docker compose down
+    ;;
+  restart)
+    docker compose restart
+    ;;
+  status)
+    docker compose ps
+    ;;
+  auth)
+    echo "Starting local authentication..."
+    echo "This will launch a browser where you can log in."
+    # Use user-writable cache for ts-node
+    export TS_NODE_CACHE_DIRECTORY="\$HOME/.cache/ts-node"
+    mkdir -p "\$TS_NODE_CACHE_DIRECTORY"
+    npm run auth
+    echo "Authentication session saved to \$HOME/.config/perplexity-researcher/user-data"
+    ;;
+  login)
+    # Deprecated or re-purposed for Docker interactive?
+    # Original 'earlier commit' didn't have login command.
+    # We can keep it or remove it. Let's keep it but warn.
+    echo "Starting interactive Docker login..."
+    # Check if server is running
+    if docker compose ps | grep -q "perplexity-server.*Up"; then
+       docker compose exec perplexity-server npm run login
+    else
+       docker compose run --rm perplexity-server npm run login
+    fi
+    ;;
+  query)
+    # Parse arguments
+    shift # Remove 'query'
+    
+    QUERY=""
+    SESSION=""
+    NAME=""
+    
+    while [[ \$# -gt 0 ]]; do
+      case \$1 in
+        --session=*)
+          SESSION="\${1#*=}"
+          shift
+          ;;
+        --name=*)
+          NAME="\${1#*=}"
+          shift
+          ;;
+        *)
+          if [ -z "\$QUERY" ]; then
+            QUERY="\$1"
+          else
+            # Append if multiple words were passed without quotes (though unlikely if user quotes properly)
+            QUERY="\$QUERY \$1"
+          fi
+          shift
+          ;;
+      esac
+    done
+
+    if [ -z "\$QUERY" ]; then
+      echo "Usage: \$APP_NAME query \"Your question\" [--session=ID|new|latest] [--name=NAME]"
+      exit 1
+    fi
+    
+    # Check if server is running
+    if docker compose ps | grep -q "perplexity-server.*Up"; then
+       # Server is running, use curl
+       # Use python3 to safely generate JSON
+       JSON_DATA=\$(python3 -c "import json, sys; print(json.dumps({'query': sys.argv[1], 'session': sys.argv[2] if sys.argv[2] else None, 'name': sys.argv[3] if sys.argv[3] else None}))" "\$QUERY" "\$SESSION" "\$NAME")
+       
+       curl -X POST http://localhost:3000/query \
+            -H "Content-Type: application/json" \
+            -d "\$JSON_DATA"
+    else
+       # Server not running, run one-off container
+       CMD="npm run query \"\$QUERY\""
+       if [ -n "\$SESSION" ]; then CMD="\$CMD --session=\$SESSION"; fi
+       if [ -n "\$NAME" ]; then CMD="\$CMD --name=\$NAME"; fi
+       
+       docker compose run --rm perplexity-server bash -c "\$CMD"
+    fi
+    ;;
+  batch)
+    if [ -z "\$2" ]; then
+        echo "Usage: \$APP_NAME batch <file>"
+        exit 1
+    fi
+    
+    # Resolve file path relative to original PWD if not absolute
+    if [[ "\$2" = /* ]]; then
+        BATCH_FILE="\$2"
+    else
+        BATCH_FILE="\$ORIGINAL_PWD/\$2"
+    fi
+    
+    if [ ! -f "\$BATCH_FILE" ]; then
+        echo "Error: File not found: \$BATCH_FILE"
+        exit 1
+    fi
+
+    # Check if server is running
+    if docker compose ps | grep -q "perplexity-server.*Up"; then
+       # Server is running. We need to copy the file into the container or mount it?
+       # Mounting is tricky with 'exec'.
+       # Easier to read content and pass it? But CLI expects a file path.
+       # We can use 'docker cp' to copy file to /tmp inside container.
+       
+       CONTAINER_ID=\$(docker compose ps -q perplexity-server)
+       docker cp "\$BATCH_FILE" "\$CONTAINER_ID:/tmp/batch.txt"
+       
+       # Execute batch command in container
+       # Note: This will hang until Ctrl+C, which is what we want for VNC inspection
+       docker compose exec perplexity-server npm run batch /tmp/batch.txt
+    else
+       # Run one-off container
+       # Mount the file
+       docker compose run --rm -v "\$BATCH_FILE:/tmp/batch.txt" perplexity-server npm run batch /tmp/batch.txt
+    fi
+    ;;
+  logs)
+    docker compose logs -f
+    ;;
+  update)
+    echo "Rebuilding images..."
+    docker compose build --no-cache
+    ;;
+  *)
+    echo "Usage: \$APP_NAME {start|stop|restart|status|auth|login|query|batch|logs|update}"
+    exit 1
+    ;;
+esac
 EOF
 chmod +x "$WORK_DIR/usr/bin/$APP_NAME"
 
-# 6. Install Man Page
+# 5. Install Man Page
 log_info "Installing man page..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$WORK_DIR/usr/share/man/man1"
 cp "$SCRIPT_DIR/perplexity-researcher.1" "$WORK_DIR/usr/share/man/man1/"
 gzip "$WORK_DIR/usr/share/man/man1/perplexity-researcher.1"
 
-# 7. Create Control File
+# 6. Create Control File
 log_info "Creating DEBIAN/control..."
 INSTALLED_SIZE=$(du -s "$WORK_DIR" | cut -f1)
 cat <<EOF > "$WORK_DIR/DEBIAN/control"
@@ -130,16 +266,16 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Sim <sim@example.com>
-Description: Perplexity AI automation tool
+Description: Perplexity AI automation tool (Docker-based)
  Installed-Size: $INSTALLED_SIZE
 EOF
 
-# 8. Build .deb
+# 7. Build .deb
 log_info "Building .deb package..."
 dpkg-deb --build "$WORK_DIR" "${APP_NAME}.deb"
 
-# 9. Install
+# 8. Install
 log_info "Installing package..."
 apt install -y "./${APP_NAME}.deb"
 
-log_info "Installation complete! Run '$APP_NAME' to start."
+log_info "Installation complete! Run '$APP_NAME' to see usage."

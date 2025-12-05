@@ -107,6 +107,20 @@ if ! getent group docker >/dev/null; then
 fi
 $SUDO usermod -aG docker "$USER"
 
+log_info "Setting up 'docker-compose' compatibility..."
+# Create a wrapper script for docker-compose if it doesn't exist
+if ! command -v docker-compose >/dev/null 2>&1; then
+    echo '#!/bin/bash' | $SUDO tee /usr/local/bin/docker-compose >/dev/null
+    echo 'exec docker compose "$@"' | $SUDO tee -a /usr/local/bin/docker-compose >/dev/null
+    $SUDO chmod +x /usr/local/bin/docker-compose
+    log_success "Created 'docker-compose' wrapper script pointing to 'docker compose'."
+else
+    log_info "'docker-compose' command already exists."
+fi
+
 log_success "Docker installed successfully!"
 log_info "You may need to log out and back in for group changes to take effect."
 docker --version
+if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose --version
+fi

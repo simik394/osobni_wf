@@ -18,14 +18,14 @@ app.get('/health', (req, res) => {
 // Query endpoint
 app.post('/query', async (req, res) => {
     try {
-        const { query } = req.body;
+        const { query, session, name } = req.body;
 
         if (!query || typeof query !== 'string') {
             return res.status(400).json({ error: 'Query parameter is required and must be a string' });
         }
 
-        console.log(`[Server] Received query: "${query}"`);
-        const result = await client.query(query);
+        console.log(`[Server] Received query: "${query}" (Session: ${session || 'new'}, Name: ${name || 'none'})`);
+        const result = await client.query(query, { session, name });
 
         res.json({
             success: true,

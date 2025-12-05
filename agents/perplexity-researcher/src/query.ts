@@ -10,20 +10,26 @@ chromium.use(StealthPlugin());
 export async function runQuery(queryText: string) {
     console.log(`Running query: "${queryText}"`);
 
-    if (!fs.existsSync(config.auth.browserDataPath)) {
-        console.error('Browser profile not found. Please run "npm run auth" first to log in.');
+    if (!fs.existsSync(config.auth.authFile)) {
+        console.error(`Auth file not found at ${config.auth.authFile}. Please run "npm run auth" first to log in.`);
         return;
     }
 
-    console.log('Launching browser with saved profile...');
+    let browser;
+    if (process.env.BROWSER_WS_ENDPOINT) {
+        console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
+        browser = await chromium.connect(config.browserWsEndpoint);
+    } else {
+        console.log('Launching local browser (System Chrome)...');
+        browser = await chromium.launch({ headless: false, channel: 'chrome' });
+    }
 
-    // Use the same persistent context that has the login
-    const context = await chromium.launchPersistentContext(config.auth.browserDataPath, {
-        headless: false, // Set to true for headless mode
-        channel: 'chromium'
+    console.log('Creating context with saved auth state...');
+    const context = await browser.newContext({
+        storageState: config.auth.authFile
     });
 
-    const page = context.pages()[0] || await context.newPage();
+    const page = await context.newPage();
 
     try {
         await page.goto(config.url);
@@ -132,5 +138,6 @@ export async function runQuery(queryText: string) {
         console.error('Query execution failed:', error);
     } finally {
         await context.close();
+        await browser.close();
     }
 }

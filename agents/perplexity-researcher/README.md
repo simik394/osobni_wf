@@ -6,20 +6,53 @@
 ```bash
 # 1. Build
 docker-compose build
+```
 
-# 2. Authenticate (opens browser, log in, close window)
-docker-compose run --rm perplexity-server npm run auth
+## Authentication
 
+Authentication is handled via a unified session file stored at `~/.config/perplexity-researcher/auth.json`. This allows you to authenticate once and use the session across CLI, local server, and Docker.
+
+### Option 1: CLI Authentication (Recommended)
+Run the following command locally:
+```bash
+npm run auth
+```
+This will launch a browser window. Log in to Perplexity, then close the window or press Enter in the terminal to save the session.
+
+### Option 2: Docker Authentication
+If you cannot run the CLI locally, you can authenticate via Docker (requires VNC):
+```bash
+perplexity-researcher auth
+```
+Connect to `localhost:5900` with a VNC viewer to see the browser and log in.
+
+### Option 3: Manual Token
+You can also manually place your `auth.json` file in `~/.config/perplexity-researcher/auth.json`.
+
+```bash
 # 3. Start
 docker-compose up -d
 ```
 
 **Usage:**
 ```bash
+# Interactive Login (Docker)
+perplexity-researcher login
+# Then open VNC at localhost:5900 to log in manually
+
 # Send query
-curl -X POST http://localhost:3000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query":"Your question here"}'
+# Note: This automatically starts the server if not running, 
+# and keeps it running for faster subsequent queries.
+perplexity-researcher query "What is conceptual mapping?" --name=concept-map
+
+# Follow up in the same session
+perplexity-researcher query "How is it used in education?" --session=concept-map
+
+# Use the latest session
+perplexity-researcher query "Give me an example" --session=latest
+
+# Batch queries from file
+perplexity-researcher batch queries.txt
 
 # View browser (VNC)
 vncviewer localhost:5900

@@ -4,7 +4,7 @@ node_modules/
 
 # Data files
 data/
-*.json
+playwright/
 
 # Local environment
 .env
@@ -24,6 +24,7 @@ Thumbs.db
 
 # Test files
 test-service.sh
+test-docker-deployment.sh
 
 # Documentation (already in image)
 *.md
@@ -35,5 +36,7 @@ test-service.sh
 # Progress tracking
 _progress/
 
+# Playwright cache (installed in base image)
+.cache/
 # Playwright cache (installed in base image)
 .cache/

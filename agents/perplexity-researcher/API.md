@@ -29,7 +29,11 @@ docker-compose run --rm perplexity-server npm run auth
 # 3. Start the server
 docker-compose up -d
 
-# 4. Test the API
+# 4. Test the API (CLI Wrapper)
+# This command automatically starts the server if needed and keeps it running.
+perplexity-researcher query "What is the capital of France?"
+
+# OR manually via curl
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
   -d '{"query":"What is the capital of France?"}'
@@ -108,6 +112,18 @@ environment:
 docker-compose restart
 ```
 
+#### Batch Querying
+Run multiple queries from a file (one per line):
+```bash
+perplexity-researcher batch my_queries.txt
+```
+
+#### Interactive Login
+Launch an interactive browser session to log in manually (useful for Google auth in Docker):
+```bash
+perplexity-researcher login
+```
+
 ---
 
 ## API Reference
@@ -149,7 +165,9 @@ Send a query to Perplexity.ai and get the response.
 **Request Body:**
 ```json
 {
-  "query": "Your question here"
+  "query": "Your question here",
+  "session": "optional-session-id-or-name",
+  "name": "optional-new-session-name"
 }
 ```
 
@@ -158,7 +176,8 @@ Send a query to Perplexity.ai and get the response.
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "What are the latest developments in quantum computing?"
+    "query": "What is conceptual mapping?",
+    "name": "concept-map"
   }'
 ```
 
@@ -196,34 +215,28 @@ curl -X POST http://localhost:3000/query \
 
 ### Initial Login
 
-**Local:**
+Authentication is unified across all environments using a shared file at `~/.config/perplexity-researcher/auth.json`.
+
+**Recommended Method (CLI):**
 ```bash
 npm run auth
 ```
+1. A browser window will open.
+2. Log in to Perplexity.ai.
+3. Close the window or press Enter in the terminal.
+4. The session is saved to `~/.config/perplexity-researcher/auth.json`.
 
-**Docker:**
+**Docker Method (if CLI not possible):**
 ```bash
-docker-compose run --rm perplexity-server npm run auth
+perplexity-researcher auth
 ```
-
-A browser window will open. Steps:
-1. Navigate to Perplexity.ai
-2. Click "Sign In" and log in with your account
-3. Wait for login to complete
-4. Close the browser window
-
-Your session is now saved and will persist across restarts.
+1. Connect via VNC to `localhost:5900`.
+2. Log in using the browser inside the container.
+3. The session is saved to the same shared location on your host.
 
 ### Re-authentication
 
-If your session expires, repeat the auth process:
-```bash
-# Docker
-docker-compose run --rm perplexity-server npm run auth
-
-# Local
-npm run auth
-```
+If your session expires, simply run `npm run auth` again locally. The Docker container will automatically pick up the new session file on its next restart or request.
 
 ---
 

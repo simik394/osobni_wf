@@ -5,18 +5,21 @@ import { config } from './config';
 chromium.use(StealthPlugin());
 
 async function debug() {
-    console.log('Launching browser for debugging...');
-    const context = await chromium.launchPersistentContext(config.auth.browserDataPath, {
-        headless: false,
-        channel: 'chromium'
+    console.log('Connecting to browser service...');
+    console.log(`Endpoint: ${config.browserWsEndpoint}`);
+
+    const browser = await chromium.connect(config.browserWsEndpoint);
+
+    // Create context with auth state if available
+    const context = await browser.newContext({
+        storageState: config.auth.authFile
     });
 
-    const page = context.pages()[0] || await context.newPage();
+    const page = await context.newPage();
 
     try {
         console.log(`Navigating to ${config.url}...`);
         await page.goto(config.url);
-        await page.waitForLoadState('networkidle');
 
         // console.log('Taking screenshot...');
         // await page.screenshot({ path: 'data/debug-screenshot.png', fullPage: true });
@@ -31,6 +34,7 @@ async function debug() {
         console.error('Debug failed:', error);
     } finally {
         await context.close();
+        await browser.close();
     }
 }
 

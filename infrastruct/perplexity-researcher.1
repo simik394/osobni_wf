@@ -1,6 +1,6 @@
 .TH PERPLEXITY-RESEARCHER 1 "November 2025" "1.0.0" "User Commands"
 .SH NAME
-perplexity-researcher \- AI-powered research automation tool using Perplexity.ai
+perplexity-researcher \- Docker-based AI research automation tool
 .SH SYNOPSIS
 .B perplexity-researcher
 .I command
@@ -9,55 +9,51 @@ perplexity-researcher \- AI-powered research automation tool using Perplexity.ai
 ]
 .SH DESCRIPTION
 .B perplexity-researcher
-is a command-line tool that automates interactions with Perplexity.ai. It allows you to perform research queries and save the results locally. It uses a persistent browser session to maintain authentication state.
+is a CLI wrapper for a Dockerized Perplexity.ai automation service. It manages the Docker containers and provides an interface for querying.
 
 .SH COMMANDS
 .TP
+.B start
+Starts the Docker services (browser and API server) in the background.
+.TP
+.B stop
+Stops the Docker services.
+.TP
+.B restart
+Restarts the Docker services.
+.TP
+.B status
+Shows the status of the Docker containers.
+.TP
+.B logs
+Follows the logs of the Docker containers.
+.TP
 .B auth
-Opens a browser window for you to log in to Perplexity.ai.
+Starts the authentication process.
 .br
-Once logged in, close the browser window. Your session cookies and local storage will be saved to \fB~/.config/perplexity-researcher/browser-data\fR.
+This will launch the browser service and the auth script. You must connect to \fBlocalhost:5900\fR using a VNC client to see the browser and log in manually.
 .br
-You only need to run this once, or whenever your session expires.
-
+Once logged in, return to the terminal and press ENTER to save the session state to \fB./data/auth.json\fR.
 .TP
 .B query "\fIquestion\fR"
-Runs a single research query.
+Sends a query to the running server via HTTP API.
 .br
-The tool will launch a browser (visible by default), navigate to Perplexity, input your question, wait for the answer to generate, and save the result.
+If the server is not running, it will attempt to start it.
 .br
 .B Example:
 .br
 \fBperplexity-researcher query "What is the history of the internet?"\fR
 
-.TP
-.B query
-(Without arguments)
-.br
-Reads queries from a \fBqueries.json\fR file in the current directory.
-.br
-The file must contain a JSON array of strings.
-.br
-.B Example queries.json:
-.br
-["What is quantum computing?", "Who won the 1994 World Cup?"]
-
 .SH FILES
 .TP
-.B ~/.config/perplexity-researcher/browser-data
-Directory where browser profile (cookies, cache) is stored.
+.B /opt/perplexity-researcher/
+Installation directory containing Docker configuration.
 .TP
-.B ./perplexity_results/
-Directory where query results are saved as JSON files. Created in the current working directory.
+.B ./data/auth.json
+File where authentication state (cookies) is saved.
 .TP
-.B ./queries.json
-Optional input file for batch queries.
-
-.SH NOTES
-.IP \[bu] 2
-The tool uses Playwright with a headful (visible) browser by default to avoid detection.
-.IP \[bu]
-Do not interact with the browser window while the query is running, as it might interfere with the automation.
+.B ./data/results/
+Directory where query results are saved.
 
 .SH AUTHOR
 Sim <sim@example.com>

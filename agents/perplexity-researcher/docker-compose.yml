@@ -1,28 +1,29 @@
 version: '3.8'
 
 services:
+  chromium:
+    build: ./browser
+    ports:
+      - "5900:5900"
+      - "3001:3000"
+    ipc: host
+    restart: unless-stopped
+
   perplexity-server:
     build: .
     image: perplexity-researcher:latest
     container_name: perplexity-server
     ports:
-      - "3000:3000" # HTTP API
-      - "5900:5900" # VNC (for debugging headed mode)
+      - "3000:3000"
     volumes:
-      # Persist browser profile (authentication state)
-      - browser-data:/root/.cache/perplexity-browser
-      # Persist query results
       - ./data:/app/data
+      - ${HOME}/.config/perplexity-researcher:/app/config
     environment:
-      - DISPLAY=:99
       - PORT=3000
-      # Set to "true" for headless mode (no VNC needed)
-      - HEADLESS=false
-    entrypoint: [ "/entrypoint.sh" ]
+      # - BROWSER_WS_ENDPOINT=ws://chromium:3000/ws # We now run locally in the container
+      - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
+    depends_on:
+      - chromium
     restart: unless-stopped
-    ipc: host
-
-volumes:
-  browser-data:
 
 
