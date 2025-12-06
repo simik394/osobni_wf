@@ -14,14 +14,33 @@ export class GeminiClient {
         console.log('[Gemini] Initializing...');
         await this.page.goto('https://gemini.google.com/', { waitUntil: 'domcontentloaded' });
 
-        // Handle "Welcome" or "Sign in" checks if needed
-        // For now, we assume shared auth session works
+        // Wait for page to actually load - Gemini has a lot of dynamic content
+        await this.page.waitForTimeout(3000);
+
+        // Check if we need to sign in
+        const signInButton = this.page.locator('button:has-text("Sign in"), a:has-text("Sign in")');
+        if (await signInButton.count() > 0) {
+            console.warn('[Gemini] Sign in required. This session needs authentication.');
+            await this.dumpState('gemini_auth_required');
+            throw new Error('Gemini requires authentication. Please run rsrch auth first.');
+        }
+
+        // Handle potential welcome/tour screens
+        const closeButtons = this.page.locator('button[aria-label*="Close"], button:has-text("Got it"), button:has-text("Skip")');
+        if (await closeButtons.count() > 0) {
+            console.log('[Gemini] Closing welcome screens...');
+            await closeButtons.first().click().catch(() => { });
+            await this.page.waitForTimeout(1000);
+        }
+
+        // Wait for the main chat interface
         try {
-            await this.page.waitForSelector('chat-app, .input-area, textarea', { timeout: 10000 });
+            await this.page.waitForSelector('chat-app, .input-area, textarea, div[contenteditable="true"]', { timeout: 15000 });
             console.log('[Gemini] Ready.');
         } catch (e) {
             console.warn('[Gemini] Timeout waiting for chat interface. Check login.');
             await this.dumpState('gemini_init_fail');
+            throw e;
         }
     }
 
@@ -32,7 +51,8 @@ export class GeminiClient {
             const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
             const input = this.page.locator(inputSelector).first();
 
-            await input.waitFor({ state: 'visible', timeout: 10000 });
+            console.log('[Gemini] Waiting for input field...');
+            await input.waitFor({ state: 'visible', timeout: 20000 });
             await input.fill(query);
             await this.page.waitForTimeout(500); // Debounce
             await input.press('Enter');
