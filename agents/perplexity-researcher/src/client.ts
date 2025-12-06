@@ -115,8 +115,13 @@ export class PerplexityClient {
                 fs.mkdirSync(config.auth.userDataDir, { recursive: true });
             }
 
-            const headless = process.env.HEADLESS === 'true';
-            console.log(`Headless: ${headless}`);
+            // Default to headless unless:
+            // 1. HEADLESS env var explicitly set to 'false', OR
+            // 2. --headed flag is passed in command line args
+            const hasHeadedFlag = process.argv.includes('--headed');
+            const headlessEnv = process.env.HEADLESS;
+            const headless = headlessEnv === 'false' ? false : (hasHeadedFlag ? false : true);
+            console.log(`Headless: ${headless}${hasHeadedFlag ? ' (--headed flag detected)' : ''}`);
 
             this.context = await chromium.launchPersistentContext(config.auth.userDataDir, {
                 headless: headless,

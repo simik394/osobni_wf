@@ -275,7 +275,12 @@ async function main() {
             console.log('  notebook add-source <URL> [--notebook <Title>]');
             console.log('  notebook add-drive-source <DocNames> [--notebook <Title>]');
             console.log('  notebook audio [--notebook <Title>] [--sources <list>] [--prompt <text>]');
-            console.log('  notebook download-audio [output_path] --notebook <Title> [--local]');
+            console.log('  notebook download-audio [output_path] --notebook <Title> [--local] [--headed]');
+            console.log('  notebook download-all-audio [output_dir] --notebook <Title> [--local] [--headed]');
+            console.log('');
+            console.log('Flags:');
+            console.log('  --local    Use local browser (required for Google services)');
+            console.log('  --headed   Show browser window (default: headless)');
         }
 
     } else if (command === 'gemini') {
