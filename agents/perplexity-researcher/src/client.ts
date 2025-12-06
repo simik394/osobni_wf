@@ -51,6 +51,37 @@ export class PerplexityClient {
                 viewport: { width: 1280, height: 1024 } // specific viewport for VNC
             });
 
+            // Add anti-detection scripts for every new page
+            await this.context.addInitScript(() => {
+                // Override the `navigator.webdriver` property
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined,
+                });
+
+                // Mock the `chrome` object
+                (window as any).chrome = {
+                    runtime: {},
+                };
+
+                // Override permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters: any) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission } as PermissionStatus) :
+                        originalQuery(parameters)
+                );
+
+                // Add realistic plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5],
+                });
+
+                // Add realistic languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en'],
+                });
+            });
+
         } else if (process.env.REMOTE_DEBUGGING_PORT) {
             console.log(`Connecting to local browser on port ${process.env.REMOTE_DEBUGGING_PORT}...`);
             this.browser = await chromium.connectOverCDP(`http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`);
