@@ -7,6 +7,31 @@ import { config } from './config';
 const args = process.argv.slice(2);
 const command = args[0];
 
+// Helper to send request to server
+async function sendServerRequest(path: string, body: any = {}) {
+    const port = config.port;
+    const url = `http://localhost:${port}${path}`;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Server error: ${response.status} ${err}`);
+        }
+
+        const data = await response.json();
+        console.log(JSON.stringify(data, null, 2));
+    } catch (e: any) {
+        console.error(`Failed to communicate with server at port ${port}. Is it running?`);
+        console.error(e.message);
+        process.exit(1);
+    }
+}
+
 function parseArgs(args: string[]) {
     const options: any = {};
     const queryParts: string[] = [];
@@ -28,6 +53,14 @@ function parseArgs(args: string[]) {
 }
 
 async function main() {
+    // Basic args parsing for subcommands
+    const subArg1 = args[1]; // e.g. create, add-source
+    const subArg2 = args[2];
+
+    // Config Port Override via args?
+    // We already load from file. 
+    // args override is harder with this simple parsing, relying on config file is safer for now.
+
     if (command === 'auth') {
         await login();
     } else if (command === 'login') {
@@ -36,10 +69,17 @@ async function main() {
         await client.init();
 
         console.log('Opening Perplexity for interactive login...');
-        await client.query('Login page', { session: 'login' }); // Just to open a tab
+        console.log('Opening Perplexity for interactive login...');
+        const ppUrl = 'https://www.perplexity.ai'; // or config.url
+        await client.openPage(ppUrl); // Opens Perplexity safely
 
-        console.log('\nPLEASE LOG IN VIA VNC (localhost:5900).');
-        console.log('Press Enter here when you have successfully logged in...');
+        console.log('Opening NotebookLM for interactive login...');
+        await client.openPage('https://notebooklm.google.com/');
+
+        console.log('\nPLEASE LOG IN TO BOTH SERVICES VIA VNC (localhost:5900).');
+        console.log('1. Log in to Perplexity in the first tab.');
+        console.log('2. Log in to Google/NotebookLM in the second tab.');
+        console.log('Press Enter here when you have successfully logged in to BOTH...');
 
         await new Promise(resolve => process.stdin.once('data', resolve));
 
@@ -49,7 +89,92 @@ async function main() {
         process.exit(0);
     } else if (command === 'serve') {
         await startServer();
+    } else if (command === 'stop') {
+        await sendServerRequest('/shutdown');
+
+    } else if (command === 'notebook') {
+        // notebook create "Title"
+        // notebook add-source "URL" [--notebook "Title"]
+        // notebook audio [--notebook "Title"]
+
+        if (subArg1 === 'create') {
+            const title = subArg2;
+            if (!title) { console.error('Usage: notebook create "Title"'); process.exit(1); }
+            await sendServerRequest('/notebook/create', { title });
+
+        } else if (subArg1 === 'add-source') {
+            const url = subArg2;
+            let notebookTitle = undefined;
+            if (args[3] === '--notebook') notebookTitle = args[4];
+
+            if (!url) { console.error('Usage: notebook add-source "URL" [--notebook "Title"]'); process.exit(1); }
+            await sendServerRequest('/notebook/add-source', { url, notebookTitle });
+
+        } else if (subArg1 === 'audio') {
+            let notebookTitle = undefined;
+            let sources: string[] = [];
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                } else if (args[i] === '--sources') {
+                    // Split by comma and trim
+                    const rawSources = args[i + 1];
+                    if (rawSources) {
+                        sources = rawSources.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                    }
+                    i++;
+                }
+            }
+
+            await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources });
+        } else {
+            console.log('Notebook commands:');
+            console.log('  notebook create <Title>');
+            console.log('  notebook add-source <URL> [--notebook <Title>]');
+            console.log('  notebook audio [--notebook <Title>]');
+        }
+
+    } else if (command === 'query') {
+        // Keep existing query logic? 
+        // User asked for "accessible from cli tool".
+        // Maybe query should also hit server if running?
+        // But query has a "standalone" legacy.
+        // Let's keep query as standalone for now unless requested otherwise, 
+        // to preserve "batch" functionality without server.
+        // But for consistency, having a CLI tool that does EVERYTHING via server is creating "one way".
+
+        const { query, options } = parseArgs(args);
+        if (query) {
+            const client = new PerplexityClient();
+            await client.init();
+            try { await client.query(query, options); } finally { await client.close(); }
+        } else {
+            // If no direct query, fall back to legacy mode (queries.json or error)
+            await runLegacyMode();
+        }
     } else if (command === 'batch') {
+        // Keep legacy batch
+        await runLegacyMode();
+    } else {
+        console.log('Usage:');
+        console.log('  auth                       - Login to Perplexity');
+        console.log('  login                      - Interactive login for Docker/Remote');
+        console.log('  serve                      - Start HTTP server');
+        console.log('  stop                       - Stop running server');
+        console.log('  notebook <cmd> ...         - Manage NotebookLM (requires server)');
+        console.log('  query "Question"           - Run localized query (standalone)');
+        console.log('  query                      - Run queries from data/queries.json (standalone)');
+        console.log('    Options: --session=ID|new|latest, --name=NAME');
+        console.log('  batch file.txt             - Run batch queries from a file (standalone)');
+    }
+}
+
+// ... Copying Legacy Logic Function
+async function runLegacyMode() {
+    const { query, options } = parseArgs(args);
+    if (command === 'batch') {
         const batchFile = args[1];
         if (!batchFile) {
             console.error('Please provide a batch file: npm run batch queries.txt');
@@ -78,81 +203,35 @@ async function main() {
             for (let i = 0; i < queries.length; i++) {
                 const q = queries[i];
                 console.log(`\n[Batch ${i + 1}/${queries.length}] Processing: "${q}"`);
-                // Use a new session for each query in the batch, or maybe named sessions?
-                // User said "paste them sequentially in separate tabs".
-                // My default logic creates a new session if no session is specified.
-                // So calling query(q) will create a new tab for each.
                 await client.query(q, { session: 'new' });
             }
         } catch (error) {
             console.error('Batch processing failed:', error);
         } finally {
-            // Keep browser open if it's a server? No, this is CLI.
-            // But user wants to see them.
-            // If we close, they are gone.
-            // The client.close() kills the browser.
-            // If we want to keep them open for VNC inspection, we shouldn't close.
-            // But the script needs to exit?
-            // If we are connecting to a remote browser (Docker), client.close() closes the context/browser?
-            // Let's check client.ts close() method.
-            // It closes pages, context, and browser.
-
-            // If running against Docker server, we probably want to leave the tabs open.
-            // But client.ts logic is:
-            // if (process.env.BROWSER_WS_ENDPOINT) ... connect ...
-            // close() -> browser.close()
-
-            // If we want to persist, we should NOT call client.close() if we want to inspect.
-            // But then the node process hangs?
-            // Maybe we add a flag --keep-open?
-            // Or just don't close if it's a batch?
-
-            // For now, I will NOT close the client if it's a batch, so the user can inspect.
-            // But the script will hang until user kills it.
             console.log('\nBatch complete. Press Ctrl+C to exit and close browser.');
-            // await client.close(); 
         }
     } else if (command === 'query') {
-        const { query, options } = parseArgs(args);
-
-        if (query) {
-            const client = new PerplexityClient();
-            await client.init();
-            try {
-                await client.query(query, options);
-            } finally {
-                await client.close();
-            }
-        } else {
-            // Check if queries.json exists and run batch
-            if (fs.existsSync(config.paths.queriesFile)) {
-                console.log('No query argument provided. Reading from queries.json...');
-                const queries = JSON.parse(fs.readFileSync(config.paths.queriesFile, 'utf-8'));
-                if (Array.isArray(queries)) {
-                    const client = new PerplexityClient();
-                    await client.init();
-                    try {
-                        for (const q of queries) {
-                            await client.query(q, options);
-                        }
-                    } finally {
-                        await client.close();
+        // This part handles the case where 'query' is called without a direct query string,
+        // implying a fallback to queries.json
+        if (fs.existsSync(config.paths.queriesFile)) {
+            console.log('No query argument provided. Reading from queries.json...');
+            const queries = JSON.parse(fs.readFileSync(config.paths.queriesFile, 'utf-8'));
+            if (Array.isArray(queries)) {
+                const client = new PerplexityClient();
+                await client.init();
+                try {
+                    for (const q of queries) {
+                        await client.query(q, options);
                     }
-                } else {
-                    console.error('queries.json should be an array of strings.');
+                } finally {
+                    await client.close();
                 }
             } else {
-                console.error('Please provide a query: npm run query "Your question" [--session=ID] [--name=NAME]');
+                console.error('queries.json should be an array of strings.');
             }
+        } else {
+            console.error('Please provide a query: npm run query "Your question" [--session=ID] [--name=NAME]');
         }
-    } else {
-        console.log('Usage:');
-        console.log('  npm run auth             - Login to Perplexity');
-        console.log('  npm run serve            - Start HTTP server (long-running service)');
-        console.log('  npm run query "Question" - Run a single query');
-        console.log('  npm run query            - Run queries from data/queries.json');
-        console.log('    Options: --session=ID|new|latest, --name=NAME');
-        console.log('  npm run batch file.txt   - Run queries from a file (one per line)');
     }
 }
 

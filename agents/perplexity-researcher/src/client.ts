@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-extra';
+import { NotebookLMClient } from './notebooklm-client';
 import type { BrowserContext, Page } from 'playwright';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
@@ -28,21 +29,50 @@ export class PerplexityClient {
         }
 
         if (process.env.BROWSER_WS_ENDPOINT) {
-            // Remote/Docker mode:
-            // We can't use launchPersistentContext over WS connect easily.
-            // But if we are in Docker using the 'chromium' service, we can't 'connect' and share the persistent disk easily unless it is mounted.
-            // Actually, the original 'client.ts' used 'launchPersistentContext' locally.
-            // If running in Docker, we typically skip the 'browser service' and just run Chromium inside the container if we want persistent context on disk.
-
-            // Wait, the original code had NO browser service concept?
-            // "Connect to browser service..." was introduced by me.
-            // If we revert to "old way", we probably run browser directly.
-
             console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
             this.browser = await chromium.connect(config.browserWsEndpoint);
-            this.context = await this.browser.newContext(); // This won't have the persistent state unless we load storageState
 
-            // Revert: If we want to support the OLD way, we should support LOCAL launch primarily.
+            // Load storage state if exists
+            let storageState = undefined;
+            if (fs.existsSync(config.auth.authFile)) {
+                console.log(`Loading auth state from ${config.auth.authFile}`);
+                try {
+                    const authContent = fs.readFileSync(config.auth.authFile, 'utf-8');
+                    storageState = JSON.parse(authContent);
+                    console.log('[Client] Auth state loaded into memory.');
+                } catch (e: any) {
+                    console.error('[Client] Failed to parse auth file:', e);
+                }
+            }
+
+            this.context = await this.browser.newContext({
+                storageState: storageState,
+                viewport: { width: 1280, height: 1024 } // specific viewport for VNC
+            });
+
+        } else if (process.env.REMOTE_DEBUGGING_PORT) {
+            console.log(`Connecting to local browser on port ${process.env.REMOTE_DEBUGGING_PORT}...`);
+            this.browser = await chromium.connectOverCDP(`http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`);
+            const contexts = this.browser.contexts();
+            if (contexts.length > 0) {
+                this.context = contexts[0];
+                console.log(`Attached to existing context with ${contexts.length} contexts.`);
+            } else {
+                console.log('No direct contexts found. Trying to derive from pages...');
+                const pages = this.browser.pages ? this.browser.pages() : []; // access pages synchronously if possible or await if needed in newer playwright? connectOverCDP returns Browser which has contexts.
+                // Wait, Browser.pages() is not a standard method on Browser type immediately?
+                // It's usually accessible via contexts.
+                // But connectOverCDP returns a Browser instance.
+                // Let's try creating a new page to get the default context.
+                try {
+                    const page = await this.browser.newPage();
+                    this.context = page.context();
+                    console.log('Acquired context via new page creation.');
+                } catch (e: any) {
+                    throw new Error(`Could not acquire context from CDP browser: ${e.message}`);
+                }
+            }
+
         } else {
             // Local mode
             console.log('Launching browser with saved profile...');
@@ -52,8 +82,11 @@ export class PerplexityClient {
             }
 
             this.context = await chromium.launchPersistentContext(config.auth.userDataDir, {
-                headless: process.env.HEADLESS !== 'false', // Default to true (headless) now that we are auth'd
-                channel: 'chromium'
+                headless: process.env.HEADLESS === 'true', // Default to false if not set, or controlled by env
+                channel: 'chromium',
+                args: ['--disable-blink-features=AutomationControlled', '--start-maximized'],
+                ignoreDefaultArgs: ['--enable-automation'],
+                viewport: null
             });
             this.browser = this.context; // persistent context objects act as browser too for closing
         }
@@ -82,7 +115,7 @@ export class PerplexityClient {
             const oldSession = this.sessions.shift();
             if (oldSession) {
                 console.log(`Closing old session: ${oldSession.id}`);
-                await oldSession.page.close().catch(e => console.error('Error closing old page:', e));
+                await oldSession.page.close().catch((e: any) => console.error('Error closing old page:', e));
             }
         }
 
@@ -111,6 +144,15 @@ export class PerplexityClient {
         }
 
         return undefined;
+    }
+
+    async openPage(url: string): Promise<void> {
+        if (!this.isInitialized || !this.context) {
+            throw new Error('Client not initialized. Call init() first.');
+        }
+        console.log(`Opening page: ${url}`);
+        const page = await this.context.newPage();
+        await page.goto(url);
     }
 
     async query(queryText: string, options: { session?: string, name?: string } = {}): Promise<{ query: string; answer: string | null; timestamp: string; url: string }> {
@@ -254,8 +296,9 @@ export class PerplexityClient {
                         await page.waitForTimeout(500);
                     }
                 }
-            } catch (e) {
-                console.log('Error during completion check, assuming done:', e);
+            } catch (e: any) {
+                console.error("Error creating session in openPage:", e);
+                throw e;
             }
 
             // TODO: Improve answer extraction for threads (get the last answer)
@@ -279,14 +322,15 @@ export class PerplexityClient {
             try {
                 fs.writeFileSync(filepath, JSON.stringify(result, null, 2));
                 console.log(`Result saved to ${filepath}`);
-            } catch (saveError) {
-                console.error('Error saving file (permission issue):', saveError);
+            } catch (e: any) {
+                console.error(`Error saving page dump: ${e.message}`);
             }
 
             return result;
 
-        } catch (error) {
-            console.error('Query execution failed:', error);
+        } catch (error: any) {
+            console.error('Unexpected error in audio generation:', error);
+            // Try to capture state on failure
             // Don't close the page on error, let the user see it in VNC
             throw error;
         }
@@ -297,6 +341,11 @@ export class PerplexityClient {
         console.log(`Saving auth state to ${config.auth.authFile}...`);
         await this.context.storageState({ path: config.auth.authFile });
         console.log('Auth state saved.');
+    }
+    async createNotebookClient(): Promise<NotebookLMClient> {
+        if (!this.context) throw new Error('Context not initialized');
+        const page = await this.context.newPage();
+        return new NotebookLMClient(page);
     }
 
     async close() {

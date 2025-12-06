@@ -57,6 +57,11 @@ perplexity-researcher batch queries.txt
 # View browser (VNC)
 vncviewer localhost:5900
 
+# NotebookLM Automations
+perplexity-researcher notebook create "My Research Project"
+perplexity-researcher notebook add-source "https://example.com/article" --notebook "My Research Project"
+perplexity-researcher notebook audio --notebook "My Research Project"
+
 # Stop
 docker-compose down
 ```

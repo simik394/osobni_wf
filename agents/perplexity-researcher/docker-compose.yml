@@ -5,7 +5,7 @@ services:
     build: ./browser
     ports:
       - "5900:5900"
-      - "3001:3000"
+      - "3002:3000"
     ipc: host
     restart: unless-stopped
 
@@ -14,14 +14,17 @@ services:
     image: perplexity-researcher:latest
     container_name: perplexity-server
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
     volumes:
       - ./data:/app/data
+      - ./src:/app/src
       - ${HOME}/.config/perplexity-researcher:/app/config
     environment:
-      - PORT=3000
-      # - BROWSER_WS_ENDPOINT=ws://chromium:3000/ws # We now run locally in the container
+      - PORT=${PORT:-3000}
+      - BROWSER_WS_ENDPOINT=ws://chromium:3000/ws
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
+      - AUTH_FILE=/app/config/auth.json
+    command: npm run serve
     depends_on:
       - chromium
     restart: unless-stopped
