@@ -1,4 +1,5 @@
 import { Page } from 'playwright';
+import * as path from 'path';
 
 export class NotebookLMClient {
     constructor(private page: Page) { }
@@ -9,30 +10,40 @@ export class NotebookLMClient {
 
     async createNotebook(title: string) {
         console.log(`Creating notebook: ${title}`);
-        await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+        try {
+            await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
 
-        // Wait for "New Notebook" button
-        const createBtnSelector = '.create-new-button';
-        await this.page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });
+            // Wait for "New Notebook" button
+            const createBtnSelector = '.create-new-button';
+            await this.page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });
 
-        // Click and wait for navigation
-        await this.page.click(createBtnSelector);
+            // Click and wait for navigation
+            await this.page.click(createBtnSelector);
 
-        // Wait for title input
-        const titleInputSelector = 'input.title-input';
-        await this.page.waitForSelector(titleInputSelector, { state: 'visible', timeout: 15000 });
+            // Wait for title input
+            const titleInputSelector = 'input.title-input';
+            await this.page.waitForSelector(titleInputSelector, { state: 'visible', timeout: 15000 });
 
-        // Set title
-        await this.page.fill(titleInputSelector, title);
-        await this.page.keyboard.press('Enter'); // Confirm title
+            // Set title
+            await this.page.fill(titleInputSelector, title);
+            await this.page.keyboard.press('Enter'); // Confirm title
 
-        await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(2000);
+        } catch (e) {
+            console.error('Error creating notebook:', e);
+            await this.dumpState('create_error');
+            throw e;
+        }
     }
 
     async dumpState(prefix: string = 'debug') {
         const timestamp = Date.now();
-        const htmlPath = `/app/data/${prefix}_${timestamp}.html`;
-        const pngPath = `/app/data/${prefix}_${timestamp}.png`;
+        const dataDir = path.join(process.cwd(), 'data');
+        if (!require('fs').existsSync(dataDir)) {
+            require('fs').mkdirSync(dataDir, { recursive: true });
+        }
+        const htmlPath = path.join(dataDir, `${prefix}_${timestamp}.html`);
+        const pngPath = path.join(dataDir, `${prefix}_${timestamp}.png`);
 
         try {
             console.log(`[NotebookLM] Dumping state to ${htmlPath} / ${pngPath}`);
@@ -43,7 +54,7 @@ export class NotebookLMClient {
             return { htmlPath, pngPath };
         } catch (e) {
             console.error('[NotebookLM] Failed to dump state:', e);
-            throw e;
+            // Don't throw here to avoid masking original error
         }
     }
 
@@ -51,9 +62,13 @@ export class NotebookLMClient {
         console.log(`Opening notebook: ${title}`);
         await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
 
+        // Network idle is too slow (background polling). 
+        // We rely on waiting for specific selectors instead.
+        // await this.page.waitForLoadState('networkidle'); 
+
         try {
             // Wait for any project button to appear to ensure list is loaded
-            await this.page.waitForSelector('project-button, mat-card', { timeout: 10000 });
+            await this.page.waitForSelector('project-button, mat-card', { timeout: 20000 });
 
             console.log(`[DEBUG] Searching for notebook: ${title}`);
             // Use specific locator for the project card
@@ -86,13 +101,26 @@ export class NotebookLMClient {
 
         } catch (e) {
             console.error('Failed to open notebook', e);
-            await this.page.screenshot({ path: '/app/data/open-notebook-fail.png' });
+            const dataDir = path.join(process.cwd(), 'data');
+            if (!require('fs').existsSync(dataDir)) require('fs').mkdirSync(dataDir, { recursive: true });
+            await this.page.screenshot({ path: path.join(dataDir, `open-notebook-fail-${Date.now()}.png`) });
             throw e;
         }
     }
 
     async addSourceUrl(url: string) {
         console.log(`Adding source URL: ${url}`);
+
+        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Sources tab...');
+                await sourcesTab.click();
+                await this.page.waitForTimeout(1000);
+            }
+        }
 
         // Find the "Web" or "Website" button. 
         // It captures "Weby", "Website", "Link", etc.
@@ -134,7 +162,90 @@ export class NotebookLMClient {
         }
     }
 
-    async generateAudioOverview(notebookTitle?: string, sources?: string[]) { // sources: optional list of source filenames to include
+    /**
+     * Add sources from Google Drive by document name or ID.
+     * @param docNames Array of document names (or partial names) to search for and select
+     * @param notebookTitle Optional notebook to open first
+     */
+    async addSourceFromDrive(docNames: string[], notebookTitle?: string) {
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[DEBUG] Adding Google Drive sources: ${docNames.join(', ')}`);
+
+        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
+        // In narrow view, "Add sources" is only visible in Sources tab.
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Sources tab...');
+                await sourcesTab.click();
+                await this.page.waitForTimeout(1000);
+            }
+        }
+
+        // Click "Add sources" button
+        const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
+        if (await addSourceBtn.count() === 0) {
+            throw new Error('"Add sources" button not found');
+        }
+        await addSourceBtn.click();
+        await this.page.waitForTimeout(1000);
+
+        // Click "Disk" (Google Drive) button in the dialog
+        const driveBtn = this.page.locator('button.drop-zone-icon-button').filter({ hasText: /Disk|Drive/i }).first();
+        if (await driveBtn.count() === 0) {
+            // Try alternative selector
+            const altDriveBtn = this.page.getByText('Disk').first();
+            if (await altDriveBtn.count() > 0) {
+                await altDriveBtn.click();
+            } else {
+                throw new Error('Google Drive button not found');
+            }
+        } else {
+            await driveBtn.click();
+        }
+
+        // Wait for Drive picker iframe to load
+        await this.page.waitForTimeout(2000);
+
+        // The Google Drive picker is in an iframe
+        const pickerFrame = this.page.frameLocator('iframe').first();
+
+        for (const docName of docNames) {
+            console.log(`[DEBUG] Searching for document: ${docName}`);
+
+            // Use the search box to find the document
+            const searchInput = pickerFrame.locator('input[type="text"]').first();
+            if (await searchInput.count() > 0) {
+                await searchInput.fill(docName);
+                await this.page.waitForTimeout(1500); // Wait for search results
+
+                // Click on the first matching result
+                const fileRow = pickerFrame.locator(`div[role="option"], div[role="row"]`).filter({ hasText: docName }).first();
+                if (await fileRow.count() > 0) {
+                    await fileRow.click();
+                    console.log(`[DEBUG] Selected: ${docName}`);
+                } else {
+                    console.warn(`[DEBUG] Document not found: ${docName}`);
+                }
+            }
+        }
+
+        // Click "Vybrat" (Select) button to confirm selection
+        const selectBtn = pickerFrame.locator('button').filter({ hasText: /Vybrat|Select/i });
+        if (await selectBtn.count() > 0 && await selectBtn.isEnabled()) {
+            await selectBtn.click();
+            console.log('[DEBUG] Confirmed Drive source selection.');
+            await this.page.waitForTimeout(2000);
+        } else {
+            console.warn('[DEBUG] Select button not found or disabled. No files selected?');
+        }
+    }
+
+    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string) {
         if (notebookTitle) {
             await this.openNotebook(notebookTitle);
         }
@@ -146,9 +257,6 @@ export class NotebookLMClient {
             // 1. Find "Select all" checkbox and uncheck it to clear selection
             // English: "Select all sources", Czech: "Vybrat všechny zdroje"
             const selectAllSelector = 'div[role="checkbox"]:has-text("Select all sources"), div[role="checkbox"]:has-text("Vybrat všechny zdroje"), div:has-text("Vybrat všechny zdroje"):has(input[type="checkbox"])';
-
-            // We need to handle different DOM structures for checkboxes. 
-            // Often they are div[role=checkbox] or input[type=checkbox].
 
             // Try to find the "Select all" element
             const selectAllBtn = await this.page.$(selectAllSelector);
@@ -169,9 +277,6 @@ export class NotebookLMClient {
                 // Simple text match for now
                 const sourceRow = await this.page.$(`div:has-text("${sourceName}")`);
                 if (sourceRow) {
-                    // Try to find the checkbox within or near this row
-                    // Assuming the row *contains* the checkbox or is clickable
-                    // Let's try clicking the checkbox specifically if possible
                     const checkbox = await sourceRow.$('div[role="checkbox"], input[type="checkbox"]');
                     if (checkbox) {
                         const isChecked = await checkbox.getAttribute('aria-checked') === 'true' || await checkbox.isChecked().catch(() => false);
@@ -182,7 +287,6 @@ export class NotebookLMClient {
                             console.log(`[DEBUG] Source already checked: ${sourceName}`);
                         }
                     } else {
-                        // Click the row itself? Might open source viewer.
                         console.warn(`[DEBUG] Checkbox not found for source: ${sourceName}`);
                     }
                 } else {
@@ -198,61 +302,485 @@ export class NotebookLMClient {
             return;
         }
 
-        // Check if audio is already completed (Play button available or "Listen" text)
-        // This is harder to genericize, but let's assume if we see "Audio přehled" in the library that IS NOT generating, it might be done.
-        // For now, just handling the "Generating" case prevents the timeout loop.
-
-        // Step 1: Check for "Vygenerovat" or "Generate" button directly (if dialog is already open)
-        console.log('[DEBUG] Looking for Generate button...');
-        const generateBtnSelector = 'button:has-text("Vygenerovat"), button:has-text("Generate")';
-        let generateBtn = await this.page.$(generateBtnSelector);
-
-        if (generateBtn) {
-            console.log('[DEBUG] Found Generate button directly. Clicking...');
-            await generateBtn.click();
-            return;
+        // RESPONSIVE UI HANDLING: Check for Studio tab
+        console.log('[DEBUG] Checking for Studio tab (responsive layout)...');
+        // Studio tab is usually a div/button in the tab list
+        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Studio tab...');
+                await studioTab.click();
+                await this.page.waitForTimeout(1000);
+            } else {
+                console.log('[DEBUG] Studio tab already active.');
+            }
         }
 
-        console.log('[DEBUG] Generate button not found. Looking for "Audio přehled" card...');
-        // Locate the "Audio Overview" or "Audio přehled" button in the Studio panel
-        const audioOverviewText = this.page.locator('basic-create-artifact-button .create-label-container').filter({ hasText: /Audio (Overview|přehled)/ }).first();
+        // Wait for notebook guide loading to finish (if any)
+        const loadingSelector = '.notebook-guide-loading-animation';
+        try {
+            // Only wait if it's visible to avoid waiting on hidden elements
+            const loading = this.page.locator(loadingSelector);
+            if (await loading.isVisible()) {
+                console.log('[DEBUG] Waiting for Notebook Guide to load...');
+                await loading.waitFor({ state: 'hidden', timeout: 30000 });
+            }
+        } catch (e) {
+            console.warn('[DEBUG] Timeout waiting for loading animation to hide (or it was never there).');
+        }
 
-        if (await audioOverviewText.count() > 0) {
-            console.log('[DEBUG] Found "Audio přehled" text. Clicking...');
-            await audioOverviewText.click();
+        // CHECK FOR EXISTING AUDIO
+        // If audio exists, we might want to Regenerate if customPrompt is provided.
+        const audioPlayer = this.page.locator('audio-player');
+        const audioArtifact = this.page.locator('artifact-library-item').filter({
+            hasText: /Audio (Overview|přehled)|Podcast/i
+        });
 
-            // Wait for the modal/dialog to appear
-            console.log('[DEBUG] Waiting for dialog...');
-            try {
-                // Wait specifically for the "Vygenerovat" button to appear in the dialog
-                await this.page.waitForSelector(generateBtnSelector, { timeout: 5000 });
-                console.log('[DEBUG] Dialog appeared. Found "Vygenerovat" button.');
+        // Check if audio exists (player or artifact)
+        const hasAudio = (await audioPlayer.count() > 0) || (await audioArtifact.count() > 0);
 
-                generateBtn = await this.page.$(generateBtnSelector);
-                if (generateBtn) {
-                    await generateBtn.click();
-                    console.log('[DEBUG] Clicked "Vygenerovat".');
+        if (hasAudio) {
+            console.log('[DEBUG] Detected existing Audio Overview.');
+            if (!customPrompt) {
+                console.log('[DEBUG] Audio exists and no custom prompt requested. Skipping generation.');
+                return;
+            } else {
+                console.log('[DEBUG] Audio exists but Custom Prompt provided. Proceeding to Customization/Regeneration...');
+
+                // 1. Find the Edit Button
+                // It's inside a basic-create-artifact-button with label "Audio Overview" or similar
+                // Button has aria-label "Customize Audio Overview" (English) or "Přizpůsobit audio přehled" (Czech)
+                const editBtnSelector = [
+                    'button[aria-label="Customize Audio Overview"]',
+                    'button[aria-label="Přizpůsobit audio přehled"]',
+                    'basic-create-artifact-button[aria-label*="Audio"] button.edit-button',
+                    'basic-create-artifact-button[aria-label*="Audio"] button:has-text("Customize")',
+                    'basic-create-artifact-button[aria-label*="Audio"] button:has-text("Přizpůsobit")'
+                ].join(',');
+
+                const editBtn = this.page.locator(editBtnSelector).first();
+
+                if (await editBtn.count() > 0 && await editBtn.isVisible()) {
+                    console.log('[DEBUG] Clicking edit button for Audio card...');
+                    await editBtn.click();
+
+                    // Wait for dialog
+                    console.log('[DEBUG] Waiting for dialog...');
+                    // Dialog usually has role="dialog" or class="mat-mdc-dialog-container"
+                    const dialog = this.page.locator('div[role="dialog"], .mat-mdc-dialog-container');
+                    try {
+                        await dialog.first().waitFor({ state: 'visible', timeout: 5000 });
+                        console.log('[DEBUG] Dialog appeared.');
+                    } catch (e) {
+                        console.warn('[DEBUG] Timeout waiting for dialog to appear.');
+                        await this.dumpState('audio_dialog_timeout');
+                        return;
+                    }
+
+                    // Fill the Prompt
+                    const promptInputSelector = 'textarea, input[type="text"]'; // Usually only one textarea in this dialog
+                    const promptInput = dialog.locator(promptInputSelector).first();
+                    if (await promptInput.count() > 0) {
+                        console.log('[DEBUG] Filling custom prompt...');
+                        await promptInput.fill(customPrompt);
+                    } else {
+                        console.warn('[DEBUG] Could not find prompt input in dialog.');
+                    }
+
+                    // Click Generate
+                    // English: "Generate", Czech: "Vygenerovat"
+                    console.log('[DEBUG] Waiting for Generate button...');
+                    const generateBtn = dialog.locator('button').filter({ hasText: /Generate|Vygenerovat/i }).first();
+
+                    try {
+                        await generateBtn.waitFor({ state: 'visible', timeout: 8000 });
+                        console.log('[DEBUG] Clicking Generate...');
+                        await generateBtn.click();
+                        // Wait for dialog to close?
+                    } catch (e) {
+                        console.error('[DEBUG] Timeout waiting for "Generate" button in dialog.');
+                        await this.dumpState('audio_dialog_timeout');
+                        return;
+                    }
+
+                } else {
+                    console.log('[DEBUG] Could not find "Customize/Edit" button for Audio. Customization skipped.');
                     return;
                 }
-            } catch (e) {
-                console.error('[DEBUG] Timeout waiting for "Vygenerovat" button in dialog.', e);
-
-                // Double check if it started generating effectively during the wait?
-                if (await this.page.locator('.artifact-title').filter({ hasText: /Generování|Generating/ }).count() > 0) {
-                    console.log('[DEBUG] Audio generation started (detected in library).');
-                    return;
-                }
-
-                await this.dumpState('audio_dialog_timeout');
             }
         } else {
-            console.warn('[DEBUG] Could not find "Audio přehled" card.');
-        }
+            // No Audio exists. Try to find "Generate" or "Audio Overview" card to start generation.
+            console.log('[DEBUG] No existing audio found. Attempting to start generation...');
 
-        // Final fallback/debug snapshot
-        if (!generateBtn) {
-            console.warn('[DEBUG] Failed to start audio generation.');
-            await this.dumpState('audio_final_fail');
+            // Define Customization Selector
+            const customizeBtnSelector = [
+                'button[aria-label="Customize Audio Overview"]',
+                'button[aria-label="Přizpůsobit audio přehled"]',
+                'button[aria-label="Customize"]',
+                'button[aria-label="Přizpůsobit"]',
+                'button:has-text("Customize")',
+                'button:has-text("Upravit")' // Czech 'Customize'
+            ].join(',');
+
+            // Helper to handle dialog interaction
+            const handleDialog = async () => {
+                console.log('[DEBUG] Waiting for dialog...');
+                // Dialog usually has role="dialog" or class="mat-mdc-dialog-container"
+                // Filter for VISIBLE dialog to avoid hidden containers from previous interactions
+                const dialog = this.page.locator('div[role="dialog"], .mat-mdc-dialog-container').filter({ has: this.page.locator(':visible') }).last();
+
+                try {
+                    await dialog.waitFor({ state: 'visible', timeout: 8000 });
+                    console.log('[DEBUG] Dialog appeared.');
+                } catch (e) {
+                    console.warn('[DEBUG] Timeout waiting for visible dialog.');
+                    await this.dumpState('audio_dialog_timeout');
+                    return false;
+                }
+
+                // Fill the Prompt
+                const promptInputSelector = 'textarea, input[type="text"]';
+                const promptInput = dialog.locator(promptInputSelector).first();
+                if (await promptInput.count() > 0) {
+                    console.log('[DEBUG] Filling custom prompt...');
+                    await promptInput.fill(customPrompt || '');
+                } else {
+                    console.warn('[DEBUG] Could not find prompt input in dialog.');
+                }
+
+                // Click Generate
+                console.log('[DEBUG] Waiting for Generate button...');
+                const generateBtn = dialog.locator('button').filter({ hasText: /Generate|Vygenerovat/i }).first();
+
+                try {
+                    await generateBtn.waitFor({ state: 'visible', timeout: 10000 });
+                    console.log('[DEBUG] Clicking Generate...');
+                    await generateBtn.click();
+
+                    // WAIT FOR GENERATION CONFIRMATION
+                    console.log('[DEBUG] Waiting for generation to start (checking UI indicator)...');
+                    // Look for "Generating..." or "Generování..." in the artifact title/status
+                    try {
+                        const generatingIndicator = this.page.locator('.artifact-title, .status-text').filter({ hasText: /Generování|Generating/ });
+                        await generatingIndicator.first().waitFor({ state: 'visible', timeout: 15000 });
+                        console.log('[DEBUG] Generation started successfully (Indicator visible).');
+                    } catch (e) {
+                        console.warn('[DEBUG] "Generating" indicator did not appear within timeout. Proceeding but verification is weak.');
+                    }
+
+                    return true;
+                } catch (e) {
+                    console.error('[DEBUG] Failed during generation click or wait.', e);
+                    await this.dumpState('audio_dialog_timeout');
+                    return false;
+                }
+            };
+
+            // 1. Try finding Customize button directly (maybe already expanded)
+            if (customPrompt) {
+                let customizeBtn = this.page.locator(customizeBtnSelector).first();
+                if (await customizeBtn.count() > 0 && await customizeBtn.isVisible()) {
+                    console.log('[DEBUG] Found Customize button directly. Clicking...');
+                    await customizeBtn.click();
+                    await handleDialog();
+                    return;
+                }
+            }
+
+            // 2. If not found, look for "Audio Overview" card/button to expand/create
+            const audioCardText = /Audio (Overview|přehled)/i;
+            const audioCard = this.page.locator('basic-create-artifact-button, button').filter({ hasText: audioCardText }).first();
+
+            if (await audioCard.count() > 0) {
+                console.log('[DEBUG] Found Audio Overview card/button. Clicking to reveal controls...');
+                await audioCard.click();
+                await this.page.waitForTimeout(1000);
+
+                // NOW check for Customize button again if needed
+                if (customPrompt) {
+                    const customizeBtn = this.page.locator(customizeBtnSelector).first();
+                    if (await customizeBtn.count() > 0 && await customizeBtn.isVisible()) {
+                        console.log('[DEBUG] Customize button revealed. Clicking...');
+                        await customizeBtn.click();
+                        await handleDialog();
+                        return;
+                    }
+                }
+
+                // Fallback to finding Generate button inside the card/panel
+                // Sometimes clicking card just expands it and shows "Generate"
+            }
+
+            // 3. Check for "Generate" button (fallback or simple generation)
+            // Prioritize "Generate" buttons inside the audio card/panel if possible
+            const generateBtnSelector = 'button:has-text("Vygenerovat"), button:has-text("Generate")';
+            let generateBtn = this.page.locator(generateBtnSelector).first();
+
+            if (await generateBtn.count() > 0 && await generateBtn.isVisible()) {
+                console.log('[DEBUG] Found Generate button. Clicking...');
+                if (customPrompt) {
+                    console.warn('[DEBUG] Custom Prompt provided but "Customize" button not found. Generating without customization.');
+                }
+                await generateBtn.click();
+                return;
+            }
+
+            console.warn('[DEBUG] Could not find Audio Overview controls (Customize or Generate).');
+            await this.dumpState('audio_not_found');
         }
     }
+
+    async downloadAudio(notebookTitle: string, outputFilename: string) {
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[DEBUG] Attempting to download audio to: ${outputFilename}`);
+
+        // RESPONSIVE UI HANDLING: Check for Studio tab
+        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Studio tab...');
+                await studioTab.click();
+                await this.page.waitForTimeout(1000);
+            }
+        }
+
+        await this.page.waitForTimeout(2000);
+
+        // 1. Try ACTIVE AUDIO PLAYER (Footer) first
+        console.log('[DEBUG] Checking for active Audio Player footer...');
+        const audioPlayer = this.page.locator('audio-player').first();
+
+        let targetMenuBtn = null;
+        let extractionSource = 'none';
+
+        // Relaxed check: Just existence is enough to try, we can handle visibility handling in click
+        if (await audioPlayer.count() > 0) {
+            console.log('[DEBUG] Found active Audio Player DOM element.');
+            targetMenuBtn = audioPlayer.locator('button[aria-label*="More"], button[aria-label*="Další"], button:has(mat-icon:has-text("more_vert"))').first();
+            if (await targetMenuBtn.count() > 0) {
+                extractionSource = 'player';
+                console.log('[DEBUG] Using Audio Player menu button.');
+            }
+        }
+
+        // 2. If no player button, find the Audio Artifact in the Library
+        if (!targetMenuBtn || await targetMenuBtn.count() === 0) {
+            console.log('[DEBUG] Audio Player menu not found. Searching in Artifact Library...');
+
+            let audioArtifact = this.page.locator('artifact-library-item').filter({
+                has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
+            }).first();
+
+            // Fallback: search by text
+            if (await audioArtifact.count() === 0) {
+                audioArtifact = this.page.locator('artifact-library-item').filter({
+                    hasText: /Audio (Overview|přehled)|Podcast/i
+                }).first();
+            }
+
+            if (await audioArtifact.count() > 0) {
+                console.log('[DEBUG] Found Audio Artifact in library. Hovering to reveal controls...');
+                await audioArtifact.scrollIntoViewIfNeeded();
+                await audioArtifact.hover();
+                await this.page.waitForTimeout(500);
+
+                // Look for "..." menu button within this artifact item
+                // Priority: exact icon match, text match in tooltip/label
+                targetMenuBtn = audioArtifact.locator('button').filter({
+                    has: this.page.locator('mat-icon').filter({ hasText: 'more_vert' })
+                }).first();
+
+                if (await targetMenuBtn.count() === 0) {
+                    targetMenuBtn = audioArtifact.locator('button[mattooltip*="Další"], button[mattooltip*="More"], button[aria-label*="Další"], button[aria-label*="More"]').first();
+                }
+                extractionSource = 'library';
+            }
+        }
+
+        // 3. Execute Menu Interaction with RETRY LOGIC
+        if (extractionSource !== 'none') { // Changed condition to check if extractionSource is set
+            console.log(`[DEBUG] Interaction Target: ${extractionSource}. Starting Click Strategy...`);
+
+            // Helper to get fresh button handle
+            const getButton = () => {
+                if (extractionSource === 'audio-player') {
+                    return this.page.locator('audio-player button.menu-button, audio-player button[aria-label*="Další"], audio-player button[aria-label*="More"]').first();
+                } else {
+                    // Library fallback
+                    const art = this.page.locator('artifact-library-item').filter({
+                        has: this.page.locator('mat-icon').filter({ hasText: 'audio_magic_eraser' })
+                    }).first(); // Simplified for speed
+
+                    // Try finding the specific class from the dump
+                    return art.locator('button.artifact-more-button').first();
+                }
+            };
+
+            const isMenuOpen = async () => await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').count() > 0;
+
+            const findAndClickDownload = async () => {
+                // 1. Wait for menu animation
+                await this.page.waitForTimeout(500);
+
+                // Specific Text Search (Czech)
+                const czDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
+                if (await czDownload.isVisible()) {
+                    console.log('[DEBUG] Found "Stáhnout" menu item. Clicking...');
+                    await czDownload.click();
+                    return true;
+                }
+
+                // Specific Icon Search (save_alt)
+                const saveAltIcon = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
+                if (await saveAltIcon.isVisible()) {
+                    console.log('[DEBUG] Found "save_alt" icon menu item. Clicking...');
+                    await saveAltIcon.click();
+                    return true;
+                }
+
+                // Fallback Text Search (English)
+                const enDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Download' }).first();
+                if (await enDownload.isVisible()) {
+                    console.log('[DEBUG] Found "Download" menu item. Clicking...');
+                    await enDownload.click();
+                    return true;
+                }
+
+                // DEBUGGING: Log what IS visible in the menu
+                const overlays = this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').filter({ has: this.page.locator(':visible') });
+                if (await overlays.count() > 0) {
+                    const texts = await overlays.allInnerTexts();
+                    console.log('[DEBUG] Menu is OPEN but Download option not matched. Visible menu text:', texts);
+                }
+
+                return false;
+            };
+
+            let success = false;
+
+            // Attempt 1: Standard Click
+            console.log('[DEBUG] Attempt 1: getButton & Standard Click...');
+            try {
+                const btn = getButton();
+                if (await btn.count() > 0) {
+                    await btn.scrollIntoViewIfNeeded();
+                    await btn.click({ timeout: 5000 });
+                    await this.page.waitForTimeout(1000); // Wait for animation
+                    if (await isMenuOpen()) {
+                        console.log('[DEBUG] Menu detected open.');
+                        if (await findAndClickDownload()) success = true;
+                    }
+                } else { console.log('[DEBUG] Button not found for Attempt 1'); }
+            } catch (e: any) { console.warn('[DEBUG] Click 1 failed:', e.message || String(e)); }
+
+            // Attempt 2: Force Click
+            if (!success && !await isMenuOpen()) {
+                console.log('[DEBUG] Attempt 2: Force Click...');
+                try {
+                    const btn = getButton();
+                    if (await btn.count() > 0) {
+                        await btn.click({ force: true, timeout: 5000 });
+                        await this.page.waitForTimeout(1000);
+                        if (await isMenuOpen()) {
+                            if (await findAndClickDownload()) success = true;
+                        }
+                    }
+                } catch (e: any) { console.warn('[DEBUG] Click 2 failed:', e.message || String(e)); }
+            }
+
+            // Attempt 3: Dispatch Event
+            if (!success && !await isMenuOpen()) {
+                console.log('[DEBUG] Attempt 3: dispatchEvent("click")...');
+                try {
+                    const btn = getButton();
+                    if (await btn.count() > 0) {
+                        await btn.dispatchEvent('click');
+                        await this.page.waitForTimeout(1000);
+                        if (await isMenuOpen()) {
+                            if (await findAndClickDownload()) success = true;
+                        }
+                    }
+                } catch (e: any) { console.warn('[DEBUG] Click 3 failed:', e.message || String(e)); }
+            }
+
+            // Attempt 4: Keyboard Enter
+            if (!success && !await isMenuOpen()) {
+                console.log('[DEBUG] Attempt 4: Keyboard Enter...');
+                try {
+                    const btn = getButton();
+                    if (await btn.count() > 0) {
+                        await btn.focus({ timeout: 2000 });
+                        await this.page.keyboard.press('Enter');
+                        await this.page.waitForTimeout(1000);
+                        if (await isMenuOpen()) {
+                            if (await findAndClickDownload()) success = true;
+                        }
+                    }
+                } catch (e: any) {
+                    console.warn('[DEBUG] Focus attempt failed:', e.message || String(e));
+                }
+            }
+
+            // Final check if menu opened but download failed
+            if (!success && await isMenuOpen()) {
+                console.log('[DEBUG] Menu is open, trying once more to find download item...');
+                if (await findAndClickDownload()) success = true;
+            }
+
+            if (success) {
+                try {
+                    console.log('[DEBUG] Waiting for download event...');
+                    const downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
+                    // Click already happened in findAndClickDownload
+                    const download = await downloadPromise;
+
+                    // Ensure directory exists
+                    const fs = require('fs');
+                    const dir = path.dirname(outputFilename);
+                    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+                    await download.saveAs(outputFilename);
+                    console.log(`[DEBUG] Audio saved via download event to ${outputFilename}`);
+                    return true;
+                } catch (e: any) {
+                    console.warn('[DEBUG] Download event capture failed (or click failed to trigger it). Error:', e);
+                }
+            } else {
+                console.log('[DEBUG] Failed to find Download option after all attempts.');
+                await this.dumpState('download_menu_fail');
+            }
+        } else {
+            console.log('[DEBUG] "More options" button target not defined.');
+        }
+        const audioEl = this.page.locator('audio').first();
+        if (await audioEl.count() > 0) {
+            const src = await audioEl.getAttribute('src');
+            if (src) {
+                console.log(`[DEBUG] Found generic audio source element.`);
+                const fs = require('fs');
+                const buffer = await this.page.evaluate(async (audioSrc) => {
+                    const response = await fetch(audioSrc);
+                    const blob = await response.blob();
+                    const arrayBuffer = await blob.arrayBuffer();
+                    return Array.from(new Uint8Array(arrayBuffer));
+                }, src);
+
+                const dir = path.dirname(outputFilename);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(outputFilename, Buffer.from(buffer));
+                console.log(`[DEBUG] Audio saved from <audio> src to ${outputFilename}`);
+                return true;
+            }
+        }
+
+        console.error('[DEBUG] Failed to download audio. Could not find artifact or valid download path.');
+        await this.dumpState('download_audio_fail');
+        return false;
+    }
 }
+

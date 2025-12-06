@@ -14,13 +14,13 @@ services:
     image: perplexity-researcher:latest
     container_name: perplexity-server
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "${PORT:-3001}:${PORT:-3001}"
     volumes:
       - ./data:/app/data
       - ./src:/app/src
       - ${HOME}/.config/perplexity-researcher:/app/config
     environment:
-      - PORT=${PORT:-3000}
+      - PORT=${PORT:-3001}
       - BROWSER_WS_ENDPOINT=ws://chromium:3000/ws
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json

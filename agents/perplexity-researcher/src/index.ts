@@ -3,6 +3,7 @@ import { PerplexityClient } from './client';
 import { startServer } from './server';
 import * as fs from 'fs';
 import { config } from './config';
+import * as path from 'path';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -57,21 +58,15 @@ async function main() {
     const subArg1 = args[1]; // e.g. create, add-source
     const subArg2 = args[2];
 
-    // Config Port Override via args?
-    // We already load from file. 
-    // args override is harder with this simple parsing, relying on config file is safer for now.
-
     if (command === 'auth') {
         await login();
     } else if (command === 'login') {
-        // Interactive login in Docker/Remote
         const client = new PerplexityClient();
         await client.init();
 
         console.log('Opening Perplexity for interactive login...');
-        console.log('Opening Perplexity for interactive login...');
-        const ppUrl = 'https://www.perplexity.ai'; // or config.url
-        await client.openPage(ppUrl); // Opens Perplexity safely
+        const ppUrl = 'https://www.perplexity.ai';
+        await client.openPage(ppUrl);
 
         console.log('Opening NotebookLM for interactive login...');
         await client.openPage('https://notebooklm.google.com/');
@@ -85,7 +80,6 @@ async function main() {
 
         await client.saveAuth();
         console.log('Session saved! You can now use "query" or "batch".');
-        // Don't close, let user decide when to stop container or just exit process
         process.exit(0);
     } else if (command === 'serve') {
         await startServer();
@@ -93,14 +87,33 @@ async function main() {
         await sendServerRequest('/shutdown');
 
     } else if (command === 'notebook') {
-        // notebook create "Title"
-        // notebook add-source "URL" [--notebook "Title"]
-        // notebook audio [--notebook "Title"]
+        // notebook audio [--notebook "Title"] [--sources "a,b"] [--prompt "..."]
+
+        const isLocalExecution = (argv?: any) => args.includes('--local');
+
+        const runLocalNotebookAction = async (argv: any, action: (client: PerplexityClient, notebook: any) => Promise<void>) => {
+            console.log('Running in LOCAL mode...');
+            const client = new PerplexityClient();
+            await client.init();
+            const notebook = await client.createNotebookClient();
+            try {
+                await action(client, notebook);
+            } finally {
+                await client.close();
+            }
+        };
 
         if (subArg1 === 'create') {
             const title = subArg2;
             if (!title) { console.error('Usage: notebook create "Title"'); process.exit(1); }
-            await sendServerRequest('/notebook/create', { title });
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.createNotebook(title);
+                });
+            } else {
+                await sendServerRequest('/notebook/create', { title });
+            }
 
         } else if (subArg1 === 'add-source') {
             const url = subArg2;
@@ -108,43 +121,173 @@ async function main() {
             if (args[3] === '--notebook') notebookTitle = args[4];
 
             if (!url) { console.error('Usage: notebook add-source "URL" [--notebook "Title"]'); process.exit(1); }
-            await sendServerRequest('/notebook/add-source', { url, notebookTitle });
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    if (notebookTitle) {
+                        await notebook.openNotebook(notebookTitle);
+                    }
+                    await notebook.addSourceUrl(url);
+                });
+            } else {
+                await sendServerRequest('/notebook/add-source', { url, notebookTitle });
+            }
+
+        } else if (subArg1 === 'add-drive-source') {
+            let notebookTitle = undefined;
+            let docNames: string[] = [];
+
+            // First positional arg is doc names (comma-separated)
+            if (subArg2) {
+                docNames = subArg2.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            }
+
+            for (let i = 3; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                }
+            }
+
+            if (docNames.length === 0) {
+                console.error('Usage: notebook add-drive-source "Doc1,Doc2" [--notebook "Title"]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.addSourceFromDrive(docNames, notebookTitle);
+                });
+            } else {
+                await sendServerRequest('/notebook/add-drive-source', { docNames, notebookTitle });
+            }
 
         } else if (subArg1 === 'audio') {
             let notebookTitle = undefined;
             let sources: string[] = [];
+            let customPrompt: string | undefined = undefined;
 
             for (let i = 2; i < args.length; i++) {
                 if (args[i] === '--notebook') {
                     notebookTitle = args[i + 1];
                     i++;
                 } else if (args[i] === '--sources') {
-                    // Split by comma and trim
                     const rawSources = args[i + 1];
                     if (rawSources) {
                         sources = rawSources.split(',').map(s => s.trim()).filter(s => s.length > 0);
                     }
                     i++;
+                } else if (args[i] === '--prompt') {
+                    customPrompt = args[i + 1];
+                    i++;
+                } else if (args[i] === '--local') {
+                    // Consume --local flag
                 }
             }
 
-            await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources });
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.generateAudioOverview(notebookTitle, sources, customPrompt);
+                });
+            } else {
+                await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt });
+            }
+        } else if (subArg1 === 'download-audio') {
+            // notebook download-audio [output_path] --notebook <Title> [--local]
+            let notebookTitle: string | undefined = undefined;
+            let outputPath: string = 'audio_overview.mp3'; // Default output path
+
+            // subArg2 is the optional output path
+            if (subArg2 && !subArg2.startsWith('--')) {
+                outputPath = subArg2;
+            }
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                } else if (args[i] === '--local') {
+                    // Consume --local flag
+                } else if (i === 2 && !args[i].startsWith('--')) {
+                    // Already handled subArg2 as output path
+                } else if (args[i].startsWith('--')) {
+                    // Unknown flag, or flag already handled but we just skip for basic parser
+                }
+            }
+
+            if (!notebookTitle) {
+                console.error('Usage: notebook download-audio [output_path] --notebook "Title" [--local]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    const resolvedOutputPath = path.resolve(process.cwd(), outputPath);
+                    await notebook.downloadAudio(notebookTitle as string, resolvedOutputPath);
+                });
+            } else {
+                console.log('Server implementation for download-audio not yet available. Use --local.');
+            }
+
         } else {
             console.log('Notebook commands:');
             console.log('  notebook create <Title>');
             console.log('  notebook add-source <URL> [--notebook <Title>]');
-            console.log('  notebook audio [--notebook <Title>]');
+            console.log('  notebook add-drive-source <DocNames> [--notebook <Title>]');
+            console.log('  notebook audio [--notebook <Title>] [--sources <list>] [--prompt <text>]');
+            console.log('  notebook download-audio [output_path] --notebook <Title> [--local]');
+        }
+
+    } else if (command === 'gemini') {
+        const subArg1 = args[1]; // e.g. research
+        const isLocalExecution = args.includes('--local');
+
+        // Helper for local execution
+        const runLocalGeminiAction = async (action: (client: PerplexityClient, gemini: any) => Promise<void>) => {
+            console.log('Running Gemini in LOCAL mode...');
+            const client = new PerplexityClient();
+            await client.init();
+            const gemini = await client.createGeminiClient();
+            await gemini.init();
+            try {
+                await action(client, gemini);
+            } finally {
+                await client.close();
+            }
+        };
+
+        if (subArg1 === 'research') {
+            // gemini research "Query string" [--local]
+            // Find query string (first non-flag arg after 'research')
+            let query = '';
+            for (let i = 2; i < args.length; i++) {
+                if (!args[i].startsWith('--')) {
+                    query = args[i];
+                    break;
+                }
+            }
+
+            if (!query) {
+                console.error('Usage: gemini research "Query" [--local]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const response = await gemini.research(query);
+                    console.log('\n--- Gemini Response ---\n');
+                    console.log(response);
+                    console.log('\n-----------------------\n');
+                });
+            } else {
+                await sendServerRequest('/gemini/research', { query });
+            }
+        } else {
+            console.log('Gemini commands:');
+            console.log('  rsrch gemini research "Query" [--local]');
         }
 
     } else if (command === 'query') {
-        // Keep existing query logic? 
-        // User asked for "accessible from cli tool".
-        // Maybe query should also hit server if running?
-        // But query has a "standalone" legacy.
-        // Let's keep query as standalone for now unless requested otherwise, 
-        // to preserve "batch" functionality without server.
-        // But for consistency, having a CLI tool that does EVERYTHING via server is creating "one way".
-
         const { query, options } = parseArgs(args);
         if (query) {
             const client = new PerplexityClient();
@@ -159,15 +302,16 @@ async function main() {
         await runLegacyMode();
     } else {
         console.log('Usage:');
-        console.log('  auth                       - Login to Perplexity');
-        console.log('  login                      - Interactive login for Docker/Remote');
-        console.log('  serve                      - Start HTTP server');
-        console.log('  stop                       - Stop running server');
-        console.log('  notebook <cmd> ...         - Manage NotebookLM (requires server)');
-        console.log('  query "Question"           - Run localized query (standalone)');
-        console.log('  query                      - Run queries from data/queries.json (standalone)');
+        console.log('  rsrch auth                       - Login to Perplexity');
+        console.log('  rsrch login                      - Interactive login for Docker/Remote');
+        console.log('  rsrch serve                      - Start HTTP server');
+        console.log('  rsrch stop                       - Stop running server');
+        console.log('  rsrch notebook <cmd> ...         - Manage NotebookLM (requires server)');
+        console.log('  rsrch gemini research "Question" - Research with Gemini');
+        console.log('  rsrch query "Question"           - Run localized query (standalone)');
+        console.log('  rsrch query                      - Run queries from data/queries.json (standalone)');
         console.log('    Options: --session=ID|new|latest, --name=NAME');
-        console.log('  batch file.txt             - Run batch queries from a file (standalone)');
+        console.log('  rsrch batch file.txt             - Run batch queries from a file (standalone)');
     }
 }
 

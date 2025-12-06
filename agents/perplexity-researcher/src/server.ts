@@ -3,6 +3,7 @@ import { PerplexityClient } from './client';
 import { config } from './config';
 
 import { NotebookLMClient } from './notebooklm-client';
+import { GeminiClient } from './gemini-client';
 
 const app = express();
 const PORT = config.port;
@@ -123,17 +124,39 @@ app.post('/notebook/add-source', async (req, res) => {
     }
 });
 
+app.post('/notebook/add-drive-source', async (req, res) => {
+    try {
+        const { docNames, notebookTitle } = req.body;
+
+        if (!docNames || !Array.isArray(docNames) || docNames.length === 0) {
+            return res.status(400).json({ success: false, error: 'docNames array is required' });
+        }
+
+        if (!notebookClient) {
+            notebookClient = await client.createNotebookClient();
+        }
+
+        console.log(`[Server] Adding Drive sources: ${docNames.join(', ')}`);
+        await notebookClient.addSourceFromDrive(docNames, notebookTitle);
+
+        res.json({ success: true, message: `Drive sources added` });
+    } catch (e: any) {
+        console.error('[Server] Add Drive source failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/notebook/generate-audio', async (req, res) => {
     try {
-        const { notebookTitle, sources } = req.body;
+        const { notebookTitle, sources, customPrompt } = req.body;
 
         if (!notebookClient) {
             notebookClient = await client.createNotebookClient();
         }
 
         // Generate audio (client handles notebook opening if title provided)
-        console.log(`[Server] Generating audio... (Notebook: ${notebookTitle}, Sources: ${sources})`);
-        await notebookClient.generateAudioOverview(notebookTitle, sources);
+        console.log(`[Server] Generating audio... (Notebook: ${notebookTitle}, Sources: ${sources}, Prompt: ${customPrompt ? 'yes' : 'no'})`);
+        await notebookClient.generateAudioOverview(notebookTitle, sources, customPrompt);
 
         res.json({ success: true, message: `Audio generation started` });
     } catch (e: any) {
@@ -153,6 +176,29 @@ app.post('/notebook/dump', async (req, res) => {
         res.json({ success: true, paths });
     } catch (e: any) {
         console.error('[Server] Dump failed:', e);
+    }
+});
+
+// Gemini Endpoints
+let geminiClient: GeminiClient | null = null;
+
+app.post('/gemini/research', async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) return res.status(400).json({ error: 'Query is required' });
+
+        if (!geminiClient) {
+            console.log('[Server] Creating Gemini client...');
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        console.log(`[Server] Generating Gemini response for: "${query}"`);
+        const response = await geminiClient.research(query);
+
+        res.json({ success: true, data: response });
+    } catch (e: any) {
+        console.error('[Server] Gemini research failed:', e);
         res.status(500).json({ success: false, error: e.message });
     }
 });

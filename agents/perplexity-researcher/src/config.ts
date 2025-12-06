@@ -28,9 +28,9 @@ export const config = {
     },
     auth: {
         // Persistent user data directory (store cookies, etc.)
-        userDataDir: process.env.PERPLEXITY_USER_DATA_DIR || path.join(os.homedir(), '.config', 'perplexity-researcher', 'user-data'),
+        userDataDir: process.env.PERPLEXITY_USER_DATA_DIR || path.join(os.homedir(), '.config', 'rsrch', 'user-data'),
         // Auth file for remote sessions (cookies/storage)
-        authFile: process.env.AUTH_FILE || path.join(os.homedir(), '.config', 'perplexity-researcher', 'auth.json'),
+        authFile: process.env.AUTH_FILE || path.join(os.homedir(), '.config', 'rsrch', 'auth.json'),
     },
     paths: {
         resultsDir: path.join(process.cwd(), 'data', 'results'),

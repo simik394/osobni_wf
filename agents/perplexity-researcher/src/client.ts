@@ -1,5 +1,6 @@
 import { chromium } from 'playwright-extra';
 import { NotebookLMClient } from './notebooklm-client';
+import { GeminiClient } from './gemini-client';
 import type { BrowserContext, Page } from 'playwright';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
@@ -75,20 +76,24 @@ export class PerplexityClient {
 
         } else {
             // Local mode
-            console.log('Launching browser with saved profile...');
+            console.log('Launching browser (Persistent Local Mode)...');
             // Ensure dir exists
             if (!fs.existsSync(config.auth.userDataDir)) {
                 fs.mkdirSync(config.auth.userDataDir, { recursive: true });
             }
 
+            const headless = process.env.HEADLESS === 'true';
+            console.log(`Headless: ${headless}`);
+
             this.context = await chromium.launchPersistentContext(config.auth.userDataDir, {
-                headless: process.env.HEADLESS === 'true', // Default to false if not set, or controlled by env
+                headless: headless,
                 channel: 'chromium',
-                args: ['--disable-blink-features=AutomationControlled', '--start-maximized'],
+                args: ['--disable-blink-features=AutomationControlled', '--start-maximized', '--no-sandbox'],
                 ignoreDefaultArgs: ['--enable-automation'],
-                viewport: null
+                viewport: { width: 1280, height: 1024 },
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             });
-            this.browser = this.context; // persistent context objects act as browser too for closing
+            this.browser = this.context;
         }
 
         // Note: connecting to existing context vs creating new one
@@ -346,6 +351,12 @@ export class PerplexityClient {
         if (!this.context) throw new Error('Context not initialized');
         const page = await this.context.newPage();
         return new NotebookLMClient(page);
+    }
+
+    async createGeminiClient(): Promise<GeminiClient> {
+        if (!this.context) throw new Error('Context not initialized');
+        const page = await this.context.newPage();
+        return new GeminiClient(page);
     }
 
     async close() {
