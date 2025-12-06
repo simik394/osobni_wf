@@ -3,6 +3,9 @@
   "version": "1.0.23",
   "description": "Automated researcher agent using Perplexity AI and Gemini",
   "main": "src/index.ts",
+  "bin": {
+    "rsrch": "dist/index.js"
+  },
   "scripts": {
     "rsrch": "ts-node src/index.ts",
     "auth": "ts-node src/index.ts auth",

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { login } from './auth';
 import { PerplexityClient } from './client';
 import { startServer } from './server';
