@@ -87,7 +87,7 @@ case "$1" in
         exit 1
     fi
     shift
-    docker exec -it perplexity-server npm run rsrch -- notebook "$@"
+    docker exec -it perplexity-server ts-node src/index.ts notebook "$@"
     ;;
   gemini)
     if ! check_running; then
@@ -95,16 +95,16 @@ case "$1" in
         exit 1
     fi
     shift
-    docker exec -it perplexity-server npm run rsrch -- gemini "$@"
+    docker exec -it perplexity-server ts-node src/index.ts gemini "$@"
     ;;
   query)
     shift
     if ! check_running; then
          # Run one-off via compose if not running
-         docker compose run --rm -e PORT=$PORT perplexity-server npm run rsrch -- query "$@"
+         docker compose run --rm -e PORT=$PORT perplexity-server ts-node src/index.ts query "$@"
     else
          # Use exec
-         docker exec -it perplexity-server npm run rsrch -- query "$@"
+         docker exec -it perplexity-server ts-node src/index.ts query "$@"
     fi
     ;;
   batch)
@@ -118,10 +118,10 @@ case "$1" in
 
     if ! check_running; then
          echo "Starting temporary container for batch..."
-         docker compose run --rm -v "$BATCH_FILE:/tmp/batch.txt" perplexity-server npm run rsrch -- batch /tmp/batch.txt
+         docker compose run --rm -v "$BATCH_FILE:/tmp/batch.txt" perplexity-server ts-node src/index.ts batch /tmp/batch.txt
     else
          docker cp "$BATCH_FILE" "perplexity-server:/tmp/batch.txt"
-         docker exec -it perplexity-server npm run rsrch -- batch /tmp/batch.txt
+         docker exec -it perplexity-server ts-node src/index.ts batch /tmp/batch.txt
     fi
     ;;
   build)
