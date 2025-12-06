@@ -230,6 +230,45 @@ async function main() {
                 console.log('Server implementation for download-audio not yet available. Use --local.');
             }
 
+        } else if (subArg1 === 'download-all-audio') {
+            // notebook download-all-audio [output_dir] --notebook <Title> [--local]
+            let notebookTitle: string | undefined = undefined;
+            let outputDir: string = './audio_downloads'; // Default output directory
+
+            // subArg2 is the optional output directory
+            if (subArg2 && !subArg2.startsWith('--')) {
+                outputDir = subArg2;
+            }
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                } else if (args[i] === '--local') {
+                    // Consume --local flag
+                } else if (i === 2 && !args[i].startsWith('--')) {
+                    // Already handled subArg2 as output directory
+                } else if (args[i].startsWith('--')) {
+                    // Unknown flag, or flag already handled but we just skip for basic parser
+                }
+            }
+
+            if (!notebookTitle) {
+                console.error('Usage: notebook download-all-audio [output_dir] --notebook "Title" [--local]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    const resolvedOutputDir = path.resolve(process.cwd(), outputDir);
+                    const downloaded = await notebook.downloadAllAudio(notebookTitle as string, resolvedOutputDir);
+                    console.log(`\n✅ Downloaded ${downloaded.length} audio file(s) to ${resolvedOutputDir}`);
+                    downloaded.forEach((f: string) => console.log(`  - ${path.basename(f)}`));
+                });
+            } else {
+                console.log('Server implementation for download-all-audio not yet available. Use --local.');
+            }
+
         } else {
             console.log('Notebook commands:');
             console.log('  notebook create <Title>');

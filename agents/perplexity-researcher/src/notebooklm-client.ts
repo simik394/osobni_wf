@@ -782,5 +782,138 @@ export class NotebookLMClient {
         await this.dumpState('download_audio_fail');
         return false;
     }
+
+    async downloadAllAudio(notebookTitle: string, outputDir: string) {
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[DEBUG] Downloading ALL audio files to directory: ${outputDir}`);
+
+        // Create output directory if it doesn't exist
+        const fs = require('fs');
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+            console.log(`[DEBUG] Created output directory: ${outputDir}`);
+        }
+
+        // RESPONSIVE UI HANDLING: Check for Studio tab
+        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Studio tab...');
+                await studioTab.click();
+                await this.page.waitForTimeout(1000);
+            }
+        }
+
+        await this.page.waitForTimeout(2000);
+
+        // Find ALL audio artifacts in the library
+        console.log('[DEBUG] Searching for all audio artifacts...');
+        const audioArtifacts = this.page.locator('artifact-library-item').filter({
+            has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
+        });
+
+        const count = await audioArtifacts.count();
+        console.log(`[DEBUG] Found ${count} audio artifact(s)`);
+
+        if (count === 0) {
+            console.warn('[DEBUG] No audio artifacts found in notebook.');
+            return [];
+        }
+
+        const downloaded = [];
+
+        // Iterate through each audio artifact
+        for (let i = 0; i < count; i++) {
+            console.log(`\n[DEBUG] === Processing audio ${i + 1} of ${count} ===`);
+
+            const artifact = audioArtifacts.nth(i);
+
+            // Try to get the title of the audio
+            let audioTitle = '';
+            try {
+                const titleEl = artifact.locator('.artifact-title, .title').first();
+                if (await titleEl.count() > 0) {
+                    audioTitle = await titleEl.innerText();
+                    audioTitle = audioTitle.trim().replace(/[^a-zA-Z0-9-_]/g, '_');
+                }
+            } catch (e) {
+                console.warn('[DEBUG] Could not extract title, using index');
+            }
+
+            if (!audioTitle) {
+                audioTitle = `audio_${i + 1}`;
+            }
+
+            const filename = path.join(outputDir, `${audioTitle}_${Date.now()}.mp3`);
+
+            // Check if this audio was already downloaded
+            const existingFiles = fs.readdirSync(outputDir).filter((f: string) => f.startsWith(audioTitle));
+            if (existingFiles.length > 0) {
+                console.log(`[DEBUG] Audio "${audioTitle}" appears to already exist. Skipping.`);
+                continue;
+            }
+
+            console.log(`[DEBUG] Downloading to: ${filename}`);
+
+            // Scroll into view and hover to reveal controls
+            await artifact.scrollIntoViewIfNeeded();
+            await artifact.hover();
+            await this.page.waitForTimeout(500);
+
+            // Find the "more_vert" menu button for this specific artifact
+            const menuBtn = artifact.locator('button').filter({
+                has: this.page.locator('mat-icon').filter({ hasText: 'more_vert' })
+            }).first();
+
+            if (await menuBtn.count() === 0) {
+                console.warn(`[DEBUG] Could not find menu button for audio "${audioTitle}". Skipping.`);
+                continue;
+            }
+
+            // Click menu button
+            console.log('[DEBUG] Clicking menu button...');
+            await menuBtn.click();
+            await this.page.waitForTimeout(500);
+
+            // Find and click Download option
+            const downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: /Stáhnout|Download/i }).first();
+
+            if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                console.log('[DEBUG] Clicking Download...');
+
+                // Set up download listener
+                const downloadPromise = this.page.waitForEvent('download', { timeout: 10000 });
+                await downloadBtn.click();
+
+                try {
+                    const download = await downloadPromise;
+                    const downloadPath = await download.path();
+                    if (downloadPath) {
+                        fs.copyFileSync(downloadPath, filename);
+                        console.log(`[DEBUG] ✅ Downloaded: ${filename}`);
+                        downloaded.push(filename);
+                    }
+                } catch (e) {
+                    console.error(`[DEBUG] ❌ Download failed for "${audioTitle}":`, e);
+                }
+            } else {
+                console.warn(`[DEBUG] Download button not found for "${audioTitle}"`);
+            }
+
+            // Close menu if still open
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(500);
+        }
+
+        console.log(`\n[DEBUG] === Download Summary ===`);
+        console.log(`[DEBUG] Total found: ${count}`);
+        console.log(`[DEBUG] Successfully downloaded: ${downloaded.length}`);
+
+        return downloaded;
+    }
 }
 
