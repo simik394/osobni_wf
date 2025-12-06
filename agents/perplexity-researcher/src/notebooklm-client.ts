@@ -865,43 +865,83 @@ export class NotebookLMClient {
             await this.page.waitForTimeout(500);
 
             // Find the "more_vert" menu button for this specific artifact
-            const menuBtn = artifact.locator('button').filter({
-                has: this.page.locator('mat-icon').filter({ hasText: 'more_vert' })
-            }).first();
+            // Be very specific - we want ONLY the button, not the parent container
+            const menuBtn = artifact.locator('button[aria-label*="More"], button[aria-label*="Další"], button mat-icon:has-text("more_vert")').first();
 
             if (await menuBtn.count() === 0) {
                 console.warn(`[DEBUG] Could not find menu button for audio "${audioTitle}". Skipping.`);
                 continue;
             }
 
-            // Click menu button
+            // Click menu button and WAIT for the overlay to appear
             console.log('[DEBUG] Clicking menu button...');
             await menuBtn.click();
-            await this.page.waitForTimeout(500);
 
-            // Find and click Download option
-            const downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: /Stáhnout|Download/i }).first();
+            // CRITICAL: Wait for the menu overlay to actually appear
+            console.log('[DEBUG] Waiting for menu to open...');
+            try {
+                await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').first().waitFor({
+                    state: 'visible',
+                    timeout: 3000
+                });
+                console.log('[DEBUG] Menu opened successfully');
+            } catch (e) {
+                console.warn(`[DEBUG] Menu did not appear for "${audioTitle}". Skipping.`);
+                await this.page.keyboard.press('Escape');
+                await this.page.waitForTimeout(500);
+                continue;
+            }
 
+            // Additional wait for menu animation to complete
+            await this.page.waitForTimeout(800);
+
+            // Find and click Download option in the popup menu overlay
+            console.log('[DEBUG] Searching for Download option in menu...');
+
+            // Try Czech first
+            let downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
             if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
-                console.log('[DEBUG] Clicking Download...');
+                console.log('[DEBUG] Found "Stáhnout" option. Clicking...');
+            } else {
+                // Try icon search
+                downloadBtn = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
+                if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                    console.log('[DEBUG] Found "save_alt" icon option. Clicking...');
+                } else {
+                    // Try English
+                    downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: /Download/i }).first();
+                    if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                        console.log('[DEBUG] Found "Download" option. Clicking...');
+                    } else {
+                        console.warn(`[DEBUG] Download button not found for "${audioTitle}". Logging menu content...`);
+                        // Debug: log what's in the menu
+                        const overlays = this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel');
+                        if (await overlays.count() > 0) {
+                            const texts = await overlays.allInnerTexts();
+                            console.log('[DEBUG] Menu content:', texts);
+                        }
+                        // Close menu and skip
+                        await this.page.keyboard.press('Escape');
+                        await this.page.waitForTimeout(500);
+                        continue;
+                    }
+                }
+            }
 
-                // Set up download listener
+            // Set up download listener and click
+            try {
                 const downloadPromise = this.page.waitForEvent('download', { timeout: 10000 });
                 await downloadBtn.click();
 
-                try {
-                    const download = await downloadPromise;
-                    const downloadPath = await download.path();
-                    if (downloadPath) {
-                        fs.copyFileSync(downloadPath, filename);
-                        console.log(`[DEBUG] ✅ Downloaded: ${filename}`);
-                        downloaded.push(filename);
-                    }
-                } catch (e) {
-                    console.error(`[DEBUG] ❌ Download failed for "${audioTitle}":`, e);
+                const download = await downloadPromise;
+                const downloadPath = await download.path();
+                if (downloadPath) {
+                    fs.copyFileSync(downloadPath, filename);
+                    console.log(`[DEBUG] ✅ Downloaded: ${filename}`);
+                    downloaded.push(filename);
                 }
-            } else {
-                console.warn(`[DEBUG] Download button not found for "${audioTitle}"`);
+            } catch (e) {
+                console.error(`[DEBUG] ❌ Download failed for "${audioTitle}":`, e);
             }
 
             // Close menu if still open
