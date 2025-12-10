@@ -70,45 +70,60 @@ cd "$WORK_DIR"
 cat > apply_czech_layout.py <<EOF
 import os
 
-KEYCODES_PATH = 'src/main/python/keycodes/keycodes.py'
+# 1. Create czech_programmer.py
+KEYMAP_DIR = 'src/main/python/keymap'
+CZECH_KEYMAP_PATH = os.path.join(KEYMAP_DIR, 'czech_programmer.py')
 
-# Mapping for Czech Programmer (approximate based on standard Czech row)
-# Standard US: 1 2 3 4 5 6 7 8 9 0
-# Czech:       + ě š č ř ž ý á í é
-# Vial Label Format: "Shift\nBase" or just "Label"
-# We want to replace the label argument in K("KC_X", "Label", ...)
-
-replacements = {
-    'K("KC_1", "!\\n1"': 'K("KC_1", "1\\n+"',
-    'K("KC_2", "@\\n2"': 'K("KC_2", "2\\ně"',
-    'K("KC_3", "#\\n3"': 'K("KC_3", "3\\nš"',
-    'K("KC_4", "$\\n4"': 'K("KC_4", "4\\nč"',
-    'K("KC_5", "%\\n5"': 'K("KC_5", "5\\nř"',
-    'K("KC_6", "^\\n6"': 'K("KC_6", "6\\nž"',
-    'K("KC_7", "&\\n7"': 'K("KC_7", "7\\ný"',
-    'K("KC_8", "*\\n8"': 'K("KC_8", "8\\ná"',
-    'K("KC_9", "(\\n9"': 'K("KC_9", "9\\ní"',
-    'K("KC_0", ")\\n0"': 'K("KC_0", "0\\né"',
+czech_keymap_content = """# coding: utf-8
+keymap = {
+    "KC_1": "1\\\\n+",
+    "KC_2": "2\\\\ně",
+    "KC_3": "3\\\\nš",
+    "KC_4": "4\\\\nč",
+    "KC_5": "5\\\\nř",
+    "KC_6": "6\\\\nž",
+    "KC_7": "7\\\\ný",
+    "KC_8": "8\\\\ná",
+    "KC_9": "9\\\\ní",
+    "KC_0": "0\\\\né",
 }
+"""
 
-if not os.path.exists(KEYCODES_PATH):
-    print(f"Error: {KEYCODES_PATH} not found!")
-    exit(1)
+with open(CZECH_KEYMAP_PATH, 'w', encoding='utf-8') as f:
+    f.write(czech_keymap_content)
+print(f"Created {CZECH_KEYMAP_PATH}")
 
-with open(KEYCODES_PATH, 'r', encoding='utf-8') as f:
-    content = f.read()
+# 2. Patch keymaps.py
+KEYMAPS_PATH = 'src/main/python/keymaps.py'
 
-for old, new in replacements.items():
-    if old in content:
-        print(f"Patching: {old} -> {new}")
-        content = content.replace(old, new)
-    else:
-        print(f"Warning: Could not find string to patch: {old}")
+with open(KEYMAPS_PATH, 'r', encoding='utf-8') as f:
+    lines = f.readlines()
 
-with open(KEYCODES_PATH, 'w', encoding='utf-8') as f:
-    f.write(content)
+new_lines = []
+import_added = False
+keymap_added = False
 
-print("Patch applied successfully.")
+for line in lines:
+    # Add import
+    if not import_added and line.strip().startswith('from keymap import ('):
+        new_lines.append(line)
+        new_lines.append('    czech_programmer,\\n')
+        import_added = True
+        continue
+
+    # Add to KEYMAPS list
+    if not keymap_added and line.strip() == 'KEYMAPS = [':
+        new_lines.append(line)
+        new_lines.append('    ("Czech Programmer", czech_programmer.keymap),\\n')
+        keymap_added = True
+        continue
+
+    new_lines.append(line)
+
+with open(KEYMAPS_PATH, 'w', encoding='utf-8') as f:
+    f.writelines(new_lines)
+
+print(f"Patched {KEYMAPS_PATH}")
 EOF
 
 # 2. Create Dockerfile
@@ -144,7 +159,7 @@ WORKDIR /usr/src/app
 RUN git clone --depth 1 $REPO_URL .
 
 # Install Python Requirements
-# We need to install requirements.txt. 
+# We need to install requirements.txt.
 # Note: Some requirements might be old/broken on newer systems, but 3.6-buster should be okay.
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
