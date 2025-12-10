@@ -38,12 +38,14 @@ export class PerplexityClient {
     private context: BrowserContext | null = null;
     private sessions: Session[] = [];
     private isInitialized = false;
+    private keepAlive = false;
 
-    async init() {
+    async init(options: { keepAlive?: boolean } = {}) {
         if (this.isInitialized) {
             console.log('Client already initialized');
             return;
         }
+        this.keepAlive = options.keepAlive || false;
 
         if (process.env.BROWSER_WS_ENDPOINT) {
             console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
@@ -570,6 +572,14 @@ export class PerplexityClient {
     }
 
     async close() {
+        if (this.keepAlive) {
+            console.log('Browser kept alive (use shutdown() to force close)');
+            return;
+        }
+        await this.shutdown();
+    }
+
+    async shutdown() {
         // Close all pages
         for (const session of this.sessions) {
             await session.page.close().catch(() => { });
@@ -585,6 +595,7 @@ export class PerplexityClient {
             this.browser = null;
         }
         this.isInitialized = false;
+        this.keepAlive = false;
         console.log('Browser closed');
     }
 }

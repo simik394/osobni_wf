@@ -4,6 +4,8 @@ import { config } from './config';
 
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
+import { jobQueue, Job } from './job-queue';
+import { notifyJobCompleted } from './discord';
 
 const app = express();
 const PORT = config.port;
@@ -12,26 +14,8 @@ const PORT = config.port;
 app.use(express.json());
 
 // Initialize the client
-// Initialize the client
 const client = new PerplexityClient();
 let notebookClient: NotebookLMClient | null = null;
-
-// Job Management
-interface Job {
-    id: string;
-    type: 'audio-generation';
-    status: 'pending' | 'processing' | 'completed' | 'failed';
-    result?: any;
-    error?: string;
-    createdAt: number;
-}
-const jobs = new Map<string, Job>();
-
-// Helper
-function generateJobId(): string {
-    return Math.random().toString(36).substring(2, 11);
-}
-
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -59,13 +43,43 @@ app.post('/shutdown', async (req, res) => {
 // Query endpoint
 app.post('/query', async (req, res) => {
     try {
-        const { query, session, name } = req.body;
+        const { query, session, name, deepResearch } = req.body;
 
         if (!query || typeof query !== 'string') {
             return res.status(400).json({ error: 'Query parameter is required and must be a string' });
         }
 
-        console.log(`[Server] Received query: "${query}" (Session: ${session || 'new'}, Name: ${name || 'none'})`);
+        console.log(`[Server] Received query: "${query}" (Session: ${session || 'new'}, Name: ${name || 'none'}, DeepResearch: ${deepResearch || false})`);
+
+        // Non-blocking deep research
+        if (deepResearch) {
+            const job = jobQueue.add('deepResearch', query, { session, name });
+            console.log(`[Server] Deep research job ${job.id} queued.`);
+
+            // Process async
+            (async () => {
+                try {
+                    jobQueue.markRunning(job.id);
+                    const result = await client.query(query, { sessionId: session, sessionName: name, deepResearch: true });
+                    jobQueue.markCompleted(job.id, result);
+                    console.log(`[Server] Deep research job ${job.id} completed.`);
+                    notifyJobCompleted(job.id, 'Deep Research', query, true, result?.answer?.substring(0, 100));
+                } catch (err: any) {
+                    console.error(`[Server] Deep research job ${job.id} failed:`, err);
+                    jobQueue.markFailed(job.id, err.message);
+                    notifyJobCompleted(job.id, 'Deep Research', query, false, err.message);
+                }
+            })();
+
+            return res.status(202).json({
+                success: true,
+                message: 'Deep research started',
+                jobId: job.id,
+                statusUrl: `/jobs/${job.id}`
+            });
+        }
+
+        // Synchronous query
         const result = await client.query(query, { sessionId: session, sessionName: name });
 
         res.json({
@@ -177,39 +191,31 @@ app.post('/notebook/generate-audio', async (req, res) => {
             return res.status(409).json({ success: false, error: 'NotebookLM client is busy with another task.' });
         }
 
-        // Create Job
-        const jobId = generateJobId();
-        const job: Job = {
-            id: jobId,
-            type: 'audio-generation',
-            status: 'pending',
-            createdAt: Date.now()
-        };
-        jobs.set(jobId, job);
+        // Create Job using centralized queue
+        const job = jobQueue.add('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
 
         // Start background processing
-        console.log(`[Server] Starting async job ${jobId}: Audio Generation (DryRun: ${dryRun})`);
-
-        // Ensure client initialized? It is if !notebookClient passed.
+        console.log(`[Server] Starting async job ${job.id}: Audio Generation (DryRun: ${dryRun})`);
 
         (async () => {
             try {
-                jobs.set(jobId, { ...job, status: 'processing' });
+                jobQueue.markRunning(job.id);
                 await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
-                // Note: generateAudioOverview waits for completion now (due to true arg)
-                jobs.set(jobId, { ...job, status: 'completed', result: { message: 'Audio generated' } });
-                console.log(`[Server] Job ${jobId} completed.`);
+                jobQueue.markCompleted(job.id, { message: 'Audio generated' });
+                console.log(`[Server] Job ${job.id} completed.`);
+                notifyJobCompleted(job.id, 'Audio Generation', notebookTitle || 'default', true, 'Audio overview generated');
             } catch (err: any) {
-                console.error(`[Server] Job ${jobId} failed:`, err);
-                jobs.set(jobId, { ...job, status: 'failed', error: err.message });
+                console.error(`[Server] Job ${job.id} failed:`, err);
+                jobQueue.markFailed(job.id, err.message);
+                notifyJobCompleted(job.id, 'Audio Generation', notebookTitle || 'default', false, err.message);
             }
         })();
 
         res.status(202).json({
             success: true,
             message: 'Audio generation started',
-            jobId,
-            statusUrl: `/jobs/${jobId}`
+            jobId: job.id,
+            statusUrl: `/jobs/${job.id}`
         });
 
     } catch (e: any) {
@@ -220,13 +226,18 @@ app.post('/notebook/generate-audio', async (req, res) => {
 
 app.get('/jobs/:id', (req, res) => {
     const jobId = req.params.id;
-    const job = jobs.get(jobId);
+    const job = jobQueue.get(jobId);
 
     if (!job) {
         return res.status(404).json({ success: false, error: 'Job not found' });
     }
 
     res.json({ success: true, job });
+});
+
+app.get('/jobs', (req, res) => {
+    const jobs = jobQueue.list();
+    res.json({ success: true, jobs });
 });
 
 

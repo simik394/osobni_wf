@@ -49,6 +49,8 @@ function parseArgs(args: string[]) {
             options.deepResearch = true;
         } else if (arg === '--local' || arg === '--headed') {
             // Ignore environment flags
+        } else if (arg === '--keep-alive') {
+            options.keepAlive = true;
         } else {
             // Check for --name or other flags if mixed
             if (arg.startsWith('--name=')) {
@@ -702,7 +704,7 @@ async function main() {
         const { query, options } = parseArgs(args);
         if (query) {
             const client = new PerplexityClient();
-            await client.init();
+            await client.init({ keepAlive: options.keepAlive });
             try { await client.query(query, options); } finally { await client.close(); }
         } else {
             // If no direct query, fall back to legacy mode (queries.json or error)
@@ -717,11 +719,12 @@ async function main() {
         console.log('  rsrch login                      - Interactive login for Docker/Remote');
         console.log('  rsrch serve                      - Start HTTP server');
         console.log('  rsrch stop                       - Stop running server');
+        console.log('  rsrch shutdown                   - Force close persistent browser');
         console.log('  rsrch notebook <cmd> ...         - Manage NotebookLM (requires server)');
         console.log('  rsrch gemini <cmd> ...           - Gemini commands (research, deep-research, sessions...)');
         console.log('  rsrch query "Question"           - Run localized query (standalone)');
         console.log('  rsrch query                      - Run queries from data/queries.json (standalone)');
-        console.log('    Options: --session=ID|new|latest, --name=NAME');
+        console.log('    Options: --session=ID|new|latest, --name=NAME, --deep, --keep-alive');
         console.log('  rsrch batch file.txt             - Run batch queries from a file (standalone)');
     }
 }

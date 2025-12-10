@@ -45,10 +45,17 @@ perplexity
     - [x] Verify with test query 
 
 API:
-- make every deep research request nonblocking while waiting. maybe some que for the requests? 
-- make it so i can send multiple quries/deepResearches to the server. the serve should answe imediately if the query is just simple one or in case of deepresearch it should answer with an responce from program that the query was submited succesfuly if it was done so. else an error.
-- add discord notifications for all running longrunning processes.
-- in case of local headless browser make it so the browser stays on until explicit shutdown command and is not started fresh with every request.
+- [x] make every deep research request nonblocking while waiting. maybe some que for the requests? 
+    - [x] Create `job-queue.ts` with Job interface
+    - [x] Implement async processing in `server.ts`
+    - [x] Add `/jobs/:id` status endpoint
+- [x] make it so i can send multiple quries/deepResearches to the server. the serve should answe imediately if the query is just simple one or in case of deepresearch it should answer with an responce from program that the query was submited succesfuly if it was done so. else an error.
+- [x] add discord notifications for all running longrunning processes.
+    - [x] Add webhook URL to config
+    - [x] Send notification on job completion
+- [x] in case of local headless browser make it so the browser stays on until explicit shutdown command and is not started fresh with every request.
+    - [x] Add `keepAlive` option to client
+    - [x] Add `rsrch shutdown` command
 - add verbose logging in the cli so i can see how the request proceeds.
 - make all existing functions available in both the rest api as well as in the cli. [SHOULD BE DONE EVERYTIME A NEW FUNCTION IS ADDED]
 - add endpoint which will take as input a research question. will do the research with both gemini and perplexity  then combines those results in a google doc. this one is then loaderd into the notebooklm and a audio for only that source is generated with custom prompt which could be gien as a parameter to the endpoint. And finally it saves the audio on a local storage. As it will run in docker there will be a mounted volume for saving the audio files. if it is successful i want to get an email onto the mail i am loged in with.
