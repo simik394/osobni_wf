@@ -270,8 +270,12 @@ export class PerplexityClient {
             console.log('Looking for query input...');
 
             const selectors = Array.isArray(config.selectors.queryInput)
-                ? config.selectors.queryInput
+                ? [...config.selectors.queryInput]
                 : [config.selectors.queryInput];
+
+            if (config.selectors.followUpInput) {
+                selectors.push(config.selectors.followUpInput);
+            }
 
             let inputSelector = '';
             for (const selector of selectors) {
@@ -344,16 +348,25 @@ export class PerplexityClient {
                         // We should probably grab the text of the whole thread or the last message.
                         // For simplicity, let's stick to the current selector logic but be aware it might need tuning for threads.
 
-                        const currentText = await page.textContent(config.selectors.answerContainer);
-                        if (currentText && currentText === lastText && currentText.length > 50) {
-                            stableCount++;
-                            if (stableCount >= 2) {
-                                console.log('Answer stabilized.');
-                                break;
+                        // We need to monitor the LAST container for stability
+                        try {
+                            const locator = page.locator(config.selectors.answerContainer);
+                            const count = await locator.count();
+                            if (count > 0) {
+                                const currentText = await locator.last().textContent();
+                                if (currentText && currentText === lastText && currentText.length > 50) {
+                                    stableCount++;
+                                    if (stableCount >= 4) { // Increased stability count for safety
+                                        console.log('Answer stabilized.');
+                                        break;
+                                    }
+                                } else {
+                                    stableCount = 0;
+                                    lastText = currentText || '';
+                                }
                             }
-                        } else {
-                            stableCount = 0;
-                            lastText = currentText || '';
+                        } catch (e) {
+                            // Ignore errors during check
                         }
                         await page.waitForTimeout(500);
                     }
@@ -364,7 +377,8 @@ export class PerplexityClient {
             }
 
             // TODO: Improve answer extraction for threads (get the last answer)
-            const answer = await page.textContent(config.selectors.answerContainer);
+            // Get the last answer in the thread
+            const answer = await page.locator(config.selectors.answerContainer).last().innerText();
 
             const result = {
                 query: queryText,

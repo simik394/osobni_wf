@@ -166,7 +166,7 @@ app.post('/notebook/add-drive-source', async (req, res) => {
 
 app.post('/notebook/generate-audio', async (req, res) => {
     try {
-        const { notebookTitle, sources, customPrompt } = req.body;
+        const { notebookTitle, sources, customPrompt, dryRun } = req.body;
 
         if (!notebookClient) {
             notebookClient = await client.createNotebookClient();
@@ -188,14 +188,14 @@ app.post('/notebook/generate-audio', async (req, res) => {
         jobs.set(jobId, job);
 
         // Start background processing
-        console.log(`[Server] Starting async job ${jobId}: Audio Generation`);
+        console.log(`[Server] Starting async job ${jobId}: Audio Generation (DryRun: ${dryRun})`);
 
         // Ensure client initialized? It is if !notebookClient passed.
 
         (async () => {
             try {
                 jobs.set(jobId, { ...job, status: 'processing' });
-                await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true);
+                await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
                 // Note: generateAudioOverview waits for completion now (due to true arg)
                 jobs.set(jobId, { ...job, status: 'completed', result: { message: 'Audio generated' } });
                 console.log(`[Server] Job ${jobId} completed.`);

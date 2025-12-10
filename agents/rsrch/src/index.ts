@@ -168,6 +168,7 @@ async function main() {
             let notebookTitle = undefined;
             let sources: string[] = [];
             let customPrompt: string | undefined = undefined;
+            let wetRun = false;
 
             for (let i = 2; i < args.length; i++) {
                 if (args[i] === '--notebook') {
@@ -184,15 +185,28 @@ async function main() {
                     i++;
                 } else if (args[i] === '--local') {
                     // Consume --local flag
+                } else if (args[i] === '--wet') {
+                    wetRun = true;
                 }
+            }
+
+            const dryRun = !wetRun; // Default to dryRun unless --wet is passed
+
+            if (dryRun) {
+                console.log('\n🧪 DRY RUN MODE ACTIVE');
+                console.log('   Audio generation will be simulated correctly, but the final "Generate" click will be SKIPPED.');
+                console.log('   To actually generate audio (and consume quota), use the --wet flag.\n');
+            } else {
+                console.log('\n🌊 WET RUN ACTIVE');
+                console.log('   Audio WILL be generated. Quota will be consumed.\n');
             }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
-                    await notebook.generateAudioOverview(notebookTitle, sources, customPrompt);
+                    await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
                 });
             } else {
-                await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt });
+                await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt, dryRun });
             }
         } else if (subArg1 === 'download-audio') {
             // notebook download-audio [output_path] --notebook <Title> [--local]

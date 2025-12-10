@@ -270,7 +270,7 @@ export class NotebookLMClient {
         }
     }
 
-    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = true) {
+    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = true, dryRun: boolean = true) {
         if (this.isBusy) {
             throw new Error('NotebookLM client is already busy.');
         }
@@ -364,7 +364,7 @@ export class NotebookLMClient {
             // If audio exists, we might want to Regenerate if customPrompt is provided.
             const audioPlayer = this.page.locator('audio-player');
             const audioArtifact = this.page.locator('artifact-library-item').filter({
-                hasText: /Audio (Overview|přehled)|Podcast/i
+                hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
             });
 
             // Check if audio exists (player or artifact)
@@ -486,6 +486,14 @@ export class NotebookLMClient {
                     try {
                         await generateBtn.waitFor({ state: 'visible', timeout: 10000 });
                         console.log('[DEBUG] Clicking Generate...');
+
+                        if (dryRun) {
+                            console.log('[DRY RUN] Would click "Generate" in dialog now. Skipping generation.');
+                            await this.notifyDiscord(`🧪 Dry Run: Audio generation for "${notebookTitle || 'Current'}" simulated successfully. No quota used.`);
+                            this.isBusy = false; // Reset busy state
+                            return true;
+                        }
+
                         await generateBtn.click();
 
                         // WAIT FOR GENERATION CONFIRMATION
@@ -542,495 +550,530 @@ export class NotebookLMClient {
                     }
                 }
 
-                // 2. If not found, look for "Audio Overview" card/button to expand/create
-                const audioCardText = /Audio (Overview|přehled)/i;
-                const audioCard = this.page.locator('basic-create-artifact-button, button').filter({ hasText: audioCardText }).first();
+                // 2. Check artifact library for existing Audio (Completed or Generating)
+                const artifactItems = this.page.locator('artifact-library-item');
+                const totalItems = await artifactItems.count();
+                console.log(`[DEBUG] Locator 'artifact-library-item' count: ${totalItems}`);
 
-                if (await audioCard.count() > 0) {
-                    console.log('[DEBUG] Found Audio Overview card/button. Clicking to reveal controls...');
-                    await audioCard.click();
-                    await this.page.waitForTimeout(1000);
+                // DUMP STATE FOR ANALYSIS
+                await this.dumpState('artifact_library_debug');
 
-                    // NOW check for Customize button again if needed
+                let audioCount = 0;
+                let isGenerating = false;
+
+                for (let i = 0; i < totalItems; i++) {
+                    const item = artifactItems.nth(i);
+                    const text = await item.innerText();
+                    const ariaLabel = await item.getAttribute('aria-label') || '';
+                    console.log(`[DEBUG] Item ${i}: text="${text}", label="${ariaLabel}"`);
+
+                    if (/Audio (Overview|přehled)|audio_magic_eraser/i.test(text) || /Audio (Overview|přehled)|audio_magic_eraser/i.test(ariaLabel)) {
+                        audioCount++;
+                        if (/(Generating|Generovat|Generování)/i.test(text)) {
+                            isGenerating = true;
+                        }
+                    }
+                }
+
+                if (audioCount > 0) {
+                    console.log(`[INFO] Found ${audioCount} existing Audio Overview(s) in this notebook.`);
+                    if (isGenerating) {
+                        console.log('[DEBUG] At least one audio is currently GENERATING. Skipping new request.');
+                        return;
+                    }
+                    console.log('[DEBUG] Audio ALREADY EXISTS. Skipping new request.');
+                    return;
+                }
+
+                // 3. Find the "Create" button
+                const audioCardText = /Audio (Overview|přehled)|audio_magic_eraser/i;
+                const createBtn = this.page.locator('basic-create-artifact-button').filter({ hasText: audioCardText }).first();
+
+                if (await createBtn.count() > 0 && await createBtn.isVisible()) {
+                    console.log('[DEBUG] Found "Create Audio Overview" button.');
+
                     if (customPrompt) {
-                        const customizeBtn = this.page.locator(customizeBtnSelector).first();
-                        if (await customizeBtn.count() > 0 && await customizeBtn.isVisible()) {
-                            console.log('[DEBUG] Customize button revealed. Clicking...');
-                            await customizeBtn.click();
+                        // Checking for "Edit" button inside the create button component:
+                        const editBtn = createBtn.locator('button.edit-button');
+                        if (await editBtn.count() > 0 && await editBtn.isVisible()) {
+                            console.log('[DEBUG] Customize button found. Handling Customization...');
+                            if (dryRun) {
+                                console.log('[DRY RUN] Would click "Customize" and then "Generate". Skipping.');
+                                await this.notifyDiscord(`🧪 Dry Run: Audio generation for "${notebookTitle || 'Current'}" simulated (Customized).`);
+                                return;
+                            }
+                            await editBtn.click();
                             await handleDialog();
                             return;
                         }
                     }
 
-                    // Fallback to finding Generate button inside the card/panel
-                    // Sometimes clicking card just expands it and shows "Generate"
-                }
-
-                // 3. Check for "Generate" button (fallback or simple generation)
-                // Prioritize "Generate" buttons inside the audio card/panel if possible
-                const generateBtnSelector = 'button:has-text("Vygenerovat"), button:has-text("Generate")';
-                let generateBtn = this.page.locator(generateBtnSelector).first();
-
-                if (await generateBtn.count() > 0 && await generateBtn.isVisible()) {
-                    console.log('[DEBUG] Found Generate button. Clicking...');
-                    if (customPrompt) {
-                        console.warn('[DEBUG] Custom Prompt provided but "Customize" button not found. Generating without customization.');
+                    if (dryRun) {
+                        console.log('[DRY RUN] The "Create Audio Overview" button starts generation immediately. SKIPPING click.');
+                        await this.notifyDiscord(`🧪 Dry Run: Audio generation for "${notebookTitle || 'Current'}" simulated. No quota used.`);
+                        this.isBusy = false;
+                        return;
                     }
-                    await generateBtn.click();
+
+                    console.log('[WET RUN] Clicking "Create Audio Overview" to START generation...');
+                    await createBtn.click();
 
                     if (waitForCompletion) {
-                        console.log('[DEBUG] Waiting for audio generation to complete (simple path)...');
-                        // Wait a bit for indicator to appear first
-                        await this.page.waitForTimeout(3000);
-
-                        const maxWait = 10 * 60 * 1000;
-                        const startTime = Date.now();
-
-                        while (Date.now() - startTime < maxWait) {
-                            await this.page.waitForTimeout(5000);
-                            const generating = await this.page.locator('.artifact-title, .status-text').filter({ hasText: /Generování|Generating/ }).count();
-                            if (generating === 0) {
-                                console.log('[DEBUG] Generation complete!');
-                                await this.notifyDiscord(`✅ Audio Overview generation complete for notebook: "${notebookTitle || 'Current'}"`);
-                                return;
-                            }
-                        }
-                        console.warn('[DEBUG] Timeout waiting for audio generation.');
-                        await this.notifyDiscord(`⚠️ Timeout waiting for Audio Overview for notebook: "${notebookTitle || 'Current'}"`, true);
+                        await this.waitForGeneration(notebookTitle);
                     }
                     return;
                 }
 
-                console.warn('[DEBUG] Could not find Audio Overview controls (Customize or Generate).');
+                console.warn('[DEBUG] Could not find "Create Audio Overview" button or existing audio.');
                 await this.dumpState('audio_not_found');
-            } finally {
-                this.isBusy = false;
+            }
+        } finally {
+            this.isBusy = false;
+        }
+    }
+
+    private async waitForGeneration(notebookTitle?: string) {
+        console.log('[DEBUG] Waiting for audio generation to complete...');
+        // Wait for indicator
+        await this.page.waitForTimeout(3000);
+
+        const maxWait = 15 * 60 * 1000; // 15 min
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWait) {
+            await this.page.waitForTimeout(5000);
+            // Check if it is still generating
+            const generating = await this.page.locator('artifact-library-item').filter({ hasText: /(Generating|Generovat|Generování)/i }).count();
+
+            // Check if complete (just look for the item generally, if it exists and NOT generating)
+            const completed = await this.page.locator('artifact-library-item').filter({ hasText: /Audio (Overview|přehled)|audio_magic_eraser/i }).count();
+
+            if (generating === 0 && completed > 0) {
+                console.log('[DEBUG] Generation complete!');
+                await this.notifyDiscord(`✅ Audio Overview generation complete for notebook: "${notebookTitle || 'Current'}"`);
+                return;
+            }
+        }
+        console.warn('[DEBUG] Timeout waiting for audio generation.');
+        await this.notifyDiscord(`⚠️ Timeout waiting for Audio Overview for notebook: "${notebookTitle || 'Current'}"`, true);
+    }
+
+    async downloadAudio(notebookTitle: string, outputFilename: string) {
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[DEBUG] Attempting to download audio to: ${outputFilename}`);
+
+        // RESPONSIVE UI HANDLING: Check for Studio tab
+        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Studio tab...');
+                await studioTab.click();
+                await this.page.waitForTimeout(1000);
             }
         }
 
-    async downloadAudio(notebookTitle: string, outputFilename: string) {
-            if (notebookTitle) {
-                await this.openNotebook(notebookTitle);
+        await this.page.waitForTimeout(2000);
+
+        // 1. Try ACTIVE AUDIO PLAYER (Footer) first
+        console.log('[DEBUG] Checking for active Audio Player footer...');
+        const audioPlayer = this.page.locator('audio-player').first();
+
+        let targetMenuBtn = null;
+        let extractionSource = 'none';
+
+        // Relaxed check: Just existence is enough to try, we can handle visibility handling in click
+        if (await audioPlayer.count() > 0) {
+            console.log('[DEBUG] Found active Audio Player DOM element.');
+            targetMenuBtn = audioPlayer.locator('button[aria-label*="More"], button[aria-label*="Další"], button:has(mat-icon:has-text("more_vert"))').first();
+            if (await targetMenuBtn.count() > 0) {
+                extractionSource = 'player';
+                console.log('[DEBUG] Using Audio Player menu button.');
             }
+        }
 
-            console.log(`[DEBUG] Attempting to download audio to: ${outputFilename}`);
+        // 2. If no player button, find the Audio Artifact in the Library
+        if (!targetMenuBtn || await targetMenuBtn.count() === 0) {
+            console.log('[DEBUG] Audio Player menu not found. Searching in Artifact Library...');
 
-            // RESPONSIVE UI HANDLING: Check for Studio tab
-            const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
-            if (await studioTab.count() > 0 && await studioTab.isVisible()) {
-                const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
-                if (!isSelected) {
-                    console.log('[DEBUG] Switching to Studio tab...');
-                    await studioTab.click();
-                    await this.page.waitForTimeout(1000);
-                }
-            }
+            const audioArtifact = this.page.locator('artifact-library-item').filter({
+                hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
+            }).first();
 
-            await this.page.waitForTimeout(2000);
+            if (await audioArtifact.count() > 0) {
+                console.log('[DEBUG] Found Audio Artifact in library. Hovering to reveal controls...');
+                await audioArtifact.scrollIntoViewIfNeeded();
+                await audioArtifact.hover();
+                await this.page.waitForTimeout(500);
 
-            // 1. Try ACTIVE AUDIO PLAYER (Footer) first
-            console.log('[DEBUG] Checking for active Audio Player footer...');
-            const audioPlayer = this.page.locator('audio-player').first();
-
-            let targetMenuBtn = null;
-            let extractionSource = 'none';
-
-            // Relaxed check: Just existence is enough to try, we can handle visibility handling in click
-            if (await audioPlayer.count() > 0) {
-                console.log('[DEBUG] Found active Audio Player DOM element.');
-                targetMenuBtn = audioPlayer.locator('button[aria-label*="More"], button[aria-label*="Další"], button:has(mat-icon:has-text("more_vert"))').first();
-                if (await targetMenuBtn.count() > 0) {
-                    extractionSource = 'player';
-                    console.log('[DEBUG] Using Audio Player menu button.');
-                }
-            }
-
-            // 2. If no player button, find the Audio Artifact in the Library
-            if (!targetMenuBtn || await targetMenuBtn.count() === 0) {
-                console.log('[DEBUG] Audio Player menu not found. Searching in Artifact Library...');
-
-                let audioArtifact = this.page.locator('artifact-library-item').filter({
-                    has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
+                // Look for "..." menu button within this artifact item
+                // Priority: exact icon match, text match in tooltip/label
+                targetMenuBtn = audioArtifact.locator('button').filter({
+                    has: this.page.locator('mat-icon').filter({ hasText: 'more_vert' })
                 }).first();
 
-                // Fallback: search by text
-                if (await audioArtifact.count() === 0) {
-                    audioArtifact = this.page.locator('artifact-library-item').filter({
-                        hasText: /Audio (Overview|přehled)|Podcast/i
-                    }).first();
+                if (await targetMenuBtn.count() === 0) {
+                    targetMenuBtn = audioArtifact.locator('button[mattooltip*="Další"], button[mattooltip*="More"], button[aria-label*="Další"], button[aria-label*="More"]').first();
                 }
-
-                if (await audioArtifact.count() > 0) {
-                    console.log('[DEBUG] Found Audio Artifact in library. Hovering to reveal controls...');
-                    await audioArtifact.scrollIntoViewIfNeeded();
-                    await audioArtifact.hover();
-                    await this.page.waitForTimeout(500);
-
-                    // Look for "..." menu button within this artifact item
-                    // Priority: exact icon match, text match in tooltip/label
-                    targetMenuBtn = audioArtifact.locator('button').filter({
-                        has: this.page.locator('mat-icon').filter({ hasText: 'more_vert' })
-                    }).first();
-
-                    if (await targetMenuBtn.count() === 0) {
-                        targetMenuBtn = audioArtifact.locator('button[mattooltip*="Další"], button[mattooltip*="More"], button[aria-label*="Další"], button[aria-label*="More"]').first();
-                    }
-                    extractionSource = 'library';
-                }
+                extractionSource = 'library';
             }
+        }
 
-            // 3. Execute Menu Interaction with RETRY LOGIC
-            if (extractionSource !== 'none') { // Changed condition to check if extractionSource is set
-                console.log(`[DEBUG] Interaction Target: ${extractionSource}. Starting Click Strategy...`);
+        // 3. Execute Menu Interaction with RETRY LOGIC
+        if (extractionSource !== 'none') { // Changed condition to check if extractionSource is set
+            console.log(`[DEBUG] Interaction Target: ${extractionSource}. Starting Click Strategy...`);
 
-                // Helper to get fresh button handle
-                const getButton = () => {
-                    if (extractionSource === 'audio-player') {
-                        return this.page.locator('audio-player button.menu-button, audio-player button[aria-label*="Další"], audio-player button[aria-label*="More"]').first();
-                    } else {
-                        // Library fallback
-                        const art = this.page.locator('artifact-library-item').filter({
-                            has: this.page.locator('mat-icon').filter({ hasText: 'audio_magic_eraser' })
-                        }).first(); // Simplified for speed
+            // Helper to get fresh button handle
+            const getButton = () => {
+                if (extractionSource === 'audio-player') {
+                    return this.page.locator('audio-player button.menu-button, audio-player button[aria-label*="Další"], audio-player button[aria-label*="More"]').first();
+                } else {
+                    // Library fallback
+                    const art = this.page.locator('artifact-library-item').filter({
+                        has: this.page.locator('mat-icon').filter({ hasText: 'audio_magic_eraser' })
+                    }).first(); // Simplified for speed
 
-                        // Try finding the specific class from the dump
-                        return art.locator('button.artifact-more-button').first();
+                    // Try finding the specific class from the dump
+                    return art.locator('button.artifact-more-button').first();
+                }
+            };
+
+            const isMenuOpen = async () => await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').count() > 0;
+
+            const findAndClickDownload = async () => {
+                // 1. Wait for menu animation
+                await this.page.waitForTimeout(500);
+
+                // Specific Text Search (Czech)
+                const czDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
+                if (await czDownload.isVisible()) {
+                    console.log('[DEBUG] Found "Stáhnout" menu item. Clicking...');
+                    await czDownload.click();
+                    return true;
+                }
+
+                // Specific Icon Search (save_alt)
+                const saveAltIcon = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
+                if (await saveAltIcon.isVisible()) {
+                    console.log('[DEBUG] Found "save_alt" icon menu item. Clicking...');
+                    await saveAltIcon.click();
+                    return true;
+                }
+
+                // Fallback Text Search (English)
+                const enDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Download' }).first();
+                if (await enDownload.isVisible()) {
+                    console.log('[DEBUG] Found "Download" menu item. Clicking...');
+                    await enDownload.click();
+                    return true;
+                }
+
+                // DEBUGGING: Log what IS visible in the menu
+                const overlays = this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').filter({ has: this.page.locator(':visible') });
+                if (await overlays.count() > 0) {
+                    const texts = await overlays.allInnerTexts();
+                    console.log('[DEBUG] Menu is OPEN but Download option not matched. Visible menu text:', texts);
+                }
+
+                return false;
+            };
+
+            let success = false;
+
+            // Attempt 1: Standard Click
+            console.log('[DEBUG] Attempt 1: getButton & Standard Click...');
+            try {
+                const btn = getButton();
+                if (await btn.count() > 0) {
+                    await btn.scrollIntoViewIfNeeded();
+                    await btn.click({ timeout: 5000 });
+                    await this.page.waitForTimeout(1000); // Wait for animation
+                    if (await isMenuOpen()) {
+                        console.log('[DEBUG] Menu detected open.');
+                        if (await findAndClickDownload()) success = true;
                     }
-                };
+                } else { console.log('[DEBUG] Button not found for Attempt 1'); }
+            } catch (e: any) { console.warn('[DEBUG] Click 1 failed:', e.message || String(e)); }
 
-                const isMenuOpen = async () => await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').count() > 0;
-
-                const findAndClickDownload = async () => {
-                    // 1. Wait for menu animation
-                    await this.page.waitForTimeout(500);
-
-                    // Specific Text Search (Czech)
-                    const czDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
-                    if (await czDownload.isVisible()) {
-                        console.log('[DEBUG] Found "Stáhnout" menu item. Clicking...');
-                        await czDownload.click();
-                        return true;
-                    }
-
-                    // Specific Icon Search (save_alt)
-                    const saveAltIcon = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
-                    if (await saveAltIcon.isVisible()) {
-                        console.log('[DEBUG] Found "save_alt" icon menu item. Clicking...');
-                        await saveAltIcon.click();
-                        return true;
-                    }
-
-                    // Fallback Text Search (English)
-                    const enDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Download' }).first();
-                    if (await enDownload.isVisible()) {
-                        console.log('[DEBUG] Found "Download" menu item. Clicking...');
-                        await enDownload.click();
-                        return true;
-                    }
-
-                    // DEBUGGING: Log what IS visible in the menu
-                    const overlays = this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').filter({ has: this.page.locator(':visible') });
-                    if (await overlays.count() > 0) {
-                        const texts = await overlays.allInnerTexts();
-                        console.log('[DEBUG] Menu is OPEN but Download option not matched. Visible menu text:', texts);
-                    }
-
-                    return false;
-                };
-
-                let success = false;
-
-                // Attempt 1: Standard Click
-                console.log('[DEBUG] Attempt 1: getButton & Standard Click...');
+            // Attempt 2: Force Click
+            if (!success && !await isMenuOpen()) {
+                console.log('[DEBUG] Attempt 2: Force Click...');
                 try {
                     const btn = getButton();
                     if (await btn.count() > 0) {
-                        await btn.scrollIntoViewIfNeeded();
-                        await btn.click({ timeout: 5000 });
-                        await this.page.waitForTimeout(1000); // Wait for animation
+                        await btn.click({ force: true, timeout: 5000 });
+                        await this.page.waitForTimeout(1000);
                         if (await isMenuOpen()) {
-                            console.log('[DEBUG] Menu detected open.');
                             if (await findAndClickDownload()) success = true;
                         }
-                    } else { console.log('[DEBUG] Button not found for Attempt 1'); }
-                } catch (e: any) { console.warn('[DEBUG] Click 1 failed:', e.message || String(e)); }
-
-                // Attempt 2: Force Click
-                if (!success && !await isMenuOpen()) {
-                    console.log('[DEBUG] Attempt 2: Force Click...');
-                    try {
-                        const btn = getButton();
-                        if (await btn.count() > 0) {
-                            await btn.click({ force: true, timeout: 5000 });
-                            await this.page.waitForTimeout(1000);
-                            if (await isMenuOpen()) {
-                                if (await findAndClickDownload()) success = true;
-                            }
-                        }
-                    } catch (e: any) { console.warn('[DEBUG] Click 2 failed:', e.message || String(e)); }
-                }
-
-                // Attempt 3: Dispatch Event
-                if (!success && !await isMenuOpen()) {
-                    console.log('[DEBUG] Attempt 3: dispatchEvent("click")...');
-                    try {
-                        const btn = getButton();
-                        if (await btn.count() > 0) {
-                            await btn.dispatchEvent('click');
-                            await this.page.waitForTimeout(1000);
-                            if (await isMenuOpen()) {
-                                if (await findAndClickDownload()) success = true;
-                            }
-                        }
-                    } catch (e: any) { console.warn('[DEBUG] Click 3 failed:', e.message || String(e)); }
-                }
-
-                // Attempt 4: Keyboard Enter
-                if (!success && !await isMenuOpen()) {
-                    console.log('[DEBUG] Attempt 4: Keyboard Enter...');
-                    try {
-                        const btn = getButton();
-                        if (await btn.count() > 0) {
-                            await btn.focus({ timeout: 2000 });
-                            await this.page.keyboard.press('Enter');
-                            await this.page.waitForTimeout(1000);
-                            if (await isMenuOpen()) {
-                                if (await findAndClickDownload()) success = true;
-                            }
-                        }
-                    } catch (e: any) {
-                        console.warn('[DEBUG] Focus attempt failed:', e.message || String(e));
                     }
-                }
-
-                // Final check if menu opened but download failed
-                if (!success && await isMenuOpen()) {
-                    console.log('[DEBUG] Menu is open, trying once more to find download item...');
-                    if (await findAndClickDownload()) success = true;
-                }
-
-                if (success) {
-                    try {
-                        console.log('[DEBUG] Waiting for download event...');
-                        const downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
-                        // Click already happened in findAndClickDownload
-                        const download = await downloadPromise;
-
-                        // Ensure directory exists
-                        const fs = require('fs');
-                        const dir = path.dirname(outputFilename);
-                        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-                        await download.saveAs(outputFilename);
-                        console.log(`[DEBUG] Audio saved via download event to ${outputFilename}`);
-                        return true;
-                    } catch (e: any) {
-                        console.warn('[DEBUG] Download event capture failed (or click failed to trigger it). Error:', e);
-                    }
-                } else {
-                    console.log('[DEBUG] Failed to find Download option after all attempts.');
-                    await this.dumpState('download_menu_fail');
-                }
-            } else {
-                console.log('[DEBUG] "More options" button target not defined.');
+                } catch (e: any) { console.warn('[DEBUG] Click 2 failed:', e.message || String(e)); }
             }
-            const audioEl = this.page.locator('audio').first();
-            if (await audioEl.count() > 0) {
-                const src = await audioEl.getAttribute('src');
-                if (src) {
-                    console.log(`[DEBUG] Found generic audio source element.`);
-                    const fs = require('fs');
-                    const buffer = await this.page.evaluate(async (audioSrc) => {
-                        const response = await fetch(audioSrc);
-                        const blob = await response.blob();
-                        const arrayBuffer = await blob.arrayBuffer();
-                        return Array.from(new Uint8Array(arrayBuffer));
-                    }, src);
 
+            // Attempt 3: Dispatch Event
+            if (!success && !await isMenuOpen()) {
+                console.log('[DEBUG] Attempt 3: dispatchEvent("click")...');
+                try {
+                    const btn = getButton();
+                    if (await btn.count() > 0) {
+                        await btn.dispatchEvent('click');
+                        await this.page.waitForTimeout(1000);
+                        if (await isMenuOpen()) {
+                            if (await findAndClickDownload()) success = true;
+                        }
+                    }
+                } catch (e: any) { console.warn('[DEBUG] Click 3 failed:', e.message || String(e)); }
+            }
+
+            // Attempt 4: Keyboard Enter
+            if (!success && !await isMenuOpen()) {
+                console.log('[DEBUG] Attempt 4: Keyboard Enter...');
+                try {
+                    const btn = getButton();
+                    if (await btn.count() > 0) {
+                        await btn.focus({ timeout: 2000 });
+                        await this.page.keyboard.press('Enter');
+                        await this.page.waitForTimeout(1000);
+                        if (await isMenuOpen()) {
+                            if (await findAndClickDownload()) success = true;
+                        }
+                    }
+                } catch (e: any) {
+                    console.warn('[DEBUG] Focus attempt failed:', e.message || String(e));
+                }
+            }
+
+            // Final check if menu opened but download failed
+            if (!success && await isMenuOpen()) {
+                console.log('[DEBUG] Menu is open, trying once more to find download item...');
+                if (await findAndClickDownload()) success = true;
+            }
+
+            if (success) {
+                try {
+                    console.log('[DEBUG] Waiting for download event...');
+                    const downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
+                    // Click already happened in findAndClickDownload
+                    const download = await downloadPromise;
+
+                    // Ensure directory exists
+                    const fs = require('fs');
                     const dir = path.dirname(outputFilename);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                    fs.writeFileSync(outputFilename, Buffer.from(buffer));
-                    console.log(`[DEBUG] Audio saved from <audio> src to ${outputFilename}`);
-                    return true;
-                }
-            }
 
-            console.error('[DEBUG] Failed to download audio. Could not find artifact or valid download path.');
-            await this.dumpState('download_audio_fail');
-            return false;
+                    await download.saveAs(outputFilename);
+                    console.log(`[DEBUG] Audio saved via download event to ${outputFilename}`);
+                    return true;
+                } catch (e: any) {
+                    console.warn('[DEBUG] Download event capture failed (or click failed to trigger it). Error:', e);
+                }
+            } else {
+                console.log('[DEBUG] Failed to find Download option after all attempts.');
+                await this.dumpState('download_menu_fail');
+            }
+        } else {
+            console.log('[DEBUG] "More options" button target not defined.');
         }
+        const audioEl = this.page.locator('audio').first();
+        if (await audioEl.count() > 0) {
+            const src = await audioEl.getAttribute('src');
+            if (src) {
+                console.log(`[DEBUG] Found generic audio source element.`);
+                const fs = require('fs');
+                const buffer = await this.page.evaluate(async (audioSrc) => {
+                    const response = await fetch(audioSrc);
+                    const blob = await response.blob();
+                    const arrayBuffer = await blob.arrayBuffer();
+                    return Array.from(new Uint8Array(arrayBuffer));
+                }, src);
+
+                const dir = path.dirname(outputFilename);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(outputFilename, Buffer.from(buffer));
+                console.log(`[DEBUG] Audio saved from <audio> src to ${outputFilename}`);
+                return true;
+            }
+        }
+
+        console.error('[DEBUG] Failed to download audio. Could not find artifact or valid download path.');
+        await this.dumpState('download_audio_fail');
+        return false;
+    }
 
     async downloadAllAudio(notebookTitle: string, outputDir: string) {
-            if (notebookTitle) {
-                await this.openNotebook(notebookTitle);
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[DEBUG] Downloading ALL audio files to directory: ${outputDir}`);
+
+        // Create output directory if it doesn't exist
+        const fs = require('fs');
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+            console.log(`[DEBUG] Created output directory: ${outputDir}`);
+        }
+
+        // RESPONSIVE UI HANDLING: Check for Studio tab
+        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Studio tab...');
+                await studioTab.click();
+                await this.page.waitForTimeout(1000);
+            }
+        }
+
+        await this.page.waitForTimeout(2000);
+
+        // Find ALL audio artifacts in the library
+        console.log('[DEBUG] Searching for all audio artifacts...');
+        const audioArtifacts = this.page.locator('artifact-library-item').filter({
+            has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
+        });
+
+        const count = await audioArtifacts.count();
+        console.log(`[DEBUG] Found ${count} audio artifact(s)`);
+
+        if (count === 0) {
+            console.warn('[DEBUG] No audio artifacts found in notebook.');
+            return [];
+        }
+
+        const downloaded = [];
+
+        // Iterate through each audio artifact
+        for (let i = 0; i < count; i++) {
+            console.log(`\n[DEBUG] === Processing audio ${i + 1} of ${count} ===`);
+
+            const artifact = audioArtifacts.nth(i);
+
+            // Try to get the title of the audio
+            let audioTitle = '';
+            try {
+                const titleEl = artifact.locator('.artifact-title, .title').first();
+                if (await titleEl.count() > 0) {
+                    audioTitle = await titleEl.innerText();
+                    audioTitle = audioTitle.trim().replace(/[^a-zA-Z0-9-_]/g, '_');
+                }
+            } catch (e) {
+                console.warn('[DEBUG] Could not extract title, using index');
             }
 
-            console.log(`[DEBUG] Downloading ALL audio files to directory: ${outputDir}`);
-
-            // Create output directory if it doesn't exist
-            const fs = require('fs');
-            if (!fs.existsSync(outputDir)) {
-                fs.mkdirSync(outputDir, { recursive: true });
-                console.log(`[DEBUG] Created output directory: ${outputDir}`);
+            if (!audioTitle) {
+                audioTitle = `audio_${i + 1}`;
             }
 
-            // RESPONSIVE UI HANDLING: Check for Studio tab
-            const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
-            if (await studioTab.count() > 0 && await studioTab.isVisible()) {
-                const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
-                if (!isSelected) {
-                    console.log('[DEBUG] Switching to Studio tab...');
-                    await studioTab.click();
-                    await this.page.waitForTimeout(1000);
-                }
+            const filename = path.join(outputDir, `${audioTitle}_${Date.now()}.mp3`);
+
+            // Check if this audio was already downloaded
+            const existingFiles = fs.readdirSync(outputDir).filter((f: string) => f.startsWith(audioTitle));
+            if (existingFiles.length > 0) {
+                console.log(`[DEBUG] Audio "${audioTitle}" appears to already exist. Skipping.`);
+                continue;
             }
 
-            await this.page.waitForTimeout(2000);
+            console.log(`[DEBUG] Downloading to: ${filename}`);
 
-            // Find ALL audio artifacts in the library
-            console.log('[DEBUG] Searching for all audio artifacts...');
-            const audioArtifacts = this.page.locator('artifact-library-item').filter({
-                has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
-            });
+            // Scroll into view and hover to reveal controls
+            await artifact.scrollIntoViewIfNeeded();
+            await artifact.hover();
+            await this.page.waitForTimeout(500);
 
-            const count = await audioArtifacts.count();
-            console.log(`[DEBUG] Found ${count} audio artifact(s)`);
+            // Find the "more_vert" menu button for this specific artifact
+            // Be very specific - we want ONLY the button, not the parent container
+            const menuBtn = artifact.locator('button[aria-label*="More"], button[aria-label*="Další"], button mat-icon:has-text("more_vert")').first();
 
-            if (count === 0) {
-                console.warn('[DEBUG] No audio artifacts found in notebook.');
-                return [];
+            if (await menuBtn.count() === 0) {
+                console.warn(`[DEBUG] Could not find menu button for audio "${audioTitle}". Skipping.`);
+                continue;
             }
 
-            const downloaded = [];
+            // Click menu button and WAIT for the overlay to appear
+            console.log('[DEBUG] Clicking menu button...');
+            await menuBtn.click();
 
-            // Iterate through each audio artifact
-            for (let i = 0; i < count; i++) {
-                console.log(`\n[DEBUG] === Processing audio ${i + 1} of ${count} ===`);
-
-                const artifact = audioArtifacts.nth(i);
-
-                // Try to get the title of the audio
-                let audioTitle = '';
-                try {
-                    const titleEl = artifact.locator('.artifact-title, .title').first();
-                    if (await titleEl.count() > 0) {
-                        audioTitle = await titleEl.innerText();
-                        audioTitle = audioTitle.trim().replace(/[^a-zA-Z0-9-_]/g, '_');
-                    }
-                } catch (e) {
-                    console.warn('[DEBUG] Could not extract title, using index');
-                }
-
-                if (!audioTitle) {
-                    audioTitle = `audio_${i + 1}`;
-                }
-
-                const filename = path.join(outputDir, `${audioTitle}_${Date.now()}.mp3`);
-
-                // Check if this audio was already downloaded
-                const existingFiles = fs.readdirSync(outputDir).filter((f: string) => f.startsWith(audioTitle));
-                if (existingFiles.length > 0) {
-                    console.log(`[DEBUG] Audio "${audioTitle}" appears to already exist. Skipping.`);
-                    continue;
-                }
-
-                console.log(`[DEBUG] Downloading to: ${filename}`);
-
-                // Scroll into view and hover to reveal controls
-                await artifact.scrollIntoViewIfNeeded();
-                await artifact.hover();
-                await this.page.waitForTimeout(500);
-
-                // Find the "more_vert" menu button for this specific artifact
-                // Be very specific - we want ONLY the button, not the parent container
-                const menuBtn = artifact.locator('button[aria-label*="More"], button[aria-label*="Další"], button mat-icon:has-text("more_vert")').first();
-
-                if (await menuBtn.count() === 0) {
-                    console.warn(`[DEBUG] Could not find menu button for audio "${audioTitle}". Skipping.`);
-                    continue;
-                }
-
-                // Click menu button and WAIT for the overlay to appear
-                console.log('[DEBUG] Clicking menu button...');
-                await menuBtn.click();
-
-                // CRITICAL: Wait for the menu overlay to actually appear
-                console.log('[DEBUG] Waiting for menu to open...');
-                try {
-                    await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').first().waitFor({
-                        state: 'visible',
-                        timeout: 3000
-                    });
-                    console.log('[DEBUG] Menu opened successfully');
-                } catch (e) {
-                    console.warn(`[DEBUG] Menu did not appear for "${audioTitle}". Skipping.`);
-                    await this.page.keyboard.press('Escape');
-                    await this.page.waitForTimeout(500);
-                    continue;
-                }
-
-                // Additional wait for menu animation to complete
-                await this.page.waitForTimeout(800);
-
-                // Find and click Download option in the popup menu overlay
-                console.log('[DEBUG] Searching for Download option in menu...');
-
-                // Try Czech first
-                let downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
-                if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
-                    console.log('[DEBUG] Found "Stáhnout" option. Clicking...');
-                } else {
-                    // Try icon search
-                    downloadBtn = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
-                    if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
-                        console.log('[DEBUG] Found "save_alt" icon option. Clicking...');
-                    } else {
-                        // Try English
-                        downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: /Download/i }).first();
-                        if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
-                            console.log('[DEBUG] Found "Download" option. Clicking...');
-                        } else {
-                            console.warn(`[DEBUG] Download button not found for "${audioTitle}". Logging menu content...`);
-                            // Debug: log what's in the menu
-                            const overlays = this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel');
-                            if (await overlays.count() > 0) {
-                                const texts = await overlays.allInnerTexts();
-                                console.log('[DEBUG] Menu content:', texts);
-                            }
-                            // Close menu and skip
-                            await this.page.keyboard.press('Escape');
-                            await this.page.waitForTimeout(500);
-                            continue;
-                        }
-                    }
-                }
-
-                // Set up download listener and click
-                try {
-                    const downloadPromise = this.page.waitForEvent('download', { timeout: 10000 });
-                    await downloadBtn.click();
-
-                    const download = await downloadPromise;
-                    const downloadPath = await download.path();
-                    if (downloadPath) {
-                        fs.copyFileSync(downloadPath, filename);
-                        console.log(`[DEBUG] ✅ Downloaded: ${filename}`);
-                        downloaded.push(filename);
-                    }
-                } catch (e) {
-                    console.error(`[DEBUG] ❌ Download failed for "${audioTitle}":`, e);
-                }
-
-                // Close menu if still open
+            // CRITICAL: Wait for the menu overlay to actually appear
+            console.log('[DEBUG] Waiting for menu to open...');
+            try {
+                await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').first().waitFor({
+                    state: 'visible',
+                    timeout: 3000
+                });
+                console.log('[DEBUG] Menu opened successfully');
+            } catch (e) {
+                console.warn(`[DEBUG] Menu did not appear for "${audioTitle}". Skipping.`);
                 await this.page.keyboard.press('Escape');
                 await this.page.waitForTimeout(500);
+                continue;
             }
 
-            console.log(`\n[DEBUG] === Download Summary ===`);
-            console.log(`[DEBUG] Total found: ${count}`);
-            console.log(`[DEBUG] Successfully downloaded: ${downloaded.length}`);
+            // Additional wait for menu animation to complete
+            await this.page.waitForTimeout(800);
 
-            return downloaded;
+            // Find and click Download option in the popup menu overlay
+            console.log('[DEBUG] Searching for Download option in menu...');
+
+            // Try Czech first
+            let downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
+            if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                console.log('[DEBUG] Found "Stáhnout" option. Clicking...');
+            } else {
+                // Try icon search
+                downloadBtn = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
+                if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                    console.log('[DEBUG] Found "save_alt" icon option. Clicking...');
+                } else {
+                    // Try English
+                    downloadBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: /Download/i }).first();
+                    if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                        console.log('[DEBUG] Found "Download" option. Clicking...');
+                    } else {
+                        console.warn(`[DEBUG] Download button not found for "${audioTitle}". Logging menu content...`);
+                        // Debug: log what's in the menu
+                        const overlays = this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel');
+                        if (await overlays.count() > 0) {
+                            const texts = await overlays.allInnerTexts();
+                            console.log('[DEBUG] Menu content:', texts);
+                        }
+                        // Close menu and skip
+                        await this.page.keyboard.press('Escape');
+                        await this.page.waitForTimeout(500);
+                        continue;
+                    }
+                }
+            }
+
+            // Set up download listener and click
+            try {
+                const downloadPromise = this.page.waitForEvent('download', { timeout: 10000 });
+                await downloadBtn.click();
+
+                const download = await downloadPromise;
+                const downloadPath = await download.path();
+                if (downloadPath) {
+                    fs.copyFileSync(downloadPath, filename);
+                    console.log(`[DEBUG] ✅ Downloaded: ${filename}`);
+                    downloaded.push(filename);
+                }
+            } catch (e) {
+                console.error(`[DEBUG] ❌ Download failed for "${audioTitle}":`, e);
+            }
+
+            // Close menu if still open
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(500);
         }
+
+        console.log(`\n[DEBUG] === Download Summary ===`);
+        console.log(`[DEBUG] Total found: ${count}`);
+        console.log(`[DEBUG] Successfully downloaded: ${downloaded.length}`);
+
+        return downloaded;
     }
+}
 
