@@ -163,6 +163,75 @@ curl http://localhost:3000/health
 
 ---
 
+### 2. Shutdown Server
+
+Gracefully stop the server and close browser connections.
+
+**Endpoint:** `POST /shutdown`
+
+**Request:**
+```bash
+curl -X POST http://localhost:3000/shutdown
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Shutting down..."
+}
+```
+
+---
+
+### 3. Job Queue
+
+Track long-running asynchronous tasks (deep research, audio generation).
+
+#### List All Jobs
+
+**Endpoint:** `GET /jobs`
+
+**Response:**
+```json
+{
+  "success": true,
+  "jobs": [
+    {
+      "id": "abc123",
+      "type": "deepResearch",
+      "status": "completed",
+      "query": "Complex topic",
+      "createdAt": 1702252800000,
+      "completedAt": 1702253100000,
+      "result": { "answer": "..." }
+    }
+  ]
+}
+```
+
+#### Get Job Status
+
+**Endpoint:** `GET /jobs/:id`
+
+**Response:**
+```json
+{
+  "success": true,
+  "job": {
+    "id": "abc123",
+    "type": "deepResearch",
+    "status": "running",
+    "query": "Complex topic",
+    "createdAt": 1702252800000
+  }
+}
+```
+
+**Status Values:** `queued`, `running`, `completed`, `failed`
+
+---
+
 ### 2. Submit Query
 
 Send a query to Perplexity.ai and get the response.
@@ -316,6 +385,118 @@ Get metadata (Title, First Heading) for the latest research document in a sessio
     "firstHeading": "Doc Heading",
     "sessionId": "session_id"
   }
+}
+```
+
+---
+
+## 4. NotebookLM (Audio Generation)
+
+### 1. Create Notebook
+
+Create a new NotebookLM notebook.
+
+**Endpoint:** `POST /notebook/create`
+
+**Request Body:**
+```json
+{
+  "title": "My Research Notebook"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Notebook 'My Research Notebook' created"
+}
+```
+
+### 2. Add Source URL
+
+Add a web URL as a source to the current notebook.
+
+**Endpoint:** `POST /notebook/add-source`
+
+**Request Body:**
+```json
+{
+  "url": "https://example.com/article",
+  "notebookTitle": "optional-notebook-name"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Source added"
+}
+```
+
+### 3. Add Google Drive Source
+
+Add documents from Google Drive as sources.
+
+**Endpoint:** `POST /notebook/add-drive-source`
+
+**Request Body:**
+```json
+{
+  "docNames": ["Document Name 1", "Document Name 2"],
+  "notebookTitle": "optional-notebook-name"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Drive sources added"
+}
+```
+
+### 4. Generate Audio Overview
+
+Generate an audio podcast from the notebook sources.
+
+**Endpoint:** `POST /notebook/generate-audio`
+
+**Request Body:**
+```json
+{
+  "notebookTitle": "My Research Notebook",
+  "sources": ["source1", "source2"],
+  "customPrompt": "Focus on key findings",
+  "dryRun": true
+}
+```
+
+> [!NOTE]
+> Set `dryRun: true` to simulate audio generation without using quota. Set to `false` for actual generation.
+
+**Response (Async - returns job ID):**
+```json
+{
+  "success": true,
+  "message": "Audio generation started",
+  "jobId": "abc123",
+  "statusUrl": "/jobs/abc123"
+}
+```
+
+### 5. Dump State (Debug)
+
+Capture current page state for debugging.
+
+**Endpoint:** `POST /notebook/dump`
+
+**Response:**
+```json
+{
+  "success": true,
+  "paths": ["/path/to/screenshot.png", "/path/to/state.html"]
 }
 ```
 
