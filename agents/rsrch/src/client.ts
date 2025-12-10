@@ -56,31 +56,40 @@ export class PerplexityClient {
                 await this.context.addInitScript(() => {
                     // Override the `navigator.webdriver` property
                     Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined,
+                        get: () => false, // Better to return false than undefined for some checks
                     });
 
-                    // Mock the `chrome` object
-                    (window as any).chrome = {
-                        runtime: {},
-                    };
+                    // Mock the `chrome` object if not present
+                    if (!(window as any).chrome) {
+                        (window as any).chrome = {
+                            runtime: {},
+                            app: {},
+                            csi: () => { },
+                            loadTimes: () => { }
+                        };
+                    }
 
-                    // Override permissions
+                    // Override permissions to always allow notifications (common in real browsers)
                     const originalQuery = window.navigator.permissions.query;
                     window.navigator.permissions.query = (parameters: any) => (
                         parameters.name === 'notifications' ?
-                            Promise.resolve({ state: Notification.permission } as PermissionStatus) :
+                            Promise.resolve({ state: 'granted' } as PermissionStatus) :
                             originalQuery(parameters)
                     );
 
-                    // Add realistic plugins
-                    Object.defineProperty(navigator, 'plugins', {
-                        get: () => [1, 2, 3, 4, 5],
-                    });
+                    // Add realistic plugins (if empty)
+                    if (navigator.plugins.length === 0) {
+                        Object.defineProperty(navigator, 'plugins', {
+                            get: () => [1, 2, 3, 4, 5],
+                        });
+                    }
 
-                    // Add realistic languages
-                    Object.defineProperty(navigator, 'languages', {
-                        get: () => ['en-US', 'en'],
-                    });
+                    // Add realistic languages if missing
+                    if (navigator.languages.length === 0) {
+                        Object.defineProperty(navigator, 'languages', {
+                            get: () => ['en-US', 'en'],
+                        });
+                    }
                 });
             }
 
