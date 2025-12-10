@@ -12,8 +12,26 @@ const PORT = config.port;
 app.use(express.json());
 
 // Initialize the client
+// Initialize the client
 const client = new PerplexityClient();
 let notebookClient: NotebookLMClient | null = null;
+
+// Job Management
+interface Job {
+    id: string;
+    type: 'audio-generation';
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    result?: any;
+    error?: string;
+    createdAt: number;
+}
+const jobs = new Map<string, Job>();
+
+// Helper
+function generateJobId(): string {
+    return Math.random().toString(36).substring(2, 11);
+}
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -154,16 +172,63 @@ app.post('/notebook/generate-audio', async (req, res) => {
             notebookClient = await client.createNotebookClient();
         }
 
-        // Generate audio (client handles notebook opening if title provided)
-        console.log(`[Server] Generating audio... (Notebook: ${notebookTitle}, Sources: ${sources}, Prompt: ${customPrompt ? 'yes' : 'no'})`);
-        await notebookClient.generateAudioOverview(notebookTitle, sources, customPrompt);
+        // Check if busy
+        if (notebookClient?.isBusy) {
+            return res.status(409).json({ success: false, error: 'NotebookLM client is busy with another task.' });
+        }
 
-        res.json({ success: true, message: `Audio generation started` });
+        // Create Job
+        const jobId = generateJobId();
+        const job: Job = {
+            id: jobId,
+            type: 'audio-generation',
+            status: 'pending',
+            createdAt: Date.now()
+        };
+        jobs.set(jobId, job);
+
+        // Start background processing
+        console.log(`[Server] Starting async job ${jobId}: Audio Generation`);
+
+        // Ensure client initialized? It is if !notebookClient passed.
+
+        (async () => {
+            try {
+                jobs.set(jobId, { ...job, status: 'processing' });
+                await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true);
+                // Note: generateAudioOverview waits for completion now (due to true arg)
+                jobs.set(jobId, { ...job, status: 'completed', result: { message: 'Audio generated' } });
+                console.log(`[Server] Job ${jobId} completed.`);
+            } catch (err: any) {
+                console.error(`[Server] Job ${jobId} failed:`, err);
+                jobs.set(jobId, { ...job, status: 'failed', error: err.message });
+            }
+        })();
+
+        res.status(202).json({
+            success: true,
+            message: 'Audio generation started',
+            jobId,
+            statusUrl: `/jobs/${jobId}`
+        });
+
     } catch (e: any) {
-        console.error('[Server] Generate audio failed:', e);
+        console.error('[Server] Generate audio request failed:', e);
         res.status(500).json({ success: false, error: e.message });
     }
 });
+
+app.get('/jobs/:id', (req, res) => {
+    const jobId = req.params.id;
+    const job = jobs.get(jobId);
+
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
+    res.json({ success: true, job });
+});
+
 
 app.post('/notebook/dump', async (req, res) => {
     try {
