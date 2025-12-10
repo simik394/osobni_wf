@@ -36,7 +36,8 @@ API:
 - add verbose logging in the cli so i can see how the request proceeds.
 - make all existing functions available in both the rest api as well as in the cli. [SHOULD BE DONE EVERYTIME A NEW FUNCTION IS ADDED]
 - add endpoint which will take as input a research question. will do the research with both gemini and perplexity  then combines those results in a google doc. this one is then loaderd into the notebooklm and a audio for only that source is generated with custom prompt which could be gien as a parameter to the endpoint. And finally it saves the audio on a local storage. As it will run in docker there will be a mounted volume for saving the audio files. if it is successful i want to get an email onto the mail i am loged in with.
-as the research and audio generation is long running process, can you do it so that the server can process other requests while the research is running and the audio is being generated?
+- [x] as the research and audio generation is long running process, can you do it so that the server can process other requests while the research is running and the audio is being generated?
+- [x] Implement Discord notifications for long-running tasks (replacing email requirement).
 
 DOCS:
 - add clearly separated docs for the cli and the api.
