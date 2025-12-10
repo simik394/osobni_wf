@@ -32,8 +32,12 @@ export const config = {
         // Auth file for remote sessions (cookies/storage)
         authFile: process.env.AUTH_FILE || path.join(os.homedir(), '.config', 'rsrch', 'auth.json'),
     },
+    notifications: {
+        discordWebhookUrl: localConfig.discordWebhookUrl || process.env.DISCORD_WEBHOOK_URL
+    },
     paths: {
         resultsDir: process.env.RESULTS_DIR || path.join(os.homedir(), '.local', 'share', 'rsrch', 'results'),
         queriesFile: process.env.QUERIES_FILE || path.join(process.cwd(), 'data', 'queries.json'),
     }
 };
+

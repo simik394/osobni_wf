@@ -1,5 +1,7 @@
 import { Page } from 'playwright';
 import * as path from 'path';
+import { config } from './config';
+
 
 export class NotebookLMClient {
     constructor(private page: Page) { }
@@ -57,6 +59,27 @@ export class NotebookLMClient {
             // Don't throw here to avoid masking original error
         }
     }
+
+    private async notifyDiscord(message: string, isError: boolean = false) {
+        const webhookUrl = config.notifications?.discordWebhookUrl;
+        if (!webhookUrl) return;
+
+        console.log('[NotebookLM] Sending Discord notification...');
+        try {
+            await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: message,
+                    username: 'NotebookLM Bot',
+                    avatar_url: 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg' // Optional
+                })
+            });
+        } catch (e) {
+            console.error('[NotebookLM] Failed to send Discord notification:', e);
+        }
+    }
+
 
     async openNotebook(title: string) {
         console.log(`Opening notebook: ${title}`);
@@ -245,7 +268,7 @@ export class NotebookLMClient {
         }
     }
 
-    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string) {
+    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = true) {
         if (notebookTitle) {
             await this.openNotebook(notebookTitle);
         }
@@ -469,6 +492,30 @@ export class NotebookLMClient {
                         console.warn('[DEBUG] "Generating" indicator did not appear within timeout. Proceeding but verification is weak.');
                     }
 
+                    if (waitForCompletion) {
+                        console.log('[DEBUG] Waiting for audio generation to complete...');
+                        const maxWait = 10 * 60 * 1000; // 10 minutes max
+                        const startTime = Date.now();
+
+                        while (Date.now() - startTime < maxWait) {
+                            await this.page.waitForTimeout(5000);
+                            const generating = await this.page.locator('.artifact-title, .status-text').filter({ hasText: /Generování|Generating/ }).count();
+                            if (generating === 0) {
+                                console.log('[DEBUG] Generation complete!');
+                                await this.notifyDiscord(`✅ Audio Overview generation complete for notebook: "${notebookTitle || 'Current'}"`);
+                                return true;
+                            }
+                        }
+
+                        console.warn('[DEBUG] Timeout waiting for audio generation.');
+                        await this.notifyDiscord(`⚠️ Timeout waiting for Audio Overview for notebook: "${notebookTitle || 'Current'}"`, true);
+                    }
+
+                    if (!waitForCompletion) {
+                        // Non-blocking mode (original behavior)
+                        await this.notifyDiscord(`⏳ Audio Overview generation started for notebook: "${notebookTitle || 'Current'}"`);
+                    }
+
                     return true;
                 } catch (e) {
                     console.error('[DEBUG] Failed during generation click or wait.', e);
@@ -523,6 +570,27 @@ export class NotebookLMClient {
                     console.warn('[DEBUG] Custom Prompt provided but "Customize" button not found. Generating without customization.');
                 }
                 await generateBtn.click();
+
+                if (waitForCompletion) {
+                    console.log('[DEBUG] Waiting for audio generation to complete (simple path)...');
+                    // Wait a bit for indicator to appear first
+                    await this.page.waitForTimeout(3000);
+
+                    const maxWait = 10 * 60 * 1000;
+                    const startTime = Date.now();
+
+                    while (Date.now() - startTime < maxWait) {
+                        await this.page.waitForTimeout(5000);
+                        const generating = await this.page.locator('.artifact-title, .status-text').filter({ hasText: /Generování|Generating/ }).count();
+                        if (generating === 0) {
+                            console.log('[DEBUG] Generation complete!');
+                            await this.notifyDiscord(`✅ Audio Overview generation complete for notebook: "${notebookTitle || 'Current'}"`);
+                            return;
+                        }
+                    }
+                    console.warn('[DEBUG] Timeout waiting for audio generation.');
+                    await this.notifyDiscord(`⚠️ Timeout waiting for Audio Overview for notebook: "${notebookTitle || 'Current'}"`, true);
+                }
                 return;
             }
 
