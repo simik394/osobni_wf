@@ -153,6 +153,7 @@ export class PerplexityClient {
             this.context = await chromium.launchPersistentContext(config.auth.userDataDir, {
                 headless: headless, // Playwright uses 'new' headless by default in recent versions
                 channel: 'chromium',
+                slowMo: 75, // Humanize actions - per user rules for Google services
                 args: [
                     '--disable-blink-features=AutomationControlled',
                     '--start-maximized',

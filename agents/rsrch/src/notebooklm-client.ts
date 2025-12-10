@@ -8,6 +8,18 @@ export class NotebookLMClient {
 
     constructor(private page: Page) { }
 
+    /**
+     * Humanized delay with randomization for anti-detection.
+     * @param baseMs Base delay in milliseconds
+     * @param variance Variance percentage (default 0.3 = ±30%)
+     */
+    private async humanDelay(baseMs: number, variance: number = 0.3): Promise<void> {
+        const min = Math.floor(baseMs * (1 - variance));
+        const max = Math.floor(baseMs * (1 + variance));
+        const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+        await this.page.waitForTimeout(delay);
+    }
+
     async init() {
         await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
     }
@@ -143,7 +155,7 @@ export class NotebookLMClient {
             if (!isSelected) {
                 console.log('[DEBUG] Switching to Sources tab...');
                 await sourcesTab.click();
-                await this.page.waitForTimeout(1000);
+                await this.humanDelay(1000);
             }
         }
 
@@ -207,7 +219,7 @@ export class NotebookLMClient {
             if (!isSelected) {
                 console.log('[DEBUG] Switching to Sources tab...');
                 await sourcesTab.click();
-                await this.page.waitForTimeout(1000);
+                await this.humanDelay(1000);
             }
         }
 
@@ -217,7 +229,7 @@ export class NotebookLMClient {
             throw new Error('"Add sources" button not found');
         }
         await addSourceBtn.click();
-        await this.page.waitForTimeout(1000);
+        await this.humanDelay(1000);
 
         // Click "Disk" (Google Drive) button in the dialog
         const driveBtn = this.page.locator('button.drop-zone-icon-button').filter({ hasText: /Disk|Drive/i }).first();
@@ -341,7 +353,7 @@ export class NotebookLMClient {
                 if (!isSelected) {
                     console.log('[DEBUG] Switching to Studio tab...');
                     await studioTab.click();
-                    await this.page.waitForTimeout(1000);
+                    await this.humanDelay(1000);
                 } else {
                     console.log('[DEBUG] Studio tab already active.');
                 }
@@ -707,7 +719,7 @@ export class NotebookLMClient {
                 console.log('[DEBUG] Found Audio Artifact in library. Hovering to reveal controls...');
                 await audioArtifact.scrollIntoViewIfNeeded();
                 await audioArtifact.hover();
-                await this.page.waitForTimeout(500);
+                await this.humanDelay(500);
 
                 // Look for "..." menu button within this artifact item
                 // Priority: exact icon match, text match in tooltip/label
@@ -790,7 +802,7 @@ export class NotebookLMClient {
                 if (await btn.count() > 0) {
                     await btn.scrollIntoViewIfNeeded();
                     await btn.click({ timeout: 5000 });
-                    await this.page.waitForTimeout(1000); // Wait for animation
+                    await this.humanDelay(800); // Wait for animation
                     if (await isMenuOpen()) {
                         console.log('[DEBUG] Menu detected open.');
                         if (await findAndClickDownload()) success = true;
