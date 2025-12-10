@@ -2,6 +2,7 @@
 id: TODO
 aliases: []
 tags: []
+status: In Progress
 ---
 # vision
 - [ ] reM plně/efektivně/správně integrováno do noteTaking/creative flow

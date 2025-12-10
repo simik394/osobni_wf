@@ -1,14 +1,20 @@
-copyQ
-'''bash
+# CopyQ
+
+This section outlines the steps to install CopyQ, a cross-platform clipboard manager.
+
+```/dev/null/install_script.sh#L1-5
 sudo apt install software-properties-common python-software-properties
 sudo add-apt-repository ppa:hluk/copyq
 sudo apt update
 sudo apt install copyq
 # this package contains all plugins and documentation
-'''
+```
 
-chrome
-'''
+# Google Chrome
+
+This script automates the installation of Google Chrome Stable on Debian/Ubuntu-based systems.
+
+```/dev/null/install_script.sh#L1-37
 #!/bin/bash
 
 # URL oficiálního stabilního sestavení pro Linux (Debian/Ubuntu)
@@ -46,13 +52,17 @@ rm "$TEMP_DEB"
 echo "--- HOTOVO ---"
 echo "Google Chrome byl nainstalován a přidán do repozitářů pro aktualizace."
 echo "Najdete ho v menu aplikací."
-'''
+```
 
+# Chromite
 
-chromite
+(No installation steps provided for Chromite.)
 
-install-bin.sh
-'''bash
+# install-bin.sh (Generic App Installer)
+
+This script creates a `.desktop` file for any binary/AppImage, integrating it into the application menu (GNOME/Cosmic/KDE).
+
+```/dev/null/install_script.sh#L1-100
 #!/bin/bash
 
 # ==============================================================================
@@ -174,49 +184,91 @@ echo " "
 echo "✅ HOTOVO. Aplikace '$APP_NAME' je nainstalována."
 echo "📍 Soubor: $DESKTOP_FILE"
 echo "💡 Nyní stiskněte klávesu Super (Windows) a napište '$APP_NAME'."
+```
 
-'''
+# Neovim
 
+This script installs the stable version of Neovim via its PPA.
 
-nvim
-'''bash
+```/dev/null/install_script.sh#L1-13
 #!/bin/bash
 
-# 1. Instalace prerekvizit pro správu repozitářů
+## 1. Instalace prerekvizit pro správu repozitářů
 sudo apt update
 sudo apt install -y software-properties-common
 
-# 2. Přidání "stable" PPA pro Neovim (zaručuje aktuální stable verzi, např. 0.10.x)
-# Pokud bys chtěl nightly (dev) verzi, změň 'stable' na 'unstable'
-sudo add-apt-repository -y ppa:neovim-ppa/stable
+## 2. Přidání "stable" PPA pro Neovim (zaručuje aktuální stable verzi, např. 0.10.x)
+`# Pokud bys chtěl nightly (dev) verzi, změň 'stable' na 'unstable'`
+`sudo add-apt-repository -y ppa:neovim-ppa/stable`
 
-# 3. Update a instalace
-sudo apt update
-sudo apt install -y neovim
+## 3. Update a instalace
+`sudo apt update`
+`sudo apt install -y neovim`
 
-# 4. Ověření verze
+## 4. Ověření verze
 nvim --version | head -n 1
+```
 
-'''
+# npm
 
+To install: `npm`
 
-npm
-node
-gemini
-wezterm
-alacritty
-	
-vial
+# Node.js
+
+To install: `node`
+
+# Gemini
+
+To install: `gemini`
+
+# WezTerm
+
+To install: `wezterm`
+
+# Alacritty
+
+To install: `alacritty`
+
+# Vial
+
+This command sets up udev rules for Vial devices, ensuring proper permissions.
+
+```/dev/null/config.sh#L1-1
 export USER_GID=`id -g`; sudo --preserve-env=USER_GID sh -c 'echo "KERNEL==\"hidraw*\", SUBSYSTEM==\"hidraw\", ATTRS{serial}==\"*vial:f64c2b3c*\", MODE=\"0660\", GROUP=\"$USER_GID\", TAG+=\"uaccess\", TAG+=\"udev-acl\"" > /etc/udev/rules.d/59-vial.rules && udevadm control --reload && udevadm trigger'
+```
 
+# OBS Studio
 
-obs
-zed
-postman
-tmux
-activeWindowLoger
-opencode
-crush
-digikam
-agor
+To install: `obs`
 
+# Zed Editor
+
+To install: `zed`
+
+# Postman
+
+To install: `postman`
+
+# tmux
+
+To install: `tmux`
+
+# Active Window Logger
+
+To install: `activeWindowLoger`
+
+# OpenCode
+
+To install: `opencode`
+
+# Crush
+
+To install: `crush`
+
+# Digikam
+
+To install: `digikam`
+
+# Agor
+
+To install: `agor`

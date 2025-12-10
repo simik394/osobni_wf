@@ -1,3 +1,6 @@
+---
+status: In Progress
+---
 
 > [!NOTE] Sunday, October 26, 2025 2:44:21 PM CET
 > MAKE Obsidian plugin (tedavlastně cokoliv co by mi do vaultu importovalo automaticky nebo aspoň indexovalo (md zástupnýma souborama) npř. NotebookLM sešity, vybrane gDocs,..... hmmmmm vlastně na tohle už jsem si i udělal poznámku (na vypsání zdrojů ze kterých mám data) je v keepu. takže bych ji sem v ideálním světě už mohl linknout, nicméně co třeba ten keep přestat používat, když muˇy mám alternativy minimálně na quckCapture čehokoliv. TEda aspoň těžce omezit A TEDA POTŘEBOVAL BY UKLIDIT. TEN KEEP!!!
