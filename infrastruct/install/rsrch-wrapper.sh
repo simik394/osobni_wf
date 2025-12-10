@@ -82,20 +82,52 @@ case "$1" in
     docker exec -it perplexity-server npm run login
     ;;
   notebook)
-    if ! check_running; then
-        echo "Error: Server is not running. Start it with '$APP_NAME start'"
-        exit 1
-    fi
     shift
-    docker exec -it perplexity-server npx ts-node src/index.ts notebook "$@"
+    # Check for headed/native flag
+    USE_NATIVE=0
+    for arg in "$@"; do
+        if [ "$arg" == "--headed" ] || [ "$arg" == "--native" ]; then
+            USE_NATIVE=1
+            break
+        fi
+    done
+
+    if [ "$USE_NATIVE" -eq 1 ]; then
+        echo "Headed/Native mode detected. Switching to host execution..."
+        cd "$PROJECT_DIR"
+        # Ensure we are not root if possible? But wrapper might be run as user.
+        # If run with sudo, this runs as root. Users typically run 'rsrch ...' as user.
+        npx ts-node src/index.ts notebook "$@"
+    else
+        if ! check_running; then
+            echo "Error: Server is not running. Start it with '$APP_NAME start'"
+            exit 1
+        fi
+        docker exec -it perplexity-server npx ts-node src/index.ts notebook "$@"
+    fi
     ;;
   gemini)
-    if ! check_running; then
-        echo "Error: Server is not running. Start it with '$APP_NAME start'"
-        exit 1
-    fi
     shift
-    docker exec -it perplexity-server npx ts-node src/index.ts gemini "$@"
+    # Check for headed/native flag
+    USE_NATIVE=0
+    for arg in "$@"; do
+        if [ "$arg" == "--headed" ] || [ "$arg" == "--native" ]; then
+            USE_NATIVE=1
+            break
+        fi
+    done
+
+    if [ "$USE_NATIVE" -eq 1 ]; then
+        echo "Headed/Native mode detected. Switching to host execution..."
+        cd "$PROJECT_DIR"
+        npx ts-node src/index.ts gemini "$@"
+    else
+        if ! check_running; then
+            echo "Error: Server is not running. Start it with '$APP_NAME start'"
+            exit 1
+        fi
+        docker exec -it perplexity-server npx ts-node src/index.ts gemini "$@"
+    fi
     ;;
   query)
     shift
@@ -151,7 +183,7 @@ case "$1" in
     echo "  logs                  - Show server logs"
     echo "  auth                  - Authenticate with services"
     echo "  notebook <cmd> ...    - NotebookLM commands"
-    echo "  gemini research <q>   - Research with Gemini"
+    echo "  gemini <cmd> ...      - Gemini (research, deep-research, chat, sessions...)"
     echo "  query <question>      - Query Perplexity"
     echo "  batch <file>          - Batch queries"
     echo "  build                 - Rebuild Docker images"

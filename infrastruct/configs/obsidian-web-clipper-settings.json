@@ -1,0 +1,270 @@
+{
+  "general_settings": {
+    "showMoreActionsButton": false,
+    "betaFeatures": false,
+    "legacyMode": false,
+    "silentOpen": false,
+    "saveBehavior": "addToObsidian"
+  },
+  "highlighter_settings": {
+    "highlighterEnabled": true,
+    "alwaysShowHighlights": true,
+    "highlightBehavior": "highlight-inline"
+  },
+  "interpreter_settings": {
+    "interpreterModel": "1754245615372",
+    "models": [
+      {
+        "id": "1754245615372",
+        "providerId": "1754245552110",
+        "providerModelId": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "enabled": true
+      },
+      {
+        "id": "1754246009061",
+        "providerId": "1754245552110",
+        "providerModelId": "gemini-2.0-flash",
+        "name": "Gemini 2.0 Flash",
+        "enabled": true
+      }
+    ],
+    "providers": [
+      {
+        "id": "1754245552110",
+        "name": "Google Gemini",
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta/chat/completions",
+        "apiKey": "AIzaSyB7CkEcZdzHBwQGVli9pljp99u0NiQTdfY",
+        "apiKeyRequired": true
+      }
+    ],
+    "interpreterEnabled": true,
+    "interpreterAutoRun": false,
+    "defaultPromptContext": ""
+  },
+  "migrationVersion": 1,
+  "property_types": [
+    {
+      "name": "title",
+      "type": "text"
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "defaultValue": "{{url}}"
+    },
+    {
+      "name": "author",
+      "type": "multitext",
+      "defaultValue": "{{author|split:\", \"|wikilink|join}}"
+    },
+    {
+      "name": "published",
+      "type": "date",
+      "defaultValue": "{{published}}"
+    },
+    {
+      "name": "created",
+      "type": "date",
+      "defaultValue": "{{date}}"
+    },
+    {
+      "name": "description",
+      "type": "text"
+    },
+    {
+      "name": "tags",
+      "type": "multitext"
+    },
+    {
+      "name": "length",
+      "type": "number"
+    },
+    {
+      "name": "date",
+      "type": "datetime"
+    },
+    {
+      "name": "about",
+      "type": "multitext"
+    },
+    {
+      "name": "url",
+      "type": "text"
+    },
+    {
+      "name": "by",
+      "type": "text"
+    },
+    {
+      "name": "page_title",
+      "type": "text"
+    },
+    {
+      "name": "aliases",
+      "type": "multitext"
+    },
+    {
+      "name": "site",
+      "type": "text"
+    }
+  ],
+  "reader_settings": {
+    "fontSize": 1.5,
+    "lineHeight": 1.6,
+    "maxWidth": 38,
+    "theme": "default",
+    "themeMode": "auto"
+  },
+  "stats": {
+    "addToObsidian": 5,
+    "saveFile": 0,
+    "copyToClipboard": 0,
+    "share": 0
+  },
+  "template_17407217080993hx7uuwss": {
+    "id": "17407217080993hx7uuwss",
+    "name": "Výchozí",
+    "behavior": "create",
+    "noteNameFormat": "{{title}}",
+    "path": "Clippings",
+    "noteContentFormat": "{{content}}\n\n{{\"Tldr from the page\"}}\n",
+    "context": "",
+    "properties": [
+      {
+        "id": "1740721708099h3g07l3bf",
+        "name": "title",
+        "value": "{{title}}",
+        "type": "text"
+      },
+      {
+        "id": "1740721708099csq76b9il",
+        "name": "source",
+        "value": "{{url}}",
+        "type": "text"
+      },
+      {
+        "id": "1740721708099vusk75grd",
+        "name": "author",
+        "value": "{{author|split:\\\", \\\"|wikilink|join}}",
+        "type": "multitext"
+      },
+      {
+        "id": "17407217080996trtn6eej",
+        "name": "published",
+        "value": "{{published}}",
+        "type": "date"
+      },
+      {
+        "id": "1740721708099t0rhlxvjr",
+        "name": "created",
+        "value": "{{date}}",
+        "type": "date"
+      },
+      {
+        "id": "1740721708099st22h5dsq",
+        "name": "description",
+        "value": "{{description}}",
+        "type": "text"
+      },
+      {
+        "id": "1740721708099et6paq9dp",
+        "name": "tags",
+        "value": "clippings",
+        "type": "multitext"
+      }
+    ],
+    "triggers": []
+  },
+  "template_1740721746438wirx7nrln": {
+    "id": "1740721746438wirx7nrln",
+    "name": "SW",
+    "behavior": "create",
+    "noteNameFormat": "{{title}}",
+    "path": "Inv/SW",
+    "noteContentFormat": "{{\"Tldr from the page\"}}\n\n\n",
+    "properties": [],
+    "triggers": [],
+    "context": ""
+  },
+  "template_17542928054209mdswiwrh": {
+    "id": "17542928054209mdswiwrh",
+    "name": "Website",
+    "behavior": "append-specific",
+    "noteNameFormat": "{{title|safe_name}}{{date|date:\"YY-MM-DD_hhmm\"}}",
+    "path": "myDM/captured/Websites",
+    "noteContentFormat": "\n> [!TLDR]+ TLDR\n{{\"Vyber ty nejpodstatnější informace a sdělení obsažené na této stránce a vypiš je srozumitelně na úvod jako TLDR, abych nemusel pročítat celý obsah až budu nebo hledat. Každý nový řádek zároveň prefixni symboly \"> \". Pokud budeš uvádět bodový seznam nepoužívej >, ale formátuj je jako markdown. Samozřejmě můžeš využít i jiné markdown formátování pokud uznáš za vhodné a užitečné. Snaž se využívat co nejvíce (samozřejmě v rozumné míře) formátovacích možnosti které obsidian nabízí pro dosažení přehledného a vizuálně přitažlivého textu (tzn. Callouts, headings, quotes, code blocks, etc.).Nevymýšlej si, pokud chceš uvést nějakou informaci která není na stránce ale zdá se ti příliš relevantní na to abys ji vynechal, pak ano, uveď ji! aALE MUSÍŠ u ní také uvést, že se nenachází na této stránce. Pokud si budeš vymýšlet a neřekneš to, tvoje maminka se podřeže.\"}}\n\n# USB Generations – Different Types of USB Generations Fully Explained\n![](https://premioinc.com/cdn/shop/files/intel-rpl-product_%7Bwidth%7Dx.png?v=7607722728743541463)\n\n## 13th Gen Intel® Core™ Processors\n\nIndustrial x86 Rugged Computers\n\n### 13th Gen Intel® Core™ Processor Industrial Computers\n\n[See Products](https://premioinc.com/pages/13th-gen-intel-core-processor-industrial-computer)\n\n![Premio-USB-Generations-Different-types-of-USB-Generations Fully Explained](https://cdn.shopify.com/s/files/1/0028/7509/7153/files/2._Premio_Title_Banner.png?v=1639380825)\n\nUSB has been rapidly evolving ever since it was first introduced. The main difference s between each USB generation are its data transfer speed and power output. Fundamentally, USB acts as a bridge to allow a smooth connection between computers and peripheral devices. The ability to transfer data incredibly fast and deliver power at the same time makes USB to be one of the most popular ports for myriad of sensors and devices, especially with computing solutions. As a result, the USB standard has been widely used not only across commercial applications but also within many industrial applications. That being said, t his blog will exp lain the difference between each USB generation and its impact on industrial applications.\n\n## What is USB and Its Main Purpose?\n\nUSB stands for Universal Serial Bus.Basically, USB is a hot-swappable digital data interface standard that enables computers to power and communicate with peripheral devices and other devices. USB can be found almost on every computer hardware, such as smartphones, personal PCs, desktop computers, and even industrial computers. USB was established in 1996 and has become the standard for universal input/output device connectors. In addition, USB has a significant impact on industrial applications by replacing proprietary cables used to connect numbers of machine components, controllers, or sensors in manufacturing lines into one USB standard. As a result, the USB standard has become universal among industrial applications.\n\n## Different Types of USB Ports and Connectors\n\nUSB ports and connectors are the physical bridge between computers and peripheral devices. Data interface means transferring data back and forth between two connected devices, which requires a medium for the data to travel through. Both USB ports and their resp ective connectors act as the communication pathways within the devices that provide power and data transmission. The first type of USB port is the type-A and type-B, which later came to the mini and micro versions of each, micro-B SuperSpeed and finally the USB Type-C port.\n\n![Different-types-of-USB-ports](https://cdn.shopify.com/s/files/1/0028/7509/7153/files/Types_of_USB_ports.png?v=1639380824)\n\nCredits: Houk Consulting understanding the different types of USB cables and ports\n\n## How Many Versions of USB Generations Are There?\n\n### USB 1.0\n\n  \n\nUSB 1.0 was introduced in January 1996, which came later the USB 1.1 in September 1998. These versions have a maximum speed of up to 12 Mbps and were initially made to ease the speedy connection between 2 simple devices, for example, mouse and keyboard, to the computer. But the problem was that USB 1.0 did not allow for extension cables and power delivery which made it difficult to go to the market. As a result, USB 1.1 is the updated version of USB 1.0 and has initiated the universal adoption of USB for data interface.\n\n**Compatibility: USB Type A and Type B**\n\n### USB 2.0\n\nThe fact that USB is the universal standard for many modern-day devices, it has encouraged the development of USB to keep up with user’s demands for faster and more reliable speed. As a result, USB 2.0 was released in April 2000, offering increased speed at up to 480 Mbps, and is believed to be 40 times faster than the USB 1.1 version. Additionally, USB 2.0 is backward-compatible, allowing users to use previous USB version s to connect to their newly adopted USB 2.0 computer and vice versa. Finally, USB 2.0 has succeeded in replacing the last version of USB with its more reliable data transfer speed and power delivery of 2.5W, 5V, and a maximum of 500mA current.\n\n**Compatibility: USB Type A, Type B, Mini A, Mini B, Mini AB, Micro A, Micro B, Micro AB.**\n\n### USB 3.2 Gen 1 – SuperSpeed USB 5Gbps\n\nTechnology advancement has further pushed the adoption of IoT devices, especially in industrial applications. Therefore, there is a vast increase in bandwidth demand to enable more reliable and smooth data transfer speed. USB 3.2 Gen 1, also known as the SuperSpeed USB 5Gbps, offers up to 5Gbps of data transfer speed. Most importantly, USB 3.2 versions have adopted the full-duplex mode that allows two connected devices to transfer and receive data at the same time simultaneously. As a result, this USB version has managed to attract many industries due to its significantly boosted data transfer speed, especially now in full-duplex mode.\n\n**Compatibility: USB type A, type B and Micro B SuperSpeed**\n\n### USB 3.2 Gen 2 - SuperSpeed USB 10Gbps\n\n  \n\nUSB 3.2 Gen 2, formerly known as the USB 3.1, now offers up to 10 Gigabit/second of data transfer speed. To avoid confusion, USB 3.2 Gen 2 is often called “SuperSpeed USB 10 Gbps”. This specific upgrade doubled the maximum transfer rate of the last USB version delivering a significant performance boost to meet computing requirements for storage and display applications. In addition, both USB 3.2 Gen 1 and Gen 2 have adopted the USB PD offering up to 20V of power at 5A for a potential of 100 watts through supported hardware.\n\n**Compatibility: USB type A, Type B, Micro B SuperSpeed and type-C**\n\n### USB 3.2 Gen 2x2 and USB4 – USB Type-C\n\nUSB 3.2 Gen 2x2 was released in August 2017; this time the most significant update with its compatibility was made on the type-C connector. This version of USB offers up to 20Gbps of data transfer speed, also called the SuperSpeed USB 20Gbps. In addition, the type-c port supports reverse insertion that simplifies its applications. Although USB 3.2 Gen 2 and USB4 ha ve shown a significant increase in data transfer speeds, it supports this at shorter distances. As a result, especially in industrial applications, the previous USB versions are preferred and still widely used for current industrial applications.\n\n**Compatibility: USB type-C**\n\n![premio-different-usb-generation-version-comparisons](https://cdn.shopify.com/s/files/1/0028/7509/7153/files/3._USB_generations_table.png?v=1639380958)\n\n## What Do the Different Colors of USB Generations Mean?\n\nEach USB generation can be identified by the color of the mating port or connector. This feature for USB enables users to differentiate them and their functions quickly and efficiency with the naked eye. Here is the specification for each color:\n\n- **Black and White:** USB 1.1 and USB 2.0 generations.\n- **Blue:** USB 3.2 Gen 1 SuperSpeed\n- **Green:** USB 3.2 Gen 1\n- **Red:** USB 3.2 Gen 2 refers to the always-on port\n\n## Why USB Is Important in Industrial Applications\n\nUSB provides a blazing-fast digital data interface and hot-swappable connections for PCs, making USB the right choice for industrial applications. Many industrial applications require a direct interface to an industrial computer for data analysis, monitoring, data collection, and acquisitions. Therefore, with USB standard that has been universally adopted for more than 20 years now has made it the best option to provide a reliable interface between the computer and peripheral devices, especially with the arrival of USB3 Vision.\n\nUSB3 Vision was first introduced in 2013; it creates a new universal standard for industrial camera applications to ease applications and reduce different proprietary cables from various industries. In addition, USB3 Vision comes to be the GenIcam standard, the programming interface for industrial machine cameras. Therefore, USB3 Vision and GenICam enable high-bandwidth and low-latency interfaces along with power deliverability. As a result, USB standard ports are present on most industrial machinery cameras to simplify implementation from its plug-and-play feature and reduce unwanted costs for different cable connectors.\n\n[Learn More About the Advantages of USB in Industrial Applications](https://premioinc.com/blogs/blog/serial-ports-vs-usb-ports-comparison \"advantages-of-usb-vs-serial-ports\")\n\n## Benefits of USB in Industrial Applications\n\n- **Backward Compatibility**\n\nAll the USB versions are backward compatible, so users do not have to worry about which versions of USB ports they have between computer and peripheral devices. As long as the standard ports are the same, they can connect. As a result, this brings ease to industrial applications by saving the cost needed to upgrade the constantly changing USB versions, which leads to a lower total cost of ownership.\n\n- **Hot-swappable**\n\nUSB’s hot-swappable feature is crucially important, especially in industrial applications. This feature enables the industry to replace or upgrade devices without shutting down or rebooting the running system.\n\n- **Power Capabilities**\n\nUSB versions can power the device without requiring an additional power supply. Therefore, the USB system does not need a different cable for the power supply, which allows the whole system to be more portable and eliminates additional cabling costs.\n\n- **Expendabilities**\n\nOne USB slot does not mean it can only connect to one device. Besides, one USB slot enables the computer (the host) to connect up to 127 different devices by using USB hubs. However, as more devices are connected, it may significantly reduce the data transfer rate due to more USB bandwidth partitions on a single USB signal.\n\n## Industrial Applications with USB Interface?\n\nThe USB standard has been widely used to connect machine components, programmable logic controllers (PLCs), and sensors in industrial applications. In addition, USB usually acts as the link in which it helps transfer raw data from the sensors to the computer for data analysis and acquisitions. Here are some industrial applications that require USB port connections:\n\n- **Production line:**USB has the ability to power and transfer data from cameras and sensors makes the USB interface a great asset for production line infrastructure setups.\n- **Robot Automation:**goals are to transfer data to the computers, make predictions, and transfer actionable commands to the robots.\n- **City and Surveillance:** to monitor the situation in the city, computers usually require computers to connect to different cameras and sensors throughout the city.\n- **Agricultural Monitoring:** ensure all the plants are in good conditions, enable the connection between the computers to the sensors and switches to take specific actions when needed.\n- **Kiosk and Vending Management:** gateways and computers communicate with various USB peripheral devices such as camera, printer, NFC/RFID, input keyboard, and more.\n\n## FAQ (Frequently Asked Questions):\n\n### What are USB generations?\n\nUSB is a standard digital data interface that acts as the bridge to connect computers to other peripheral devices. USB was first introduced in 1996 and had been growing rapidly from the first USB 1.0, 1.1, 2.0, 3.2 Gen 1, 3.2 Gen 2, 3.2 Gen 2x2, to USB4. As a result, USB has now been the universal standard for data interface and power delivery.\n\n### How many devices can be connected to a USB port?\n\nUSB is a standard digital data interface that acts as the bridge to connect computers to other peripheral devices. USB was first introduced in 1996 and has been growing rapidly ever since its inception. As a result, USB has now been the universal standard for data interface and power delivery.\n\n### How many versions of USB Generations are there?\n\nThe USB standard has been evolving ever since it was first established. Last 2019, they introduced the USB4, the 7th version of the four USB generations. These seven versions are including USB1.0, 1.1, 2.0, 3.2 Gen 1, 3.2 Gen 2, 3.2 Gen 2x2, and USB4.\n\n### Is USB used in industrial applications?\n\nYes, key USB features in hot- swappab ility, backward compatibility, and expandability have made it the right choice for industrial applications. Especially with the widespread adoption of USB standards, it's even easier for industries to connect to machine-to-machine devices and peripherals.\n\n### What’s the difference between USB and Thunderbolt?\n\nThunderbolt cables are compatible with the USB4 Type-C devices and cables, but they are not entirely the same. Thunderbolt was developed by the collaboration between Intel and Apple, while USB4 was developed by the USB Implementers Forum (USB-IF). USB-C refers to the connection that thunderbolt and USB4 use. In addition, Thunderbolt 3 and USB4 have a very identical feature in which they can transfer data for up to 20 to 40Gbps. In comparison, the thunderbolt4 reaches a maximum of 40Gbps data transfer rate and can also connect external 4K displays, making it stand s out when compared to USB4.\n\n![premio-usb-generations-different-types-of-usb-generations-fully-explained](https://cdn.shopify.com/s/files/1/0028/7509/7153/files/map1.png?v=1628590376)\n\n- [Translation missing: en.general.sharing.social\\_sharing.linkedin](https://linkedin.com/shareArticle?url=https://premioinc.com/blogs/blog/usb-generations-explained-different-types-of-usb-generations&text=USB%20Generations%20%E2%80%93%20Different%20Types%20of%20USB%20Generations%20Fully%20Explained)\n\n# {{title}}\n{{content}}",
+    "properties": [
+      {
+        "id": "1754293481828n8l6h9f0g",
+        "name": "about",
+        "value": "[ \\\"[[ ]]\\\", ]",
+        "type": "multitext"
+      },
+      {
+        "id": "1754293533102s8mkltjdg",
+        "name": "page_title",
+        "value": "{{title}}",
+        "type": "text"
+      },
+      {
+        "id": "175429359243915rutmyg9",
+        "name": "aliases",
+        "value": "[ ]",
+        "type": "multitext"
+      },
+      {
+        "id": "1754293636537g1h9xlcbl",
+        "name": "date",
+        "value": "{{time}}",
+        "type": "datetime"
+      },
+      {
+        "id": "175429365843085w4kyull",
+        "name": "tags",
+        "value": "[ a/, f/{{meta:property:og:type}}, c/, p/ ]",
+        "type": "multitext"
+      },
+      {
+        "id": "1754293718858635cd13zx",
+        "name": "by",
+        "value": "{{author}}",
+        "type": "text"
+      },
+      {
+        "id": "1754293804728ybpwpkebu",
+        "name": "url",
+        "value": "{{url}}",
+        "type": "text"
+      },
+      {
+        "id": "1754294006544r2l39211n",
+        "name": "length",
+        "value": "{{words}}",
+        "type": "number"
+      },
+      {
+        "id": "175429427171711gxwr5oc",
+        "name": "site",
+        "value": "{{site}}",
+        "type": "text"
+      },
+      {
+        "id": "1754294403045nyh8n9seo",
+        "name": "description",
+        "value": "{{meta:property:og:description}}",
+        "type": "text"
+      }
+    ],
+    "triggers": [],
+    "context": ""
+  },
+  "template_list": [
+    "17542928054209mdswiwrh",
+    "1740721746438wirx7nrln",
+    "17407217080993hx7uuwss"
+  ],
+  "vaults": [
+    "Obsi"
+  ]
+}
