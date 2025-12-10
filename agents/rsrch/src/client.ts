@@ -124,12 +124,22 @@ export class PerplexityClient {
             console.log(`Headless: ${headless}${hasHeadedFlag ? ' (--headed flag detected)' : ''}`);
 
             this.context = await chromium.launchPersistentContext(config.auth.userDataDir, {
-                headless: headless,
+                headless: headless, // Playwright uses 'new' headless by default in recent versions
                 channel: 'chromium',
-                args: ['--disable-blink-features=AutomationControlled', '--start-maximized', '--no-sandbox'],
+                args: [
+                    '--disable-blink-features=AutomationControlled',
+                    '--start-maximized',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-infobars',
+                    '--window-size=1920,1080',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process'
+                ],
                 ignoreDefaultArgs: ['--enable-automation'],
-                viewport: { width: 1280, height: 1024 },
-                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                viewport: { width: 1920, height: 1080 },
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
             });
             this.browser = this.context;
         }

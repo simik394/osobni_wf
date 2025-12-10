@@ -33,7 +33,7 @@ export const config = {
         authFile: process.env.AUTH_FILE || path.join(os.homedir(), '.config', 'rsrch', 'auth.json'),
     },
     paths: {
-        resultsDir: path.join(process.cwd(), 'data', 'results'),
-        queriesFile: path.join(process.cwd(), 'data', 'queries.json'),
+        resultsDir: process.env.RESULTS_DIR || path.join(os.homedir(), '.local', 'share', 'rsrch', 'results'),
+        queriesFile: process.env.QUERIES_FILE || path.join(process.cwd(), 'data', 'queries.json'),
     }
 };

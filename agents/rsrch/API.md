@@ -31,7 +31,7 @@ docker-compose up -d
 
 # 4. Test the API (CLI Wrapper)
 # This command automatically starts the server if needed and keeps it running.
-perplexity-researcher query "What is the capital of France?"
+rsrch query "What is the capital of France?"
 
 # OR manually via curl
 curl -X POST http://localhost:3000/query \
@@ -115,13 +115,13 @@ docker-compose restart
 #### Batch Querying
 Run multiple queries from a file (one per line):
 ```bash
-perplexity-researcher batch my_queries.txt
+rsrch batch my_queries.txt
 ```
 
 #### Interactive Login
 Launch an interactive browser session to log in manually (useful for Google auth in Docker):
 ```bash
-perplexity-researcher login
+rsrch login
 ```
 
 ---
@@ -211,6 +211,85 @@ curl -X POST http://localhost:3000/query \
 
 ---
 
+## 3. Gemini Research (Beta)
+
+### 1. Perform Deep Research
+Generate a comprehensive research report using Gemini Deep Research.
+**Endpoint:** `POST /gemini/research`
+
+**Request Body:**
+```json
+{
+  "query": "Future of AI in Healthcare"
+}
+```
+
+### 2. List Recent Sessions
+List recent chat sessions from the sidebar, including IDs.
+**Endpoint:** `GET /gemini/sessions`
+
+**Query Parameters:**
+- `limit` (optional): Max number of sessions to return (default: 20).
+- `offset` (optional): Start index for pagination (default: 0). Use this to access older history.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    { "name": "Session Name", "id": "session_id" },
+    ...
+  ]
+}
+```
+
+### 3. List Research Documents
+Scan sessions for Deep Research documents.
+**Endpoint:** `GET /gemini/list-research-docs`
+
+**Query Parameters:**
+- `limit` (optional): Number of recent sessions to scan (default: 10)
+- `sessionId` (optional): Scan specific session ID only.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "title": "Doc Title",
+      "firstHeading": "Doc Heading",
+      "sessionId": "session_id"
+    }
+  ]
+}
+```
+
+### 4. Get Research Info
+Get metadata (Title, First Heading) for the latest research document in a session.
+**Endpoint:** `POST /gemini/get-research-info`
+
+**Request Body:**
+```json
+{
+  "sessionId": "required-session-id"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "title": "Doc Title",
+    "firstHeading": "Doc Heading",
+    "sessionId": "session_id"
+  }
+}
+```
+
+---
+
 ## Authentication Setup
 
 ### Initial Login
@@ -228,7 +307,7 @@ npm run auth
 
 **Docker Method (if CLI not possible):**
 ```bash
-perplexity-researcher auth
+rsrch auth
 ```
 1. Connect via VNC to `localhost:5900`.
 2. Log in using the browser inside the container.

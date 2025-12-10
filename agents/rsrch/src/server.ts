@@ -203,6 +203,77 @@ app.post('/gemini/research', async (req, res) => {
     }
 });
 
+app.get('/gemini/sessions', async (req, res) => {
+    try {
+        const limitStr = req.query.limit as string;
+        const limit = limitStr ? parseInt(limitStr) : 20;
+        const offsetStr = req.query.offset as string;
+        const offset = offsetStr ? parseInt(offsetStr) : 0;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const sessions = await geminiClient.listSessions(limit, offset);
+        res.json({ success: true, data: sessions });
+    } catch (e: any) {
+        console.error('[Server] Gemini list sessions failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.get('/gemini/list-research-docs', async (req, res) => {
+    try {
+        const limitStr = req.query.limit as string;
+        const limit = limitStr ? parseInt(limitStr) : 10;
+        const sessionId = req.query.sessionId as string;
+
+        if (!geminiClient) {
+            console.log('[Server] Creating Gemini client...');
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        let docs;
+        if (sessionId) {
+            console.log(`[Server] Listing research docs for session: ${sessionId}`);
+            await geminiClient.openSession(sessionId);
+            docs = await geminiClient.getAllResearchDocsInSession();
+        } else {
+            console.log(`[Server] Listing recent research docs (limit: ${limit})...`);
+            docs = await geminiClient.listDeepResearchDocuments(limit);
+        }
+
+        res.json({ success: true, data: docs });
+    } catch (e: any) {
+        console.error('[Server] Gemini list research docs failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/gemini/get-research-info', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            console.log(`[Server] Navigating to session ${sessionId} for research extraction...`);
+            await geminiClient.openSession(sessionId);
+        }
+
+        const info = await geminiClient.getResearchInfo();
+        res.json({ success: true, data: info });
+    } catch (e: any) {
+        console.error('[Server] Gemini get info failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing browser...');

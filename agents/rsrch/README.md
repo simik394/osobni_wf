@@ -22,7 +22,7 @@ This will launch a browser window. Log in to Perplexity, then close the window o
 ### Option 2: Docker Authentication
 If you cannot run the CLI locally, you can authenticate via Docker (requires VNC):
 ```bash
-perplexity-researcher auth
+rsrch auth
 ```
 Connect to `localhost:5900` with a VNC viewer to see the browser and log in.
 
@@ -37,30 +37,37 @@ docker-compose up -d
 **Usage:**
 ```bash
 # Interactive Login (Docker)
-perplexity-researcher login
+rsrch login
 # Then open VNC at localhost:5900 to log in manually
 
 # Send query
 # Note: This automatically starts the server if not running, 
 # and keeps it running for faster subsequent queries.
-perplexity-researcher query "What is conceptual mapping?" --name=concept-map
+rsrch query "What is conceptual mapping?" --name=concept-map
 
 # Follow up in the same session
-perplexity-researcher query "How is it used in education?" --session=concept-map
+rsrch query "How is it used in education?" --session=concept-map
 
 # Use the latest session
-perplexity-researcher query "Give me an example" --session=latest
+rsrch query "Give me an example" --session=latest
 
 # Batch queries from file
-perplexity-researcher batch queries.txt
+rsrch batch queries.txt
 
 # View browser (VNC)
 vncviewer localhost:5900
 
 # NotebookLM Automations
-perplexity-researcher notebook create "My Research Project"
-perplexity-researcher notebook add-source "https://example.com/article" --notebook "My Research Project"
-perplexity-researcher notebook audio --notebook "My Research Project"
+rsrch notebook create "My Research Project"
+rsrch notebook add-source "https://example.com/article" --notebook "My Research Project"
+rsrch notebook audio --notebook "My Research Project"
+
+# Gemini Deep Research
+rsrch gemini deep-research "Quantum Computing Future"
+rsrch gemini list-sessions
+rsrch gemini list-research-docs 5
+rsrch gemini list-research-docs <session-id>
+rsrch gemini export-to-docs <session-id>
 
 # Stop
 docker-compose down
