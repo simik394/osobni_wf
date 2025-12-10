@@ -248,12 +248,12 @@ export class PerplexityClient {
         await page.goto(url);
     }
 
-    async query(queryText: string, options: { sessionName?: string, sessionId?: string } = {}): Promise<QueryResponse> {
+    async query(queryText: string, options: { sessionName?: string, sessionId?: string, deepResearch?: boolean } = {}): Promise<QueryResponse> {
         if (!this.isInitialized || !this.context) {
             throw new Error('Client not initialized. Call init() first.');
         }
 
-        console.log(`Running query: "${queryText}"`);
+        console.log(`Running query: "${queryText}" (Deep Research: ${options.deepResearch || false})`);
 
         // Resolve session
         let session: Session;
@@ -332,6 +332,24 @@ export class PerplexityClient {
             // Capture initial answer count BEFORE submitting
             const initialAnswerCount = await page.locator(config.selectors.answerContainer).count();
             console.log(`Initial answer count: ${initialAnswerCount}`);
+
+            // Toggle Deep Research if requested
+            if (options.deepResearch) {
+                console.log('Activating Deep Research mode...');
+                try {
+                    // Try to find the "Research" button (aria-label="Research")
+                    const deepButtonSelector = 'button[aria-label="Research"]';
+                    if (await page.isVisible(deepButtonSelector)) {
+                        await page.click(deepButtonSelector);
+                        console.log('Clicked "Research" button (Deep Research).');
+                        await page.waitForTimeout(1000);
+                    } else {
+                        console.warn('Deep Research button not found. Proceeding with standard search.');
+                    }
+                } catch (e) {
+                    console.error('Failed to toggle Deep Research:', e);
+                }
+            }
 
             console.log('Typing query...');
             await page.fill(inputSelector, queryText);

@@ -40,6 +40,9 @@ rsrch notebook audio --wet  # Actual generation
 # Query with Session
 rsrch query "What is the population?" --session="france-info" --local
 
+# Deep Research Mode (more comprehensive answers)
+rsrch query "Explain quantum entanglement" --deep --local
+
 # OR manually via curl
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
@@ -176,7 +179,8 @@ Send a query to Perplexity.ai and get the response.
 {
   "query": "Your question here",
   "sessionId": "optional-session-id", 
-  "sessionName": "optional-session-name"
+  "sessionName": "optional-session-name",
+  "deepResearch": false
 }
 ```
 

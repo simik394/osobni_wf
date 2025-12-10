@@ -45,8 +45,17 @@ function parseArgs(args: string[]) {
             options.session = arg.split('=')[1];
         } else if (arg.startsWith('--name=')) {
             options.name = arg.split('=')[1];
+        } else if (arg === '--deep') {
+            options.deepResearch = true;
+        } else if (arg === '--local' || arg === '--headed') {
+            // Ignore environment flags
         } else {
-            queryParts.push(arg);
+            // Check for --name or other flags if mixed
+            if (arg.startsWith('--name=')) {
+                options.name = arg.split('=')[1];
+            } else {
+                queryParts.push(arg);
+            }
         }
     }
     return {
