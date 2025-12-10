@@ -29,7 +29,10 @@ gemini.google
   
 
 perplexity
-- add support for sending messages into existing chat sessions. identify the sessions by their name and also support the option to select it by their id shown in the url (the last part of the url). and to retrieve the answer from the session.
+- [/] add support for sending messages into existing chat sessions. identify the sessions by their name and also support the option to select it by their id shown in the url (the last part of the url). and to retrieve the answer from the session.
+  - ⚠️ **Issue**: Answer extraction in multi-turn threads is currently unstable (selector fragility).
+  - [ ] Fix Answer Extraction: Refactor poll loop to count answer containers and monitor the *new* one.
+  - [ ] Investigate Docker timeouts for NotebookLM audio generation (potentially need increased timeout or slowMo).
 - add support for creating new chat session with tool Deep Research turned on. 
 
 API:
@@ -38,6 +41,7 @@ API:
 - add endpoint which will take as input a research question. will do the research with both gemini and perplexity  then combines those results in a google doc. this one is then loaderd into the notebooklm and a audio for only that source is generated with custom prompt which could be gien as a parameter to the endpoint. And finally it saves the audio on a local storage. As it will run in docker there will be a mounted volume for saving the audio files. if it is successful i want to get an email onto the mail i am loged in with.
 - [x] as the research and audio generation is long running process, can you do it so that the server can process other requests while the research is running and the audio is being generated?
 - [x] Implement Discord notifications for long-running tasks (replacing email requirement).
+- [x] Implement "Dry Run" mode for audio generation (mimic interaction without clicking generate) to save quota. Default to dry-run, require `--wet` flag for real generation.
 
 DOCS:
 - add clearly separated docs for the cli and the api.

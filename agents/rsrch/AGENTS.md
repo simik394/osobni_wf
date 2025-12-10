@@ -267,6 +267,34 @@ When handing off to another developer/agent:
 3. Reduced selector timeouts
 4. Text stability checks
 
+## Feature: NotebookLM Audio Dry Run
+
+### Goal
+Simulate the generation of an Audio Overview to verify UI steps without consuming daily quota.
+
+### Implementation Details
+- **Logic**: Inspects `src/notebooklm-client.ts` -> `generateAudioOverview`.
+- **Detection**: Checks if audio already exists using regex `/Audio (Overview|přehled)|audio_magic_eraser/i`. The `audio_magic_eraser` string is specific to the user account's artifacts.
+- **Generating State**: Checks for "Generating" status to avoid duplicate requests.
+- **Dry Run**: If enabled, performs all steps but *skips* the final click on the generate button.
+
+### Environment Notes
+- **Local (Headed/Headless)**: Works reliably.
+- **Docker**: Currently experiences timeouts in `page.waitForSelector`. This is an infrastructure issue likely related to resource constraints or slower rendering in the container.
+
+## Feature: Perplexity Multi-Turn Sessions
+
+### Goal
+Reuse existing conversation contexts for follow-up questions using session IDs or names.
+
+### Implementation Details
+- **Storage**: Sessions are stored in-memory in `src/client.ts`.
+- **API**: `/query` endpoint accepts `session: "name"` or `session: "id"`.
+
+### Known Issues
+- **Answer Extraction Fragility**: In multi-turn threads, targeting the correct "last" answer container is unstable.
+- **Docker Timeout**: The stability check mechanism (waiting for text to stop changing) often times out or crashes the server in the Docker environment when dealing with multiple answer containers. Use local environment for logic development.
+
 ## Future Considerations
 
 ### Potential Improvements

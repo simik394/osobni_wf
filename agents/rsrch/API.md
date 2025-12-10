@@ -33,6 +33,13 @@ docker-compose up -d
 # This command automatically starts the server if needed and keeps it running.
 rsrch query "What is the capital of France?"
 
+# NotebookLM Audio (Dry Run by default)
+rsrch notebook audio --dry-run
+rsrch notebook audio --wet  # Actual generation
+
+# Query with Session
+rsrch query "What is the population?" --session="france-info" --local
+
 # OR manually via curl
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
