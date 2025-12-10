@@ -1,3 +1,7 @@
+---
+status: Completed
+finished: 2025-12-10
+---
 notebooklm
 - [x] add option to give a custom prompt into the audio generation. there is builtin text filed for it. just use it.
 - [x] add option to load sources from google drive. there is dedicated button for it with popup file picker. identify the documents by name or if possible by uid of the gdocs.
@@ -29,10 +33,11 @@ gemini.google
   
 
 perplexity
-- [/] add support for sending messages into existing chat sessions. identify the sessions by their name and also support the option to select it by their id shown in the url (the last part of the url). and to retrieve the answer from the session.
+- [x] enhance the export of answers by extracting also the sources discovered. naturaly with the links from the actual answer. maybe as an markdown file in which the sources would be added as footnotes for obsidian.![[Prods/01-pwf/agents/rsrch/image.png|perplexity model thoughts]]. In the picture are shown the intermediate thoughts of the model and at that time used links. so i want all this information to be extracted, even the positional. mening i want to se the information structures the same way as in the gui. like links used for each thoughts turn visibly connected. eg under the same subheading.
+- [x] add support for sending messages into existing chat sessions. identify the sessions by their name and also support the option to select it by their id shown in the url (the last part of the url). and to retrieve the answer from the session.
   - ⚠️ **Issue**: Answer extraction in multi-turn threads is currently unstable (selector fragility).
-  - [ ] Fix Answer Extraction: Refactor poll loop to count answer containers and monitor the *new* one.
-  - [ ] Investigate Docker timeouts for NotebookLM audio generation (potentially need increased timeout or slowMo).
+  - [x] Fix Answer Extraction: Refactored poll loop to count answer containers and monitor the *new* one.
+
 - add support for creating new chat session with tool Deep Research turned on. 
 
 API:

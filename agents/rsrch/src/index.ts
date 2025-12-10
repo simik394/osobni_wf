@@ -749,7 +749,7 @@ async function runLegacyMode() {
             for (let i = 0; i < queries.length; i++) {
                 const q = queries[i];
                 console.log(`\n[Batch ${i + 1}/${queries.length}] Processing: "${q}"`);
-                await client.query(q, { session: 'new' });
+                await client.query(q, { sessionName: 'new-cli-session' });
             }
         } catch (error) {
             console.error('Batch processing failed:', error);

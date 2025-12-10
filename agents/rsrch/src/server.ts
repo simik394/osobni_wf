@@ -66,7 +66,7 @@ app.post('/query', async (req, res) => {
         }
 
         console.log(`[Server] Received query: "${query}" (Session: ${session || 'new'}, Name: ${name || 'none'})`);
-        const result = await client.query(query, { session, name });
+        const result = await client.query(query, { sessionId: session, sessionName: name });
 
         res.json({
             success: true,

@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-extra';
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
-import type { BrowserContext, Page } from 'playwright';
+import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'playwright';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
 import * as fs from 'fs';
@@ -17,8 +17,24 @@ interface Session {
     createdAt: number;
 }
 
+interface Source {
+    index: number;
+    url: string;
+    title: string;
+}
+
+export interface QueryResponse {
+    query: string;
+    answer: string;
+    markdown?: string;
+    sources?: Source[];
+    timestamp: string;
+    url: string;
+}
+
 export class PerplexityClient {
     private browser: any = null;
+    private page: Page | null = null;
     private context: BrowserContext | null = null;
     private sessions: Session[] = [];
     private isInitialized = false;
@@ -36,7 +52,7 @@ export class PerplexityClient {
             // Load storage state if exists
             let storageState = undefined;
             if (fs.existsSync(config.auth.authFile)) {
-                console.log(`Loading auth state from ${config.auth.authFile}`);
+                console.log(`Loading auth state from ${config.auth.authFile} `);
                 try {
                     const authContent = fs.readFileSync(config.auth.authFile, 'utf-8');
                     storageState = JSON.parse(authContent);
@@ -151,6 +167,7 @@ export class PerplexityClient {
                 userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
             });
             this.browser = this.context;
+            this.page = this.context.pages()[0] || await this.context.newPage();
         }
 
         // Note: connecting to existing context vs creating new one
@@ -208,6 +225,20 @@ export class PerplexityClient {
         return undefined;
     }
 
+    // New helper to create session exposed for external use if needed, but confusing with standard flow.
+    // Instead we stick to standard query flow or explicit session tool calls (not here).
+    // Let's refactor query to use logic similar to getSession but also create if missing.
+    private async _getSession(name?: string, id?: string): Promise<Session> {
+        if (id && this.getSession(id)) {
+            return this.getSession(id)!;
+        }
+        if (name && this.getSession(name)) {
+            return this.getSession(name)!;
+        }
+        // else create new
+        return this.createSession(name);
+    }
+
     async openPage(url: string): Promise<void> {
         if (!this.isInitialized || !this.context) {
             throw new Error('Client not initialized. Call init() first.');
@@ -217,51 +248,39 @@ export class PerplexityClient {
         await page.goto(url);
     }
 
-    async query(queryText: string, options: { session?: string, name?: string } = {}): Promise<{ query: string; answer: string | null; timestamp: string; url: string }> {
+    async query(queryText: string, options: { sessionName?: string, sessionId?: string } = {}): Promise<QueryResponse> {
         if (!this.isInitialized || !this.context) {
             throw new Error('Client not initialized. Call init() first.');
         }
 
         console.log(`Running query: "${queryText}"`);
 
+        // Resolve session
         let session: Session;
-        const target = options.session || 'new';
-        const existingSession = this.getSession(target);
-
-        if (existingSession) {
-            console.log(`Using existing session: ${existingSession.id} ${existingSession.name ? `(${existingSession.name})` : ''}`);
-            session = existingSession;
-            // Bring to front
+        if (options.sessionId && this.getSession(options.sessionId)) {
+            session = this.getSession(options.sessionId)!;
+            console.log(`Using existing session by ID: ${session.id}`);
+            await session.page.bringToFront();
+        } else if (options.sessionName && this.getSession(options.sessionName)) {
+            session = this.getSession(options.sessionName)!;
+            console.log(`Using existing session by Name: ${session.name}`);
             await session.page.bringToFront();
         } else {
-            if (target !== 'new' && target !== 'latest') {
-                console.log(`Session '${target}' not found. Creating new one.`);
-            }
-            session = await this.createSession(options.name || (target !== 'new' && target !== 'latest' ? target : undefined));
+            console.log(`Creating new session${options.sessionName ? ` '${options.sessionName}'` : ''}...`);
+            session = await this.createSession(options.sessionName);
         }
 
-        const page = session.page;
+        const { page } = session;
+        // Fix: Use imported 'config' object, not 'this.config'
+        // The original code had `const config = this.config;` which was a syntax error.
+        // The `config` object is imported at the top of the file.
+        // No change needed here as `config` is already in scope.
 
         try {
-            // Only navigate home if it's a new session or we want to start fresh? 
-            // Actually, for follow-ups we might want to stay on the same page if it's already there?
-            // But the current logic assumes we type into the main input. 
-            // Perplexity handles follow-ups in the same thread differently.
-            // For now, let's assume we always go to the main URL to ensure we find the input.
-            // Wait, if we are in a thread, the input selector might be different (bottom of page).
-            // But config.url is the home page.
-
-            // If we are reusing a session, we might be on a result page.
-            // If we go to config.url, we start a NEW thread.
-            // If the user wants to follow up, they probably want to stay on the current page.
-
-            // Let's check if we are already on a perplexity page.
+            // Check if we are already on a search page
             const currentUrl = page.url();
             if (currentUrl.includes('perplexity.ai/search/')) {
-                console.log('Already on a search page. Attempting to find follow-up input...');
-                // We need a selector for follow-up input.
-                // Usually it's the same textarea but at the bottom.
-                // Let's try to find the input without navigating.
+                console.log('Already on a search page. Monitoring thread state...');
             } else {
                 await page.goto(config.url);
             }
@@ -276,6 +295,8 @@ export class PerplexityClient {
             if (config.selectors.followUpInput) {
                 selectors.push(config.selectors.followUpInput);
             }
+            // Add fallback selectors
+            selectors.push('textarea[placeholder*="Ask"]', 'div[contenteditable="true"]');
 
             let inputSelector = '';
             for (const selector of selectors) {
@@ -290,8 +311,6 @@ export class PerplexityClient {
             }
 
             if (!inputSelector) {
-                // If we are on a result page, maybe the selector is different?
-                // For now, if we fail to find input, and we didn't navigate, maybe we should navigate home and try again?
                 if (currentUrl.includes('perplexity.ai/search/')) {
                     console.log('Could not find input on search page. Navigating to home...');
                     await page.goto(config.url);
@@ -307,82 +326,183 @@ export class PerplexityClient {
             }
 
             if (!inputSelector) {
-                throw new Error('Could not find query input field with any known selector.');
+                throw new Error('Could not find query input field with known selectors.');
             }
+
+            // Capture initial answer count BEFORE submitting
+            const initialAnswerCount = await page.locator(config.selectors.answerContainer).count();
+            console.log(`Initial answer count: ${initialAnswerCount}`);
 
             console.log('Typing query...');
             await page.fill(inputSelector, queryText);
 
             // Submit query
             await page.keyboard.press('Enter');
-            console.log('Query submitted. Waiting for answer...');
+            console.log('Query submitted. Waiting for new answer...');
 
-            // Wait for answer container to appear
-            // Note: On a follow-up, the answer container might already exist from previous turn.
-            // We need to wait for a NEW answer or the "Stop generating" button to appear and then disappear.
+            // Wait for answer generation
+            let newAnswerIndex = initialAnswerCount;
+            let pollingAttempts = 0;
+            const maxPollingAttempts = 60; // 30 seconds approx
 
-            // Wait for answer generation to complete
-            console.log('Waiting for answer generation to complete...');
-
-            // Give it a moment to start generating
-            await page.waitForTimeout(1000);
-
-            try {
-                // If "Stop generating" button exists, wait for it to detach
-                const stopButton = await page.$('button:has-text("Stop generating")');
-                if (stopButton) {
-                    console.log('Found "Stop generating" button, waiting for it to disappear...');
-                    await page.waitForSelector('button:has-text("Stop generating")', { state: 'detached', timeout: 60000 });
-                    console.log('Generation complete (button disappeared).');
-                } else {
-                    // Fallback: wait a bit and check stability
-                    console.log('No "Stop generating" button found, using stability check...');
-                    let lastText = '';
-                    let stableCount = 0;
-                    const maxRetries = 60;
-
-                    for (let i = 0; i < maxRetries; i++) {
-                        // We need to get the LAST answer container if there are multiple?
-                        // config.selectors.answerContainer usually targets the main answer.
-                        // In a thread, there are multiple answers.
-                        // We should probably grab the text of the whole thread or the last message.
-                        // For simplicity, let's stick to the current selector logic but be aware it might need tuning for threads.
-
-                        // We need to monitor the LAST container for stability
-                        try {
-                            const locator = page.locator(config.selectors.answerContainer);
-                            const count = await locator.count();
-                            if (count > 0) {
-                                const currentText = await locator.last().textContent();
-                                if (currentText && currentText === lastText && currentText.length > 50) {
-                                    stableCount++;
-                                    if (stableCount >= 4) { // Increased stability count for safety
-                                        console.log('Answer stabilized.');
-                                        break;
-                                    }
-                                } else {
-                                    stableCount = 0;
-                                    lastText = currentText || '';
-                                }
-                            }
-                        } catch (e) {
-                            // Ignore errors during check
-                        }
-                        await page.waitForTimeout(500);
-                    }
+            // Wait for the NEW container to appear
+            while (pollingAttempts < maxPollingAttempts) {
+                const currentCount = await page.locator(config.selectors.answerContainer).count();
+                if (currentCount > initialAnswerCount) {
+                    newAnswerIndex = currentCount - 1; // 0-based index of the last one
+                    console.log(`New answer container detected at index ${newAnswerIndex} (Total: ${currentCount})`);
+                    break;
                 }
-            } catch (e: any) {
-                console.error("Error creating session in openPage:", e);
-                throw e;
+                await page.waitForTimeout(500);
+                pollingAttempts++;
             }
 
-            // TODO: Improve answer extraction for threads (get the last answer)
-            // Get the last answer in the thread
-            const answer = await page.locator(config.selectors.answerContainer).last().innerText();
+            if (pollingAttempts >= maxPollingAttempts) {
+                console.warn("Timed out waiting for new answer container count to increase. Checking current count...");
+                const currentCount = await page.locator(config.selectors.answerContainer).count();
+                if (currentCount > 0) {
+                    newAnswerIndex = currentCount - 1;
+                    console.log(`Fallback: Using last available answer container at index ${newAnswerIndex}`);
+                } else {
+                    throw new Error("No answer containers found after query submission.");
+                }
+            }
 
-            const result = {
+            // Stability check logic...
+            console.log(`Monitoring stability of answer at index ${newAnswerIndex}...`);
+            const answerLocator = page.locator(config.selectors.answerContainer).nth(newAnswerIndex);
+
+            let lastText = '';
+            let stableCount = 0;
+            const stabilityThreshold = 5;
+
+            for (let i = 0; i < 240; i++) {
+                const stopButton = await page.$('button:has-text("Stop generating")');
+                if (!stopButton && stableCount > 2) {
+                    // faster exit check
+                }
+
+                const currentText = await answerLocator.innerText().catch(() => '');
+
+                if (currentText && currentText.length > 0) {
+                    if (currentText === lastText) {
+                        stableCount++;
+                    } else {
+                        stableCount = 0;
+                        lastText = currentText;
+                        process.stdout.write('.');
+                    }
+                }
+
+                if (stableCount >= stabilityThreshold) {
+                    console.log('\nAnswer stabilized.');
+                    break;
+                }
+
+                await page.waitForTimeout(500);
+            }
+
+            // --- Enhanced Extraction ---
+
+            // 1. Expand Thoughts if present (Multilingual support: English, Czech, etc.)
+            // Logic: Find the toggle acting as a header for reasoning steps.
+            console.log('Checking for thoughts toggle...');
+
+            // We search for a clickable div containing relevant text keywords or the specific icon pattern.
+            // Based on DOM analysis, it's a div.cursor-pointer containing text like "4 steps completed".
+            const togglePattern = /(\d+\s+)?(steps?|kroky?|fáze|thoughts?).*(completed|dokončeny?|generated)|(view|zobrazit).*(detailed|detailní).*(steps|kroky)|reasoning process/i;
+
+            // We target the clickable container directly
+            const thoughtsToggle = page.locator('div.cursor-pointer')
+                .filter({ hasText: togglePattern })
+                .first();
+
+            const isVisible = await thoughtsToggle.isVisible().catch(() => false);
+            if (isVisible) {
+                console.log('Thoughts toggle found, clicking...');
+                await thoughtsToggle.click();
+                await page.waitForTimeout(1000); // Wait for toggle animation
+            } else {
+                console.log('No thoughts toggle found (or already expanded/not present).');
+            }
+
+
+            // 2. Extract Data
+            const data = await page.evaluate(([index, answerSelector]: any) => {
+                const containers = document.querySelectorAll(answerSelector);
+                // We typically want the requested index, but sticking to logic.
+                const container = containers[index];
+                if (!container) return { answer: '', html: '', sources: [] as { index: number; url: string; title: string }[], thoughts: [] as string[] };
+
+                // Clone to avoid mutating visible page
+                const clone = container.cloneNode(true) as HTMLElement;
+
+                const sources: { index: number; url: string; title: string }[] = [];
+                const thoughts: string[] = [];
+
+                // 1. Extract Sources (Robust)
+                // Find citations in CLONE and replace with [^n]
+                const specificCitations = clone.querySelectorAll('.citation a, a[href*="perplexity.ai/search"]');
+
+                specificCitations.forEach((a: any) => {
+                    const href = a.getAttribute('href');
+                    const originalText = a.textContent?.trim() || '';
+                    if (!href) return;
+
+                    let sourceIndex = sources.findIndex(s => s.url === href);
+                    if (sourceIndex === -1) {
+                        sourceIndex = sources.length;
+                        sources.push({ index: sourceIndex + 1, url: href, title: originalText });
+                    }
+
+                    // Replace text with [^i] in the clone so innerText captures it
+                    a.textContent = `[^${sourceIndex + 1}]`;
+                });
+
+                // 2. Extract Thoughts (Best Effort)
+                // Search live DOM for headers "Step X" / "Krok X"
+                const parent = container.parentElement?.parentElement || document.body;
+                const stepElements = Array.from(parent.querySelectorAll('*')).filter((el: any) =>
+                    /^(Step|Fáze|Krok)\s+\d+$/i.test((el.textContent || '').trim())
+                );
+
+                stepElements.forEach((stepHeader: any) => {
+                    let content = '';
+                    if (stepHeader.nextElementSibling) {
+                        content = (stepHeader.nextElementSibling as HTMLElement).innerText;
+                    }
+                    if (content) {
+                        thoughts.push(`**${stepHeader.textContent?.trim()}**: ${content.trim()}`);
+                    }
+                });
+
+                return {
+                    answer: clone.innerText, // Use cloned text with footnotes
+                    html: container.innerHTML,
+                    sources,
+                    thoughts
+                };
+            }, [newAnswerIndex, config.selectors.answerContainer]);
+
+            // --- Markdown Formatting ---
+            let markdown = `### Answer\n\n${data.answer}\n\n`;
+
+            if (data.thoughts && data.thoughts.length > 0) {
+                markdown = `### Thoughts\n\n${data.thoughts.join('\n\n')}\n\n` + markdown;
+            }
+
+            if (data.sources && data.sources.length > 0) {
+                markdown += `### Sources\n`;
+                data.sources.forEach(s => {
+                    markdown += `[^${s.index}]: [${s.title}](${s.url})\n`;
+                });
+            }
+
+            const result: QueryResponse = {
                 query: queryText,
-                answer: answer,
+                answer: data.answer,
+                markdown: markdown,
+                sources: data.sources,
                 timestamp: new Date().toISOString(),
                 url: page.url()
             };
@@ -397,17 +517,17 @@ export class PerplexityClient {
 
             try {
                 fs.writeFileSync(filepath, JSON.stringify(result, null, 2));
-                console.log(`Result saved to ${filepath}`);
+                const mdPath = filepath.replace('.json', '.md');
+                fs.writeFileSync(mdPath, markdown);
+                console.log(`Result saved to ${filepath} and ${mdPath}`);
             } catch (e: any) {
-                console.error(`Error saving page dump: ${e.message}`);
+                console.error(`Error saving result: ${e.message}`);
             }
 
             return result;
 
         } catch (error: any) {
-            console.error('Unexpected error in audio generation:', error);
-            // Try to capture state on failure
-            // Don't close the page on error, let the user see it in VNC
+            console.error('Unexpected error in Perplexity query:', error);
             throw error;
         }
     }
@@ -418,6 +538,7 @@ export class PerplexityClient {
         await this.context.storageState({ path: config.auth.authFile });
         console.log('Auth state saved.');
     }
+
     async createNotebookClient(): Promise<NotebookLMClient> {
         if (!this.context) throw new Error('Context not initialized');
         const page = await this.context.newPage();

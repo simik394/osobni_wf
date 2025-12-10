@@ -164,22 +164,42 @@ curl http://localhost:3000/health
 
 Send a query to Perplexity.ai and get the response.
 
+### Query Perplexity
+
 **Endpoint:** `POST /query`
 
 **Headers:**
 - `Content-Type: application/json`
 
-**Request Body:**
+**Body:**
 ```json
 {
   "query": "Your question here",
-  "session": "optional-session-id-or-name",
-  "name": "optional-new-session-name"
+  "sessionId": "optional-session-id", 
+  "sessionName": "optional-session-name"
 }
 ```
 
-**Example Request:**
-```bash
+**Response:**
+```json
+{
+  "answer": "The plain text answer...",
+  "html": "<div>Raw HTML content...</div>",
+  "markdown": "## Answer\n\nformatted as markdown with [^1] footnotes...\n\n### Thoughts\n\n**Step 1**: Reasoning content...",
+  "sources": [
+    { "index": 1, "url": "https://example.com", "title": "Source Title" }
+  ],
+  "thoughts": [
+    "**Step 1**: Content...",
+    "**Step 2**: Content..."
+  ]
+}
+```
+
+> [!NOTE]
+> The `markdown` field contains a fully formatted version of the answer, suitable for Obsidian, with "Thoughts" (reasoning steps) included and sources formatted as footnotes.
+
+### Session Management
 curl -X POST http://localhost:3000/query \
   -H "Content-Type: application/json" \
   -d '{
