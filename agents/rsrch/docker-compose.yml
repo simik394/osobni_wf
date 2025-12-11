@@ -6,7 +6,12 @@ services:
     ports:
       - "5900:5900"
       - "3002:3000"
+      - "9223:9223"  # CDP port (socat proxy)
     ipc: host
+    volumes:
+      - ${HOME}/.config/rsrch/user-data:/app/user-data
+    environment:
+      - USER_DATA_DIR=/app/user-data
     restart: unless-stopped
 
   perplexity-server:
@@ -21,7 +26,7 @@ services:
       - ${HOME}/.config/rsrch:/app/config
     environment:
       - PORT=${PORT:-3001}
-      - BROWSER_WS_ENDPOINT=ws://chromium:3000/ws
+      - BROWSER_CDP_ENDPOINT=http://chromium:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
     command: npm run serve

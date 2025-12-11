@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     x11vnc \
     fluxbox \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Install playwright package for the server script
@@ -20,6 +21,6 @@ COPY start.sh /start.sh
 COPY server.js /app/server.js
 RUN chmod +x /start.sh
 
-EXPOSE 3000 5900
+EXPOSE 3000 5900 9223
 
 CMD ["/start.sh"]
