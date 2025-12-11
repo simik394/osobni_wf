@@ -715,6 +715,84 @@ async function main() {
             console.log('  --headed   Show browser window (default: headless)');
         }
 
+    } else if (command === 'registry') {
+        // registry list [--type=session|document|audio]
+        // registry show <ID>
+        // registry lineage <ID>
+
+        const registryFile = path.join(process.cwd(), 'data', 'artifact-registry.json');
+        const { execSync } = require('child_process');
+
+        const runJq = (filter: string): string => {
+            try {
+                return execSync(`jq '${filter}' "${registryFile}"`, { encoding: 'utf-8' }).trim();
+            } catch (e: any) {
+                if (e.message?.includes('No such file')) {
+                    console.log('No registry file found. Run a research workflow first to create artifacts.');
+                    return '';
+                }
+                throw e;
+            }
+        };
+
+        if (subArg1 === 'list') {
+            // Check for --type filter
+            let typeFilter: string | undefined;
+            for (const arg of args) {
+                if (arg.startsWith('--type=')) {
+                    typeFilter = arg.split('=')[1];
+                }
+            }
+
+            if (typeFilter) {
+                const result = runJq(`.artifacts | to_entries[] | select(.value.type=="${typeFilter}") | .key`);
+                if (result) console.log(result);
+            } else {
+                const result = runJq('.artifacts | keys[]');
+                if (result) console.log(result);
+            }
+
+        } else if (subArg1 === 'show') {
+            const id = subArg2;
+            if (!id) {
+                console.error('Usage: rsrch registry show <ID>');
+                process.exit(1);
+            }
+            const result = runJq(`.artifacts["${id}"]`);
+            console.log(result || 'Not found');
+
+        } else if (subArg1 === 'lineage') {
+            const id = subArg2;
+            if (!id) {
+                console.error('Usage: rsrch registry lineage <ID>');
+                process.exit(1);
+            }
+
+            // Recursive lineage via Node.js (jq doesn't do recursion easily)
+            const { getRegistry } = require('./artifact-registry');
+            const registry = getRegistry();
+            const lineage = registry.getLineage(id);
+
+            if (lineage.length === 0) {
+                console.log('Not found');
+            } else {
+                console.log('Lineage (child → parent):');
+                lineage.forEach((entry: any, idx: number) => {
+                    const indent = '  '.repeat(idx);
+                    console.log(`${indent}${entry.type}: ${entry.currentTitle || entry.query || entry.geminiSessionId || 'N/A'}`);
+                });
+            }
+
+        } else {
+            console.log('Registry commands:');
+            console.log('  rsrch registry list                  # List all artifact IDs');
+            console.log('  rsrch registry list --type=session   # Filter by type');
+            console.log('  rsrch registry list --type=document');
+            console.log('  rsrch registry list --type=audio');
+            console.log('  rsrch registry show <ID>             # Show artifact details');
+            console.log('  rsrch registry lineage <ID>          # Show parent chain');
+        }
+
     } else if (command === 'query') {
         const { query, options } = parseArgs(args);
         if (query) {

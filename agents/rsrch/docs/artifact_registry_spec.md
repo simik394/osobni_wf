@@ -144,16 +144,16 @@ rsrch registry list --type=audio
 
 # Work Breakdown Structure (WBS)
 
-## Phase 1: Core Registry
+## Phase 1: Core Registry ✅
 
-- [ ] Create `src/artifact-registry.ts`
-  - [ ] Define `ArtifactEntry` type (unified for session/doc/audio)
-  - [ ] Implement `load()` / `save()` for `data/artifact-registry.json`
-  - [ ] Implement `generateBaseId()` — 3-char random
-  - [ ] Implement `registerSession(geminiSessionId, query)` → returns `XXX`
-  - [ ] Implement `registerDocument(parentId, googleDocId, originalTitle)` → returns `XXX-NN`
-  - [ ] Implement `registerAudio(parentId, notebookTitle, originalTitle, localPath)` → returns `XXX-NN-L`
-  - [ ] Implement `getLineage(id)` → returns parent chain
+- [x] Create `src/artifact-registry.ts`
+  - [x] Define `ArtifactEntry` type (unified for session/doc/audio)
+  - [x] Implement `load()` / `save()` for `data/artifact-registry.json`
+  - [x] Implement `generateBaseId()` — 3-char random
+  - [x] Implement `registerSession(geminiSessionId, query)` → returns `XXX`
+  - [x] Implement `registerDocument(parentId, googleDocId, originalTitle)` → returns `XXX-NN`
+  - [x] Implement `registerAudio(parentId, notebookTitle, originalTitle, localPath)` → returns `XXX-NN-L`
+  - [x] Implement `getLineage(id)` → returns parent chain
 
 ## Phase 2: Renaming Automation
 
@@ -172,12 +172,12 @@ rsrch registry list --type=audio
   - [ ] Call `registerAudio`, rename artifact
 - [ ] Update `downloadAudio` to use registry ID for filename
 
-## Phase 4: CLI (jq wrappers)
+## Phase 4: CLI (jq wrappers) ✅
 
-- [ ] Add `rsrch registry list` — wrapper for `jq 'keys[]'`
-- [ ] Add `rsrch registry show <ID>` — wrapper for `jq '.artifacts["<ID>"]'`
-- [ ] Add `rsrch registry lineage <ID>` — recursive parent lookup
-- [ ] Add `rsrch registry list --type=<type>` — filter by type
+- [x] Add `rsrch registry list` — wrapper for `jq 'keys[]'`
+- [x] Add `rsrch registry show <ID>` — wrapper for `jq '.artifacts["<ID>"]'`
+- [x] Add `rsrch registry lineage <ID>` — recursive parent lookup
+- [x] Add `rsrch registry list --type=<type>` — filter by type
 - [ ] Update `USER_GUIDE.md` with registry usage
 
 ## Phase 5: Testing & Verification
