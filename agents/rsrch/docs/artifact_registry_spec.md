@@ -180,9 +180,12 @@ rsrch registry list --type=audio
 - [x] Add `rsrch registry list --type=<type>` — filter by type
 - [ ] Update `USER_GUIDE.md` with registry usage
 
-## Phase 5: Testing & Verification
+## Phase 5: Testing & Verification ✅
 
-- [ ] Unit test: ID generation uniqueness
-- [ ] Integration test: Full session → doc → audio flow
-- [ ] Manual test: Verify renamed titles in all services
+- [x] Unit test: ID generation uniqueness
+- [x] Unit test: Session/Document/Audio registration
+- [x] Unit test: Lineage tracking
+- [x] Unit test: Persistence
+- [x] Integration test: Full session → doc → audio flow
+- [ ] Manual test: Verify renamed titles in all services (requires live browser)
 

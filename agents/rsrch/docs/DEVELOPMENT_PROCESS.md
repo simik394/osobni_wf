@@ -142,9 +142,70 @@ rsrch <command> [args]
       ↓
 5. Update WBS checkboxes as you go
       ↓
-6. Commit after each phase
+6. Write Tests (see below)
       ↓
-7. Mark spec status as "Complete"
+7. Commit after each phase
+      ↓
+8. Mark spec status as "Complete"
+```
+
+---
+
+## 6. Testing (Required)
+
+**Rule: Always write test code BEFORE running tests.**
+
+Tests are not manual—they are scripted and repeatable.
+
+### Test File Location
+- `tests/<feature_name>.test.ts` for unit/integration tests
+- Delete test files after verification passes if they are one-time validations
+
+### Test Structure
+```typescript
+// tests/artifact-registry.test.ts
+import { ArtifactRegistry } from '../src/artifact-registry';
+
+async function runTests() {
+    const registry = new ArtifactRegistry('data/test');
+    
+    // Test 1: ID generation uniqueness
+    const ids = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+        ids.add(registry.generateBaseId());
+    }
+    console.assert(ids.size === 100, 'IDs should be unique');
+    
+    // Test 2: Session registration
+    const sessionId = registry.registerSession('gem123', 'Test query');
+    console.assert(sessionId.length === 3, 'Session ID should be 3 chars');
+    
+    // Test 3: Document registration
+    const docId = registry.registerDocument(sessionId, 'doc456', 'Original Title');
+    console.assert(docId.startsWith(sessionId), 'Doc ID should start with session ID');
+    
+    // Test 4: Lineage
+    const lineage = registry.getLineage(docId);
+    console.assert(lineage.length === 2, 'Lineage should have 2 entries');
+    
+    console.log('✅ All tests passed');
+}
+
+runTests().catch(console.error);
+```
+
+### Running Tests
+```bash
+npx ts-node tests/<feature>.test.ts
+```
+
+### WBS Test Entry
+Always include a testing phase in the WBS:
+```markdown
+## Phase N: Testing
+- [ ] Write tests in `tests/<feature>.test.ts`
+- [ ] Run tests: `npx ts-node tests/<feature>.test.ts`
+- [ ] Delete test file if one-time validation
 ```
 
 ---
