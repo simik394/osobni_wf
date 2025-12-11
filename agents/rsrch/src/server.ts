@@ -6,6 +6,7 @@ import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { jobQueue, Job } from './job-queue';
 import { notifyJobCompleted } from './discord';
+import { getRegistry } from './artifact-registry';
 
 const app = express();
 const PORT = config.port;
@@ -374,6 +375,9 @@ app.post('/research-to-podcast', async (req, res) => {
                 jobQueue.markRunning(job.id);
                 notifyJobCompleted(job.id, 'Unified Flow Started', query, true, 'Starting automated research pipeline...');
 
+                // Get registry instance
+                const registry = getRegistry();
+
                 // 1. Perplexity Research (Fast, Grounded)
                 console.log(`[Job ${job.id}] Step 1: Perplexity Research`);
                 const pxResult = await client.query(query, { deepResearch: false }); // Use standard for speed/grounding
@@ -389,6 +393,11 @@ app.post('/research-to-podcast', async (req, res) => {
                     geminiClient = await client.createGeminiClient();
                     await geminiClient.init();
                 }
+
+                // Register session in artifact registry
+                const geminiSessionId = geminiClient.getCurrentSessionId() || 'unknown';
+                const sessionId = registry.registerSession(geminiSessionId, query);
+                console.log(`[Job ${job.id}] Registered session: ${sessionId}`);
 
                 const combinedQuery = `
 Please perform a generic Deep Research on the topic: "${query}".
@@ -406,12 +415,24 @@ Focus on depth, nuance, and covering aspects that might be missing above.
                 // 3. Export to Google Docs
                 console.log(`[Job ${job.id}] Step 3: Export to Google Docs`);
                 // Short wait for generation to ensure export button is ready handled in exportToGoogleDocs logic
-                const { docTitle, docUrl } = await geminiClient.exportCurrentToGoogleDocs();
+                const exportResult = await geminiClient.exportCurrentToGoogleDocs();
+                const { docTitle, docUrl, docId: googleDocId } = exportResult;
 
                 if (!docTitle) {
                     throw new Error('Failed to export Gemini research to Google Docs (Title not captured).');
                 }
                 console.log(`[Job ${job.id}] Exported Doc: "${docTitle}" (${docUrl})`);
+
+                // Register document in artifact registry
+                const docId = registry.registerDocument(sessionId, googleDocId || 'unknown', docTitle);
+                console.log(`[Job ${job.id}] Registered document: ${docId}`);
+
+                // Rename Google Doc with registry ID prefix
+                if (googleDocId) {
+                    const newDocTitle = `${docId} ${docTitle}`;
+                    await geminiClient.renameGoogleDoc(googleDocId, newDocTitle);
+                    registry.updateTitle(docId, newDocTitle);
+                }
 
                 // 4. NotebookLM Setup
                 console.log(`[Job ${job.id}] Step 4: NotebookLM Import`);
@@ -424,8 +445,9 @@ Focus on depth, nuance, and covering aspects that might be missing above.
                 const safeTitle = query.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 50).trim() || 'Research Podcast';
                 await notebookClient.createNotebook(safeTitle);
 
-                // Add Source
-                await notebookClient.addSourceFromDrive([docTitle]);
+                // Add Source - use the new renamed title if available
+                const sourceDocTitle = googleDocId ? `${docId} ${docTitle}` : docTitle;
+                await notebookClient.addSourceFromDrive([sourceDocTitle]);
 
                 // 5. Generate Audio Overview
                 console.log(`[Job ${job.id}] Step 5: Audio Generation`);
@@ -436,14 +458,23 @@ Focus on depth, nuance, and covering aspects that might be missing above.
                 // 6. Download Audio
                 if (!dryRun) {
                     console.log(`[Job ${job.id}] Step 6: Download Audio`);
-                    const cleanFilename = query.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 50) + '.mp3';
+
+                    // Register audio in artifact registry
+                    const audioId = registry.registerAudio(docId, safeTitle, 'Audio Overview');
+                    const cleanFilename = `${audioId}.mp3`;
+
                     await notebookClient.downloadAudio(safeTitle, cleanFilename);
+                    registry.updateLocalPath(audioId, cleanFilename);
                     console.log(`[Job ${job.id}] Audio saved to: ${cleanFilename}`);
+
+                    // Rename audio artifact in NotebookLM
+                    const newAudioTitle = `${audioId} Audio Overview`;
+                    await notebookClient.renameArtifact('Audio Overview', newAudioTitle);
                 } else {
                     console.log(`[Job ${job.id}] Step 6: Skipped Download (Dry Run)`);
                 }
 
-                jobQueue.markCompleted(job.id, { docTitle, docUrl, audioGenerated: true });
+                jobQueue.markCompleted(job.id, { docTitle, docUrl, audioGenerated: true, sessionId, docId });
                 notifyJobCompleted(job.id, 'Unified Flow Completed', query, true, `Podcast generated for "${query}". Doc: ${docTitle}`);
 
             } catch (err: any) {

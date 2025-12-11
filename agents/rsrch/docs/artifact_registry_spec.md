@@ -162,15 +162,15 @@ rsrch registry list --type=audio
 - [x] Add `renameArtifact(artifactTitle, newTitle)` to `notebooklm-client.ts`
   - [x] Locate artifact, More menu → Rename → fill
 
-## Phase 3: Workflow Integration
+## Phase 3: Workflow Integration ✅
 
-- [ ] Update `gemini deep-research` flow
-  - [ ] Call `registerSession` before research
-  - [ ] Call `registerDocument` after export, rename doc
-- [ ] Update `notebooklm generateAudioOverview` flow
-  - [ ] On completion, extract sources, match to registry
-  - [ ] Call `registerAudio`, rename artifact
-- [ ] Update `downloadAudio` to use registry ID for filename
+- [x] Update `gemini deep-research` flow
+  - [x] Call `registerSession` before research
+  - [x] Call `registerDocument` after export, rename doc
+- [x] Update `notebooklm generateAudioOverview` flow
+  - [x] On completion, extract sources, match to registry
+  - [x] Call `registerAudio`, rename artifact
+- [x] Update `downloadAudio` to use registry ID for filename
 
 ## Phase 4: CLI (jq wrappers) ✅
 
