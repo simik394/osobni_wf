@@ -24,13 +24,26 @@ The Artifact Registry provides **unified naming and lineage tracking** for objec
 
 ## 4. ID Format
 
-| Type | Format | Example | Description |
-|------|--------|---------|-------------|
-| Session | `SES-XXX` | `SES-A1D` | 3-char alphanumeric, assigned to Gemini session |
-| Document | `DOC-XXX-NN` | `DOC-A1D-01` | Session ID + 2-digit sequence |
-| Audio | `AUD-XXX-NN-L` | `AUD-A1D-01-A` | Document ID + letter suffix |
+**Unified IDs** — No type prefixes. All artifacts sharing the same research context use the **same base ID**.
+
+| Scope | Format | Example | Description |
+|-------|--------|---------|-------------|
+| Base ID | `XXX` | `A1D` | 3-char alphanumeric, assigned when session starts |
+| Document variant | `XXX-NN` | `A1D-01` | Base + 2-digit sequence (multiple exports) |
+| Audio variant | `XXX-NN-L` | `A1D-01-A` | Document ID + letter suffix (multiple audio) |
 
 **Character Set**: `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (excludes confusing chars: 0/O, 1/I/L)
+
+### Examples
+
+| Research Query | Session | Doc Export | Audio |
+|----------------|---------|------------|-------|
+| "History of Espresso" | `A1D` | `A1D-01` | `A1D-01-A` |
+| (second export) | `A1D` | `A1D-02` | `A1D-02-A` |
+| (second audio of first doc) | `A1D` | `A1D-01` | `A1D-01-B` |
+
+### Nice-to-Have (Future)
+Similar content topics could share similar IDs (e.g., `A1D` and `A1E` for related research). This requires AI-based semantic matching and is **not in scope** for initial implementation.
 
 ## 5. Registry Storage
 
@@ -38,36 +51,35 @@ The Artifact Registry provides **unified naming and lineage tracking** for objec
 
 ```json
 {
-  "sessions": {
-    "SES-A1D": {
+  "artifacts": {
+    "A1D": {
+      "type": "session",
       "geminiSessionId": "1a2b3c4d5e",
-      "createdAt": "2025-12-11T00:00:00Z",
       "query": "History of Espresso",
-      "documents": ["DOC-A1D-01"]
-    }
-  },
-  "documents": {
-    "DOC-A1D-01": {
-      "sessionId": "SES-A1D",
+      "createdAt": "2025-12-11T00:00:00Z"
+    },
+    "A1D-01": {
+      "type": "document",
+      "parentId": "A1D",
       "googleDocId": "abc123xyz",
       "originalTitle": "Deep Research on History of Espresso",
-      "currentTitle": "DOC-A1D-01 Deep Research on History of Espresso",
-      "createdAt": "2025-12-11T00:05:00Z",
-      "audio": ["AUD-A1D-01-A"]
-    }
-  },
-  "audio": {
-    "AUD-A1D-01-A": {
-      "documentId": "DOC-A1D-01",
+      "currentTitle": "A1D-01 Deep Research on History of Espresso",
+      "createdAt": "2025-12-11T00:05:00Z"
+    },
+    "A1D-01-A": {
+      "type": "audio",
+      "parentId": "A1D-01",
       "notebookTitle": "Espresso Research",
-      "originalArtifactTitle": "Audio Overview",
-      "currentArtifactTitle": "AUD-A1D-01-A Audio Overview",
-      "localPath": "/data/audio/AUD-A1D-01-A.mp3",
+      "originalTitle": "Audio Overview",
+      "currentTitle": "A1D-01-A Audio Overview",
+      "localPath": "/data/audio/A1D-01-A.mp3",
       "createdAt": "2025-12-11T00:15:00Z"
     }
   }
 }
 ```
+
+**Flat structure** enables simple `jq` queries without nested traversal.
 
 ## 6. Core Operations
 
@@ -75,44 +87,48 @@ The Artifact Registry provides **unified naming and lineage tracking** for objec
 
 | Operation | Trigger | Action |
 |-----------|---------|--------|
-| `registerSession` | Deep research starts | Assign `SES-XXX`, store geminiSessionId |
-| `registerDocument` | Export to Docs completes | Assign `DOC-XXX-NN`, link to session |
-| `registerAudio` | Audio generation completes | Assign `AUD-XXX-NN-L`, link to document |
+| `registerSession` | Deep research starts | Generate base ID `XXX`, store |
+| `registerDocument` | Export to Docs | Generate `XXX-NN`, link to parent |
+| `registerAudio` | Audio completes | Generate `XXX-NN-L`, link to parent |
 
 ### 6.2 Renaming
 
-| Target | Method | Details |
-|--------|--------|---------|
-| Google Doc | Playwright | Navigate to doc URL, edit `<title>` in `<head>` or use "Rename" menu |
-| NotebookLM Artifact | Playwright | Click artifact → "Rename" menu item → fill input |
-| Local Audio File | Node.js `fs.rename` | Move file to new name in `data/audio/` |
-
-### 6.3 Lookup
-
-| Query | Returns |
-|-------|---------|
-| `getSession(SES-XXX)` | Full session object with linked docs/audio |
-| `getDocumentByGoogleDocId(id)` | Document entry |
-| `getAudioByLocalPath(path)` | Audio entry |
-| `getLineage(AUD-XXX-NN-L)` | `{ audio, document, session }` chain |
+| Target | Method |
+|--------|--------|
+| Google Doc | Playwright: click title → edit → auto-save |
+| NotebookLM Artifact | Playwright: More menu → Rename → fill |
+| Local Audio File | `fs.rename()` |
 
 ## 7. Source-to-Audio Matching
 
-When an audio overview completes, the system must deduce which document it came from:
+When an audio overview completes, deduce the source document:
 
-1. **Extract source list** from the audio artifact's UI (NotebookLM shows sources used).
-2. **Match source titles** against registered documents in the registry.
-3. **Assign the audio ID** based on the matched document.
+1. **Extract source list** from NotebookLM artifact UI.
+2. **Match source titles** against registered documents in registry.
+3. **Assign audio ID** based on matched document.
 
-If no match is found, assign a standalone ID (`AUD-ORPHAN-NNN`).
+If no match: assign standalone ID (`ORPHAN-NNN`).
 
-## 8. CLI Commands
+## 8. CLI Commands (jq-based)
+
+All lookups use `jq` directly on the registry file for simplicity. Future migration to Neo4j or similar will replace these.
 
 ```bash
-rsrch registry list                    # List all sessions
-rsrch registry show SES-A1D            # Show session with all linked artifacts
-rsrch registry rename SES-A1D "New ID" # Manually reassign session ID
-rsrch registry lineage AUD-A1D-01-A    # Show full lineage chain
+# List all artifacts
+rsrch registry list
+# → jq -r 'keys[]' data/artifact-registry.json
+
+# Show specific artifact
+rsrch registry show A1D-01
+# → jq '.artifacts["A1D-01"]' data/artifact-registry.json
+
+# Get lineage (parent chain)
+rsrch registry lineage A1D-01-A
+# Recursively resolves parentId until root
+
+# Find by type
+rsrch registry list --type=audio
+# → jq '[.artifacts | to_entries[] | select(.value.type=="audio") | .key]' data/artifact-registry.json
 ```
 
 ## 9. Integration Points
@@ -131,48 +147,42 @@ rsrch registry lineage AUD-A1D-01-A    # Show full lineage chain
 ## Phase 1: Core Registry
 
 - [ ] Create `src/artifact-registry.ts`
-  - [ ] Define `RegistryEntry` types (Session, Document, Audio)
+  - [ ] Define `ArtifactEntry` type (unified for session/doc/audio)
   - [ ] Implement `load()` / `save()` for `data/artifact-registry.json`
-  - [ ] Implement `generateShortId(length)`
-  - [ ] Implement `registerSession(geminiSessionId, query)`
-  - [ ] Implement `registerDocument(sessionId, googleDocId, originalTitle)`
-  - [ ] Implement `registerAudio(documentId, notebookTitle, originalTitle, localPath)`
-  - [ ] Implement `getLineage(audioId)`
+  - [ ] Implement `generateBaseId()` — 3-char random
+  - [ ] Implement `registerSession(geminiSessionId, query)` → returns `XXX`
+  - [ ] Implement `registerDocument(parentId, googleDocId, originalTitle)` → returns `XXX-NN`
+  - [ ] Implement `registerAudio(parentId, notebookTitle, originalTitle, localPath)` → returns `XXX-NN-L`
+  - [ ] Implement `getLineage(id)` → returns parent chain
 
 ## Phase 2: Renaming Automation
 
 - [ ] Add `renameGoogleDoc(docId, newTitle)` to `gemini-client.ts`
-  - [ ] Navigate to `https://docs.google.com/document/d/{docId}/edit`
-  - [ ] Click the document title element
-  - [ ] Clear and type new title
-  - [ ] Wait for auto-save
+  - [ ] Navigate to doc, click title, edit, wait for save
 - [ ] Add `renameArtifact(artifactTitle, newTitle)` to `notebooklm-client.ts`
-  - [ ] Locate artifact by current title
-  - [ ] Click "More options" menu
-  - [ ] Click "Rename"
-  - [ ] Fill new title, confirm
+  - [ ] Locate artifact, More menu → Rename → fill
 
 ## Phase 3: Workflow Integration
 
 - [ ] Update `gemini deep-research` flow
-  - [ ] Call `registerSession` before research starts
-  - [ ] Call `registerDocument` after export, then rename doc
+  - [ ] Call `registerSession` before research
+  - [ ] Call `registerDocument` after export, rename doc
 - [ ] Update `notebooklm generateAudioOverview` flow
-  - [ ] On completion, extract source list from UI
-  - [ ] Match sources to registry, deduce document ID
-  - [ ] Call `registerAudio`, then rename artifact
+  - [ ] On completion, extract sources, match to registry
+  - [ ] Call `registerAudio`, rename artifact
 - [ ] Update `downloadAudio` to use registry ID for filename
 
-## Phase 4: CLI & Documentation
+## Phase 4: CLI (jq wrappers)
 
-- [ ] Add `rsrch registry list` command
-- [ ] Add `rsrch registry show <ID>` command
-- [ ] Add `rsrch registry lineage <audioId>` command
+- [ ] Add `rsrch registry list` — wrapper for `jq 'keys[]'`
+- [ ] Add `rsrch registry show <ID>` — wrapper for `jq '.artifacts["<ID>"]'`
+- [ ] Add `rsrch registry lineage <ID>` — recursive parent lookup
+- [ ] Add `rsrch registry list --type=<type>` — filter by type
 - [ ] Update `USER_GUIDE.md` with registry usage
-- [ ] Update `API.md` with new endpoints (if any)
 
 ## Phase 5: Testing & Verification
 
 - [ ] Unit test: ID generation uniqueness
-- [ ] Integration test: Full flow from session → doc → audio
-- [ ] Manual test: Verify renamed titles appear correctly in all services
+- [ ] Integration test: Full session → doc → audio flow
+- [ ] Manual test: Verify renamed titles in all services
+
