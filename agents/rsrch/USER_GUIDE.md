@@ -113,7 +113,17 @@ curl -X POST http://localhost:3000/research-to-podcast \
 
 ---
 
-## 🔧 Troubleshooting
+### 🔔 Notifications & Job Status
+Long-running tasks (like `Deep Research` or `Unified Podcast`) run in the background.
+
+*   **Discord Alerts:** You will receive notifications when a job starts, finishes, or fails.
+*   **Crash Recovery:** If the server restarts while a job is running, you will get a "Job Failed (Interrupted)" notification so you know to try again.
+*   **Check Status API:** You can check the status of a job using its ID (returned when you start the task):
+    ```bash
+    curl http://localhost:3000/jobs/djea58bg
+    ```
+
+### 🔧 Troubleshooting
 
 ### "Not logged in" Error
 Run `rsrch auth` and log in through the browser window.

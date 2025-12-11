@@ -324,6 +324,27 @@ Automate Google's Gemini "Thinking" model to perform deep research and export re
   - Detects completion by monitoring the "Researching..." status indicators.
 - **Export**: Automates the "Export to Docs" button click and retrieves the new document's title / heading to return to the API.
 
+## Feature: Job Persistence & Recovery
+
+### Goal
+Ensure that long-running async tasks (like `research-to-podcast`) are not lost if the server process crashes or restarts.
+
+### Architecture Design
+1.  **Persistence Layer**:
+    *   **Mechanism**: JSON file storage (`data/jobs.json`).
+    *   **Decision**: Chosen over SQLite or Redis to keep the architecture dependency-free and lightweight (using existing `data/` volume).
+    *   **Behavior**: The `JobQueue` class writes to this file synchronously whenever a job is added or updated.
+
+2.  **Recovery Logic**:
+    *   **On Startup**: The server calls `jobQueue.load()` to restore state from disk.
+    *   **Interruption Handling**: It scans for jobs with `status: 'running'`. Since the server just started, any "running" job was necessarily interrupted.
+    *   **Resolution**: These jobs are marked as `failed` with the error "Interrupted by server restart/crash".
+    *   **Notification**: A Discord alert is sent immediately so the user knows the job failed and can retry.
+
+### Trade-offs
+*   **Pros**: Simple, zero extra deps, robust enough for single-instance use.
+*   **Cons**: Does not *resume* the work (e.g., does not reconnect to an orphaned browser page). Resuming complex multi-step browser automation from an arbitrary mid-point is significantly more complex and error-prone. "Fail fast and notify" is the safer implementation.
+
 ## Future Considerations
 
 ### Potential Improvements

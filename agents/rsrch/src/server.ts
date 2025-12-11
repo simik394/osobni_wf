@@ -478,6 +478,22 @@ export async function startServer() {
         console.log('Initializing Perplexity client...');
         await client.init();
 
+        // Load persisted jobs and recover state
+        console.log('[Server] Loading persistent job queue...');
+        jobQueue.load();
+
+        // Check for interrupted jobs
+        const runningJobs = jobQueue.list().filter(j => j.status === 'running');
+        if (runningJobs.length > 0) {
+            console.warn(`[Server] Found ${runningJobs.length} interrupted jobs from previous status.`);
+            for (const job of runningJobs) {
+                const msg = 'Interrupted by server restart/crash.';
+                jobQueue.markFailed(job.id, msg);
+                console.log(`[Server] Marked job ${job.id} as failed.`);
+                notifyJobCompleted(job.id, `${job.type} (Interrupted)`, job.query, false, msg);
+            }
+        }
+
         app.listen(PORT, () => {
             console.log(`\n✓ Perplexity Researcher server running on http://localhost:${PORT}`);
             console.log(`\nEndpoints:`);
