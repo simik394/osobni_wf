@@ -350,6 +350,115 @@ app.post('/gemini/get-research-info', async (req, res) => {
     }
 });
 
+// Unified Unified Research to Podcast Endpoint
+app.post('/research-to-podcast', async (req, res) => {
+    try {
+        const { query, customPrompt, dryRun } = req.body;
+
+        if (!query) return res.status(400).json({ error: 'Query is required' });
+
+        const job = jobQueue.add('research-to-podcast', query, { customPrompt, dryRun });
+
+        console.log(`[Server] Starting Unified Research Job ${job.id} for: "${query}"`);
+
+        res.status(202).json({
+            success: true,
+            message: 'Unified research flow started',
+            jobId: job.id,
+            statusUrl: `/jobs/${job.id}`
+        });
+
+        // Async Processing
+        (async () => {
+            try {
+                jobQueue.markRunning(job.id);
+                notifyJobCompleted(job.id, 'Unified Flow Started', query, true, 'Starting automated research pipeline...');
+
+                // 1. Perplexity Research (Fast, Grounded)
+                console.log(`[Job ${job.id}] Step 1: Perplexity Research`);
+                const pxResult = await client.query(query, { deepResearch: false }); // Use standard for speed/grounding
+
+                if (!pxResult || !pxResult.answer) {
+                    throw new Error('Perplexity query returned no answer.');
+                }
+                console.log(`[Job ${job.id}] Perplexity answer length: ${pxResult.answer.length}`);
+
+                // 2. Gemini Deep Research (Reasoning + Synthesis)
+                console.log(`[Job ${job.id}] Step 2: Gemini Deep Research`);
+                if (!geminiClient) {
+                    geminiClient = await client.createGeminiClient();
+                    await geminiClient.init();
+                }
+
+                const combinedQuery = `
+Please perform a generic Deep Research on the topic: "${query}".
+
+I have already gathered some initial findings from another source (Perplexity):
+"""
+${pxResult.answer}
+"""
+
+Please use your Deep Research capabilities to expand on this, verify the information, and produce a comprehensive, well-structured research report. 
+Focus on depth, nuance, and covering aspects that might be missing above.
+`;
+                await geminiClient.research(combinedQuery);
+
+                // 3. Export to Google Docs
+                console.log(`[Job ${job.id}] Step 3: Export to Google Docs`);
+                // Short wait for generation to ensure export button is ready handled in exportToGoogleDocs logic
+                const { docTitle, docUrl } = await geminiClient.exportCurrentToGoogleDocs();
+
+                if (!docTitle) {
+                    throw new Error('Failed to export Gemini research to Google Docs (Title not captured).');
+                }
+                console.log(`[Job ${job.id}] Exported Doc: "${docTitle}" (${docUrl})`);
+
+                // 4. NotebookLM Setup
+                console.log(`[Job ${job.id}] Step 4: NotebookLM Import`);
+                if (!notebookClient) {
+                    notebookClient = await client.createNotebookClient();
+                }
+
+                // Create dedicated notebook
+                // Sanitize title
+                const safeTitle = query.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 50).trim() || 'Research Podcast';
+                await notebookClient.createNotebook(safeTitle);
+
+                // Add Source
+                await notebookClient.addSourceFromDrive([docTitle]);
+
+                // 5. Generate Audio Overview
+                console.log(`[Job ${job.id}] Step 5: Audio Generation`);
+                const audioPrompt = customPrompt || "Create a deep, engaging conversation about this research. Focus on the most surprising findings and the implications.";
+
+                await notebookClient.generateAudioOverview(safeTitle, undefined, audioPrompt, true, dryRun);
+
+                // 6. Download Audio
+                if (!dryRun) {
+                    console.log(`[Job ${job.id}] Step 6: Download Audio`);
+                    const cleanFilename = query.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 50) + '.mp3';
+                    await notebookClient.downloadAudio(safeTitle, cleanFilename);
+                    console.log(`[Job ${job.id}] Audio saved to: ${cleanFilename}`);
+                } else {
+                    console.log(`[Job ${job.id}] Step 6: Skipped Download (Dry Run)`);
+                }
+
+                jobQueue.markCompleted(job.id, { docTitle, docUrl, audioGenerated: true });
+                notifyJobCompleted(job.id, 'Unified Flow Completed', query, true, `Podcast generated for "${query}". Doc: ${docTitle}`);
+
+            } catch (err: any) {
+                console.error(`[Job ${job.id}] Failed:`, err);
+                jobQueue.markFailed(job.id, err.message);
+                notifyJobCompleted(job.id, 'Unified Flow Failed', query, false, err.message);
+            }
+        })();
+
+    } catch (e: any) {
+        console.error('[Server] Unified research request failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing browser...');

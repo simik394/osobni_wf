@@ -313,6 +313,27 @@ curl -X POST http://localhost:3000/query \
 
 ## 3. Gemini Research (Beta)
 
+### Automated Research to Podcast
+`POST /research-to-podcast`
+
+Orchestrates a full pipeline: Perplexity Research -> Gemini Deep Research -> Google Doc -> NotebookLM -> Audio Podcast.
+
+**Body Parameters:**
+- `query` (string, required): The research topic.
+- `customPrompt` (string, optional): Prompt for the audio conversation.
+- `dryRun` (boolean, optional): If true, skips audio generation to save quota.
+
+**Example:**
+```bash
+curl -X POST http://localhost:3000/research-to-podcast \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Impact of AI on Healthcare",
+    "customPrompt": "Focus on diagnostic accuracy",
+    "dryRun": false
+  }'
+```
+
 ### 1. Perform Deep Research
 Generate a comprehensive research report using Gemini Deep Research.
 **Endpoint:** `POST /gemini/research`

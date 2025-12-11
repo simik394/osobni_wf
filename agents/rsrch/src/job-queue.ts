@@ -4,7 +4,7 @@
 
 export interface Job {
     id: string;
-    type: 'query' | 'deepResearch' | 'audio-generation';
+    type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast';
     status: 'queued' | 'running' | 'completed' | 'failed';
     query: string;
     options?: Record<string, any>;

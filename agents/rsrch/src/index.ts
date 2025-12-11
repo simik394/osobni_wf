@@ -713,6 +713,30 @@ async function main() {
     } else if (command === 'batch') {
         // Keep legacy batch
         await runLegacyMode();
+    } else if (command === 'unified') {
+        // rsrch unified "Query string" [--prompt "custom prompt"] [--dry-run]
+        const query = args[1];
+        if (!query || query.startsWith('--')) {
+            console.error('Usage: rsrch unified "Query" [--prompt "..."] [--dry-run]');
+            process.exit(1);
+        }
+
+        let customPrompt: string | undefined = undefined;
+        let dryRun = false;
+
+        for (let i = 2; i < args.length; i++) {
+            if (args[i] === '--prompt') {
+                customPrompt = args[i + 1];
+                i++;
+            } else if (args[i] === '--dry-run') {
+                dryRun = true;
+            }
+        }
+
+        await sendServerRequest('/research-to-podcast', { query, customPrompt, dryRun });
+        console.log("\nUnified flow started! 🚀");
+        console.log("Check server logs or Discord for progress updates.");
+
     } else {
         console.log('Usage:');
         console.log('  rsrch auth                       - Login to Perplexity');
@@ -722,6 +746,7 @@ async function main() {
         console.log('  rsrch shutdown                   - Force close persistent browser');
         console.log('  rsrch notebook <cmd> ...         - Manage NotebookLM (requires server)');
         console.log('  rsrch gemini <cmd> ...           - Gemini commands (research, deep-research, sessions...)');
+        console.log('  rsrch unified "Query"            - Run One-Click Research-to-Podcast flow (requires server)');
         console.log('  rsrch query "Question"           - Run localized query (standalone)');
         console.log('  rsrch query                      - Run queries from data/queries.json (standalone)');
         console.log('    Options: --session=ID|new|latest, --name=NAME, --deep, --keep-alive');

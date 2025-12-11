@@ -91,8 +91,25 @@ rsrch gemini list-sessions
 rsrch gemini export-to-docs <session-id>
 
 # Continue a chat in an existing session
+# ...
 rsrch gemini send-message <session-id> "Elaborate on point 3"
 ```
+
+### 🎙️ One-Click Research Podcast
+Create a podcast from scratch with a single command! This unified workflow:
+1. Researches your topic on Perplexity.
+2. Expands it with Gemini Deep Research.
+3. Saves a combined report to Google Docs.
+4. Imports it into NotebookLM.
+5. Generates an audio conversation.
+
+**Usage (via API):**
+```bash
+curl -X POST http://localhost:3000/research-to-podcast \
+  -H "Content-Type: application/json" \
+  -d '{"query": "The History of Espresso"}'
+```
+
 
 ---
 

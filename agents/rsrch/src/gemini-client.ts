@@ -223,7 +223,7 @@ export class GeminiClient {
         return docs;
     }
 
-    async exportCurrentToGoogleDocs(): Promise<{ docId: string | null; docUrl: string | null }> {
+    async exportCurrentToGoogleDocs(): Promise<{ docId: string | null; docUrl: string | null; docTitle: string | null }> {
         return this.exportToGoogleDocs();
     }
 
@@ -435,7 +435,7 @@ export class GeminiClient {
         }
     }
 
-    private async exportToGoogleDocs(): Promise<{ docId: string | null; docUrl: string | null }> {
+    private async exportToGoogleDocs(): Promise<{ docId: string | null; docUrl: string | null; docTitle: string | null }> {
         console.log('[Gemini] Exporting to Google Docs...');
 
         try {
@@ -482,7 +482,7 @@ export class GeminiClient {
             if (!exportButton) {
                 console.warn('[Gemini] Export button not found');
                 await this.dumpState('export_button_not_found');
-                return { docId: null, docUrl: null };
+                return { docId: null, docUrl: null, docTitle: null };
             }
 
             console.log('[Gemini] Clicking export dropdown...');
@@ -515,6 +515,8 @@ export class GeminiClient {
                     // Poll for actual URL
                     let docUrl = '';
                     let docId: string | null = null;
+                    let docTitle: string | null = null;
+
                     for (let i = 0; i < 20; i++) {
                         docUrl = newPage.url();
                         if (docUrl && docUrl !== 'about:blank' && docUrl.includes('docs.google.com')) {
@@ -525,6 +527,8 @@ export class GeminiClient {
 
                     if (docUrl.includes('docs.google.com')) {
                         await newPage.waitForLoadState('load').catch(() => { });
+                        // Extract title
+                        docTitle = await newPage.title().then(t => t.replace(' - Google Docs', '').replace(' - Dokumenty Google', '').trim()).catch(() => null);
                     }
 
                     const docMatch = docUrl.match(/\/document(?:\/u\/\d+)?\/d\/([a-zA-Z0-9_-]+)/);
@@ -534,9 +538,10 @@ export class GeminiClient {
 
                     console.log(`[Gemini] Google Doc created: ${docId}`);
                     console.log(`[Gemini] URL: ${docUrl}`);
+                    console.log(`[Gemini] Title: ${docTitle}`);
 
                     await newPage.close();
-                    return { docId, docUrl };
+                    return { docId, docUrl, docTitle };
                 }
             }
 
@@ -545,12 +550,12 @@ export class GeminiClient {
                 await this.dumpState('export_docs_option_not_found');
             }
 
-            return { docId: null, docUrl: null };
+            return { docId: null, docUrl: null, docTitle: null };
 
         } catch (e) {
             console.error('[Gemini] Export to Google Docs failed:', e);
             await this.dumpState('export_to_docs_fail');
-            return { docId: null, docUrl: null };
+            return { docId: null, docUrl: null, docTitle: null };
         }
     }
 
