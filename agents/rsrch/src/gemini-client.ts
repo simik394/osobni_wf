@@ -704,28 +704,59 @@ export class GeminiClient {
             return false;
         }
     }
+    /**
+     * Navigate to a specific research session by URL or session ID.
+     * This ensures we're viewing the full research content.
+     */
+    async navigateToResearchSession(sessionIdOrUrl: string): Promise<boolean> {
+        console.log(`[Gemini] Navigating to research session: ${sessionIdOrUrl}`);
 
-    // === Research Parser Methods ===
+        try {
+            // Build full URL if just session ID
+            let url = sessionIdOrUrl;
+            if (!url.startsWith('http')) {
+                url = `https://gemini.google.com/app/${sessionIdOrUrl}`;
+            }
+
+            await this.page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+            await this.page.waitForTimeout(3000);
+
+            // Wait for content to load
+            await this.page.waitForSelector('model-response, div.container', { timeout: 15000 });
+
+            console.log('[Gemini] ✅ Navigated to research session');
+            return true;
+        } catch (e: any) {
+            console.error('[Gemini] Failed to navigate to session:', e.message);
+            return false;
+        }
+    }
 
     /**
      * Parse the current deep research session into a structured format.
      * Extracts content, citations, reasoning steps, and builds research flow.
+     * 
+     * @param sessionIdOrUrl - Optional session ID or URL. If provided, navigates to that session first.
      */
-    async parseResearch(): Promise<ParsedResearch | null> {
+    async parseResearch(sessionIdOrUrl?: string): Promise<ParsedResearch | null> {
         console.log('[Gemini] Parsing research content...');
 
         try {
-            // Wait for research panel to be present
-            const researchPanel = this.page.locator('div.container, .immersive-container, model-response').first();
-            if (await researchPanel.count() === 0) {
-                console.warn('[Gemini] No research panel found. Opening research view...');
-                // Try to click on the research chip to open detail view
-                const researchChip = this.page.locator('[class*="research"], [class*="deep-research"]').first();
-                if (await researchChip.count() > 0) {
-                    await researchChip.click();
-                    await this.page.waitForTimeout(2000);
+            // Navigate to session if URL provided
+            if (sessionIdOrUrl) {
+                const navigated = await this.navigateToResearchSession(sessionIdOrUrl);
+                if (!navigated) {
+                    console.warn('[Gemini] Could not navigate to session, parsing current page');
                 }
             }
+
+            // Wait for immersive panel to be present
+            console.log('[Gemini] Waiting for research content...');
+            await this.page.waitForSelector('model-response, div.container', { timeout: 10000 }).catch(() => { });
+
+            // Check if immersive view is open (has more content)
+            const immersiveOpen = await this.page.locator('.immersives-open').count() > 0;
+            console.log(`[Gemini] Immersive view: ${immersiveOpen ? 'OPEN' : 'closed'}`);
 
             // Extract title from research panel or page
             const title = await this.extractTitle();
@@ -735,7 +766,7 @@ export class GeminiClient {
             const query = await this.extractQuery();
             console.log(`[Gemini] Query: ${query?.substring(0, 50)}...`);
 
-            // Extract main content
+            // Extract main content - try multiple containers to get most content
             const { content, contentHtml, headings } = await this.extractContent();
             console.log(`[Gemini] Extracted ${headings.length} headings, ${content.length} chars`);
 
@@ -837,44 +868,70 @@ export class GeminiClient {
     }
 
     /**
-     * Extract main content from the research panel
+     * Extract main content from the research panel.
+     * 
+     * Aggregates content from all model-response elements to capture full research.
      */
     private async extractContent(): Promise<{ content: string, contentHtml: string, headings: string[] }> {
-        const contentSelectors = [
-            'div.container .content-area',
-            'div.container',
-            'model-response',
-            '.research-content',
-            '.immersive-content'
-        ];
+        let allContent = '';
+        let allHtml = '';
+        const headings: string[] = [];
 
-        let contentEl = null;
-        for (const selector of contentSelectors) {
-            const el = this.page.locator(selector).first();
-            if (await el.count() > 0) {
-                contentEl = el;
-                break;
+        // Try to get content from all model-response elements
+        const modelResponses = this.page.locator('model-response');
+        const responseCount = await modelResponses.count();
+        console.log(`[Gemini] Found ${responseCount} model-response elements`);
+
+        if (responseCount > 0) {
+            for (let i = 0; i < responseCount; i++) {
+                try {
+                    const el = modelResponses.nth(i);
+                    const html = await el.evaluate(node => node.innerHTML);
+                    const text = await el.evaluate(node => node.textContent || '');
+                    allHtml += html + '\n';
+                    allContent += text + '\n';
+                } catch (e) {
+                    // Skip inaccessible elements
+                }
             }
         }
 
-        if (!contentEl) {
-            console.warn('[Gemini] Could not find content element');
-            return { content: '', contentHtml: '', headings: [] };
-        }
+        // Fallback: try container elements if no model-response
+        if (allContent.length < 1000) {
+            const containers = this.page.locator('div.container.hide-from-message-actions');
+            const containerCount = await containers.count();
 
-        const contentHtml = await contentEl.evaluate(el => el.innerHTML);
-        const content = await contentEl.evaluate(el => el.textContent || '');
+            for (let i = 0; i < containerCount; i++) {
+                try {
+                    const el = containers.nth(i);
+                    const text = await el.evaluate(node => node.textContent || '');
+                    const html = await el.evaluate(node => node.innerHTML);
+                    allContent += text + '\n';
+                    allHtml += html + '\n';
+                } catch (e) {
+                    // Skip
+                }
+            }
+        }
 
         // Extract headings
-        const headingEls = contentEl.locator('h1, h2, h3, h4');
-        const headings: string[] = [];
-        const count = await headingEls.count();
-        for (let i = 0; i < count; i++) {
+        const headingEls = this.page.locator('model-response h1, model-response h2, model-response h3, div.container h1, div.container h2, div.container h3');
+        const headingCount = await headingEls.count();
+        for (let i = 0; i < Math.min(headingCount, 50); i++) {
             const text = await headingEls.nth(i).textContent();
-            if (text) headings.push(text.trim());
+            if (text) {
+                const trimmed = text.trim();
+                if (trimmed.length > 5 && !headings.includes(trimmed)) {
+                    headings.push(trimmed);
+                }
+            }
         }
 
-        return { content: content.trim(), contentHtml, headings };
+        return {
+            content: allContent.trim(),
+            contentHtml: allHtml.trim(),
+            headings
+        };
     }
 
     /**
@@ -1120,5 +1177,87 @@ export class GeminiClient {
         }
 
         return md;
+    }
+
+    /**
+     * Create a Google Doc with the parsed research content.
+     * 
+     * Uses browser automation to:
+     * 1. Navigate to Google Docs
+     * 2. Create a new blank document
+     * 3. Insert the markdown content
+     * 4. Rename the document
+     * 
+     * @returns Object with docId and docUrl, or null on failure
+     */
+    async createGoogleDoc(parsed: ParsedResearch, customTitle?: string): Promise<{ docId: string, docUrl: string } | null> {
+        console.log('[Gemini] Creating Google Doc...');
+
+        try {
+            const title = customTitle || parsed.title;
+
+            // Navigate to Google Docs create page
+            await this.page.goto('https://docs.google.com/document/create', {
+                waitUntil: 'networkidle',
+                timeout: 60000
+            });
+            await this.page.waitForTimeout(3000);
+
+            // Wait for document to be ready
+            await this.page.waitForSelector('.docs-title-input, [aria-label*="Document title"]', { timeout: 15000 });
+
+            // Get the document URL (contains the doc ID)
+            const docUrl = this.page.url();
+            const docIdMatch = docUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            const docId = docIdMatch ? docIdMatch[1] : '';
+            console.log(`[Gemini] Created doc: ${docId}`);
+
+            // Rename the document
+            const titleInput = this.page.locator('.docs-title-input, input[aria-label*="Document title"]').first();
+            if (await titleInput.count() > 0) {
+                await titleInput.click();
+                await this.page.waitForTimeout(500);
+                await titleInput.fill(title);
+                await this.page.keyboard.press('Enter');
+                await this.page.waitForTimeout(1000);
+            }
+
+            // Generate markdown content
+            const markdown = this.exportToMarkdown(parsed);
+
+            // Focus on document body
+            const docBody = this.page.locator('.kix-appview-editor, [contenteditable="true"]').first();
+            if (await docBody.count() > 0) {
+                await docBody.click();
+                await this.page.waitForTimeout(500);
+
+                // Type the content (Docs will auto-format some markdown)
+                // Note: For large content, we split into chunks
+                const chunks = this.splitIntoChunks(markdown, 5000);
+                for (const chunk of chunks) {
+                    await this.page.keyboard.type(chunk, { delay: 1 });
+                    await this.page.waitForTimeout(100);
+                }
+            }
+
+            console.log(`[Gemini] ✅ Created Google Doc: ${title}`);
+            return { docId, docUrl };
+
+        } catch (e: any) {
+            console.error('[Gemini] Failed to create Google Doc:', e.message);
+            await this.dumpState('create_doc_fail');
+            return null;
+        }
+    }
+
+    /**
+     * Split text into chunks for typing
+     */
+    private splitIntoChunks(text: string, chunkSize: number): string[] {
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += chunkSize) {
+            chunks.push(text.slice(i, i + chunkSize));
+        }
+        return chunks;
     }
 }

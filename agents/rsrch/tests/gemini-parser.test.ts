@@ -85,7 +85,9 @@ async function main() {
         console.log('\n[5] Creating GeminiClient and parsing research...');
         const gemini = new GeminiClient(page);
 
-        const parsed = await gemini.parseResearch();
+        // Use the known research session ID for direct navigation
+        const sessionId = 'c492b1aa3ca79d07'; // Terminal emulator comparison
+        const parsed = await gemini.parseResearch(sessionId);
 
         if (!parsed) {
             console.log('❌ Failed to parse research');
