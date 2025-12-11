@@ -777,29 +777,43 @@ export class GeminiClient {
 
     /**
      * Extract the title from the research panel
+     * 
+     * Skip generic headings like "Chaty", "Konverzace" and find actual research title.
      */
     private async extractTitle(): Promise<string | null> {
-        const titleSelectors = [
-            'h1.title',
-            '.research-title',
-            'div.container h1',
-            '.immersive-title',
-            '[class*="title"]'
-        ];
+        // Generic headings to skip
+        const skipTitles = ['chaty', 'konverzace', 'konverzace s gemini', 'gemini', 'conversations'];
 
-        for (const selector of titleSelectors) {
-            const el = this.page.locator(selector).first();
-            if (await el.count() > 0) {
-                const text = await el.textContent();
-                if (text && text.trim().length > 0) {
-                    return text.trim();
-                }
+        // Look for all headings in content area
+        const headings = this.page.locator('model-response h1, model-response h2, div.container h1, div.container h2');
+        const count = await headings.count();
+
+        for (let i = 0; i < count; i++) {
+            const text = await headings.nth(i).textContent();
+            if (text) {
+                const trimmed = text.trim();
+                const lower = trimmed.toLowerCase();
+
+                // Skip generic titles
+                if (skipTitles.some(skip => lower === skip || lower.startsWith(skip))) continue;
+
+                // Skip very short titles (likely navigation)
+                if (trimmed.length < 10) continue;
+
+                return trimmed;
             }
         }
 
-        // Fallback: get first h1/h2 from content
-        const h1 = await this.page.locator('div.container h1, model-response h1').first().textContent();
-        return h1?.trim() || null;
+        // Fallback: try conversation title from sidebar
+        const convTitle = this.page.locator('.conversation-title').first();
+        if (await convTitle.count() > 0) {
+            const text = await convTitle.textContent();
+            if (text && text.trim().length > 5) {
+                return text.trim();
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -864,66 +878,61 @@ export class GeminiClient {
     }
 
     /**
-     * Extract citations from the content
+     * Extract citations from inline links in the content
+     * 
+     * DOM research showed: Source URLs are regular <a href> elements,
+     * NOT hidden behind button clicks. Filter out Google/internal URLs.
      */
     async extractCitations(): Promise<Citation[]> {
         const citations: Citation[] = [];
 
-        // Look for citation buttons
-        const citationButtons = this.page.locator(
-            'button[aria-label*="informace"], button[aria-label*="source"], button[aria-label*="citation"], [class*="citation"]'
-        );
+        // Domains to exclude (internal/boilerplate)
+        const excludeDomains = [
+            'google.com',
+            'gstatic.com',
+            'accounts.google.com',
+            'gemini.google.com',
+            'support.google.com',
+            'www.google.com',
+            'googletagmanager.com'
+        ];
 
-        const count = await citationButtons.count();
-        console.log(`[Gemini] Found ${count} potential citation elements`);
-
-        for (let i = 0; i < Math.min(count, 50); i++) {
-            try {
-                const btn = citationButtons.nth(i);
-
-                // Try to extract info without clicking first
-                const ariaLabel = await btn.getAttribute('aria-label');
-                const title = await btn.getAttribute('title');
-                const href = await btn.getAttribute('href');
-
-                if (href || title || ariaLabel) {
-                    citations.push({
-                        id: i + 1,
-                        text: title || ariaLabel || `Source ${i + 1}`,
-                        url: href || '',
-                        domain: href ? new URL(href).hostname : '',
-                        usedInSections: []
-                    });
-                }
-            } catch (e) {
-                // Skip invalid citations
-            }
-        }
-
-        // Also look for inline links
-        const links = this.page.locator('div.container a[href^="http"]');
+        // Look for all external links in content containers
+        const links = this.page.locator('model-response a[href^="http"], div.container a[href^="http"]');
         const linkCount = await links.count();
+        console.log(`[Gemini] Found ${linkCount} links in content`);
 
-        for (let i = 0; i < Math.min(linkCount, 50); i++) {
+        for (let i = 0; i < Math.min(linkCount, 100); i++) {
             try {
                 const link = links.nth(i);
                 const href = await link.getAttribute('href');
                 const text = await link.textContent();
 
-                if (href && !citations.some(c => c.url === href)) {
-                    citations.push({
-                        id: citations.length + 1,
-                        text: text?.trim() || `Source ${citations.length + 1}`,
-                        url: href,
-                        domain: new URL(href).hostname,
-                        usedInSections: []
-                    });
-                }
+                if (!href) continue;
+
+                // Parse URL and check domain
+                const url = new URL(href);
+                const domain = url.hostname.replace('www.', '');
+
+                // Skip if excluded domain
+                if (excludeDomains.some(d => domain.includes(d))) continue;
+
+                // Skip if already have this URL
+                if (citations.some(c => c.url === href)) continue;
+
+                citations.push({
+                    id: citations.length + 1,
+                    text: text?.trim() || domain,
+                    url: href,
+                    domain: domain,
+                    usedInSections: []
+                });
             } catch (e) {
-                // Skip invalid links
+                // Skip invalid URLs
             }
         }
 
+        console.log(`[Gemini] Extracted ${citations.length} unique citations`);
         return citations;
     }
 
