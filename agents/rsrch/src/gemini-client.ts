@@ -17,6 +17,41 @@ export interface ResearchInfo {
     sessionId: string | null;
 }
 
+// === Parsed Research Types ===
+export interface Citation {
+    id: number;
+    text: string;
+    url: string;
+    domain: string;
+    usedInSections: string[];
+}
+
+export interface ReasoningStep {
+    phase: string;
+    action: string;
+    timestamp?: string;
+}
+
+export interface FlowNode {
+    id: string;
+    type: 'query' | 'source' | 'thought' | 'conclusion';
+    label: string;
+    links: string[]; // IDs of connected nodes
+}
+
+export interface ParsedResearch {
+    title: string;
+    query: string;
+    content: string;           // Plain text
+    contentHtml: string;       // HTML with structure
+    contentMarkdown: string;   // Converted to markdown
+    headings: string[];
+    citations: Citation[];
+    reasoningSteps: ReasoningStep[];
+    researchFlow: FlowNode[];
+    createdAt: string;
+}
+
 export class GeminiClient {
     private page: Page;
     private deepResearchEnabled = false;
@@ -668,5 +703,413 @@ export class GeminiClient {
             console.error('[Gemini] Failed to rename document:', e);
             return false;
         }
+    }
+
+    // === Research Parser Methods ===
+
+    /**
+     * Parse the current deep research session into a structured format.
+     * Extracts content, citations, reasoning steps, and builds research flow.
+     */
+    async parseResearch(): Promise<ParsedResearch | null> {
+        console.log('[Gemini] Parsing research content...');
+
+        try {
+            // Wait for research panel to be present
+            const researchPanel = this.page.locator('div.container, .immersive-container, model-response').first();
+            if (await researchPanel.count() === 0) {
+                console.warn('[Gemini] No research panel found. Opening research view...');
+                // Try to click on the research chip to open detail view
+                const researchChip = this.page.locator('[class*="research"], [class*="deep-research"]').first();
+                if (await researchChip.count() > 0) {
+                    await researchChip.click();
+                    await this.page.waitForTimeout(2000);
+                }
+            }
+
+            // Extract title from research panel or page
+            const title = await this.extractTitle();
+            console.log(`[Gemini] Title: ${title}`);
+
+            // Extract query (original prompt)
+            const query = await this.extractQuery();
+            console.log(`[Gemini] Query: ${query?.substring(0, 50)}...`);
+
+            // Extract main content
+            const { content, contentHtml, headings } = await this.extractContent();
+            console.log(`[Gemini] Extracted ${headings.length} headings, ${content.length} chars`);
+
+            // Extract citations
+            const citations = await this.extractCitations();
+            console.log(`[Gemini] Found ${citations.length} citations`);
+
+            // Extract reasoning steps from chat history
+            const reasoningSteps = await this.extractReasoningSteps();
+            console.log(`[Gemini] Found ${reasoningSteps.length} reasoning steps`);
+
+            // Build research flow diagram
+            const researchFlow = this.buildResearchFlow(citations, reasoningSteps, query || '');
+
+            // Convert to markdown
+            const contentMarkdown = this.htmlToMarkdown(contentHtml, citations);
+
+            const parsed: ParsedResearch = {
+                title: title || 'Untitled Research',
+                query: query || '',
+                content,
+                contentHtml,
+                contentMarkdown,
+                headings,
+                citations,
+                reasoningSteps,
+                researchFlow,
+                createdAt: new Date().toISOString()
+            };
+
+            return parsed;
+
+        } catch (e: any) {
+            console.error('[Gemini] Failed to parse research:', e);
+            await this.dumpState('parse_research_fail');
+            return null;
+        }
+    }
+
+    /**
+     * Extract the title from the research panel
+     */
+    private async extractTitle(): Promise<string | null> {
+        const titleSelectors = [
+            'h1.title',
+            '.research-title',
+            'div.container h1',
+            '.immersive-title',
+            '[class*="title"]'
+        ];
+
+        for (const selector of titleSelectors) {
+            const el = this.page.locator(selector).first();
+            if (await el.count() > 0) {
+                const text = await el.textContent();
+                if (text && text.trim().length > 0) {
+                    return text.trim();
+                }
+            }
+        }
+
+        // Fallback: get first h1/h2 from content
+        const h1 = await this.page.locator('div.container h1, model-response h1').first().textContent();
+        return h1?.trim() || null;
+    }
+
+    /**
+     * Extract the original query/prompt
+     */
+    private async extractQuery(): Promise<string | null> {
+        // Look in chat history for user message
+        const userMessages = this.page.locator('.user-message, [class*="user-query"], .query-text');
+        if (await userMessages.count() > 0) {
+            const text = await userMessages.first().textContent();
+            return text?.trim() || null;
+        }
+
+        // Try to find prompt in another location
+        const promptEl = this.page.locator('[data-query], [aria-label*="query"]').first();
+        if (await promptEl.count() > 0) {
+            return await promptEl.textContent();
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract main content from the research panel
+     */
+    private async extractContent(): Promise<{ content: string, contentHtml: string, headings: string[] }> {
+        const contentSelectors = [
+            'div.container .content-area',
+            'div.container',
+            'model-response',
+            '.research-content',
+            '.immersive-content'
+        ];
+
+        let contentEl = null;
+        for (const selector of contentSelectors) {
+            const el = this.page.locator(selector).first();
+            if (await el.count() > 0) {
+                contentEl = el;
+                break;
+            }
+        }
+
+        if (!contentEl) {
+            console.warn('[Gemini] Could not find content element');
+            return { content: '', contentHtml: '', headings: [] };
+        }
+
+        const contentHtml = await contentEl.evaluate(el => el.innerHTML);
+        const content = await contentEl.evaluate(el => el.textContent || '');
+
+        // Extract headings
+        const headingEls = contentEl.locator('h1, h2, h3, h4');
+        const headings: string[] = [];
+        const count = await headingEls.count();
+        for (let i = 0; i < count; i++) {
+            const text = await headingEls.nth(i).textContent();
+            if (text) headings.push(text.trim());
+        }
+
+        return { content: content.trim(), contentHtml, headings };
+    }
+
+    /**
+     * Extract citations from the content
+     */
+    async extractCitations(): Promise<Citation[]> {
+        const citations: Citation[] = [];
+
+        // Look for citation buttons
+        const citationButtons = this.page.locator(
+            'button[aria-label*="informace"], button[aria-label*="source"], button[aria-label*="citation"], [class*="citation"]'
+        );
+
+        const count = await citationButtons.count();
+        console.log(`[Gemini] Found ${count} potential citation elements`);
+
+        for (let i = 0; i < Math.min(count, 50); i++) {
+            try {
+                const btn = citationButtons.nth(i);
+
+                // Try to extract info without clicking first
+                const ariaLabel = await btn.getAttribute('aria-label');
+                const title = await btn.getAttribute('title');
+                const href = await btn.getAttribute('href');
+
+                if (href || title || ariaLabel) {
+                    citations.push({
+                        id: i + 1,
+                        text: title || ariaLabel || `Source ${i + 1}`,
+                        url: href || '',
+                        domain: href ? new URL(href).hostname : '',
+                        usedInSections: []
+                    });
+                }
+            } catch (e) {
+                // Skip invalid citations
+            }
+        }
+
+        // Also look for inline links
+        const links = this.page.locator('div.container a[href^="http"]');
+        const linkCount = await links.count();
+
+        for (let i = 0; i < Math.min(linkCount, 50); i++) {
+            try {
+                const link = links.nth(i);
+                const href = await link.getAttribute('href');
+                const text = await link.textContent();
+
+                if (href && !citations.some(c => c.url === href)) {
+                    citations.push({
+                        id: citations.length + 1,
+                        text: text?.trim() || `Source ${citations.length + 1}`,
+                        url: href,
+                        domain: new URL(href).hostname,
+                        usedInSections: []
+                    });
+                }
+            } catch (e) {
+                // Skip invalid links
+            }
+        }
+
+        return citations;
+    }
+
+    /**
+     * Extract reasoning steps from chat history
+     */
+    async extractReasoningSteps(): Promise<ReasoningStep[]> {
+        const steps: ReasoningStep[] = [];
+
+        // Look for research status messages
+        const statusMessages = this.page.locator(
+            '[class*="research-status"], [class*="thinking"], .system-message'
+        );
+
+        const count = await statusMessages.count();
+        for (let i = 0; i < count; i++) {
+            const text = await statusMessages.nth(i).textContent();
+            if (text) {
+                const trimmed = text.trim();
+                if (trimmed.includes('výzkum') || trimmed.includes('research') ||
+                    trimmed.includes('Searching') || trimmed.includes('Analyzing')) {
+                    steps.push({
+                        phase: `Step ${i + 1}`,
+                        action: trimmed.substring(0, 100)
+                    });
+                }
+            }
+        }
+
+        // Look for specific markers in chat
+        const chatHistory = this.page.locator('[data-test-id="chat-history-container"]').first();
+        if (await chatHistory.count() > 0) {
+            try {
+                const historyText = await chatHistory.textContent();
+
+                // Extract research phases
+                if (historyText?.includes('Zahájit výzkum') || historyText?.includes('Start research')) {
+                    steps.push({ phase: 'Start', action: 'Research initiated' });
+                }
+                if (historyText?.includes('Dokončeno') || historyText?.includes('Completed')) {
+                    steps.push({ phase: 'Complete', action: 'Research completed' });
+                }
+            } catch (e) {
+                // Ignore if can't get text
+            }
+        }
+
+        return steps;
+    }
+
+    /**
+     * Build research flow diagram data
+     */
+    private buildResearchFlow(citations: Citation[], steps: ReasoningStep[], query: string): FlowNode[] {
+        const nodes: FlowNode[] = [];
+
+        // Query node
+        nodes.push({
+            id: 'query',
+            type: 'query',
+            label: query.substring(0, 50) + (query.length > 50 ? '...' : ''),
+            links: []
+        });
+
+        // Add source nodes from citations
+        citations.slice(0, 10).forEach((c, i) => {
+            nodes.push({
+                id: `source_${i}`,
+                type: 'source',
+                label: c.domain || c.text.substring(0, 30),
+                links: ['query']
+            });
+        });
+
+        // Add thought nodes from reasoning steps
+        steps.forEach((s, i) => {
+            nodes.push({
+                id: `thought_${i}`,
+                type: 'thought',
+                label: s.action.substring(0, 40),
+                links: i === 0 ? ['query'] : [`thought_${i - 1}`]
+            });
+        });
+
+        // Conclusion node
+        if (nodes.length > 1) {
+            nodes.push({
+                id: 'conclusion',
+                type: 'conclusion',
+                label: 'Research Complete',
+                links: [nodes[nodes.length - 1].id]
+            });
+        }
+
+        return nodes;
+    }
+
+    /**
+     * Convert HTML content to Markdown with citation references
+     */
+    private htmlToMarkdown(html: string, citations: Citation[]): string {
+        let md = html;
+
+        // Convert headings
+        md = md.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n');
+        md = md.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n');
+        md = md.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n');
+        md = md.replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n');
+
+        // Convert paragraphs
+        md = md.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
+
+        // Convert lists
+        md = md.replace(/<ul[^>]*>/gi, '\n');
+        md = md.replace(/<\/ul>/gi, '\n');
+        md = md.replace(/<ol[^>]*>/gi, '\n');
+        md = md.replace(/<\/ol>/gi, '\n');
+        md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n');
+
+        // Convert links
+        md = md.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)');
+
+        // Convert bold/italic
+        md = md.replace(/<(strong|b)[^>]*>(.*?)<\/(strong|b)>/gi, '**$2**');
+        md = md.replace(/<(em|i)[^>]*>(.*?)<\/(em|i)>/gi, '*$2*');
+
+        // Remove remaining HTML tags
+        md = md.replace(/<[^>]+>/g, '');
+
+        // Clean up whitespace
+        md = md.replace(/\n{3,}/g, '\n\n');
+        md = md.trim();
+
+        return md;
+    }
+
+    /**
+     * Export parsed research to a Markdown file
+     */
+    exportToMarkdown(parsed: ParsedResearch): string {
+        let md = `# ${parsed.title}\n\n`;
+        md += `> **Query:** ${parsed.query}\n`;
+        md += `> **Generated:** ${parsed.createdAt}\n\n`;
+        md += `---\n\n`;
+
+        // Main content
+        md += parsed.contentMarkdown;
+        md += '\n\n---\n\n';
+
+        // Sources section
+        if (parsed.citations.length > 0) {
+            md += `## Sources Used\n\n`;
+            md += `| # | Source | Domain |\n`;
+            md += `|---|--------|--------|\n`;
+            parsed.citations.forEach(c => {
+                md += `| ${c.id} | [${c.text}](${c.url}) | ${c.domain} |\n`;
+            });
+            md += '\n';
+        }
+
+        // Reasoning section
+        if (parsed.reasoningSteps.length > 0) {
+            md += `## Research Process\n\n`;
+            parsed.reasoningSteps.forEach(s => {
+                md += `- **${s.phase}**: ${s.action}\n`;
+            });
+            md += '\n';
+        }
+
+        // Research flow diagram
+        if (parsed.researchFlow.length > 0) {
+            md += `## Research Flow\n\n`;
+            md += '```mermaid\ngraph TD\n';
+            parsed.researchFlow.forEach(node => {
+                const shape = node.type === 'query' ? `[${node.label}]` :
+                    node.type === 'source' ? `((${node.label}))` :
+                        node.type === 'conclusion' ? `[/${node.label}/]` :
+                            `{${node.label}}`;
+                md += `    ${node.id}${shape}\n`;
+                node.links.forEach(link => {
+                    md += `    ${link} --> ${node.id}\n`;
+                });
+            });
+            md += '```\n';
+        }
+
+        return md;
     }
 }
