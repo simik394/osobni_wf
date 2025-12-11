@@ -72,59 +72,154 @@ export class PerplexityClient {
             // Add anti-detection scripts for every new page
             if (this.context) {
                 await this.context.addInitScript(() => {
-                    // Override the `navigator.webdriver` property
+                    // 1. WebDriver - return false, not undefined
                     Object.defineProperty(navigator, 'webdriver', {
-                        get: () => false, // Better to return false than undefined for some checks
+                        get: () => false,
+                        configurable: true
                     });
 
-                    // Mock the `chrome` object if not present
+                    // 2. Languages - realistic
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en', 'cs'],
+                        configurable: true
+                    });
+
+                    // 3. Plugins - realistic plugin array
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => {
+                            const plugins = [
+                                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                                { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                            ] as any;
+                            plugins.item = (i: number) => plugins[i];
+                            plugins.namedItem = (name: string) => plugins.find((p: any) => p.name === name);
+                            plugins.refresh = () => { };
+                            return plugins;
+                        },
+                        configurable: true
+                    });
+
+                    // 4. Hardware concurrency - realistic value
+                    Object.defineProperty(navigator, 'hardwareConcurrency', {
+                        get: () => 8,
+                        configurable: true
+                    });
+
+                    // 5. Device memory - realistic value  
+                    Object.defineProperty(navigator, 'deviceMemory', {
+                        get: () => 8,
+                        configurable: true
+                    });
+
+                    // 6. Max touch points
+                    Object.defineProperty(navigator, 'maxTouchPoints', {
+                        get: () => 0,
+                        configurable: true
+                    });
+
+                    // 7. Chrome runtime object - complete
                     if (!(window as any).chrome) {
-                        (window as any).chrome = {
-                            runtime: {},
-                            app: {},
-                            csi: () => { },
-                            loadTimes: () => { }
+                        (window as any).chrome = {};
+                    }
+                    (window as any).chrome.runtime = {
+                        connect: () => { },
+                        sendMessage: () => { },
+                        onMessage: { addListener: () => { } },
+                        id: undefined
+                    };
+                    (window as any).chrome.app = {
+                        isInstalled: false,
+                        InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+                        RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }
+                    };
+                    (window as any).chrome.csi = () => ({});
+                    (window as any).chrome.loadTimes = () => ({});
+
+                    // 8. WebGL vendor/renderer spoofing
+                    const getParameterProto = WebGLRenderingContext.prototype.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function (param) {
+                        if (param === 37445) return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+                        if (param === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
+                        return getParameterProto.call(this, param);
+                    };
+
+                    // Also for WebGL2
+                    if (typeof WebGL2RenderingContext !== 'undefined') {
+                        const getParameterProto2 = WebGL2RenderingContext.prototype.getParameter;
+                        WebGL2RenderingContext.prototype.getParameter = function (param) {
+                            if (param === 37445) return 'Intel Inc.';
+                            if (param === 37446) return 'Intel Iris OpenGL Engine';
+                            return getParameterProto2.call(this, param);
                         };
                     }
 
-                    // Override permissions to always allow notifications (common in real browsers)
+                    // 9. Permissions API - more realistic
                     const originalQuery = window.navigator.permissions.query;
-                    window.navigator.permissions.query = (parameters: any) => (
-                        parameters.name === 'notifications' ?
-                            Promise.resolve({ state: 'granted' } as PermissionStatus) :
-                            originalQuery(parameters)
-                    );
+                    window.navigator.permissions.query = (parameters: any) => {
+                        if (parameters.name === 'notifications') {
+                            return Promise.resolve({ state: 'prompt', onchange: null } as PermissionStatus);
+                        }
+                        return originalQuery(parameters);
+                    };
 
-                    // Add realistic plugins (if empty)
-                    if (navigator.plugins.length === 0) {
-                        Object.defineProperty(navigator, 'plugins', {
-                            get: () => [1, 2, 3, 4, 5],
+                    // 10. Connection API spoofing
+                    if (!(navigator as any).connection) {
+                        Object.defineProperty(navigator, 'connection', {
+                            get: () => ({
+                                effectiveType: '4g',
+                                rtt: 50,
+                                downlink: 10,
+                                saveData: false
+                            }),
+                            configurable: true
                         });
                     }
 
-                    // Add realistic languages if missing
-                    if (navigator.languages.length === 0) {
-                        Object.defineProperty(navigator, 'languages', {
-                            get: () => ['en-US', 'en'],
-                        });
-                    }
+                    console.log('[Stealth] Advanced anti-detection scripts loaded');
                 });
             }
 
-        } else if (process.env.REMOTE_DEBUGGING_PORT) {
-            console.log(`Connecting to local browser on port ${process.env.REMOTE_DEBUGGING_PORT}...`);
-            this.browser = await chromium.connectOverCDP(`http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`);
+        } else if (process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT) {
+            // CDP connection - either to Docker container or local browser
+            let cdpEndpoint = process.env.BROWSER_CDP_ENDPOINT ||
+                `http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`;
+            console.log(`Connecting to browser via CDP at ${cdpEndpoint}...`);
+
+            // Chrome rejects non-localhost/non-IP Host headers, so we need to fetch
+            // the WebSocket URL first using a plain HTTP request with a specific Host header
+            try {
+                const url = new URL(cdpEndpoint);
+                const dns = await import('dns');
+                const { promisify } = await import('util');
+                const lookup = promisify(dns.lookup);
+
+                // Resolve hostname to IP if it's not already localhost or an IP
+                let host = url.hostname;
+                if (host !== 'localhost' && host !== '127.0.0.1' && !host.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                    try {
+                        const result = await lookup(host);
+                        console.log(`Resolved ${host} to ${result.address}`);
+                        host = result.address;
+                    } catch (e) {
+                        console.log(`Could not resolve ${host}, using as-is`);
+                    }
+                }
+
+                // Use IP-based URL for CDP connection
+                cdpEndpoint = `http://${host}:${url.port}`;
+                console.log(`Using IP-based CDP endpoint: ${cdpEndpoint}`);
+            } catch (e) {
+                console.log('Hostname resolution skipped, using original endpoint');
+            }
+
+            this.browser = await chromium.connectOverCDP(cdpEndpoint);
             const contexts = this.browser.contexts();
             if (contexts.length > 0) {
                 this.context = contexts[0];
                 console.log(`Attached to existing context with ${contexts.length} contexts.`);
             } else {
-                console.log('No direct contexts found. Trying to derive from pages...');
-                const pages = this.browser.pages ? this.browser.pages() : []; // access pages synchronously if possible or await if needed in newer playwright? connectOverCDP returns Browser which has contexts.
-                // Wait, Browser.pages() is not a standard method on Browser type immediately?
-                // It's usually accessible via contexts.
-                // But connectOverCDP returns a Browser instance.
-                // Let's try creating a new page to get the default context.
+                console.log('No direct contexts found. Creating new page to get context...');
                 try {
                     const page = await this.browser.newPage();
                     this.context = page.context();

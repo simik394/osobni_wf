@@ -290,6 +290,11 @@ export class NotebookLMClient {
         try {
             if (notebookTitle) {
                 await this.openNotebook(notebookTitle);
+            } else {
+                // Always navigate to NotebookLM if not already there
+                console.log('[DEBUG] No notebook specified, navigating to NotebookLM homepage...');
+                await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+                await this.humanDelay(2000);
             }
 
             // Handle Source Selection if provided
