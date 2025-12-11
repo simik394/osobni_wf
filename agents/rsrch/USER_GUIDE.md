@@ -74,7 +74,24 @@ rsrch notebook create "My Research Topic"
 rsrch notebook add-source --url="https://example.com/article"
 
 # Generate audio overview
-rsrch notebook audio
+rsrch notebook audio --notebook "My Research Topic"
+```
+
+### Gemini Research (Google)
+Use Google's Gemini for deep research and document creation:
+
+```bash
+# Start a Deep Research task (Thinking Model + Search)
+rsrch gemini deep-research "Future of Quantum Computing"
+
+# List your recent Gemini sessions
+rsrch gemini list-sessions
+
+# Export a research chat to a Google Doc
+rsrch gemini export-to-docs <session-id>
+
+# Continue a chat in an existing session
+rsrch gemini send-message <session-id> "Elaborate on point 3"
 ```
 
 ---

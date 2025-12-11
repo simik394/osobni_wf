@@ -63,6 +63,23 @@ entrypoint.sh → Xvfb :99 → Fluxbox → x11vnc → Application
 
 **Performance Impact:** Reduced query time from ~30+ seconds to ~15-20 seconds.
 
+### 5. Robust CDP Connection in Docker
+**Challenge:** Connecting to a browser inside a Docker container from another container or host via CDP (`chromium.connectOverCDP`) often fails due to Chrome's security checks on the `Host` header (rejects non-localhost).
+
+**Solution:**
+1. **Infrastructure:** Use `socat` in the browser container to forward the local CDP port (9222) to an exposed port (9223) that binds to `0.0.0.0`.
+2. **Client-Side:** In `src/client.ts`, resolve the container's hostname to an IP address before connecting.
+   - Chrome accepts connections if the Host is an IP address, but rejects hostname aliases (like `chromium:9223`).
+   - We perform a DNS lookup of `process.env.BROWSER_CDP_ENDPOINT`'s hostname and construct the WebSocket URL using the direct IP.
+
+**Critical Code:**
+```typescript
+// Resolve hostname to IP to bypass Host header check
+const lookup = promisify(dns.lookup);
+const result = await lookup(host);
+cdpEndpoint = `http://${result.address}:${url.port}`;
+```
+
 ## Critical Configurations
 
 ### Docker Setup
@@ -294,6 +311,18 @@ Reuse existing conversation contexts for follow-up questions using session IDs o
 ### Known Issues
 - **Answer Extraction Fragility**: In multi-turn threads, targeting the correct "last" answer container is unstable.
 - **Docker Timeout**: The stability check mechanism (waiting for text to stop changing) often times out or crashes the server in the Docker environment when dealing with multiple answer containers. Use local environment for logic development.
+
+## Feature: Gemini Deep Research
+### Goal
+Automate Google's Gemini "Thinking" model to perform deep research and export results to Google Docs.
+
+### Implementation Details
+- **Client**: `src/gemini-client.ts` uses a persistent Playwright context (shared with Perplexity/NotebookLM).
+- **Selector Strategy**: 
+  - Detects "Deep Research" toggle (Thinking model).
+  - Handles the "Confirm plan" interaction which is unique to Deep Research.
+  - Detects completion by monitoring the "Researching..." status indicators.
+- **Export**: Automates the "Export to Docs" button click and retrieves the new document's title / heading to return to the API.
 
 ## Future Considerations
 
