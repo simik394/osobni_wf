@@ -675,12 +675,13 @@ export class NotebookLMClient {
         await this.notifyDiscord(`⚠️ Timeout waiting for Audio Overview for notebook: "${notebookTitle || 'Current'}"`, true);
     }
 
-    async downloadAudio(notebookTitle: string, outputFilename: string) {
+    async downloadAudio(notebookTitle: string, outputFilename: string, options: { audioTitlePattern?: string, latestOnly?: boolean } = {}) {
         if (notebookTitle) {
             await this.openNotebook(notebookTitle);
         }
 
         console.log(`[DEBUG] Attempting to download audio to: ${outputFilename}`);
+        console.log(`[DEBUG] Options:`, options);
 
         // RESPONSIVE UI HANDLING: Check for Studio tab
         const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
@@ -695,66 +696,120 @@ export class NotebookLMClient {
 
         await this.page.waitForTimeout(2000);
 
-        // 1. Try ACTIVE AUDIO PLAYER (Footer) first
-        console.log('[DEBUG] Checking for active Audio Player footer...');
-        const audioPlayer = this.page.locator('audio-player').first();
-
+        // 1. Try ACTIVE AUDIO PLAYER (Footer) first IF no specific criteria are active
+        // If searching for "latest" or specific pattern, bypassing the footer player is safer 
+        // because we don't know what the player is playing.
         let targetMenuBtn = null;
         let extractionSource = 'none';
 
-        // Relaxed check: Just existence is enough to try, we can handle visibility handling in click
-        if (await audioPlayer.count() > 0) {
-            console.log('[DEBUG] Found active Audio Player DOM element.');
-            targetMenuBtn = audioPlayer.locator('button[aria-label*="More"], button[aria-label*="Další"], button:has(mat-icon:has-text("more_vert"))').first();
-            if (await targetMenuBtn.count() > 0) {
-                extractionSource = 'player';
-                console.log('[DEBUG] Using Audio Player menu button.');
+        if (!options.audioTitlePattern && !options.latestOnly) {
+            console.log('[DEBUG] Checking for active Audio Player footer...');
+            const audioPlayer = this.page.locator('audio-player').first();
+            if (await audioPlayer.count() > 0) {
+                console.log('[DEBUG] Found active Audio Player DOM element.');
+                targetMenuBtn = audioPlayer.locator('button[aria-label*="More"], button[aria-label*="Další"], button:has(mat-icon:has-text("more_vert"))').first();
+                if (await targetMenuBtn.count() > 0) {
+                    extractionSource = 'audio-player'; // Fix typo in original code was 'player'
+                    console.log('[DEBUG] Using Audio Player menu button.');
+                }
             }
         }
 
-        // 2. If no player button, find the Audio Artifact in the Library
+        // 2. If no player button or filtered download, find the Audio Artifact in the Library
         if (!targetMenuBtn || await targetMenuBtn.count() === 0) {
-            console.log('[DEBUG] Audio Player menu not found. Searching in Artifact Library...');
+            console.log('[DEBUG] Searching in Artifact Library...');
 
-            const audioArtifact = this.page.locator('artifact-library-item').filter({
-                hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
-            }).first();
+            let audioArtifacts = this.page.locator('artifact-library-item').filter({
+                has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
+            });
 
-            if (await audioArtifact.count() > 0) {
-                console.log('[DEBUG] Found Audio Artifact in library. Hovering to reveal controls...');
-                await audioArtifact.scrollIntoViewIfNeeded();
-                await audioArtifact.hover();
+            // Fallback to text matching if icon check fails
+            if (await audioArtifacts.count() === 0) {
+                audioArtifacts = this.page.locator('artifact-library-item').filter({
+                    hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
+                });
+            }
+
+            const count = await audioArtifacts.count();
+            console.log(`[DEBUG] Found ${count} audio filters candidates.`);
+
+            if (count > 0) {
+                let targetArtifact = audioArtifacts.first(); // Default to first (often latest)
+
+                if (options.audioTitlePattern) {
+                    // Filter by title regex
+                    console.log(`[DEBUG] Filtering by pattern: ${options.audioTitlePattern}`);
+                    const regex = new RegExp(options.audioTitlePattern, 'i');
+                    let found = false;
+                    for (let i = 0; i < count; i++) {
+                        const item = audioArtifacts.nth(i);
+                        const text = await item.innerText();
+                        if (regex.test(text)) {
+                            targetArtifact = item;
+                            found = true;
+                            console.log(`[DEBUG] Found matching artifact: "${text.substring(0, 30)}..."`);
+                            break;
+                        }
+                    }
+                    if (!found) console.warn('[DEBUG] No artifact matched the pattern. Using default.');
+                }
+                else if (options.latestOnly) {
+                    // Start from index 0 (top of list) and check if it's audio
+                    // We already filtered by "has audio icon/text", so .first() IS the latest in standard sorting
+                    // But explicitly logging it:
+                    console.log('[DEBUG] Selecting latest (first) audio artifact.');
+                    targetArtifact = audioArtifacts.first();
+                }
+
+                console.log('[DEBUG] Found target Audio Artifact. Hovering to reveal controls...');
+                await targetArtifact.scrollIntoViewIfNeeded();
+                await targetArtifact.hover();
                 await this.humanDelay(500);
 
-                // Look for "..." menu button within this artifact item
-                // Priority: exact icon match, text match in tooltip/label
-                targetMenuBtn = audioArtifact.locator('button').filter({
-                    has: this.page.locator('mat-icon').filter({ hasText: 'more_vert' })
-                }).first();
+                // Look for "..." menu button within this specific artifact
+                targetMenuBtn = targetArtifact.locator('button[aria-label*="More"], button[aria-label*="Další"], button mat-icon:has-text("more_vert")').first();
 
+                // Fallback selector for buttons
                 if (await targetMenuBtn.count() === 0) {
-                    targetMenuBtn = audioArtifact.locator('button[mattooltip*="Další"], button[mattooltip*="More"], button[aria-label*="Další"], button[aria-label*="More"]').first();
+                    targetMenuBtn = targetArtifact.locator('button.artifact-more-button').first();
                 }
-                extractionSource = 'library';
+
+                if (await targetMenuBtn.count() > 0) {
+                    extractionSource = 'library';
+                } else {
+                    console.warn('[DEBUG] Identified artifact but could not find its menu button.');
+                }
             }
         }
 
         // 3. Execute Menu Interaction with RETRY LOGIC
-        if (extractionSource !== 'none') { // Changed condition to check if extractionSource is set
+        if (extractionSource !== 'none' && targetMenuBtn) {
             console.log(`[DEBUG] Interaction Target: ${extractionSource}. Starting Click Strategy...`);
 
             // Helper to get fresh button handle
+            // RE-LOCATING IS CRITICAL to avoid Stale Element Reference
             const getButton = () => {
                 if (extractionSource === 'audio-player') {
-                    return this.page.locator('audio-player button.menu-button, audio-player button[aria-label*="Další"], audio-player button[aria-label*="More"]').first();
+                    return this.page.locator('audio-player button.menu-button, audio-player button[aria-label*="More"], audio-player button[aria-label*="Další"]').first();
                 } else {
-                    // Library fallback
-                    const art = this.page.locator('artifact-library-item').filter({
-                        has: this.page.locator('mat-icon').filter({ hasText: 'audio_magic_eraser' })
-                    }).first(); // Simplified for speed
+                    // We need to re-find the exact artifact we targeted above to get its button
+                    // Ideally we used a unique ID, but we don't have one.
+                    // We rely on the fact that we hovered it and it's visible.
+                    // IMPORTANT: Ideally filtering should be redone here or we risk clicking wrong one.
+                    // For simplicity/perf, we reuse the locator strategy but filtering might need care.
+                    // Let's rely on :hover pseudo check if possible? No.
 
-                    // Try finding the specific class from the dump
-                    return art.locator('button.artifact-more-button').first();
+                    // Re-run the filter logic briefly is safest:
+                    // Simplification: just find the FIRST visible more button in an audio artifact 
+                    // IF we were targeting "latest" or default.
+                    // IF we matched a pattern, we must re-match.
+
+                    if (options.audioTitlePattern) {
+                        return this.page.locator('artifact-library-item').filter({ hasText: new RegExp(options.audioTitlePattern, 'i') }).locator('button mat-icon:has-text("more_vert")').locator('xpath=ancestor::button').first();
+                    } else {
+                        // Default / Latest = First
+                        return this.page.locator('artifact-library-item').filter({ has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ }) }).first().locator('button mat-icon:has-text("more_vert")').locator('xpath=ancestor::button').first();
+                    }
                 }
             };
 

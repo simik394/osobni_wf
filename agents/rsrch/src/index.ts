@@ -220,11 +220,14 @@ async function main() {
                 await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt, dryRun });
             }
         } else if (subArg1 === 'download-audio') {
-            // notebook download-audio [output_path] --notebook <Title> [--local]
+            // formula: notebook download-audio [output_path] --notebook <Title> [--local] [--latest] [--pattern "regex"]
+
             let notebookTitle: string | undefined = undefined;
             let outputPath: string = 'audio_overview.mp3'; // Default output path
+            let latestOnly = false;
+            let audioTitlePattern: string | undefined = undefined;
 
-            // subArg2 is the optional output path
+            // subArg2 is the optional output path (if not a flag)
             if (subArg2 && !subArg2.startsWith('--')) {
                 outputPath = subArg2;
             }
@@ -235,22 +238,34 @@ async function main() {
                     i++;
                 } else if (args[i] === '--local') {
                     // Consume --local flag
+                } else if (args[i] === '--latest') {
+                    latestOnly = true;
+                } else if (args[i] === '--pattern') {
+                    audioTitlePattern = args[i + 1];
+                    i++;
                 } else if (i === 2 && !args[i].startsWith('--')) {
                     // Already handled subArg2 as output path
                 } else if (args[i].startsWith('--')) {
-                    // Unknown flag, or flag already handled but we just skip for basic parser
+                    // Unknown flag or already handled
                 }
             }
 
             if (!notebookTitle) {
-                console.error('Usage: rsrch notebook download-audio [output_path] --notebook "Title" [--local]');
+                console.error('Usage: rsrch notebook download-audio [output_path] --notebook "Title" [--local] [--latest] [--pattern "Regex"]');
                 process.exit(1);
             }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const resolvedOutputPath = path.resolve(process.cwd(), outputPath);
-                    await notebook.downloadAudio(notebookTitle as string, resolvedOutputPath);
+                    console.log(`[CLI] Downloading audio... Output: ${resolvedOutputPath}`);
+                    if (latestOnly) console.log(`[CLI] Mode: Latest audio only.`);
+                    if (audioTitlePattern) console.log(`[CLI] Mode: Filtering by pattern "${audioTitlePattern}".`);
+
+                    await notebook.downloadAudio(notebookTitle as string, resolvedOutputPath, {
+                        latestOnly,
+                        audioTitlePattern
+                    });
                 });
             } else {
                 console.log('Server implementation for download-audio not yet available. Use --local.');
