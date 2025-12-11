@@ -1147,5 +1147,95 @@ export class NotebookLMClient {
 
         return downloaded;
     }
-}
 
+    /**
+     * Rename an artifact in the Studio panel.
+     * @param currentTitle The current title to search for
+     * @param newTitle The new title to set
+     */
+    async renameArtifact(currentTitle: string, newTitle: string): Promise<boolean> {
+        console.log(`[NotebookLM] Renaming artifact "${currentTitle}" to "${newTitle}"`);
+
+        try {
+            // Ensure we're on the Studio tab
+            const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+            if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+                const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+                if (!isSelected) {
+                    await studioTab.click();
+                    await this.humanDelay(1000);
+                }
+            }
+
+            // Find the artifact by title
+            const artifact = this.page.locator('artifact-library-item').filter({ hasText: currentTitle }).first();
+            if (await artifact.count() === 0) {
+                console.warn(`[NotebookLM] Artifact "${currentTitle}" not found.`);
+                return false;
+            }
+
+            // Hover to reveal controls
+            await artifact.scrollIntoViewIfNeeded();
+            await artifact.hover();
+            await this.humanDelay(500);
+
+            // Click the "more_vert" menu button
+            const menuBtn = artifact.locator('button[aria-label*="More"], button[aria-label*="Další"], button mat-icon:has-text("more_vert")').first();
+            if (await menuBtn.count() === 0) {
+                console.warn('[NotebookLM] Menu button not found on artifact.');
+                return false;
+            }
+            await menuBtn.click();
+            await this.page.waitForTimeout(500);
+
+            // Find "Rename" menu item
+            // Czech: "Přejmenovat", English: "Rename"
+            const renameBtn = this.page.locator('button[role="menuitem"]').filter({ hasText: /Přejmenovat|Rename/i }).first();
+            if (await renameBtn.count() === 0 || !(await renameBtn.isVisible())) {
+                console.warn('[NotebookLM] Rename option not found in menu.');
+                await this.page.keyboard.press('Escape');
+                return false;
+            }
+            await renameBtn.click();
+            await this.page.waitForTimeout(500);
+
+            // A dialog or inline input should appear
+            // Try dialog first
+            const dialog = this.page.locator('div[role="dialog"], .mat-mdc-dialog-container').first();
+            if (await dialog.isVisible()) {
+                const input = dialog.locator('input, textarea').first();
+                if (await input.count() > 0) {
+                    await input.fill(newTitle);
+                    // Click confirm/OK button
+                    const confirmBtn = dialog.locator('button').filter({ hasText: /OK|Uložit|Save|Potvrdit|Confirm/i }).first();
+                    if (await confirmBtn.count() > 0) {
+                        await confirmBtn.click();
+                    } else {
+                        await this.page.keyboard.press('Enter');
+                    }
+                    await this.page.waitForTimeout(800);
+                    console.log(`[NotebookLM] Artifact renamed successfully via dialog.`);
+                    return true;
+                }
+            }
+
+            // Try inline input (aria-label on artifact changes to input)
+            const inlineInput = artifact.locator('input').first();
+            if (await inlineInput.count() > 0 && await inlineInput.isVisible()) {
+                await inlineInput.fill(newTitle);
+                await this.page.keyboard.press('Enter');
+                await this.page.waitForTimeout(500);
+                console.log(`[NotebookLM] Artifact renamed successfully via inline input.`);
+                return true;
+            }
+
+            console.warn('[NotebookLM] Could not find rename input.');
+            await this.dumpState('rename_artifact_fail');
+            return false;
+
+        } catch (e) {
+            console.error('[NotebookLM] Failed to rename artifact:', e);
+            return false;
+        }
+    }
+}

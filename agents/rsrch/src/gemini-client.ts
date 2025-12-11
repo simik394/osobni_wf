@@ -607,4 +607,66 @@ export class GeminiClient {
             console.error('[Gemini] Failed to dump state:', e);
         }
     }
+
+    /**
+     * Rename a Google Doc by navigating to it and editing the title.
+     * @param googleDocId The document ID (from URL)
+     * @param newTitle The new title to set
+     */
+    async renameGoogleDoc(googleDocId: string, newTitle: string): Promise<boolean> {
+        console.log(`[Gemini] Renaming Google Doc ${googleDocId} to "${newTitle}"`);
+
+        try {
+            // Navigate to the document
+            const docUrl = `https://docs.google.com/document/d/${googleDocId}/edit`;
+            await this.page.goto(docUrl, { waitUntil: 'domcontentloaded' });
+            await this.page.waitForTimeout(2000);
+
+            // The title is usually in an input or contenteditable div at the top
+            // Selector for Google Docs title: input.docs-title-input or similar
+            const titleSelector = 'input.docs-title-input';
+
+            try {
+                await this.page.waitForSelector(titleSelector, { state: 'visible', timeout: 10000 });
+
+                // Click to focus
+                await this.page.click(titleSelector);
+                await this.page.waitForTimeout(300);
+
+                // Select all and replace
+                await this.page.keyboard.press('Control+a');
+                await this.page.keyboard.type(newTitle, { delay: 30 });
+
+                // Click outside to trigger auto-save (click on the document body)
+                await this.page.click('.kix-appview-editor');
+                await this.page.waitForTimeout(1500);
+
+                console.log(`[Gemini] Document renamed successfully.`);
+                return true;
+            } catch (e) {
+                console.warn('[Gemini] Title input not found with primary selector. Trying alternative...');
+
+                // Alternative: sometimes title is in a different location
+                const altTitleSelector = '[data-tooltip="Rename"]';
+                const altTitle = this.page.locator(altTitleSelector).first();
+                if (await altTitle.count() > 0) {
+                    await altTitle.click();
+                    await this.page.waitForTimeout(500);
+                    await this.page.keyboard.press('Control+a');
+                    await this.page.keyboard.type(newTitle, { delay: 30 });
+                    await this.page.keyboard.press('Enter');
+                    await this.page.waitForTimeout(1000);
+                    console.log(`[Gemini] Document renamed via alternative selector.`);
+                    return true;
+                }
+
+                console.error('[Gemini] Could not find title element to rename.');
+                await this.dumpState('rename_doc_fail');
+                return false;
+            }
+        } catch (e) {
+            console.error('[Gemini] Failed to rename document:', e);
+            return false;
+        }
+    }
 }

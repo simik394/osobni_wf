@@ -155,12 +155,12 @@ rsrch registry list --type=audio
   - [x] Implement `registerAudio(parentId, notebookTitle, originalTitle, localPath)` → returns `XXX-NN-L`
   - [x] Implement `getLineage(id)` → returns parent chain
 
-## Phase 2: Renaming Automation
+## Phase 2: Renaming Automation ✅
 
-- [ ] Add `renameGoogleDoc(docId, newTitle)` to `gemini-client.ts`
-  - [ ] Navigate to doc, click title, edit, wait for save
-- [ ] Add `renameArtifact(artifactTitle, newTitle)` to `notebooklm-client.ts`
-  - [ ] Locate artifact, More menu → Rename → fill
+- [x] Add `renameGoogleDoc(docId, newTitle)` to `gemini-client.ts`
+  - [x] Navigate to doc, click title, edit, wait for save
+- [x] Add `renameArtifact(artifactTitle, newTitle)` to `notebooklm-client.ts`
+  - [x] Locate artifact, More menu → Rename → fill
 
 ## Phase 3: Workflow Integration
 
