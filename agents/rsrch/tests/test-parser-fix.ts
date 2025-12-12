@@ -52,11 +52,11 @@ async function main() {
             console.log(parsed.content.substring(0, 1000));
             console.log('...');
 
-            // Save
+            // Save using exportToMarkdown for complete output
             const ts = Date.now();
-            fs.writeFileSync(`data/experiments/fixed_research_${ts}.md`,
-                `# ${parsed.title}\n\n${parsed.content}`);
-            console.log(`\n✅ Saved: data/experiments/fixed_research_${ts}.md`);
+            const fullMarkdown = geminiClient.exportToMarkdown(parsed);
+            fs.writeFileSync(`data/experiments/complete_research_${ts}.md`, fullMarkdown);
+            console.log(`\n✅ Saved: data/experiments/complete_research_${ts}.md`);
         } else {
             console.log('❌ Parse failed');
         }

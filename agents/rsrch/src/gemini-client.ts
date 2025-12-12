@@ -896,6 +896,62 @@ export class GeminiClient {
         }
         return chunks;
     }
+
+    /**
+     * Export parsed research to complete markdown with all sections.
+     */
+    exportToMarkdown(parsed: ParsedResearch): string {
+        let md = `# ${parsed.title}\n\n`;
+        md += `> **Query:** ${parsed.query || 'N/A'}\n`;
+        md += `> **Generated:** ${parsed.createdAt}\n\n`;
+        md += `---\n\n`;
+
+        // Content
+        md += parsed.content + '\n\n';
+        md += `---\n\n`;
+
+        // Sources Used
+        if (parsed.citations.length > 0) {
+            md += `## Sources Used\n\n`;
+            md += `| # | Source | Domain |\n`;
+            md += `|---|--------|--------|\n`;
+            for (const c of parsed.citations) {
+                md += `| ${c.id} | [${c.text.substring(0, 50)}...](${c.url}) | ${c.domain} |\n`;
+            }
+            md += `\n`;
+        }
+
+        // Research Process (Agent Thoughts)
+        if (parsed.reasoningSteps.length > 0) {
+            md += `## Research Process\n\n`;
+            for (const step of parsed.reasoningSteps) {
+                md += `- **${step.phase}**: ${step.action.substring(0, 80)}...\n`;
+            }
+            md += `\n`;
+        }
+
+        // Research Flow Diagram
+        if (parsed.researchFlow.length > 0) {
+            md += `## Research Flow\n\n`;
+            md += '```mermaid\n';
+            md += 'graph TD\n';
+            for (const node of parsed.researchFlow) {
+                if (node.type === 'source') {
+                    md += `    ${node.id}((${node.label}))\n`;
+                } else if (node.type === 'query') {
+                    md += `    ${node.id}[${node.label}]\n`;
+                } else {
+                    md += `    ${node.id}{${node.label}}\n`;
+                }
+                for (const link of node.links) {
+                    md += `    ${node.id} --> ${link}\n`;
+                }
+            }
+            md += '```\n';
+        }
+
+        return md;
+    }
 }
 
 // Parser interfaces
