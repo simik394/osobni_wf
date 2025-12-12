@@ -1,0 +1,28 @@
+---
+# tasks file for docker
+- name: Install Docker
+  become: true
+  ansible.builtin.dnf:
+    name: docker
+    state: present
+
+- name: Start and enable Docker service
+  become: true
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Add the opc user to the docker group
+  become: true
+  ansible.builtin.user:
+    name: opc
+    groups: docker
+    append: true
+
+- name: Install Docker Compose
+  become: true
+  ansible.builtin.get_url:
+    url: https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-aarch64
+    dest: /usr/local/bin/docker-compose
+    mode: 'u+x,g+x,o+x'

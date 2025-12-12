@@ -1,0 +1,29 @@
+---
+# tasks file for langfuse
+- name: Create langfuse directory
+  ansible.builtin.file:
+    path: /home/opc/langfuse
+    state: directory
+    mode: '0755'
+
+- name: Generate encryption key
+  ansible.builtin.command: openssl rand -hex 32
+  register: langfuse_openssl_rand_hex_32
+  changed_when: false
+
+- name: Set encryption key fact
+  ansible.builtin.set_fact:
+    langfuse_encryption_key: "{{ langfuse_openssl_rand_hex_32.stdout }}"
+
+- name: Create docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: /home/opc/langfuse/docker-compose.yml
+    mode: '0644'
+
+- name: Run docker-compose up
+  ansible.builtin.command: docker-compose up -d
+  args:
+    chdir: /home/opc/langfuse
+  register: langfuse_docker_compose_up
+  changed_when: "'Creating' in langfuse_docker_compose_up.stdout or 'Recreating' in langfuse_docker_compose_up.stdout"

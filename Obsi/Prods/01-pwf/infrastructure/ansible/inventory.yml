@@ -1,0 +1,12 @@
+# For running ansible from a local machine (e.g., ntb) to provision 'halvarm'
+servers:
+  hosts:
+    halvarm:
+      ansible_host: <halvarm_ip>
+      ansible_user: opc
+
+# For running ansible from 'halvarm' itself
+local:
+  hosts:
+    localhost:
+      ansible_connection: local
