@@ -731,25 +731,67 @@ export class GeminiClient {
         let allHtml = '';
         const headings: string[] = [];
 
-        const modelResponses = this.page.locator('model-response');
-        const responseCount = await modelResponses.count();
+        // First, try to extract from the actual research document (thought-items)
+        // This is where the real research results are, not the chat history
+        const immersivePanel = this.page.locator('deep-research-immersive-panel');
+        const hasImmersive = await immersivePanel.count() > 0;
 
-        for (let i = 0; i < responseCount; i++) {
-            try {
-                const el = modelResponses.nth(i);
-                const html = await el.evaluate(node => node.innerHTML);
-                const text = await el.evaluate(node => node.textContent || '');
-                allHtml += html + '\n';
-                allContent += text + '\n';
-            } catch (e) { }
+        if (hasImmersive) {
+            console.log('[Gemini] Extracting from immersive research panel (thought-items)...');
+
+            // Extract from thought-item elements - these contain the actual findings
+            const thoughtItems = this.page.locator('deep-research-immersive-panel thought-item');
+            const thoughtCount = await thoughtItems.count();
+            console.log(`[Gemini] Found ${thoughtCount} thought items`);
+
+            for (let i = 0; i < thoughtCount; i++) {
+                try {
+                    const thought = thoughtItems.nth(i);
+
+                    // Get heading from .thought-header
+                    const header = await thought.locator('.thought-header').textContent().catch(() => null);
+                    if (header && header.trim().length > 5) {
+                        headings.push(header.trim());
+                        allContent += `\n## ${header.trim()}\n\n`;
+                        allHtml += `<h2>${header.trim()}</h2>`;
+                    }
+
+                    // Get content from the body div (second .gds-body-m, not the header)
+                    // Both header and body have .gds-body-m, so we need to get the one that's NOT .thought-header
+                    const bodyLocator = thought.locator('.gds-body-m:not(.thought-header)').first();
+                    const body = await bodyLocator.textContent().catch(() => null);
+                    if (body && body.trim().length > 10) {
+                        allContent += body.trim() + '\n\n';
+                        const bodyHtml = await bodyLocator.evaluate(node => node.innerHTML).catch(() => body);
+                        allHtml += `<p>${bodyHtml}</p>`;
+                    }
+                } catch (e) { }
+            }
         }
 
-        const headingEls = this.page.locator('model-response h1, model-response h2, model-response h3');
-        const headingCount = await headingEls.count();
-        for (let i = 0; i < Math.min(headingCount, 30); i++) {
-            const text = await headingEls.nth(i).textContent();
-            if (text && text.trim().length > 5 && !headings.includes(text.trim())) {
-                headings.push(text.trim());
+        // Fallback: if no immersive panel or no content, try model-response
+        if (allContent.trim().length < 500) {
+            console.log('[Gemini] Fallback: extracting from model-response...');
+            const modelResponses = this.page.locator('model-response');
+            const responseCount = await modelResponses.count();
+
+            for (let i = 0; i < responseCount; i++) {
+                try {
+                    const el = modelResponses.nth(i);
+                    const html = await el.evaluate(node => node.innerHTML);
+                    const text = await el.evaluate(node => node.textContent || '');
+                    allHtml += html + '\n';
+                    allContent += text + '\n';
+                } catch (e) { }
+            }
+
+            const headingEls = this.page.locator('model-response h1, model-response h2, model-response h3');
+            const headingCount = await headingEls.count();
+            for (let i = 0; i < Math.min(headingCount, 30); i++) {
+                const text = await headingEls.nth(i).textContent();
+                if (text && text.trim().length > 5 && !headings.includes(text.trim())) {
+                    headings.push(text.trim());
+                }
             }
         }
 

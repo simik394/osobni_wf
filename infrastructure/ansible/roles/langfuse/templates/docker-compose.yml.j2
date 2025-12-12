@@ -162,7 +162,7 @@ services:
   minio:
     image: minio/minio:latest
     ports:
-      - "9000:9000"
+      - "9090:9000"
       - "9001:9001" # Minio Console port
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
