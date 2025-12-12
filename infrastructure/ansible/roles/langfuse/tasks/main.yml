@@ -1,0 +1,48 @@
+---
+# tasks file for langfuse
+- name: Create langfuse directory
+  ansible.builtin.file:
+    path: /home/ubuntu/langfuse
+    state: directory
+    mode: '0755'
+
+- name: Create .env file from template
+  ansible.builtin.template:
+    src: .env.j2
+    dest: /home/ubuntu/langfuse/.env
+    mode: '0644'
+
+- name: Generate encryption key
+  ansible.builtin.command: openssl rand -hex 32
+  register: langfuse_openssl_rand_hex_32
+  changed_when: false
+
+- name: Set encryption key fact
+  ansible.builtin.set_fact:
+    langfuse_encryption_key: "{{ langfuse_openssl_rand_hex_32.stdout }}"
+
+- name: Copy clickhouse-config directory
+  ansible.builtin.copy:
+    src: clickhouse-config/
+    dest: /home/ubuntu/langfuse/clickhouse-config/
+    mode: '0755'
+
+- name: Create docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: /home/ubuntu/langfuse/docker-compose.yml
+    mode: '0644'
+
+- name: Run docker-compose down (to ensure clean restart with new config)
+  ansible.builtin.command: docker compose down
+  args:
+    chdir: /home/ubuntu/langfuse
+  ignore_errors: true # Ignore if containers are not running
+  changed_when: false
+
+- name: Run docker-compose up
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: /home/ubuntu/langfuse
+  register: langfuse_docker_compose_up
+  changed_when: "'Creating' in langfuse_docker_compose_up.stdout or 'Recreating' in langfuse_docker_compose_up.stdout"

@@ -403,14 +403,34 @@ Focus on depth, nuance, and covering aspects that might be missing above.
 `;
                 await geminiClient.research(combinedQuery);
 
-                // 3. Export to Google Docs
-                console.log(`[Job ${job.id}] Step 3: Export to Google Docs`);
-                // Short wait for generation to ensure export button is ready handled in exportToGoogleDocs logic
-                const { docTitle, docUrl } = await geminiClient.exportCurrentToGoogleDocs();
+                // 3. Parse the Deep Research document and create Google Doc
+                console.log(`[Job ${job.id}] Step 3: Parse Research & Create Doc`);
 
-                if (!docTitle) {
-                    throw new Error('Failed to export Gemini research to Google Docs (Title not captured).');
+                // Wait a bit for research to complete
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                // Get the current session URL for navigation
+                const currentUrl = geminiClient.getPage().url();
+                const sessionMatch = currentUrl.match(/\/app\/([a-zA-Z0-9_-]+)/);
+                const sessionId = sessionMatch ? sessionMatch[1] : undefined;
+
+                // Parse the research document (this clicks "Open" and extracts content)
+                const parsed = await geminiClient.parseResearch(sessionId);
+
+                if (!parsed) {
+                    throw new Error('Failed to parse Gemini Deep Research document.');
                 }
+                console.log(`[Job ${job.id}] Parsed: "${parsed.title}" (${parsed.content.length} chars, ${parsed.citations.length} citations)`);
+
+                // Create Google Doc with parsed content
+                const docResult = await geminiClient.createGoogleDoc(parsed);
+
+                if (!docResult) {
+                    throw new Error('Failed to create Google Doc from research.');
+                }
+
+                const { docId, docUrl } = docResult;
+                const docTitle = parsed.title;
                 console.log(`[Job ${job.id}] Exported Doc: "${docTitle}" (${docUrl})`);
 
                 // 4. NotebookLM Setup

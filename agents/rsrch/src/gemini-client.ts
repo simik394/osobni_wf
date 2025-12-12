@@ -66,6 +66,13 @@ export class GeminiClient {
         return match ? match[1] : null;
     }
 
+    /**
+     * Get the underlying Playwright page instance
+     */
+    getPage(): Page {
+        return this.page;
+    }
+
     async openSession(sessionId: string): Promise<void> {
         const url = `https://gemini.google.com/app/${sessionId}`;
         console.log(`[Gemini] Navigating to: ${url}`);
@@ -607,4 +614,279 @@ export class GeminiClient {
             console.error('[Gemini] Failed to dump state:', e);
         }
     }
+
+    // ===== Deep Research Parser Methods =====
+
+    /**
+     * Navigate to a specific research session by URL or session ID.
+     */
+    async navigateToResearchSession(sessionIdOrUrl: string): Promise<boolean> {
+        console.log(`[Gemini] Navigating to research session: ${sessionIdOrUrl}`);
+
+        try {
+            let url = sessionIdOrUrl;
+            if (!url.startsWith('http')) {
+                url = `https://gemini.google.com/app/${sessionIdOrUrl}`;
+            }
+
+            await this.page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+            await this.page.waitForTimeout(3000);
+            await this.page.waitForSelector('model-response, div.container', { timeout: 15000 });
+
+            console.log('[Gemini] ✅ Navigated to research session');
+            return true;
+        } catch (e: any) {
+            console.error('[Gemini] Failed to navigate to session:', e.message);
+            return false;
+        }
+    }
+
+    /**
+     * Open the Deep Research document by clicking "Otevřít" (Open) button.
+     */
+    async openResearchDocument(): Promise<boolean> {
+        console.log('[Gemini] Looking for research document Open button...');
+
+        try {
+            const openButton = this.page.locator('button:has-text("Otevřít"), button:has-text("Open")').first();
+
+            if (await openButton.count() > 0) {
+                console.log('[Gemini] Found Open button, clicking...');
+                await openButton.click();
+                await this.page.waitForTimeout(3000);
+                console.log('[Gemini] ✅ Opened research document');
+                return true;
+            } else {
+                console.log('[Gemini] No Open button found');
+                return false;
+            }
+        } catch (e: any) {
+            console.error('[Gemini] Failed to open document:', e.message);
+            return false;
+        }
+    }
+
+    /**
+     * Parse the current deep research session into a structured format.
+     */
+    async parseResearch(sessionIdOrUrl?: string): Promise<ParsedResearch | null> {
+        console.log('[Gemini] Parsing research content...');
+
+        try {
+            if (sessionIdOrUrl) {
+                await this.navigateToResearchSession(sessionIdOrUrl);
+            }
+
+            await this.page.waitForSelector('model-response, div.container', { timeout: 10000 }).catch(() => { });
+            await this.openResearchDocument();
+            await this.page.waitForTimeout(2000);
+
+            const title = await this.extractTitle();
+            console.log(`[Gemini] Title: ${title}`);
+
+            const { content, contentHtml, headings } = await this.extractContent();
+            console.log(`[Gemini] Extracted ${headings.length} headings, ${content.length} chars`);
+
+            const citations = await this.extractCitations();
+            console.log(`[Gemini] Found ${citations.length} citations`);
+
+            return {
+                title: title || 'Untitled Research',
+                query: '',
+                content,
+                contentHtml,
+                contentMarkdown: content,
+                headings,
+                citations,
+                reasoningSteps: [],
+                researchFlow: [],
+                createdAt: new Date().toISOString()
+            };
+        } catch (e: any) {
+            console.error('[Gemini] Failed to parse research:', e);
+            await this.dumpState('parse_research_fail');
+            return null;
+        }
+    }
+
+    private async extractTitle(): Promise<string | null> {
+        const skipTitles = ['chaty', 'konverzace', 'gemini', 'conversations'];
+        const headings = this.page.locator('model-response h1, model-response h2, div.container h1, div.container h2');
+        const count = await headings.count();
+
+        for (let i = 0; i < count; i++) {
+            const text = await headings.nth(i).textContent();
+            if (text) {
+                const trimmed = text.trim();
+                if (skipTitles.some(skip => trimmed.toLowerCase().startsWith(skip))) continue;
+                if (trimmed.length < 10) continue;
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    private async extractContent(): Promise<{ content: string, contentHtml: string, headings: string[] }> {
+        let allContent = '';
+        let allHtml = '';
+        const headings: string[] = [];
+
+        const modelResponses = this.page.locator('model-response');
+        const responseCount = await modelResponses.count();
+
+        for (let i = 0; i < responseCount; i++) {
+            try {
+                const el = modelResponses.nth(i);
+                const html = await el.evaluate(node => node.innerHTML);
+                const text = await el.evaluate(node => node.textContent || '');
+                allHtml += html + '\n';
+                allContent += text + '\n';
+            } catch (e) { }
+        }
+
+        const headingEls = this.page.locator('model-response h1, model-response h2, model-response h3');
+        const headingCount = await headingEls.count();
+        for (let i = 0; i < Math.min(headingCount, 30); i++) {
+            const text = await headingEls.nth(i).textContent();
+            if (text && text.trim().length > 5 && !headings.includes(text.trim())) {
+                headings.push(text.trim());
+            }
+        }
+
+        return { content: allContent.trim(), contentHtml: allHtml.trim(), headings };
+    }
+
+    private async extractCitations(): Promise<Citation[]> {
+        const citations: Citation[] = [];
+        const excludeDomains = ['google.com', 'gstatic.com', 'gemini.google.com'];
+
+        const links = this.page.locator('model-response a[href^="http"], div.container a[href^="http"]');
+        const linkCount = await links.count();
+        console.log(`[Gemini] Found ${linkCount} links in content`);
+
+        for (let i = 0; i < Math.min(linkCount, 100); i++) {
+            try {
+                const link = links.nth(i);
+                const href = await link.getAttribute('href');
+                const text = await link.textContent();
+
+                if (!href) continue;
+
+                const url = new URL(href);
+                const domain = url.hostname.replace('www.', '');
+                if (excludeDomains.some(d => domain.includes(d))) continue;
+                if (citations.some(c => c.url === href)) continue;
+
+                citations.push({
+                    id: citations.length + 1,
+                    text: text?.trim() || domain,
+                    url: href,
+                    domain: domain,
+                    usedInSections: []
+                });
+            } catch (e) { }
+        }
+
+        console.log(`[Gemini] Extracted ${citations.length} unique citations`);
+        return citations;
+    }
+
+    /**
+     * Create a Google Doc with the parsed research content.
+     */
+    async createGoogleDoc(parsed: ParsedResearch, customTitle?: string): Promise<{ docId: string, docUrl: string } | null> {
+        console.log('[Gemini] Creating Google Doc...');
+
+        try {
+            const title = customTitle || parsed.title;
+
+            await this.page.goto('https://docs.google.com/document/create', {
+                waitUntil: 'networkidle',
+                timeout: 60000
+            });
+            await this.page.waitForTimeout(3000);
+
+            await this.page.waitForSelector('.docs-title-input, [aria-label*="Document title"]', { timeout: 15000 });
+
+            const docUrl = this.page.url();
+            const docIdMatch = docUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            const docId = docIdMatch ? docIdMatch[1] : '';
+            console.log(`[Gemini] Created doc: ${docId}`);
+
+            const titleInput = this.page.locator('.docs-title-input, input[aria-label*="Document title"]').first();
+            if (await titleInput.count() > 0) {
+                await titleInput.click();
+                await this.page.waitForTimeout(500);
+                await titleInput.fill(title);
+                await this.page.keyboard.press('Enter');
+                await this.page.waitForTimeout(1000);
+            }
+
+            // Type content into doc body
+            const docBody = this.page.locator('.kix-appview-editor, [contenteditable="true"]').first();
+            if (await docBody.count() > 0) {
+                await docBody.click();
+                await this.page.waitForTimeout(500);
+
+                // Type title and content
+                const docContent = `# ${parsed.title}\n\n${parsed.content}`;
+                const chunks = this.splitIntoChunks(docContent, 3000);
+                for (const chunk of chunks) {
+                    await this.page.keyboard.type(chunk, { delay: 1 });
+                    await this.page.waitForTimeout(100);
+                }
+            }
+
+            console.log(`[Gemini] ✅ Created Google Doc: ${title}`);
+            return { docId, docUrl };
+
+        } catch (e: any) {
+            console.error('[Gemini] Failed to create Google Doc:', e.message);
+            await this.dumpState('create_doc_fail');
+            return null;
+        }
+    }
+
+    private splitIntoChunks(text: string, chunkSize: number): string[] {
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += chunkSize) {
+            chunks.push(text.slice(i, i + chunkSize));
+        }
+        return chunks;
+    }
+}
+
+// Parser interfaces
+export interface ParsedResearch {
+    title: string;
+    query: string;
+    content: string;
+    contentHtml: string;
+    contentMarkdown: string;
+    headings: string[];
+    citations: Citation[];
+    reasoningSteps: ReasoningStep[];
+    researchFlow: FlowNode[];
+    createdAt: string;
+}
+
+export interface Citation {
+    id: number;
+    text: string;
+    url: string;
+    domain: string;
+    usedInSections: string[];
+}
+
+export interface ReasoningStep {
+    phase: string;
+    action: string;
+    timestamp?: string;
+}
+
+export interface FlowNode {
+    id: string;
+    type: 'query' | 'source' | 'step' | 'conclusion';
+    label: string;
+    links: string[];
 }
