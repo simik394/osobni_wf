@@ -27,51 +27,95 @@ Unified graph-based storage for job queues, knowledge base, and agent memory usi
 ### 4.1 Data Model
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      FalkorDB Graph                         │
-├─────────────────────────────────────────────────────────────┤
-│  (:Job)           - id, type, status, query, createdAt      │
-│  (:Entity)        - id, type, name, properties              │
-│  (:Fact)          - id, content, context, createdAt         │
-│  (:Agent)         - id                                       │
-│                                                             │
-│  [:DEPENDS_ON]    - Job → Job (workflow dependencies)       │
-│  [:RELATES_TO]    - Entity → Entity (knowledge links)       │
-│  [:KNOWS]         - Agent → Fact (agent memory)             │
-│  [:PRODUCED]      - Job → Entity (provenance)               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      FalkorDB Graph                              │
+├─────────────────────────────────────────────────────────────────┤
+│  CORE NODES                                                      │
+│  (:Job)           - id, type, status, query, createdAt           │
+│  (:Session)       - id, platform, externalId, query, createdAt   │
+│  (:Document)      - id, title, url, createdAt                    │
+│  (:Audio)         - id, path, duration, createdAt                │
+│                                                                  │
+│  AGENT NODES                                                     │
+│  (:Agent)         - id, name                                     │
+│  (:Conversation)  - id, createdAt                                │
+│  (:Turn)          - role, content, timestamp                     │
+│                                                                  │
+│  KNOWLEDGE (future)                                              │
+│  (:Entity)        - id, type, name, properties                   │
+│  (:Fact)          - id, content, source                          │
+├─────────────────────────────────────────────────────────────────┤
+│  LINEAGE RELATIONSHIPS (provenance tracking)                     │
+│  [:STARTED]       - Job → Session                                │
+│  [:EXPORTED_TO]   - Session → Document                           │
+│  [:CONVERTED_TO]  - Document → Audio                             │
+│  [:DEPENDS_ON]    - Job → Job (workflow chains)                  │
+│                                                                  │
+│  CONVERSATION RELATIONSHIPS                                      │
+│  [:HAD]           - Agent → Conversation                         │
+│  [:HAS_TURN]      - Conversation → Turn                          │
+│  [:NEXT]          - Turn → Turn (sequence)                       │
+│                                                                  │
+│  KNOWLEDGE RELATIONSHIPS (future)                                │
+│  [:MENTIONS]      - Document → Entity                            │
+│  [:RELATES_TO]    - Entity → Entity                              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 Key Operations
+### 4.2 Lineage Example
+
+```cypher
+// Research → Export → Podcast flow
+(:Job {type: 'deepResearch', query: 'coffee origins'})
+  -[:STARTED]-> (:Session {platform: 'gemini', externalId: 'abc123'})
+    -[:EXPORTED_TO]-> (:Document {id: 'K6Q-01', title: 'K6Q-01 Deep Research...'})
+      -[:CONVERTED_TO]-> (:Audio {id: 'K6Q-01-audio', path: '...'})
+```
+
+### 4.3 Conversation Example
+
+```cypher
+(:Agent {id: 'rsrch-cli'})
+  -[:HAD]-> (:Conversation {id: 'conv-001', createdAt: 1702...})
+    -[:HAS_TURN]-> (:Turn {role: 'user', content: 'Research coffee'})
+      -[:NEXT]-> (:Turn {role: 'assistant', content: 'Starting deep research...'})
+```
+
+### 4.4 Key Operations
 
 | Operation | Description |
 |-----------|-------------|
+| **Job Queue** | |
 | `addJob()` | Create queued job node |
 | `getNextQueuedJob()` | FIFO queue retrieval |
 | `updateJobStatus()` | Transition job state |
-| `addEntity()` | Add knowledge node |
-| `addRelationship()` | Link entities |
-| `storeFact()` | Store agent memory |
-| `getFacts()` | Retrieve agent memory |
+| **Lineage** | |
+| `linkJobToSession()` | Job → Session |
+| `linkSessionToDocument()` | Session → Document |
+| `linkDocumentToAudio()` | Document → Audio |
+| `getLineage()` | Trace full provenance chain |
+| **Conversations** | |
+| `startConversation()` | Create conversation for agent |
+| `addTurn()` | Add user/assistant turn |
+| `getConversation()` | Retrieve conversation history |
 
 ## 5. CLI Commands
 
 ```bash
-# Future CLI extensions
 rsrch graph status            # Show FalkorDB connection status
 rsrch graph jobs [--status]   # List jobs from graph
-rsrch graph entities [type]   # List knowledge entities
-rsrch graph agent-facts <id>  # Show facts for agent
+rsrch graph lineage <id>      # Show provenance chain for artifact
+rsrch graph conversations     # List recent conversations
 ```
 
 ## 6. Integration Points
 
 | Workflow | Current | After |
 |----------|---------|-------|
-| `/deep-research` | `jobQueue.add()` | `graphStore.addJob()` |
-| `/research-to-podcast` | `jobQueue.*` | `graphStore.*` |
-| Server job polling | `jobQueue.getNextQueuedJob()` | `graphStore.getNextQueuedJob()` |
-| Artifact registry | Separate storage | Link via graph relationships |
+| `/deep-research` | `jobQueue.add()` | `graphStore.addJob()` + lineage |
+| `/research-to-podcast` | `jobQueue.*` | `graphStore.*` + full lineage chain |
+| Artifact registry | Separate JSON | Merged into graph nodes |
+| Job polling | `jobQueue.getNextQueuedJob()` | `graphStore.getNextQueuedJob()` |
 
 ---
 
@@ -83,35 +127,40 @@ rsrch graph agent-facts <id>  # Show facts for agent
 - [x] Create `src/graph-store.ts` module
   - [x] Connection management
   - [x] Job queue operations
-  - [x] Knowledge base operations
-  - [x] Agent memory operations
+  - [x] Basic entity operations
 
 ## Phase 2: Testing
 - [ ] Start FalkorDB container
 - [ ] Write `tests/graph-store.test.ts`
   - [ ] Test job CRUD operations
-  - [ ] Test entity/relationship operations
-  - [ ] Test agent memory operations
+  - [ ] Test connection handling
 - [ ] Run tests: `npx ts-node tests/graph-store.test.ts`
 
-## Phase 3: Migration
-- [ ] Create adapter layer in `src/job-queue.ts`
-  - [ ] Option to use graph-store as backend
-  - [ ] Fallback to JSON for backward compatibility
-- [ ] Update server endpoints to use graph-store
-- [ ] Test with existing workflows
+## Phase 3: Lineage Tracking
+- [ ] Add lineage node types (Session, Document, Audio)
+- [ ] Implement `linkJobToSession()`
+- [ ] Implement `linkSessionToDocument()`
+- [ ] Implement `linkDocumentToAudio()`
+- [ ] Implement `getLineage()` traversal
+- [ ] Test lineage chain
 
-## Phase 4: CLI Extensions
-- [ ] Add `rsrch graph status` command
-- [ ] Add `rsrch graph jobs` command
-- [ ] Add `rsrch graph entities` command
+## Phase 4: Replace JSON Job Queue
+- [ ] Update server to use graph-store
+- [ ] Delete `src/job-queue.ts`
+- [ ] Delete `data/jobs.json`
+- [ ] Test all existing endpoints
+
+## Phase 5: Conversation History
+- [ ] Add conversation node types
+- [ ] Implement `startConversation()`
+- [ ] Implement `addTurn()`
+- [ ] Implement `getConversation()`
+- [ ] CLI integration
+
+## Phase 6: CLI Extensions
+- [ ] `rsrch graph status`
+- [ ] `rsrch graph lineage <id>`
 - [ ] Update USER_GUIDE.md
-
-## Phase 5: Agent Memory Schema
-- [ ] Design conversation history structure
-- [ ] Design fact extraction patterns
-- [ ] Implement `storeConversation()` method
-- [ ] Implement `getRelevantContext()` method
 
 ---
 
