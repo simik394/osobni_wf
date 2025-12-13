@@ -193,9 +193,34 @@ rsrch graph search "keyword" [--platform=gemini]
 - [ ] `rsrch graph conversation <id> --questions-only --answers-only`
 
 ## Phase 4: Testing
-- [ ] Run sync on Gemini account
-- [ ] Verify filtering works
+- [x] Run sync on Gemini account
+- [x] Verify filtering works
 - [ ] Test deep research extraction
+
+## Phase 5: Content Quality Improvements
+- [ ] **Code Block Preservation**
+  - [ ] Use `innerHTML()` instead of `innerText()` for extraction
+  - [ ] Convert HTML `<pre><code>` to markdown fenced blocks
+  - [ ] Preserve language hints from `class="language-*"`
+  - [ ] Maintain proper newlines inside code blocks
+  
+- [ ] **Reasoning/Thinking Extraction**
+  - [ ] Expand collapsed "Show reasoning" sections before extraction
+  - [ ] Language-agnostic detection: match `Zobrazit uvažování` (CZ), `Show reasoning` (EN), or similar patterns
+  - [ ] Store reasoning as separate field or inline with marker
+  - [ ] Click to expand toggle elements before reading content
+  
+- [ ] **Content Formatting**
+  - [ ] Preserve markdown formatting (bold, italic, lists)
+  - [ ] Handle tables properly
+  - [ ] Maintain heading hierarchy
+  - [ ] Handle LaTeX/math expressions if present
+
+- [ ] **Robustness**
+  - [ ] Retry on transient scraping failures
+  - [ ] Handle session timeout/re-auth
+  - [ ] Graceful degradation if element not found
+  - [ ] Log extraction warnings without failing entire sync
 
 ---
 
@@ -211,3 +236,13 @@ rsrch graph search "keyword" [--platform=gemini]
 | Capture time | `capturedAt` stored per conversation sync |
 | Content filtering | `--questions-only`, `--answers-only`, `--research-docs` flags |
 
+---
+
+## Known Issues (from Testing)
+
+| Issue | Description | Priority |
+|-------|-------------|----------|
+| Code blocks truncated | `innerText()` flattens HTML structure, loses formatting | P1 |
+| Reasoning not expanded | "Zobrazit uvažování" / "Show reasoning" shows instead of actual thoughts | P1 |
+| Content truncation | Long messages may be cut off in CLI display (display issue, not storage) | P2 |
+| Re-sync doesn't update turns | Upsert only touches `capturedAt`, not conversation content | P2 |

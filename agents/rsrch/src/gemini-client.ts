@@ -367,6 +367,123 @@ export class GeminiClient {
     }
 
     /**
+     * Convert HTML content to markdown (simple version for turn extraction)
+     */
+    private htmlToMarkdownSimple(html: string): string {
+        let md = html;
+
+        // Handle code blocks: <pre><code class="language-xxx">...</code></pre>
+        md = md.replace(/<pre[^>]*><code(?:\s+class="language-(\w+)")?[^>]*>([\s\S]*?)<\/code><\/pre>/gi,
+            (_, lang, code) => {
+                const language = lang || '';
+                const decoded = code
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&quot;/g, '"')
+                    .replace(/<[^>]+>/g, ''); // Strip any inner HTML tags
+                return `\n\`\`\`${language}\n${decoded.trim()}\n\`\`\`\n`;
+            });
+
+        // Handle inline code: <code>...</code>
+        md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (_, code) => {
+            const decoded = code
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&amp;/g, '&');
+            return `\`${decoded}\``;
+        });
+
+        // Handle headings
+        md = md.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n');
+        md = md.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n');
+        md = md.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n');
+        md = md.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n#### $1\n');
+
+        // Handle bold and italic
+        md = md.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
+        md = md.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
+        md = md.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
+        md = md.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
+
+        // Handle lists
+        md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n');
+        md = md.replace(/<\/?[ou]l[^>]*>/gi, '\n');
+
+        // Handle paragraphs and line breaks
+        md = md.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n');
+        md = md.replace(/<br\s*\/?>/gi, '\n');
+        md = md.replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, '$1\n');
+
+        // Handle links
+        md = md.replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)');
+
+        // Strip remaining HTML tags
+        md = md.replace(/<[^>]+>/g, '');
+
+        // Decode HTML entities
+        md = md.replace(/&nbsp;/g, ' ');
+        md = md.replace(/&lt;/g, '<');
+        md = md.replace(/&gt;/g, '>');
+        md = md.replace(/&amp;/g, '&');
+        md = md.replace(/&quot;/g, '"');
+        md = md.replace(/&#39;/g, "'");
+
+        // Clean up extra whitespace
+        md = md.replace(/\n{3,}/g, '\n\n');
+
+        return md.trim();
+    }
+
+    /**
+     * Expand collapsed reasoning/thinking sections
+     */
+    private async expandReasoningSections(): Promise<void> {
+        // Language-agnostic patterns for reasoning toggle buttons
+        const reasoningPatterns = [
+            'Zobrazit uvažování',  // Czech
+            'Show reasoning',      // English
+            'Show thinking',       // English variant
+            'Zeige Überlegungen',  // German
+            'Afficher le raisonnement', // French
+        ];
+
+        try {
+            // Find and click any collapsed reasoning sections
+            for (const pattern of reasoningPatterns) {
+                const buttons = this.page.locator(`button:has-text("${pattern}"), [role="button"]:has-text("${pattern}")`);
+                const count = await buttons.count();
+
+                if (count > 0) {
+                    console.log(`[Gemini] Found ${count} collapsed reasoning sections (${pattern})`);
+                    for (let i = 0; i < count; i++) {
+                        try {
+                            await buttons.nth(i).click();
+                            await this.page.waitForTimeout(300);
+                        } catch (e) {
+                            // Button may already be expanded or not clickable
+                        }
+                    }
+                }
+            }
+
+            // Also try generic expand buttons near "reasoning" text
+            const expandButtons = this.page.locator('[aria-expanded="false"]');
+            const expandCount = await expandButtons.count();
+            for (let i = 0; i < Math.min(expandCount, 10); i++) {
+                const btn = expandButtons.nth(i);
+                const nearby = await btn.evaluate((el) => el.closest('[class*="reason"], [class*="think"]'));
+                if (nearby) {
+                    await btn.click().catch(() => { });
+                    await this.page.waitForTimeout(200);
+                }
+            }
+        } catch (e: any) {
+            console.warn('[Gemini] Could not expand reasoning sections:', e.message);
+        }
+    }
+
+    /**
      * Extract all turns from the current conversation view
      */
     private async extractConversationTurns(): Promise<ScrapedTurn[]> {
@@ -376,20 +493,23 @@ export class GeminiClient {
             // Wait for content to load
             await this.page.waitForTimeout(2000);
 
+            // Expand any collapsed reasoning sections BEFORE extraction
+            await this.expandReasoningSections();
+            await this.page.waitForTimeout(500);
+
             // Scroll to load all messages
             const chatHistory = this.page.locator('infinite-scroller.chat-history, .chat-history, main');
             if (await chatHistory.count() > 0) {
                 await chatHistory.first().evaluate((el: HTMLElement) => {
-                    el.scrollTop = 0; // Start at top
+                    el.scrollTop = 0;
                 });
                 await this.page.waitForTimeout(500);
                 await chatHistory.first().evaluate((el: HTMLElement) => {
-                    el.scrollTop = el.scrollHeight; // Scroll to bottom
+                    el.scrollTop = el.scrollHeight;
                 });
                 await this.page.waitForTimeout(1000);
             }
 
-            // Try to find conversation turns using multiple selector strategies
             // Strategy 1: Look for user-query and model-response elements
             const userQueries = this.page.locator('user-query');
             const modelResponses = this.page.locator('model-response');
@@ -400,19 +520,38 @@ export class GeminiClient {
             console.log(`[Gemini] Strategy 1: Found ${userCount} user-query, ${modelCount} model-response`);
 
             if (userCount > 0 || modelCount > 0) {
-                // Interleave user/model messages
                 const maxTurns = Math.max(userCount, modelCount);
                 for (let i = 0; i < maxTurns; i++) {
+                    // Extract user turn (text is fine for user queries)
                     if (i < userCount) {
                         const text = await userQueries.nth(i).innerText().catch(() => '');
                         if (text.trim()) {
                             turns.push({ role: 'user', content: text.trim() });
                         }
                     }
+
+                    // Extract assistant turn (use HTML for proper formatting)
                     if (i < modelCount) {
-                        const text = await modelResponses.nth(i).innerText().catch(() => '');
-                        if (text.trim()) {
-                            turns.push({ role: 'assistant', content: text.trim() });
+                        try {
+                            const html = await modelResponses.nth(i).innerHTML();
+                            const markdown = this.htmlToMarkdownSimple(html);
+                            if (markdown.trim()) {
+                                // Filter out button-only content
+                                const cleaned = markdown
+                                    .replace(/Zobrazit uvažování.*?(?=\n|$)/gi, '')
+                                    .replace(/Show reasoning.*?(?=\n|$)/gi, '')
+                                    .replace(/Show thinking.*?(?=\n|$)/gi, '')
+                                    .trim();
+                                if (cleaned.length > 10) {
+                                    turns.push({ role: 'assistant', content: cleaned });
+                                }
+                            }
+                        } catch (e) {
+                            // Fallback to innerText
+                            const text = await modelResponses.nth(i).innerText().catch(() => '');
+                            if (text.trim()) {
+                                turns.push({ role: 'assistant', content: text.trim() });
+                            }
                         }
                     }
                 }
@@ -427,28 +566,25 @@ export class GeminiClient {
             if (turnCount > 0) {
                 for (let i = 0; i < turnCount; i++) {
                     const el = conversationTurns.nth(i);
-                    const text = await el.innerText().catch(() => '');
                     const html = await el.innerHTML().catch(() => '');
-
-                    // Determine role based on class or content
                     const className = await el.getAttribute('class') || '';
                     const isUser = className.includes('user') || className.includes('query') || html.includes('user-query');
 
-                    if (text.trim()) {
+                    const markdown = this.htmlToMarkdownSimple(html);
+                    if (markdown.trim().length > 10) {
                         turns.push({
                             role: isUser ? 'user' : 'assistant',
-                            content: text.trim()
+                            content: markdown.trim()
                         });
                     }
                 }
                 return turns;
             }
 
-            // Strategy 3: Parse the chat-history text content directly
+            // Strategy 3: Fallback to raw text
             const chatContent = await chatHistory.first().innerText().catch(() => '');
             if (chatContent && chatContent.length > 50) {
                 console.log(`[Gemini] Strategy 3: Parsing chat-history text (${chatContent.length} chars)`);
-                // Store as single assistant message if we can't parse structure
                 turns.push({ role: 'assistant', content: chatContent.trim() });
             }
 
