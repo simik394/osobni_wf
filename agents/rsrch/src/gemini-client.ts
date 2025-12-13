@@ -719,6 +719,14 @@ export class GeminiClient {
                     console.log(`[Gemini] Document renamed to: ${newTitle}`);
                 }
 
+                // Step 8: Rename the Gemini session with registry ID prefix
+                const sessionTitle = exportResult.docTitle || query.substring(0, 30);
+                const newSessionTitle = `${sessionId} ${sessionTitle}`;
+                const sessionRenamed = await this.renameSession(newSessionTitle);
+                if (sessionRenamed) {
+                    console.log(`[Gemini] Session renamed to: ${newSessionTitle}`);
+                }
+
                 result.status = 'completed';
             } else {
                 result.error = 'Failed to export to Google Docs';
@@ -952,6 +960,143 @@ export class GeminiClient {
             }
         } catch (e) {
             console.error('[Gemini] Failed to rename document:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Rename the current Gemini chat session.
+     * Uses the dropdown menu accessed from the session title bar.
+     * 
+     * @param newTitle The new title for the session
+     * @returns true if rename was successful
+     */
+    async renameSession(newTitle: string): Promise<boolean> {
+        console.log(`[Gemini] Renaming session to "${newTitle}"`);
+
+        try {
+            // First, we need to go back to Gemini if we navigated away
+            const currentUrl = this.page.url();
+            if (!currentUrl.includes('gemini.google.com')) {
+                await this.page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+                await this.page.waitForTimeout(2000);
+            }
+
+            // Click on the session title/dropdown button
+            // The dropdown trigger is typically the session title bar with a chevron
+            const titleDropdownSelectors = [
+                'button[aria-haspopup="menu"]:has-text("Espresso")',  // Recent session
+                '.conversation-title button',
+                'button[data-test-id="conversation-menu"]',
+                'mat-icon:has-text("expand_more")',  // Chevron icon
+                'button:has(mat-icon:has-text("expand_more"))',
+            ];
+
+            let dropdownOpened = false;
+            for (const selector of titleDropdownSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.count() > 0 && await btn.isVisible()) {
+                    await btn.click();
+                    await this.page.waitForTimeout(500);
+                    dropdownOpened = true;
+                    break;
+                }
+            }
+
+            if (!dropdownOpened) {
+                // Try clicking on the header area of the chat that shows the title
+                const headerArea = this.page.locator('[class*="conversation-header"], [class*="chat-header"]').first();
+                if (await headerArea.count() > 0) {
+                    await headerArea.click();
+                    await this.page.waitForTimeout(500);
+                    dropdownOpened = true;
+                }
+            }
+
+            // Look for the Rename option in the menu
+            // Czech: "Přejmenovat", English: "Rename"
+            const renameSelectors = [
+                'button:has-text("Přejmenovat")',
+                'button:has-text("Rename")',
+                '[role="menuitem"]:has-text("Přejmenovat")',
+                '[role="menuitem"]:has-text("Rename")',
+                'mat-menu-item:has-text("Přejmenovat")',
+                'mat-menu-item:has-text("Rename")',
+            ];
+
+            let renameClicked = false;
+            for (const selector of renameSelectors) {
+                const renameBtn = this.page.locator(selector).first();
+                if (await renameBtn.count() > 0 && await renameBtn.isVisible()) {
+                    await renameBtn.click();
+                    await this.page.waitForTimeout(500);
+                    renameClicked = true;
+                    break;
+                }
+            }
+
+            if (!renameClicked) {
+                console.warn('[Gemini] Rename option not found in menu');
+                await this.dumpState('rename_session_no_menu');
+                return false;
+            }
+
+            // Now there should be an input field for the new name
+            const inputSelectors = [
+                'input[type="text"]',
+                '[contenteditable="true"]',
+                'textarea',
+            ];
+
+            let inputFound = false;
+            for (const selector of inputSelectors) {
+                const input = this.page.locator(selector).first();
+                if (await input.count() > 0 && await input.isVisible()) {
+                    await input.fill('');  // Clear existing
+                    await input.fill(newTitle);
+                    await this.page.waitForTimeout(300);
+
+                    // Confirm with Enter or click a save button
+                    await this.page.keyboard.press('Enter');
+                    await this.page.waitForTimeout(1000);
+
+                    inputFound = true;
+                    break;
+                }
+            }
+
+            if (!inputFound) {
+                // Try looking for a dialog with form
+                const dialogInput = this.page.locator('[role="dialog"] input, mat-dialog-container input').first();
+                if (await dialogInput.count() > 0) {
+                    await dialogInput.fill('');
+                    await dialogInput.fill(newTitle);
+                    await this.page.waitForTimeout(300);
+
+                    // Click confirm/save button
+                    const confirmBtn = this.page.locator('[role="dialog"] button:has-text("Save"), [role="dialog"] button:has-text("Uložit"), mat-dialog-container button[type="submit"]').first();
+                    if (await confirmBtn.count() > 0) {
+                        await confirmBtn.click();
+                    } else {
+                        await this.page.keyboard.press('Enter');
+                    }
+                    await this.page.waitForTimeout(1000);
+                    inputFound = true;
+                }
+            }
+
+            if (inputFound) {
+                console.log(`[Gemini] Session renamed to "${newTitle}"`);
+                return true;
+            }
+
+            console.warn('[Gemini] Could not find input field to type new name');
+            await this.dumpState('rename_session_no_input');
+            return false;
+
+        } catch (e: any) {
+            console.error('[Gemini] Failed to rename session:', e.message);
+            await this.dumpState('rename_session_fail');
             return false;
         }
     }
