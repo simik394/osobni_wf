@@ -46,3 +46,24 @@
     chdir: /home/ubuntu/langfuse
   register: langfuse_docker_compose_up
   changed_when: "'Creating' in langfuse_docker_compose_up.stdout or 'Recreating' in langfuse_docker_compose_up.stdout"
+
+- name: Wait for Minio to be healthy
+  ansible.builtin.wait_for:
+    port: 9000
+    host: 127.0.0.1
+    delay: 5
+    timeout: 60
+    state: started
+
+- name: Read Minio password from .env
+  ansible.builtin.shell: grep MINIO_ROOT_PASSWORD /home/ubuntu/langfuse/.env | cut -d '=' -f2
+  register: minio_password_env
+  changed_when: false
+
+- name: Create Minio bucket 'langfuse-events'
+  ansible.builtin.command: >
+    docker compose exec minio sh -c "mc alias set local http://localhost:9000 minioadmin {{ minio_password_env.stdout }} && mc mb --ignore-existing local/langfuse-events"
+  args:
+    chdir: /home/ubuntu/langfuse
+  register: create_minio_bucket
+  changed_when: "'Bucket created successfully' in create_minio_bucket.stdout"
