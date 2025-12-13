@@ -129,35 +129,35 @@ rsrch graph conversations     # List recent conversations
   - [x] Job queue operations
   - [x] Basic entity operations
 
-## Phase 2: Testing
-- [ ] Start FalkorDB container
-- [ ] Write `tests/graph-store.test.ts`
-  - [ ] Test job CRUD operations
-  - [ ] Test connection handling
-- [ ] Run tests: `npx ts-node tests/graph-store.test.ts`
+## Phase 2: Testing ✅
+- [x] Start FalkorDB container
+- [x] Write `tests/graph-store.test.ts`
+  - [x] Test job CRUD operations
+  - [x] Test connection handling
+- [x] Run tests: `npx ts-node tests/graph-store.test.ts`
 
-## Phase 3: Lineage Tracking
-- [ ] Add lineage node types (Session, Document, Audio)
-- [ ] Implement `linkJobToSession()`
-- [ ] Implement `linkSessionToDocument()`
-- [ ] Implement `linkDocumentToAudio()`
-- [ ] Implement `getLineage()` traversal
-- [ ] Test lineage chain
+## Phase 3: Lineage Tracking ✅
+- [x] Add lineage node types (Session, Document, Audio)
+- [x] Implement `createSession()`, `createDocument()`, `createAudio()`
+- [x] Implement `linkJobToSession()`
+- [x] Implement `linkSessionToDocument()`
+- [x] Implement `linkDocumentToAudio()`
+- [x] Implement `getLineage()` and `getLineageChain()` traversals
 
-## Phase 4: Replace JSON Job Queue
+## Phase 4: Replace JSON Job Queue ⏸️
 - [ ] Update server to use graph-store
 - [ ] Delete `src/job-queue.ts`
 - [ ] Delete `data/jobs.json`
 - [ ] Test all existing endpoints
 
-## Phase 5: Conversation History
-- [ ] Add conversation node types
-- [ ] Implement `startConversation()`
-- [ ] Implement `addTurn()`
-- [ ] Implement `getConversation()`
-- [ ] CLI integration
+## Phase 5: Conversation History ✅
+- [x] Add conversation node types
+- [x] Implement `startConversation()`
+- [x] Implement `addTurn()`
+- [x] Implement `getConversation()`
+- [x] Implement `getRecentConversations()`
 
-## Phase 6: CLI Extensions
+## Phase 6: CLI Extensions ⏸️
 - [ ] `rsrch graph status`
 - [ ] `rsrch graph lineage <id>`
 - [ ] Update USER_GUIDE.md
