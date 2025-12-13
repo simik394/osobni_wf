@@ -144,11 +144,11 @@ rsrch graph conversations     # List recent conversations
 - [x] Implement `linkDocumentToAudio()`
 - [x] Implement `getLineage()` and `getLineageChain()` traversals
 
-## Phase 4: Replace JSON Job Queue ⏸️
-- [ ] Update server to use graph-store
-- [ ] Delete `src/job-queue.ts`
-- [ ] Delete `data/jobs.json`
-- [ ] Test all existing endpoints
+## Phase 4: Replace JSON Job Queue ✅
+- [x] Update server to use graph-store
+- [x] Delete `src/job-queue.ts`
+- [x] Delete `data/jobs.json`
+- [x] Test all existing endpoints
 
 ## Phase 5: Conversation History ✅
 - [x] Add conversation node types
@@ -157,10 +157,11 @@ rsrch graph conversations     # List recent conversations
 - [x] Implement `getConversation()`
 - [x] Implement `getRecentConversations()`
 
-## Phase 6: CLI Extensions ⏸️
-- [ ] `rsrch graph status`
-- [ ] `rsrch graph lineage <id>`
-- [ ] Update USER_GUIDE.md
+## Phase 6: CLI Extensions ✅
+- [x] `rsrch graph status`
+- [x] `rsrch graph jobs [status]`
+- [x] `rsrch graph lineage <id>`
+- [x] Update help text
 
 ---
 
