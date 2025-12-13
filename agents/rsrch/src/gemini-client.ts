@@ -2,13 +2,18 @@
 import { Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getRegistry } from './artifact-registry';
 
 export interface DeepResearchResult {
     query: string;
     googleDocId?: string;
     googleDocUrl?: string;
+    googleDocTitle?: string;
     status: 'completed' | 'failed' | 'cancelled';
     error?: string;
+    // Artifact Registry IDs
+    registrySessionId?: string;  // e.g., "A1D"
+    registryDocId?: string;      // e.g., "A1D-01"
 }
 
 export interface ResearchInfo {
@@ -624,6 +629,252 @@ export class GeminiClient {
             await this.dumpState('gemini_research_fail');
             throw e;
         }
+    }
+
+    /**
+     * Start a full Deep Research workflow with artifact registry integration.
+     * 
+     * This method:
+     * 1. Enables Deep Research mode (Thinking 3 Pro + Deep Research tool)
+     * 2. Sends the query and automatically confirms the research plan
+     * 3. Waits for research completion (can take several minutes)
+     * 4. Exports results to Google Docs
+     * 5. Registers session and document in the artifact registry
+     * 6. Renames the Google Doc with the registry ID prefix
+     * 
+     * @param query The research question/topic
+     * @returns DeepResearchResult with status, doc info, and registry IDs
+     */
+    async startDeepResearch(query: string): Promise<DeepResearchResult> {
+        console.log(`[Gemini] Starting Deep Research: "${query}"`);
+
+        const result: DeepResearchResult = {
+            query,
+            status: 'failed'
+        };
+
+        try {
+            const registry = getRegistry();
+
+            // Register session at the start
+            const geminiSessionId = this.getCurrentSessionId() || 'new-session';
+            const sessionId = registry.registerSession(geminiSessionId, query);
+            result.registrySessionId = sessionId;
+            console.log(`[Gemini] Registered session: ${sessionId}`);
+
+            // Step 1: Enable Deep Research mode
+            await this.enableDeepResearchMode();
+            console.log('[Gemini] Deep Research mode enabled');
+
+            // Step 2: Send the query
+            const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
+            const input = this.page.locator(inputSelector).first();
+            await input.waitFor({ state: 'visible', timeout: 20000 });
+            await input.fill(query);
+            await this.page.waitForTimeout(500);
+            await input.press('Enter');
+            console.log('[Gemini] Query sent, waiting for research plan...');
+
+            // Step 3: Wait for and auto-confirm the research plan
+            await this.waitForAndConfirmResearchPlan();
+            console.log('[Gemini] Research plan confirmed, waiting for completion...');
+
+            // Step 4: Wait for research to complete
+            await this.waitForResearchCompletion();
+            console.log('[Gemini] Research completed');
+
+            // Update session ID now that we have it
+            const actualSessionId = this.getCurrentSessionId();
+            if (actualSessionId && actualSessionId !== geminiSessionId) {
+                // Update registry with actual session ID
+                const sessionEntry = registry.get(sessionId);
+                if (sessionEntry) {
+                    sessionEntry.geminiSessionId = actualSessionId;
+                }
+            }
+
+            // Step 5: Export to Google Docs
+            const exportResult = await this.exportToGoogleDocs();
+            if (exportResult.docId) {
+                result.googleDocId = exportResult.docId;
+                result.googleDocUrl = exportResult.docUrl || undefined;
+                result.googleDocTitle = exportResult.docTitle || undefined;
+
+                // Step 6: Register document in artifact registry
+                const docId = registry.registerDocument(
+                    sessionId,
+                    exportResult.docId,
+                    exportResult.docTitle || 'Untitled Research'
+                );
+                result.registryDocId = docId;
+                console.log(`[Gemini] Registered document: ${docId}`);
+
+                // Step 7: Rename the Google Doc with registry ID prefix
+                const originalTitle = exportResult.docTitle || 'Research';
+                const newTitle = `${docId} ${originalTitle}`;
+                const renamed = await this.renameGoogleDoc(exportResult.docId, newTitle);
+                if (renamed) {
+                    registry.updateTitle(docId, newTitle);
+                    result.googleDocTitle = newTitle;
+                    console.log(`[Gemini] Document renamed to: ${newTitle}`);
+                }
+
+                result.status = 'completed';
+            } else {
+                result.error = 'Failed to export to Google Docs';
+                console.warn('[Gemini] Export to Google Docs failed');
+            }
+
+        } catch (e: any) {
+            console.error('[Gemini] Deep Research failed:', e);
+            result.error = e.message;
+            result.status = 'failed';
+            await this.dumpState('deep_research_fail');
+        }
+
+        return result;
+    }
+
+    /**
+     * Enable Deep Research mode by selecting the appropriate model and tool.
+     */
+    private async enableDeepResearchMode(): Promise<void> {
+        // Look for model selector or Deep Research toggle
+        const modelSelectors = [
+            'button[aria-label*="Model"]',
+            'button[aria-label*="model"]',
+            '[data-test-id="model-selector"]',
+            'button:has-text("Gemini")',
+        ];
+
+        for (const selector of modelSelectors) {
+            const btn = this.page.locator(selector).first();
+            if (await btn.count() > 0 && await btn.isVisible()) {
+                await btn.click();
+                await this.page.waitForTimeout(500);
+
+                // Look for Deep Research or 2.0 Pro option
+                const deepResearchOptions = [
+                    'button:has-text("Deep Research")',
+                    '[role="menuitem"]:has-text("Deep Research")',
+                    'button:has-text("2.5 Pro")',
+                    '[role="menuitem"]:has-text("2.5 Pro")',
+                ];
+
+                for (const optSelector of deepResearchOptions) {
+                    const opt = this.page.locator(optSelector).first();
+                    if (await opt.count() > 0 && await opt.isVisible()) {
+                        await opt.click();
+                        await this.page.waitForTimeout(500);
+                        this.deepResearchEnabled = true;
+                        return;
+                    }
+                }
+                break;
+            }
+        }
+
+        // Fallback: check for Deep Research tool toggle
+        const toolToggle = this.page.locator('button[aria-label*="Deep Research"], [data-tool="deep-research"]').first();
+        if (await toolToggle.count() > 0) {
+            await toolToggle.click();
+            this.deepResearchEnabled = true;
+        }
+    }
+
+    /**
+     * Wait for the research plan to appear and automatically confirm it.
+     */
+    private async waitForAndConfirmResearchPlan(): Promise<void> {
+        const maxWait = 60000; // 60 seconds for plan to appear
+        const pollInterval = 2000;
+        let elapsed = 0;
+
+        while (elapsed < maxWait) {
+            // Look for confirmation buttons
+            const confirmButtons = [
+                'button:has-text("Start research")',
+                'button:has-text("Confirm")',
+                'button:has-text("Continue")',
+                'button:has-text("Zahájit výzkum")',
+                'button:has-text("Potvrdit")',
+            ];
+
+            for (const selector of confirmButtons) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.count() > 0 && await btn.isVisible()) {
+                    await btn.click();
+                    console.log('[Gemini] Research plan confirmed via button');
+                    return;
+                }
+            }
+
+            await this.page.waitForTimeout(pollInterval);
+            elapsed += pollInterval;
+        }
+
+        console.warn('[Gemini] No research plan confirmation button found - research may have started automatically');
+    }
+
+    /**
+     * Wait for the Deep Research to complete.
+     * Look for completion indicators and stabilize on final content.
+     */
+    private async waitForResearchCompletion(): Promise<void> {
+        const maxWait = 600000; // 10 minutes max
+        const pollInterval = 5000;
+        let elapsed = 0;
+        let lastContentLength = 0;
+        let stableCount = 0;
+
+        console.log('[Gemini] Waiting for research completion (max 10 min)...');
+
+        while (elapsed < maxWait) {
+            // Check for completion indicators
+            const completionIndicators = [
+                'deep-research-immersive-panel',
+                'button[aria-label*="Export"]',
+                'button[aria-label*="Nabídka pro export"]',
+            ];
+
+            let completed = false;
+            for (const selector of completionIndicators) {
+                if (await this.page.locator(selector).count() > 0) {
+                    // Found completion indicator - wait for content to stabilize
+                    const content = await this.page.locator('model-response').last().innerText().catch(() => '');
+
+                    if (content.length === lastContentLength && content.length > 500) {
+                        stableCount++;
+                        if (stableCount >= 3) {
+                            console.log('[Gemini] Research content stabilized');
+                            return;
+                        }
+                    } else {
+                        stableCount = 0;
+                        lastContentLength = content.length;
+                    }
+                    completed = true;
+                    break;
+                }
+            }
+
+            if (!completed) {
+                // Check for error states
+                const errorIndicators = this.page.locator('text="Something went wrong", text="Error", text="Try again"');
+                if (await errorIndicators.count() > 0) {
+                    throw new Error('Research encountered an error');
+                }
+            }
+
+            await this.page.waitForTimeout(pollInterval);
+            elapsed += pollInterval;
+
+            if (elapsed % 30000 === 0) {
+                console.log(`[Gemini] Still researching... (${Math.round(elapsed / 1000)}s elapsed)`);
+            }
+        }
+
+        console.warn('[Gemini] Research wait timeout - proceeding anyway');
     }
 
     async dumpState(name: string) {
