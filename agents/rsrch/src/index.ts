@@ -830,6 +830,66 @@ async function main() {
         console.log("\nUnified flow started! 🚀");
         console.log("Check server logs or Discord for progress updates.");
 
+    } else if (command === 'graph') {
+        // Graph database commands
+        const graphArg1 = args[1]; // e.g. status, jobs, lineage
+        const graphArg2 = args[2]; // e.g. job ID, status filter
+        const { getGraphStore } = await import('./graph-store');
+        const store = getGraphStore();
+
+        try {
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            await store.connect(graphHost, 6379);
+
+            if (graphArg1 === 'status') {
+                console.log('✅ FalkorDB connection: OK');
+                const jobs = await store.listJobs();
+                const queued = jobs.filter(j => j.status === 'queued').length;
+                const running = jobs.filter(j => j.status === 'running').length;
+                const completed = jobs.filter(j => j.status === 'completed').length;
+                const failed = jobs.filter(j => j.status === 'failed').length;
+                console.log(`\nJobs: ${jobs.length} total`);
+                console.log(`  Queued: ${queued}`);
+                console.log(`  Running: ${running}`);
+                console.log(`  Completed: ${completed}`);
+                console.log(`  Failed: ${failed}`);
+            } else if (graphArg1 === 'jobs') {
+                const status = graphArg2 as any;
+                const jobs = status ? await store.listJobs(status) : await store.listJobs();
+                console.log(`\nJobs (${jobs.length}):`);
+                for (const job of jobs) {
+                    const time = new Date(job.createdAt).toISOString();
+                    console.log(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
+                }
+            } else if (graphArg1 === 'lineage') {
+                if (!graphArg2) {
+                    console.error('Usage: rsrch graph lineage <artifact-id>');
+                    process.exit(1);
+                }
+                const chain = await store.getLineageChain(graphArg2);
+                if (!chain.job && !chain.session && !chain.document && !chain.audio) {
+                    console.log(`No lineage found for: ${graphArg2}`);
+                } else {
+                    console.log('\nLineage Chain:');
+                    if (chain.job) console.log(`  Job: ${chain.job.id} (${chain.job.type}) - "${chain.job.query.substring(0, 40)}..."`);
+                    if (chain.session) console.log(`  Session: ${chain.session.id} (${chain.session.platform})`);
+                    if (chain.document) console.log(`  Document: ${chain.document.id} - "${chain.document.title}"`);
+                    if (chain.audio) console.log(`  Audio: ${chain.audio.id} - ${chain.audio.path}`);
+                }
+            } else {
+                console.log('Graph Database Commands:');
+                console.log('  rsrch graph status          - Show connection status and job counts');
+                console.log('  rsrch graph jobs [status]   - List jobs (optional: queued|running|completed|failed)');
+                console.log('  rsrch graph lineage <id>    - Show lineage chain for artifact');
+            }
+        } catch (e: any) {
+            console.error('FalkorDB connection failed:', e.message);
+            console.error('Make sure FalkorDB is running: docker compose up falkordb -d');
+            process.exit(1);
+        } finally {
+            await store.disconnect();
+        }
+
     } else {
         console.log('Usage:');
         console.log('  rsrch auth                       - Login to Perplexity');
@@ -840,6 +900,7 @@ async function main() {
         console.log('  rsrch notebook <cmd> ...         - Manage NotebookLM (requires server)');
         console.log('  rsrch gemini <cmd> ...           - Gemini commands (research, deep-research, sessions...)');
         console.log('  rsrch unified "Query"            - Run One-Click Research-to-Podcast flow (requires server)');
+        console.log('  rsrch graph <cmd> ...            - Graph database commands (status, jobs, lineage)');
         console.log('  rsrch query "Question"           - Run localized query (standalone)');
         console.log('  rsrch query                      - Run queries from data/queries.json (standalone)');
         console.log('    Options: --session=ID|new|latest, --name=NAME, --deep, --keep-alive');

@@ -4,9 +4,12 @@ import { config } from './config';
 
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
-import { jobQueue, Job } from './job-queue';
+import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
+
+// Initialize graph store
+const graphStore = getGraphStore();
 
 const app = express();
 const PORT = config.port;
@@ -54,20 +57,20 @@ app.post('/query', async (req, res) => {
 
         // Non-blocking deep research
         if (deepResearch) {
-            const job = jobQueue.add('deepResearch', query, { session, name });
+            const job = await graphStore.addJob('deepResearch', query, { session, name });
             console.log(`[Server] Deep research job ${job.id} queued.`);
 
             // Process async
             (async () => {
                 try {
-                    jobQueue.markRunning(job.id);
+                    await graphStore.updateJobStatus(job.id, 'running');
                     const result = await client.query(query, { sessionId: session, sessionName: name, deepResearch: true });
-                    jobQueue.markCompleted(job.id, result);
+                    await graphStore.updateJobStatus(job.id, 'completed', { result });
                     console.log(`[Server] Deep research job ${job.id} completed.`);
                     notifyJobCompleted(job.id, 'Deep Research', query, true, result?.answer?.substring(0, 100));
                 } catch (err: any) {
                     console.error(`[Server] Deep research job ${job.id} failed:`, err);
-                    jobQueue.markFailed(job.id, err.message);
+                    await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
                     notifyJobCompleted(job.id, 'Deep Research', query, false, err.message);
                 }
             })();
@@ -193,21 +196,21 @@ app.post('/notebook/generate-audio', async (req, res) => {
         }
 
         // Create Job using centralized queue
-        const job = jobQueue.add('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
+        const job = await graphStore.addJob('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
 
         // Start background processing
         console.log(`[Server] Starting async job ${job.id}: Audio Generation (DryRun: ${dryRun})`);
 
         (async () => {
             try {
-                jobQueue.markRunning(job.id);
+                await graphStore.updateJobStatus(job.id, 'running');
                 await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
-                jobQueue.markCompleted(job.id, { message: 'Audio generated' });
+                await graphStore.updateJobStatus(job.id, 'completed', { result: { message: 'Audio generated' } });
                 console.log(`[Server] Job ${job.id} completed.`);
                 notifyJobCompleted(job.id, 'Audio Generation', notebookTitle || 'default', true, 'Audio overview generated');
             } catch (err: any) {
                 console.error(`[Server] Job ${job.id} failed:`, err);
-                jobQueue.markFailed(job.id, err.message);
+                await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
                 notifyJobCompleted(job.id, 'Audio Generation', notebookTitle || 'default', false, err.message);
             }
         })();
@@ -225,9 +228,9 @@ app.post('/notebook/generate-audio', async (req, res) => {
     }
 });
 
-app.get('/jobs/:id', (req, res) => {
+app.get('/jobs/:id', async (req, res) => {
     const jobId = req.params.id;
-    const job = jobQueue.get(jobId);
+    const job = await graphStore.getJob(jobId);
 
     if (!job) {
         return res.status(404).json({ success: false, error: 'Job not found' });
@@ -236,8 +239,8 @@ app.get('/jobs/:id', (req, res) => {
     res.json({ success: true, job });
 });
 
-app.get('/jobs', (req, res) => {
-    const jobs = jobQueue.list();
+app.get('/jobs', async (req, res) => {
+    const jobs = await graphStore.listJobs();
     res.json({ success: true, jobs });
 });
 
@@ -358,7 +361,7 @@ app.post('/research-to-podcast', async (req, res) => {
 
         if (!query) return res.status(400).json({ error: 'Query is required' });
 
-        const job = jobQueue.add('research-to-podcast', query, { customPrompt, dryRun });
+        const job = await graphStore.addJob('research-to-podcast', query, { customPrompt, dryRun });
 
         console.log(`[Server] Starting Unified Research Job ${job.id} for: "${query}"`);
 
@@ -372,7 +375,7 @@ app.post('/research-to-podcast', async (req, res) => {
         // Async Processing
         (async () => {
             try {
-                jobQueue.markRunning(job.id);
+                await graphStore.updateJobStatus(job.id, 'running');
                 notifyJobCompleted(job.id, 'Unified Flow Started', query, true, 'Starting automated research pipeline...');
 
                 // Get registry instance
@@ -474,12 +477,12 @@ Focus on depth, nuance, and covering aspects that might be missing above.
                     console.log(`[Job ${job.id}] Step 6: Skipped Download (Dry Run)`);
                 }
 
-                jobQueue.markCompleted(job.id, { docTitle, docUrl, audioGenerated: true, sessionId, docId });
+                await graphStore.updateJobStatus(job.id, 'completed', { result: { docTitle, docUrl, audioGenerated: true, sessionId, docId } });
                 notifyJobCompleted(job.id, 'Unified Flow Completed', query, true, `Podcast generated for "${query}". Doc: ${docTitle}`);
 
             } catch (err: any) {
                 console.error(`[Job ${job.id}] Failed:`, err);
-                jobQueue.markFailed(job.id, err.message);
+                await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
                 notifyJobCompleted(job.id, 'Unified Flow Failed', query, false, err.message);
             }
         })();
@@ -509,17 +512,18 @@ export async function startServer() {
         console.log('Initializing Perplexity client...');
         await client.init();
 
-        // Load persisted jobs and recover state
-        console.log('[Server] Loading persistent job queue...');
-        jobQueue.load();
+        // Connect to graph store
+        console.log('[Server] Connecting to FalkorDB...');
+        const graphHost = process.env.FALKORDB_HOST || 'localhost';
+        await graphStore.connect(graphHost, 6379);
 
         // Check for interrupted jobs
-        const runningJobs = jobQueue.list().filter(j => j.status === 'running');
+        const runningJobs = await graphStore.listJobs('running');
         if (runningJobs.length > 0) {
-            console.warn(`[Server] Found ${runningJobs.length} interrupted jobs from previous status.`);
+            console.warn(`[Server] Found ${runningJobs.length} interrupted jobs from previous session.`);
             for (const job of runningJobs) {
                 const msg = 'Interrupted by server restart/crash.';
-                jobQueue.markFailed(job.id, msg);
+                await graphStore.updateJobStatus(job.id, 'failed', { error: msg });
                 console.log(`[Server] Marked job ${job.id} as failed.`);
                 notifyJobCompleted(job.id, `${job.type} (Interrupted)`, job.query, false, msg);
             }
