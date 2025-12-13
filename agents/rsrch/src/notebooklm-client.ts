@@ -832,22 +832,26 @@ export class NotebookLMClient {
 
             const isMenuOpen = async () => await this.page.locator('.cdk-overlay-pane, .mat-mdc-menu-panel').count() > 0;
 
-            const findAndClickDownload = async () => {
-                // 1. Wait for menu animation
-                await this.page.waitForTimeout(500);
+            let downloadPromise: Promise<any> | null = null;
 
-                // Specific Text Search (Czech)
+            const findAndClickDownload = async () => {
+                // English / Intl "Download" text or icon
+                // Strategy: look for "Stáhnout", "Download", or "save_alt" icon
+
+                // Czech "Stáhnout"
                 const czDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Stáhnout' }).first();
                 if (await czDownload.isVisible()) {
                     console.log('[DEBUG] Found "Stáhnout" menu item. Clicking...');
+                    downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
                     await czDownload.click();
                     return true;
                 }
 
-                // Specific Icon Search (save_alt)
-                const saveAltIcon = this.page.locator('mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button[contains(@role, "menuitem")]').first();
+                // Icon "save_alt"
+                const saveAltIcon = this.page.locator('button[role="menuitem"] mat-icon').filter({ hasText: 'save_alt' }).locator('xpath=ancestor::button').first();
                 if (await saveAltIcon.isVisible()) {
                     console.log('[DEBUG] Found "save_alt" icon menu item. Clicking...');
+                    downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
                     await saveAltIcon.click();
                     return true;
                 }
@@ -856,6 +860,7 @@ export class NotebookLMClient {
                 const enDownload = this.page.locator('button[role="menuitem"]').filter({ hasText: 'Download' }).first();
                 if (await enDownload.isVisible()) {
                     console.log('[DEBUG] Found "Download" menu item. Clicking...');
+                    downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
                     await enDownload.click();
                     return true;
                 }
@@ -941,11 +946,10 @@ export class NotebookLMClient {
                 if (await findAndClickDownload()) success = true;
             }
 
-            if (success) {
+            if (success && downloadPromise) {
                 try {
                     console.log('[DEBUG] Waiting for download event...');
-                    const downloadPromise = this.page.waitForEvent('download', { timeout: 15000 });
-                    // Click already happened in findAndClickDownload
+                    // don't recreate promise, use the one created before click
                     const download = await downloadPromise;
 
                     // Ensure directory exists
@@ -953,7 +957,7 @@ export class NotebookLMClient {
                     const dir = path.dirname(outputFilename);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-                    await download.saveAs(outputFilename);
+                    await (download as any).saveAs(outputFilename);
                     console.log(`[DEBUG] Audio saved via download event to ${outputFilename}`);
                     return true;
                 } catch (e: any) {
