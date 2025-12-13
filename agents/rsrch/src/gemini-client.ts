@@ -897,43 +897,58 @@ export class GeminiClient {
 
     /**
      * Wait for the Deep Research to complete.
-     * Uses event-driven approach: waits for Export button OR DOM stabilization.
+     * Uses event-driven approach: waits for Export button (primary) with DOM stability backup.
+     * 
+     * Key insight: Research takes 3-10 minutes. We need minimum wait time before 
+     * accepting DOM stability to avoid false positives during plan→research transition.
      */
     private async waitForResearchCompletion(): Promise<void> {
         const maxWait = 600000; // 10 minutes max
+        const minWait = 60000;  // Minimum 1 minute before accepting stability
 
         console.log('[Gemini] Waiting for research completion (event-driven)...');
+        console.log(`[Gemini] Minimum wait: ${minWait / 1000}s, max: ${maxWait / 1000}s`);
+
+        const startTime = Date.now();
 
         try {
             // Use Promise.race to wait for first completion signal
             const result = await Promise.race([
-                // Signal 1: Export button appears (strongest signal)
+                // Signal 1: Export button appears (STRONGEST - this means research is truly done)
                 this.page.locator('button[aria-label*="Export"], button[aria-label*="Nabídka pro export"], button:has-text("Export")').first()
                     .waitFor({ state: 'visible', timeout: maxWait })
                     .then(() => 'export-button-visible'),
 
-                // Signal 2: Deep research panel with content
-                this.page.locator('deep-research-immersive-panel').first()
-                    .waitFor({ state: 'visible', timeout: maxWait })
-                    .then(async () => {
-                        // Panel visible, wait for stability
-                        await this.waitForDomStabilization(5000, maxWait);
-                        return 'panel-stabilized';
-                    }),
+                // Signal 2: Deep research panel stabilizes (but only after minWait)
+                (async () => {
+                    // Wait for panel to appear
+                    await this.page.locator('deep-research-immersive-panel').first()
+                        .waitFor({ state: 'visible', timeout: maxWait });
 
-                // Signal 3: Pure DOM stabilization fallback (5s quiet = done)
-                this.waitForDomStabilization(5000, maxWait)
-                    .then(result => `dom-${result}`),
+                    // Enforce minimum wait before accepting stability
+                    const elapsed = Date.now() - startTime;
+                    const remaining = Math.max(0, minWait - elapsed);
+                    if (remaining > 0) {
+                        console.log(`[Gemini] Panel visible, waiting ${remaining / 1000}s more before stability check...`);
+                        await this.page.waitForTimeout(remaining);
+                    }
 
-                // Signal 4: Check for error states periodically
+                    // Now check for DOM stability (10s quiet = research truly done)
+                    await this.waitForDomStabilization(10000, maxWait - (Date.now() - startTime));
+                    return 'panel-stabilized';
+                })(),
+
+                // Signal 3: Progress logging and error checking
                 (async () => {
                     const checkInterval = 5000;
                     let elapsed = 0;
                     while (elapsed < maxWait) {
+                        // Check for error states
                         const errorIndicators = this.page.locator('text="Something went wrong", text="Error", text="Try again"');
                         if (await errorIndicators.count() > 0) {
                             throw new Error('Research encountered an error');
                         }
+
                         await this.page.waitForTimeout(checkInterval);
                         elapsed += checkInterval;
 
@@ -948,7 +963,7 @@ export class GeminiClient {
             console.log(`[Gemini] Research completion detected via: ${result}`);
 
             // Give a short buffer for any final rendering
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(2000);
 
         } catch (error: any) {
             if (error.message.includes('timeout')) {
