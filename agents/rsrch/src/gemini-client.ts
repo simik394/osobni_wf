@@ -744,50 +744,77 @@ export class GeminiClient {
     }
 
     /**
-     * Enable Deep Research mode by selecting the appropriate model and tool.
+     * Enable Deep Research mode by clicking the Tools button and toggling Deep Research.
+     * 
+     * UI Path: Click "Nástroje" (Tools) button near input → Toggle "Deep Research" in drawer
      */
     private async enableDeepResearchMode(): Promise<void> {
-        // Look for model selector or Deep Research toggle
-        const modelSelectors = [
-            'button[aria-label*="Model"]',
-            'button[aria-label*="model"]',
-            '[data-test-id="model-selector"]',
-            'button:has-text("Gemini")',
+        console.log('[Gemini] Enabling Deep Research mode...');
+
+        // Step 1: Click the "Nástroje" (Tools) button near the input area
+        const toolsButtonSelectors = [
+            'button:has-text("Nástroje")',  // Czech
+            'button:has-text("Tools")',      // English
+            'button[aria-label*="Nástroje"]',
+            'button[aria-label*="Tools"]',
+            'button[aria-label*="nástroje"]',
         ];
 
-        for (const selector of modelSelectors) {
+        let toolsClicked = false;
+        for (const selector of toolsButtonSelectors) {
             const btn = this.page.locator(selector).first();
             if (await btn.count() > 0 && await btn.isVisible()) {
+                console.log(`[Gemini] Found Tools button with selector: ${selector}`);
                 await btn.click();
-                await this.page.waitForTimeout(500);
-
-                // Look for Deep Research or 2.0 Pro option
-                const deepResearchOptions = [
-                    'button:has-text("Deep Research")',
-                    '[role="menuitem"]:has-text("Deep Research")',
-                    'button:has-text("2.5 Pro")',
-                    '[role="menuitem"]:has-text("2.5 Pro")',
-                ];
-
-                for (const optSelector of deepResearchOptions) {
-                    const opt = this.page.locator(optSelector).first();
-                    if (await opt.count() > 0 && await opt.isVisible()) {
-                        await opt.click();
-                        await this.page.waitForTimeout(500);
-                        this.deepResearchEnabled = true;
-                        return;
-                    }
-                }
+                await this.page.waitForTimeout(1000);
+                toolsClicked = true;
                 break;
             }
         }
 
-        // Fallback: check for Deep Research tool toggle
-        const toolToggle = this.page.locator('button[aria-label*="Deep Research"], [data-tool="deep-research"]').first();
-        if (await toolToggle.count() > 0) {
-            await toolToggle.click();
-            this.deepResearchEnabled = true;
+        if (!toolsClicked) {
+            console.warn('[Gemini] Tools button not found. Trying alternative approach...');
+            // Try clicking on the toolbar area that might contain tools
+            const toolbarBtn = this.page.locator('[class*="tools"], [class*="capabilities"]').first();
+            if (await toolbarBtn.count() > 0) {
+                await toolbarBtn.click();
+                await this.page.waitForTimeout(1000);
+                toolsClicked = true;
+            }
         }
+
+        // Step 2: Find and toggle the Deep Research option
+        const deepResearchSelectors = [
+            // Toggle/switch for Deep Research
+            'button:has-text("Deep Research")',
+            '[role="switch"]:has-text("Deep Research")',
+            '[role="menuitem"]:has-text("Deep Research")',
+            'label:has-text("Deep Research")',
+            // Try finding the toggle within the drawer
+            '[role="dialog"] button:has-text("Deep Research")',
+            'div:has-text("Deep Research") input[type="checkbox"]',
+            'div:has-text("Deep Research") [role="switch"]',
+        ];
+
+        for (const selector of deepResearchSelectors) {
+            const toggle = this.page.locator(selector).first();
+            if (await toggle.count() > 0 && await toggle.isVisible()) {
+                console.log(`[Gemini] Found Deep Research toggle: ${selector}`);
+                await toggle.click();
+                await this.page.waitForTimeout(500);
+                this.deepResearchEnabled = true;
+                console.log('[Gemini] Deep Research mode enabled!');
+
+                // Close the drawer by clicking outside or pressing Escape
+                await this.page.keyboard.press('Escape');
+                await this.page.waitForTimeout(500);
+                return;
+            }
+        }
+
+        // If we found the tools drawer but not Deep Research, log what's visible
+        console.warn('[Gemini] Deep Research toggle not found in drawer');
+        await this.dumpState('deep_research_mode_fail');
     }
 
     /**
