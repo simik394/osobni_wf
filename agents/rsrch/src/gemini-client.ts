@@ -373,49 +373,83 @@ export class GeminiClient {
         const turns: ScrapedTurn[] = [];
 
         try {
-            // User prompts - try multiple selectors
-            const userSelectors = [
-                'user-query',
-                'div[data-author-role="user"]',
-                '.user-message',
-                'div.query-text'
-            ];
+            // Wait for content to load
+            await this.page.waitForTimeout(2000);
 
-            let userMessages: any = null;
-            for (const sel of userSelectors) {
-                const loc = this.page.locator(sel);
-                if (await loc.count() > 0) {
-                    userMessages = loc;
-                    console.log(`[Gemini] Using user selector: ${sel}`);
-                    break;
-                }
+            // Scroll to load all messages
+            const chatHistory = this.page.locator('infinite-scroller.chat-history, .chat-history, main');
+            if (await chatHistory.count() > 0) {
+                await chatHistory.first().evaluate((el: HTMLElement) => {
+                    el.scrollTop = 0; // Start at top
+                });
+                await this.page.waitForTimeout(500);
+                await chatHistory.first().evaluate((el: HTMLElement) => {
+                    el.scrollTop = el.scrollHeight; // Scroll to bottom
+                });
+                await this.page.waitForTimeout(1000);
             }
 
-            // Model responses
-            const modelMessages = this.page.locator('model-response');
+            // Try to find conversation turns using multiple selector strategies
+            // Strategy 1: Look for user-query and model-response elements
+            const userQueries = this.page.locator('user-query');
+            const modelResponses = this.page.locator('model-response');
 
-            const userCount = userMessages ? await userMessages.count() : 0;
-            const modelCount = await modelMessages.count();
-            console.log(`[Gemini] Found ${userCount} user messages, ${modelCount} model responses`);
+            const userCount = await userQueries.count();
+            const modelCount = await modelResponses.count();
 
-            // Interleave user/model messages (usually alternating)
-            const maxTurns = Math.max(userCount, modelCount);
-            for (let i = 0; i < maxTurns; i++) {
-                // User turn
-                if (userMessages && i < userCount) {
-                    const text = await userMessages.nth(i).innerText().catch(() => '');
-                    if (text.trim()) {
-                        turns.push({ role: 'user', content: text.trim() });
+            console.log(`[Gemini] Strategy 1: Found ${userCount} user-query, ${modelCount} model-response`);
+
+            if (userCount > 0 || modelCount > 0) {
+                // Interleave user/model messages
+                const maxTurns = Math.max(userCount, modelCount);
+                for (let i = 0; i < maxTurns; i++) {
+                    if (i < userCount) {
+                        const text = await userQueries.nth(i).innerText().catch(() => '');
+                        if (text.trim()) {
+                            turns.push({ role: 'user', content: text.trim() });
+                        }
+                    }
+                    if (i < modelCount) {
+                        const text = await modelResponses.nth(i).innerText().catch(() => '');
+                        if (text.trim()) {
+                            turns.push({ role: 'assistant', content: text.trim() });
+                        }
                     }
                 }
+                return turns;
+            }
 
-                // Assistant turn
-                if (i < modelCount) {
-                    const text = await modelMessages.nth(i).innerText().catch(() => '');
+            // Strategy 2: Look for conversation-turn elements
+            const conversationTurns = this.page.locator('conversation-turn, [class*="turn"], [class*="message"]');
+            const turnCount = await conversationTurns.count();
+            console.log(`[Gemini] Strategy 2: Found ${turnCount} conversation-turn elements`);
+
+            if (turnCount > 0) {
+                for (let i = 0; i < turnCount; i++) {
+                    const el = conversationTurns.nth(i);
+                    const text = await el.innerText().catch(() => '');
+                    const html = await el.innerHTML().catch(() => '');
+
+                    // Determine role based on class or content
+                    const className = await el.getAttribute('class') || '';
+                    const isUser = className.includes('user') || className.includes('query') || html.includes('user-query');
+
                     if (text.trim()) {
-                        turns.push({ role: 'assistant', content: text.trim() });
+                        turns.push({
+                            role: isUser ? 'user' : 'assistant',
+                            content: text.trim()
+                        });
                     }
                 }
+                return turns;
+            }
+
+            // Strategy 3: Parse the chat-history text content directly
+            const chatContent = await chatHistory.first().innerText().catch(() => '');
+            if (chatContent && chatContent.length > 50) {
+                console.log(`[Gemini] Strategy 3: Parsing chat-history text (${chatContent.length} chars)`);
+                // Store as single assistant message if we can't parse structure
+                turns.push({ role: 'assistant', content: chatContent.trim() });
             }
 
         } catch (e: any) {
