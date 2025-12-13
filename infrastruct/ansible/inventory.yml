@@ -1,0 +1,12 @@
+# For running ansible from a local machine (e.g., ntb) to provision 'halvarm'
+servers:
+  hosts:
+    halvarm:
+      ansible_user: ubuntu
+      # ansible_host is inherited from ~/.ssh/config alias 'halvarm'
+
+# For running ansible from 'halvarm' itself
+local:
+  hosts:
+    localhost:
+      ansible_connection: local

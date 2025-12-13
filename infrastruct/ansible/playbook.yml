@@ -1,0 +1,7 @@
+---
+- name: Deploy Langfuse to server
+  hosts: servers
+  become: true
+  roles:
+    - role: docker
+    - role: langfuse

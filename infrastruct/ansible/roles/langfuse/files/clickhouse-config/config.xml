@@ -1,0 +1,12 @@
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <console>true</console>
+    </logger>
+    <listen_host>0.0.0.0</listen_host>
+    <max_concurrent_queries>100</max_concurrent_queries>
+    <keep_alive_timeout>3</keep_alive_timeout>
+    <max_connections>1024</max_connections>
+    <max_table_size_to_drop>0</max_table_size_to_drop>
+    <max_partition_size_to_drop>0</max_partition_size_to_drop>
+</clickhouse>
