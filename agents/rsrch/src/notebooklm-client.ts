@@ -675,6 +675,33 @@ export class NotebookLMClient {
         await this.notifyDiscord(`⚠️ Timeout waiting for Audio Overview for notebook: "${notebookTitle || 'Current'}"`, true);
     }
 
+    /**
+     * Ensure the Studio/Analysis panel is visible (where Audio Overviews live).
+     */
+    private async maximizeStudio() {
+        // Switch to Studio/Notebook Guide tab/button
+        // In some locales/UI versions, this is a button "Studio" or "Notebook Guide"
+        const studioToggle = this.page.locator('button, [role="button"], div[role="tab"]').filter({
+            hasText: /Studio|Notebook Guide|Průvodce sešitem/i
+        }).first();
+
+        if (await studioToggle.count() > 0 && await studioToggle.isVisible()) {
+            const isSelected = await studioToggle.getAttribute('aria-selected') === 'true';
+
+            // Check if already open by looking for Audio/Overview header text
+            const hasAudioText = await this.page.locator('body').filter({ hasText: /Audio (Overview|přehled)/i }).count() > 0;
+
+            if (!hasAudioText && !isSelected) {
+                console.log(`[NotebookLM] Clicking Studio/Analysis toggle: "${await studioToggle.innerText()}"`);
+                await studioToggle.click();
+                await this.humanDelay(1500);
+            }
+        } else {
+            // It might be already open or different UI, log warning but proceed
+            console.log('[NotebookLM] Warning: Studio/Analysis toggle not found.');
+        }
+    }
+
     async downloadAudio(notebookTitle: string, outputFilename: string, options: { audioTitlePattern?: string, latestOnly?: boolean } = {}) {
         if (notebookTitle) {
             await this.openNotebook(notebookTitle);
@@ -684,15 +711,7 @@ export class NotebookLMClient {
         console.log(`[DEBUG] Options:`, options);
 
         // RESPONSIVE UI HANDLING: Check for Studio tab
-        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
-        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
-            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                console.log('[DEBUG] Switching to Studio tab...');
-                await studioTab.click();
-                await this.page.waitForTimeout(1000);
-            }
-        }
+        await this.maximizeStudio();
 
         await this.page.waitForTimeout(2000);
 
@@ -725,9 +744,10 @@ export class NotebookLMClient {
 
             // Fallback to text matching if icon check fails
             if (await audioArtifacts.count() === 0) {
-                audioArtifacts = this.page.locator('artifact-library-item').filter({
-                    hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
-                });
+                // Try finding buttons with audio icon text
+                audioArtifacts = this.page.locator('button, div[role="button"]').filter({
+                    hasText: 'audio_magic_eraser'
+                }).filter({ hasText: /play_arrow|more_vert/ });
             }
 
             const count = await audioArtifacts.count();
@@ -792,24 +812,21 @@ export class NotebookLMClient {
                 if (extractionSource === 'audio-player') {
                     return this.page.locator('audio-player button.menu-button, audio-player button[aria-label*="More"], audio-player button[aria-label*="Další"]').first();
                 } else {
-                    // We need to re-find the exact artifact we targeted above to get its button
-                    // Ideally we used a unique ID, but we don't have one.
-                    // We rely on the fact that we hovered it and it's visible.
-                    // IMPORTANT: Ideally filtering should be redone here or we risk clicking wrong one.
-                    // For simplicity/perf, we reuse the locator strategy but filtering might need care.
-                    // Let's rely on :hover pseudo check if possible? No.
-
-                    // Re-run the filter logic briefly is safest:
-                    // Simplification: just find the FIRST visible more button in an audio artifact 
-                    // IF we were targeting "latest" or default.
-                    // IF we matched a pattern, we must re-match.
+                    // Specific strategy for Audio Artifact button
+                    // Filter by title pattern if provided
+                    let artifact = this.page.locator('button, div[role="button"]').filter({
+                        hasText: 'audio_magic_eraser'
+                    }).filter({ hasText: /play_arrow|more_vert/ });
 
                     if (options.audioTitlePattern) {
-                        return this.page.locator('artifact-library-item').filter({ hasText: new RegExp(options.audioTitlePattern, 'i') }).locator('button mat-icon:has-text("more_vert")').locator('xpath=ancestor::button').first();
-                    } else {
-                        // Default / Latest = First
-                        return this.page.locator('artifact-library-item').filter({ has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ }) }).first().locator('button mat-icon:has-text("more_vert")').locator('xpath=ancestor::button').first();
+                        artifact = artifact.filter({ hasText: new RegExp(options.audioTitlePattern, 'i') });
                     }
+
+                    // The 'more_vert' icon is inside a button which is inside the artifact container (which is also a button technically in some views)
+                    // Or it's a sibling. 
+                    // Based on debug: <button ... class="mdc-icon-button ..."><mat-icon ...>more_vert</mat-icon></button>
+                    // And this button is INSIDE the artifact container.
+                    return artifact.first().locator('mat-icon').filter({ hasText: 'more_vert' }).locator('xpath=..').first();
                 }
             };
 
@@ -990,23 +1007,16 @@ export class NotebookLMClient {
         }
 
         // RESPONSIVE UI HANDLING: Check for Studio tab
-        const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
-        if (await studioTab.count() > 0 && await studioTab.isVisible()) {
-            const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                console.log('[DEBUG] Switching to Studio tab...');
-                await studioTab.click();
-                await this.page.waitForTimeout(1000);
-            }
-        }
+        // RESPONSIVE UI HANDLING: Check for Studio tab
+        await this.maximizeStudio();
 
         await this.page.waitForTimeout(2000);
 
         // Find ALL audio artifacts in the library
         console.log('[DEBUG] Searching for all audio artifacts...');
-        const audioArtifacts = this.page.locator('artifact-library-item').filter({
-            has: this.page.locator('mat-icon').filter({ hasText: /^audio_magic_eraser$/ })
-        });
+        const audioArtifacts = this.page.locator('button, div[role="button"]').filter({
+            hasText: 'audio_magic_eraser'
+        }).filter({ hasText: /play_arrow|more_vert/ });
 
         const count = await audioArtifacts.count();
         console.log(`[DEBUG] Found ${count} audio artifact(s)`);
@@ -1158,14 +1168,8 @@ export class NotebookLMClient {
 
         try {
             // Ensure we're on the Studio tab
-            const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
-            if (await studioTab.count() > 0 && await studioTab.isVisible()) {
-                const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
-                if (!isSelected) {
-                    await studioTab.click();
-                    await this.humanDelay(1000);
-                }
-            }
+            // Ensure we're on the Studio tab
+            await this.maximizeStudio();
 
             // Find the artifact by title
             const artifact = this.page.locator('artifact-library-item').filter({ hasText: currentTitle }).first();
@@ -1399,20 +1403,27 @@ export class NotebookLMClient {
         const audioList: Array<{ title: string; hasTranscript: boolean }> = [];
 
         try {
-            // Switch to Studio tab
-            const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
-            if (await studioTab.count() > 0 && await studioTab.isVisible()) {
-                const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
-                if (!isSelected) {
-                    await studioTab.click();
-                    await this.humanDelay(1000);
-                }
-            }
+            // Switch to Studio/Notebook Guide tab
+            await this.maximizeStudio();
 
             // Find audio artifacts
-            const audioArtifacts = this.page.locator('artifact-library-item').filter({
-                hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
-            });
+            // In some UI versions, these are button elements containing the 'audio_magic_eraser' icon text
+            // and usually a 'play_arrow' or 'more_vert'.
+            const selector = 'button, div[role="button"]';
+            // Wait for at least one candidate to appear to avoid race conditions, but don't fail if truly none
+            try {
+                // We use a short timeout because it might genuinely be empty
+                await this.page.waitForSelector(selector, { timeout: 3000, state: 'attached' });
+            } catch (e) {
+                // Ignore timeout, just means none found quickly
+            }
+
+            const audioArtifacts = this.page.locator(selector).filter({
+                hasText: 'audio_magic_eraser'
+            }).filter({ hasText: /play_arrow|more_vert/ });
+
+            // Give a small grace period for dynamic hydration
+            await this.page.waitForTimeout(1000);
 
             const count = await audioArtifacts.count();
             console.log(`[NotebookLM] Found ${count} audio overviews`);
