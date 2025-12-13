@@ -467,6 +467,7 @@ export class GraphStore {
 
     /**
      * Sync a scraped conversation from a platform (upsert by platformId)
+     * Smart merge: compares turn count and updates if different
      */
     async syncConversation(data: {
         platform: 'gemini' | 'perplexity';
@@ -480,19 +481,22 @@ export class GraphStore {
             sources?: Array<{ id: number; text: string; url: string; domain: string }>;
             reasoningSteps?: Array<{ phase: string; action: string }>;
         }>;
-    }): Promise<{ id: string; isNew: boolean }> {
+    }): Promise<{ id: string; isNew: boolean; turnsUpdated?: boolean }> {
         if (!this.graph) throw new Error('Not connected');
 
         const capturedAt = Date.now();
         const id = `conv_${data.platform}_${data.platformId}`;
 
-        // Check if conversation already exists
+        // Check if conversation already exists and get turn count
         const existing = await this.graph.query<any[]>(`
             MATCH (c:Conversation {platformId: '${escapeString(data.platformId)}', platform: '${data.platform}'})
-            RETURN c.id as id
+            OPTIONAL MATCH (c)-[:HAS_TURN]->(t:Turn)
+            RETURN c.id as id, count(t) as turnCount
         `);
 
         const isNew = !existing.data || existing.data.length === 0;
+        const existingTurnCount = isNew ? 0 : ((existing.data as any[])[0]?.turnCount ?? 0);
+        const newTurnCount = data.turns.length;
 
         if (isNew) {
             // Create new conversation
@@ -511,51 +515,101 @@ export class GraphStore {
             `);
 
             // Add turns
-            for (let i = 0; i < data.turns.length; i++) {
-                const turn = data.turns[i];
-                const ts = turn.timestamp || capturedAt + i;
-                await this.graph.query(`
-                    MATCH (c:Conversation {id: '${id}'})
-                    CREATE (t:Turn {
-                        role: '${turn.role}',
-                        content: '${escapeString(turn.content)}',
-                        timestamp: ${ts},
-                        idx: ${i}
-                    })
-                    CREATE (c)-[:HAS_TURN]->(t)
-                `);
-            }
+            await this.insertTurns(id, data.turns, capturedAt);
 
             // Add research docs if deep research
             if (data.researchDocs && data.researchDocs.length > 0) {
-                for (const doc of data.researchDocs) {
-                    const docId = `doc_${id}_${Math.random().toString(36).substring(2, 8)}`;
-                    await this.graph.query(`
-                        MATCH (c:Conversation {id: '${id}'})
-                        CREATE (d:ResearchDoc {
-                            id: '${docId}',
-                            title: '${escapeString(doc.title)}',
-                            content: '${escapeString(doc.content)}',
-                            sources: '${escapeString(JSON.stringify(doc.sources || []))}',
-                            reasoningSteps: '${escapeString(JSON.stringify(doc.reasoningSteps || []))}',
-                            capturedAt: ${capturedAt}
-                        })
-                        CREATE (c)-[:HAS_RESEARCH_DOC]->(d)
-                    `);
-                }
+                await this.insertResearchDocs(id, data.researchDocs, capturedAt);
             }
 
             console.log(`[GraphStore] Synced new conversation: ${id} (${data.turns.length} turns)`);
+            return { id, isNew: true };
         } else {
-            // Update capturedAt only
-            await this.graph.query(`
-                MATCH (c:Conversation {id: '${id}'})
-                SET c.capturedAt = ${capturedAt}
-            `);
-            console.log(`[GraphStore] Updated conversation: ${id}`);
-        }
+            // Smart merge: check if turns changed
+            const turnsChanged = newTurnCount !== existingTurnCount;
 
-        return { id, isNew };
+            if (turnsChanged && newTurnCount > 0) {
+                // Delete old turns and insert new ones
+                await this.graph.query(`
+                    MATCH (c:Conversation {id: '${id}'})-[:HAS_TURN]->(t:Turn)
+                    DETACH DELETE t
+                `);
+
+                // Insert new turns
+                await this.insertTurns(id, data.turns, capturedAt);
+
+                // Update capturedAt and title
+                await this.graph.query(`
+                    MATCH (c:Conversation {id: '${id}'})
+                    SET c.capturedAt = ${capturedAt}, c.title = '${escapeString(data.title)}'
+                `);
+
+                console.log(`[GraphStore] Updated conversation: ${id} (${existingTurnCount} → ${newTurnCount} turns)`);
+                return { id, isNew: false, turnsUpdated: true };
+            } else {
+                // Just update capturedAt
+                await this.graph.query(`
+                    MATCH (c:Conversation {id: '${id}'})
+                    SET c.capturedAt = ${capturedAt}
+                `);
+                console.log(`[GraphStore] Touched conversation: ${id} (${existingTurnCount} turns unchanged)`);
+                return { id, isNew: false, turnsUpdated: false };
+            }
+        }
+    }
+
+    /**
+     * Helper to insert turns for a conversation
+     */
+    private async insertTurns(
+        conversationId: string,
+        turns: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>,
+        baseTimestamp: number
+    ): Promise<void> {
+        for (let i = 0; i < turns.length; i++) {
+            const turn = turns[i];
+            const ts = turn.timestamp || baseTimestamp + i;
+            await this.graph!.query(`
+                MATCH (c:Conversation {id: '${conversationId}'})
+                CREATE (t:Turn {
+                    role: '${turn.role}',
+                    content: '${escapeString(turn.content)}',
+                    timestamp: ${ts},
+                    idx: ${i}
+                })
+                CREATE (c)-[:HAS_TURN]->(t)
+            `);
+        }
+    }
+
+    /**
+     * Helper to insert research docs for a conversation
+     */
+    private async insertResearchDocs(
+        conversationId: string,
+        docs: Array<{
+            title: string;
+            content: string;
+            sources?: Array<{ id: number; text: string; url: string; domain: string }>;
+            reasoningSteps?: Array<{ phase: string; action: string }>;
+        }>,
+        capturedAt: number
+    ): Promise<void> {
+        for (const doc of docs) {
+            const docId = `doc_${conversationId}_${Math.random().toString(36).substring(2, 8)}`;
+            await this.graph!.query(`
+                MATCH (c:Conversation {id: '${conversationId}'})
+                CREATE (d:ResearchDoc {
+                    id: '${docId}',
+                    title: '${escapeString(doc.title)}',
+                    content: '${escapeString(doc.content)}',
+                    sources: '${escapeString(JSON.stringify(doc.sources || []))}',
+                    reasoningSteps: '${escapeString(JSON.stringify(doc.reasoningSteps || []))}',
+                    capturedAt: ${capturedAt}
+                })
+                CREATE (c)-[:HAS_RESEARCH_DOC]->(d)
+            `);
+        }
     }
 
     /**
