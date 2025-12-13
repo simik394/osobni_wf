@@ -732,6 +732,120 @@ export class GraphStore {
     }
 
     // ====================
+    // NOTEBOOKLM SCRAPING
+    // ====================
+
+    /**
+     * Sync a scraped notebook from NotebookLM
+     */
+    async syncNotebook(data: {
+        platformId: string;
+        title: string;
+        sources: Array<{ type: string; title: string; url?: string }>;
+        audioOverviews: Array<{ title: string; hasTranscript: boolean }>;
+    }): Promise<{ id: string; isNew: boolean }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const capturedAt = Date.now();
+        const id = `nb_${data.platformId}`;
+
+        // Check if notebook exists
+        const existing = await this.graph.query<any[]>(`
+            MATCH (n:Notebook {platformId: '${escapeString(data.platformId)}'})
+            RETURN n.id as id
+        `);
+
+        const isNew = !existing.data || existing.data.length === 0;
+
+        if (isNew) {
+            // Create notebook
+            await this.graph.query(`
+                MERGE (a:Agent {id: 'notebooklm'})
+                CREATE (n:Notebook {
+                    id: '${id}',
+                    platformId: '${escapeString(data.platformId)}',
+                    title: '${escapeString(data.title)}',
+                    sourceCount: ${data.sources.length},
+                    audioCount: ${data.audioOverviews.length},
+                    capturedAt: ${capturedAt}
+                })
+                CREATE (a)-[:OWNS]->(n)
+            `);
+
+            // Add sources
+            for (const source of data.sources) {
+                const srcId = `src_${id}_${Math.random().toString(36).substring(2, 8)}`;
+                await this.graph.query(`
+                    MATCH (n:Notebook {id: '${id}'})
+                    CREATE (s:Source {
+                        id: '${srcId}',
+                        type: '${source.type}',
+                        title: '${escapeString(source.title)}',
+                        url: '${escapeString(source.url || '')}'
+                    })
+                    CREATE (n)-[:HAS_SOURCE]->(s)
+                `);
+            }
+
+            // Add audio overviews
+            for (const audio of data.audioOverviews) {
+                const audioId = `audio_${id}_${Math.random().toString(36).substring(2, 8)}`;
+                await this.graph.query(`
+                    MATCH (n:Notebook {id: '${id}'})
+                    CREATE (ao:AudioOverview {
+                        id: '${audioId}',
+                        title: '${escapeString(audio.title)}',
+                        hasTranscript: ${audio.hasTranscript}
+                    })
+                    CREATE (n)-[:HAS_AUDIO]->(ao)
+                `);
+            }
+
+            console.log(`[GraphStore] Synced new notebook: ${id} (${data.sources.length} sources, ${data.audioOverviews.length} audio)`);
+        } else {
+            // Update capturedAt
+            await this.graph.query(`
+                MATCH (n:Notebook {id: '${id}'})
+                SET n.capturedAt = ${capturedAt}, n.sourceCount = ${data.sources.length}, n.audioCount = ${data.audioOverviews.length}
+            `);
+            console.log(`[GraphStore] Touched notebook: ${id}`);
+        }
+
+        return { id, isNew };
+    }
+
+    /**
+     * Get all notebooks
+     */
+    async getNotebooks(limit = 50): Promise<Array<{
+        id: string;
+        title: string;
+        sourceCount: number;
+        audioCount: number;
+        capturedAt: number;
+    }>> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (n:Notebook)
+            RETURN n
+            ORDER BY n.capturedAt DESC
+            LIMIT ${limit}
+        `);
+
+        return (result.data || []).map((row: any) => {
+            const props = row.n.properties || row.n;
+            return {
+                id: props.id,
+                title: props.title,
+                sourceCount: props.sourceCount || 0,
+                audioCount: props.audioCount || 0,
+                capturedAt: props.capturedAt
+            };
+        });
+    }
+
+    // ====================
     // LINEAGE TRACKING
     // ====================
 

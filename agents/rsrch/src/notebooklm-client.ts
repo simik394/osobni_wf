@@ -1238,4 +1238,205 @@ export class NotebookLMClient {
             return false;
         }
     }
+
+    // ==========================================
+    // SCRAPER METHODS
+    // ==========================================
+
+    /**
+     * List all notebooks from the home page
+     */
+    async listNotebooks(): Promise<Array<{
+        title: string;
+        platformId: string;
+        sourceCount: number;
+    }>> {
+        console.log('[NotebookLM] Listing notebooks...');
+        await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+        await this.humanDelay(2000);
+
+        const notebooks: Array<{ title: string; platformId: string; sourceCount: number }> = [];
+
+        try {
+            // Wait for notebook cards to load
+            await this.page.waitForSelector('project-button, mat-card', { timeout: 15000 });
+
+            const cards = this.page.locator('project-button');
+            const count = await cards.count();
+            console.log(`[NotebookLM] Found ${count} notebooks`);
+
+            for (let i = 0; i < count; i++) {
+                const card = cards.nth(i);
+
+                // Extract title
+                const titleEl = card.locator('.project-button-title');
+                const title = await titleEl.innerText().catch(() => `Notebook ${i + 1}`);
+
+                // Extract source count (usually in subtitle like "3 sources")
+                const subtitleEl = card.locator('.project-button-subtitle, .source-count');
+                const subtitleText = await subtitleEl.innerText().catch(() => '');
+                const sourceMatch = subtitleText.match(/(\d+)\s*(sources?|zdrojů?|zdroje?)/i);
+                const sourceCount = sourceMatch ? parseInt(sourceMatch[1]) : 0;
+
+                // Get platformId from data attribute or by clicking
+                let platformId = await card.getAttribute('data-project-id') || '';
+
+                if (!platformId) {
+                    // Generate ID from title hash if not available
+                    platformId = title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16);
+                }
+
+                notebooks.push({ title: title.trim(), platformId, sourceCount });
+            }
+        } catch (e: any) {
+            console.error('[NotebookLM] Error listing notebooks:', e.message);
+        }
+
+        return notebooks;
+    }
+
+    /**
+     * Scrape a notebook's contents (sources, audio, optionally download audio)
+     */
+    async scrapeNotebook(title: string, downloadAudio: boolean = false): Promise<{
+        title: string;
+        platformId: string;
+        sources: Array<{ type: string; title: string; url?: string }>;
+        audioOverviews: Array<{ title: string; hasTranscript: boolean }>;
+    }> {
+        console.log(`[NotebookLM] Scraping notebook: ${title}`);
+        await this.openNotebook(title);
+        await this.humanDelay(2000);
+
+        // Get platformId from URL
+        const url = this.page.url();
+        const idMatch = url.match(/notebook\/([a-zA-Z0-9_-]+)/);
+        const platformId = idMatch ? idMatch[1] : title.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        // Extract sources
+        const sources = await this.extractSources();
+
+        // Extract audio overviews
+        const audioOverviews = await this.extractAudioOverviews();
+
+        // Optionally download audio
+        if (downloadAudio && audioOverviews.length > 0) {
+            const outputDir = 'data/audio';
+            const fs = require('fs');
+            if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir, { recursive: true });
+            }
+
+            const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+            const outputPath = `${outputDir}/${safeTitle}_${Date.now()}.mp3`;
+
+            try {
+                await this.downloadAudio(title, outputPath, { latestOnly: true });
+                console.log(`[NotebookLM] Audio downloaded to: ${outputPath}`);
+            } catch (e: any) {
+                console.error('[NotebookLM] Failed to download audio:', e.message);
+            }
+        }
+
+        return { title, platformId, sources, audioOverviews };
+    }
+
+    /**
+     * Extract sources from current notebook
+     */
+    private async extractSources(): Promise<Array<{ type: string; title: string; url?: string }>> {
+        const sources: Array<{ type: string; title: string; url?: string }> = [];
+
+        try {
+            // Switch to Sources tab
+            const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+            if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+                const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+                if (!isSelected) {
+                    await sourcesTab.click();
+                    await this.humanDelay(1000);
+                }
+            }
+
+            // Find source items
+            const sourceItems = this.page.locator('source-list-item, .source-item, [class*="source"]').filter({
+                has: this.page.locator('.source-title, .title, span')
+            });
+
+            const count = await sourceItems.count();
+            console.log(`[NotebookLM] Found ${count} sources`);
+
+            for (let i = 0; i < count; i++) {
+                const item = sourceItems.nth(i);
+
+                // Get title
+                const titleEl = item.locator('.source-title, .title').first();
+                const title = await titleEl.innerText().catch(() => '');
+
+                // Determine type from icon or class
+                const html = await item.innerHTML().catch(() => '');
+                let type = 'unknown';
+                if (html.includes('link') || html.includes('web')) type = 'url';
+                else if (html.includes('drive') || html.includes('doc')) type = 'gdoc';
+                else if (html.includes('pdf') || html.includes('picture_as_pdf')) type = 'pdf';
+                else if (html.includes('text') || html.includes('article')) type = 'text';
+
+                if (title.trim()) {
+                    sources.push({ type, title: title.trim() });
+                }
+            }
+        } catch (e: any) {
+            console.error('[NotebookLM] Error extracting sources:', e.message);
+        }
+
+        return sources;
+    }
+
+    /**
+     * Extract audio overviews from current notebook
+     */
+    private async extractAudioOverviews(): Promise<Array<{ title: string; hasTranscript: boolean }>> {
+        const audioList: Array<{ title: string; hasTranscript: boolean }> = [];
+
+        try {
+            // Switch to Studio tab
+            const studioTab = this.page.locator('div[role="tab"]').filter({ hasText: /^Studio$/ }).first();
+            if (await studioTab.count() > 0 && await studioTab.isVisible()) {
+                const isSelected = await studioTab.getAttribute('aria-selected') === 'true';
+                if (!isSelected) {
+                    await studioTab.click();
+                    await this.humanDelay(1000);
+                }
+            }
+
+            // Find audio artifacts
+            const audioArtifacts = this.page.locator('artifact-library-item').filter({
+                hasText: /Audio (Overview|přehled)|Podcast|audio_magic_eraser/i
+            });
+
+            const count = await audioArtifacts.count();
+            console.log(`[NotebookLM] Found ${count} audio overviews`);
+
+            for (let i = 0; i < count; i++) {
+                const artifact = audioArtifacts.nth(i);
+                const text = await artifact.innerText().catch(() => '');
+
+                // Check for transcript indicator
+                const hasTranscript = text.toLowerCase().includes('transcript') ||
+                    text.toLowerCase().includes('přepis');
+
+                // Extract title (first line usually)
+                const titleMatch = text.split('\n')[0] || `Audio ${i + 1}`;
+
+                audioList.push({
+                    title: titleMatch.trim(),
+                    hasTranscript
+                });
+            }
+        } catch (e: any) {
+            console.error('[NotebookLM] Error extracting audio overviews:', e.message);
+        }
+
+        return audioList;
+    }
 }
