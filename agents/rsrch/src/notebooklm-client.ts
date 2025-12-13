@@ -1367,7 +1367,8 @@ export class NotebookLMClient {
             }
 
             // Find source items
-            const sourceItems = this.page.locator('source-list-item, .source-item, [class*="source"]').filter({
+            // Find source items - explicitly target the item container
+            const sourceItems = this.page.locator('.single-source-container, source-list-item').filter({
                 has: this.page.locator('.source-title, .title, span')
             });
 
