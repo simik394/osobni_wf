@@ -272,7 +272,7 @@ async function main() {
             }
 
         } else if (subArg1 === 'download-all-audio') {
-            // notebook download-all-audio [output_dir] --notebook <Title> [--local]
+            // formula: notebook download-all-audio [output_dir] --notebook <Title> [--local]
             let notebookTitle: string | undefined = undefined;
             let outputDir: string = './audio_downloads'; // Default output directory
 
@@ -290,7 +290,7 @@ async function main() {
                 } else if (i === 2 && !args[i].startsWith('--')) {
                     // Already handled subArg2 as output directory
                 } else if (args[i].startsWith('--')) {
-                    // Unknown flag, or flag already handled but we just skip for basic parser
+                    // Unknown flag or already handled
                 }
             }
 
@@ -302,26 +302,152 @@ async function main() {
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const resolvedOutputDir = path.resolve(process.cwd(), outputDir);
-                    const downloaded = await notebook.downloadAllAudio(notebookTitle as string, resolvedOutputDir);
-                    console.log(`\n✅ Downloaded ${downloaded.length} audio file(s) to ${resolvedOutputDir}`);
-                    downloaded.forEach((f: string) => console.log(`  - ${path.basename(f)}`));
+                    console.log(`[CLI] Downloading ALL audio... Output: ${resolvedOutputDir}`);
+
+                    await notebook.downloadAllAudio(notebookTitle as string, resolvedOutputDir);
                 });
             } else {
-                console.log('Server implementation for download-all-audio not yet available. Use --local.');
+                console.log('Server mode for download-all-audio not yet implemented. Use --local.');
+            }
+
+        } else if (subArg1 === 'sync') {
+            // rsrch notebook sync [--title "Title"] [-a] [--local]
+            let title: string | undefined = undefined;
+            let downloadAudio = false;
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--title') {
+                    title = args[i + 1];
+                    i++;
+                } else if (args[i] === '-a' || args[i] === '--audio') {
+                    downloadAudio = true;
+                }
+            }
+
+            if (isLocalExecution()) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                await store.connect(graphHost, 6379);
+
+                try {
+                    await runLocalNotebookAction({}, async (client, notebook) => {
+                        if (title) {
+                            // Sync single notebook
+                            console.log(`\n[Sync] Scraping notebook: "${title}"...`);
+                            if (downloadAudio) console.log('[Sync] Audio download enabled (-a)');
+
+                            const data = await notebook.scrapeNotebook(title, downloadAudio);
+                            const result = await store.syncNotebook(data);
+                            console.log(`\n[Sync] Result: ${result.isNew ? 'New' : 'Updated'} notebook ${result.id}\n`);
+                        } else {
+                            // Sync all notebooks (listing only currently, full scrape needs iteration)
+                            console.log('\n[Sync] Listing all notebooks...');
+                            const notebooks = await notebook.listNotebooks();
+
+                            console.log(`\n[Sync] Found ${notebooks.length} notebooks. Syncing metadata...`);
+
+                            for (const nb of notebooks) {
+                                // For listing, we don't open each one so we don't have sources/audio yet
+                                // We'll store a basic record
+                                const result = await store.syncNotebook({
+                                    platformId: nb.platformId,
+                                    title: nb.title,
+                                    sources: [], // No details in list view
+                                    audioOverviews: [] // No details in list view
+                                });
+                                console.log(`  - ${nb.title} (${result.id}) [${nb.sourceCount} sources]`);
+                            }
+                            console.log('\n[Sync] Metadata sync complete. To scrape contents, use: rsrch notebook sync --title "Name"\n');
+                        }
+                    });
+                } finally {
+                    await store.disconnect();
+                }
+            } else {
+                console.log('Server mode for notebook sync not yet implemented. Use --local.');
             }
 
         } else {
-            console.log('Notebook commands:');
-            console.log('  rsrch notebook create <Title>');
-            console.log('  rsrch notebook add-source <URL> [--notebook <Title>]');
-            console.log('  rsrch notebook add-drive-source <DocNames> [--notebook <Title>]');
-            console.log('  rsrch notebook audio [--notebook <Title>] [--sources <list>] [--prompt <text>]');
-            console.log('  rsrch notebook download-audio [output_path] --notebook <Title> [--local] [--headed]');
-            console.log('  rsrch notebook download-all-audio [output_dir] --notebook <Title> [--local] [--headed]');
-            console.log('');
-            console.log('Flags:');
-            console.log('  --local    Use local browser (required for Google services)');
-            console.log('  --headed   Show browser window (default: headless)');
+            console.log('NotebookLM commands:');
+            console.log('  rsrch notebook create "Title" [--local]');
+            console.log('  rsrch notebook add-source "URL" --notebook "Title" [--local]');
+            console.log('  rsrch notebook add-drive-source "Doc Name" --notebook "Title" [--local]');
+            console.log('  rsrch notebook generate-audio --notebook "Title" [--sources "A,B"] [--prompt "Prompt"] [--wet] [--local]');
+            console.log('  rsrch notebook download-audio [path] --notebook "Title" [--latest] [--pattern "regex"] [--local]');
+            console.log('  rsrch notebook download-all-audio [dir] --notebook "Title" [--local]');
+            console.log('  rsrch notebook sync [--title "Title"] [-a] [--local] # Sync metadata or full content');
+        }
+
+    } else if (command === 'graph') {
+        const subArg = args[1];
+        const isLocalExecution = args.includes('--local');
+
+        if (subArg === 'notebooks') {
+            // rsrch graph notebooks [--limit=N]
+            const limit = parseInt(args[2]?.replace('--limit=', '') || '50');
+
+            const { getGraphStore } = await import('./graph-store');
+            const store = getGraphStore();
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+            try {
+                await store.connect(graphHost, 6379);
+                const notebooks = await store.getNotebooks(limit);
+
+                console.log(`\n=== Synced Notebooks (${notebooks.length}) ===\n`);
+                if (notebooks.length === 0) {
+                    console.log('No notebooks found. Run "rsrch notebook sync" first.\n');
+                } else {
+                    console.table(notebooks.map(n => ({
+                        ID: n.id,
+                        Title: n.title,
+                        Sources: n.sourceCount,
+                        Audio: n.audioCount,
+                        Synced: new Date(n.capturedAt).toLocaleString()
+                    })));
+                }
+            } finally {
+                await store.disconnect();
+            }
+
+        } else if (subArg === 'conversations') {
+            // rsrch graph conversations [--limit=N]
+            const limit = parseInt(args[2]?.replace('--limit=', '') || '50');
+
+            if (isLocalExecution) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+                try {
+                    await store.connect(graphHost, 6379);
+                    // We need to implement getConversations in graph-store first or use getConversationsByPlatform
+                    // For now, let's just list Gemini conversations as default orall
+
+                    // Actually, let's use the existing getConversationsByPlatform or similar
+                    // But wait, the user previously added 'getConversationsByPlatform'
+
+                    const conversations = await store.getConversationsByPlatform('gemini', limit);
+
+                    console.log(`\n=== Synced Conversations (${conversations.length}) ===\n`);
+                    console.table(conversations.map((c: any) => ({
+                        ID: c.id,
+                        Title: c.title,
+                        Turns: c.turnCount,
+                        Synced: new Date(c.capturedAt).toLocaleString()
+                    })));
+
+                } finally {
+                    await store.disconnect();
+                }
+            } else {
+                console.log('Server mode for graph conversations not implemented');
+            }
+        } else {
+            console.log('Graph commands:');
+            console.log('  rsrch graph notebooks [--limit=N]');
+            console.log('  rsrch graph conversations [--limit=N] [--local]');
         }
 
     } else if (command === 'gemini') {
