@@ -57,6 +57,30 @@ export interface ParsedResearch {
     createdAt: string;
 }
 
+// === Scraped Conversation Types ===
+
+export interface ScrapedTurn {
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp?: number;
+}
+
+export interface ScrapedResearchDoc {
+    title: string;
+    content: string;  // With footnotes for citations
+    sources: Array<{ id: number; text: string; url: string; domain: string }>;
+    reasoningSteps: Array<{ phase: string; action: string }>;
+}
+
+export interface ScrapedConversation {
+    platformId: string;
+    title: string;
+    type: 'regular' | 'deep-research';
+    turns: ScrapedTurn[];
+    researchDocs?: ScrapedResearchDoc[];
+    capturedAt: number;
+}
+
 export class GeminiClient {
     private page: Page;
     private deepResearchEnabled = false;
@@ -258,6 +282,197 @@ export class GeminiClient {
             }
         } catch (e) {
             console.error('[Gemini] Error listing deep research documents:', e);
+        }
+
+        return docs;
+    }
+
+    /**
+     * Scrape conversations from Gemini sidebar with pagination.
+     * 
+     * @param limit Maximum number of sessions to scrape
+     * @param offset Starting offset in session list
+     * @returns Array of scraped conversations with turns and metadata
+     */
+    async scrapeConversations(limit: number = 10, offset: number = 0): Promise<ScrapedConversation[]> {
+        const conversations: ScrapedConversation[] = [];
+        console.log(`[Gemini] Scraping conversations (limit: ${limit}, offset: ${offset})...`);
+
+        try {
+            // Ensure we're on Gemini
+            const url = this.page.url();
+            if (!url.includes('gemini.google.com')) {
+                await this.page.goto('https://gemini.google.com/app', { waitUntil: 'networkidle' });
+                await this.page.waitForTimeout(2000);
+            }
+
+            // Load sessions using existing method
+            const sessions = await this.listSessions(limit, offset);
+            console.log(`[Gemini] Found ${sessions.length} sessions to scrape`);
+
+            for (let i = 0; i < sessions.length; i++) {
+                const session = sessions[i];
+                console.log(`[Gemini] Scraping ${i + 1}/${sessions.length}: "${session.name}"...`);
+
+                try {
+                    // Click to open session
+                    const sessionItems = this.page.locator('div.conversation[role="button"]');
+                    const targetIndex = offset + i;
+
+                    if (await sessionItems.count() > targetIndex) {
+                        await sessionItems.nth(targetIndex).click({ force: true });
+                        await this.page.waitForTimeout(2000);
+                    } else {
+                        console.warn(`[Gemini] Session ${targetIndex} no longer available`);
+                        continue;
+                    }
+
+                    // Detect session type
+                    const deepResearchPanel = this.page.locator('deep-research-immersive-panel');
+                    const isDeepResearch = await deepResearchPanel.count() > 0;
+
+                    // Extract turns
+                    const turns = await this.extractConversationTurns();
+
+                    const conversation: ScrapedConversation = {
+                        platformId: session.id || `gemini_${Date.now()}_${i}`,
+                        title: session.name,
+                        type: isDeepResearch ? 'deep-research' : 'regular',
+                        turns,
+                        capturedAt: Date.now()
+                    };
+
+                    // For deep research, also extract research docs
+                    if (isDeepResearch) {
+                        conversation.researchDocs = await this.extractResearchDocsWithSources();
+                    }
+
+                    conversations.push(conversation);
+                    console.log(`[Gemini] Scraped: ${conversation.type} session with ${turns.length} turns`);
+
+                    // Rate limiting
+                    await this.page.waitForTimeout(500);
+
+                } catch (e: any) {
+                    console.error(`[Gemini] Failed to scrape session "${session.name}":`, e.message);
+                }
+            }
+
+        } catch (e: any) {
+            console.error('[Gemini] Error scraping conversations:', e);
+        }
+
+        console.log(`[Gemini] Scraped ${conversations.length} conversations total`);
+        return conversations;
+    }
+
+    /**
+     * Extract all turns from the current conversation view
+     */
+    private async extractConversationTurns(): Promise<ScrapedTurn[]> {
+        const turns: ScrapedTurn[] = [];
+
+        try {
+            // User prompts - try multiple selectors
+            const userSelectors = [
+                'user-query',
+                'div[data-author-role="user"]',
+                '.user-message',
+                'div.query-text'
+            ];
+
+            let userMessages: any = null;
+            for (const sel of userSelectors) {
+                const loc = this.page.locator(sel);
+                if (await loc.count() > 0) {
+                    userMessages = loc;
+                    console.log(`[Gemini] Using user selector: ${sel}`);
+                    break;
+                }
+            }
+
+            // Model responses
+            const modelMessages = this.page.locator('model-response');
+
+            const userCount = userMessages ? await userMessages.count() : 0;
+            const modelCount = await modelMessages.count();
+            console.log(`[Gemini] Found ${userCount} user messages, ${modelCount} model responses`);
+
+            // Interleave user/model messages (usually alternating)
+            const maxTurns = Math.max(userCount, modelCount);
+            for (let i = 0; i < maxTurns; i++) {
+                // User turn
+                if (userMessages && i < userCount) {
+                    const text = await userMessages.nth(i).innerText().catch(() => '');
+                    if (text.trim()) {
+                        turns.push({ role: 'user', content: text.trim() });
+                    }
+                }
+
+                // Assistant turn
+                if (i < modelCount) {
+                    const text = await modelMessages.nth(i).innerText().catch(() => '');
+                    if (text.trim()) {
+                        turns.push({ role: 'assistant', content: text.trim() });
+                    }
+                }
+            }
+
+        } catch (e: any) {
+            console.error('[Gemini] Error extracting turns:', e.message);
+        }
+
+        return turns;
+    }
+
+    /**
+     * Extract research documents from deep research panel with sources and citations
+     */
+    private async extractResearchDocsWithSources(): Promise<ScrapedResearchDoc[]> {
+        const docs: ScrapedResearchDoc[] = [];
+
+        try {
+            // Get content, citations, and reasoning separately
+            const contentResult = await this.extractContent();
+            const citations = await this.extractCitations();
+            const reasoningSteps = await this.extractReasoningSteps();
+
+            // Get title from first heading or page title
+            const title = contentResult.headings[0] || await this.page.title().catch(() => '') || 'Research Document';
+
+            // Convert inline citation markers [1] to Obsidian footnotes [^1]
+            let contentWithFootnotes = contentResult.content;
+            for (const citation of citations) {
+                // Replace [1], [2], etc. with [^1], [^2]
+                const marker = new RegExp(`\\[${citation.id}\\]`, 'g');
+                contentWithFootnotes = contentWithFootnotes.replace(marker, `[^${citation.id}]`);
+            }
+
+            // Add footnote definitions at the end
+            if (citations.length > 0) {
+                contentWithFootnotes += '\n\n---\n\n';
+                for (const c of citations) {
+                    contentWithFootnotes += `[^${c.id}]: [${c.text}](${c.url}) - ${c.domain}\n`;
+                }
+            }
+
+            docs.push({
+                title,
+                content: contentWithFootnotes,
+                sources: citations.map(c => ({
+                    id: c.id,
+                    text: c.text,
+                    url: c.url,
+                    domain: c.domain
+                })),
+                reasoningSteps: reasoningSteps.map(s => ({
+                    phase: s.phase,
+                    action: s.action
+                }))
+            });
+
+        } catch (e: any) {
+            console.error('[Gemini] Error extracting research docs:', e.message);
         }
 
         return docs;

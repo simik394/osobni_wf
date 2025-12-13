@@ -462,6 +462,222 @@ export class GraphStore {
     }
 
     // ====================
+    // PLATFORM CONVERSATION SCRAPING
+    // ====================
+
+    /**
+     * Sync a scraped conversation from a platform (upsert by platformId)
+     */
+    async syncConversation(data: {
+        platform: 'gemini' | 'perplexity';
+        platformId: string;
+        title: string;
+        type: 'regular' | 'deep-research';
+        turns: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>;
+        researchDocs?: Array<{
+            title: string;
+            content: string;
+            sources?: Array<{ id: number; text: string; url: string; domain: string }>;
+            reasoningSteps?: Array<{ phase: string; action: string }>;
+        }>;
+    }): Promise<{ id: string; isNew: boolean }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const capturedAt = Date.now();
+        const id = `conv_${data.platform}_${data.platformId}`;
+
+        // Check if conversation already exists
+        const existing = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {platformId: '${escapeString(data.platformId)}', platform: '${data.platform}'})
+            RETURN c.id as id
+        `);
+
+        const isNew = !existing.data || existing.data.length === 0;
+
+        if (isNew) {
+            // Create new conversation
+            await this.graph.query(`
+                MERGE (a:Agent {id: '${data.platform}'})
+                CREATE (c:Conversation {
+                    id: '${id}',
+                    platformId: '${escapeString(data.platformId)}',
+                    platform: '${data.platform}',
+                    title: '${escapeString(data.title)}',
+                    type: '${data.type}',
+                    createdAt: ${capturedAt},
+                    capturedAt: ${capturedAt}
+                })
+                CREATE (a)-[:HAD]->(c)
+            `);
+
+            // Add turns
+            for (let i = 0; i < data.turns.length; i++) {
+                const turn = data.turns[i];
+                const ts = turn.timestamp || capturedAt + i;
+                await this.graph.query(`
+                    MATCH (c:Conversation {id: '${id}'})
+                    CREATE (t:Turn {
+                        role: '${turn.role}',
+                        content: '${escapeString(turn.content)}',
+                        timestamp: ${ts},
+                        idx: ${i}
+                    })
+                    CREATE (c)-[:HAS_TURN]->(t)
+                `);
+            }
+
+            // Add research docs if deep research
+            if (data.researchDocs && data.researchDocs.length > 0) {
+                for (const doc of data.researchDocs) {
+                    const docId = `doc_${id}_${Math.random().toString(36).substring(2, 8)}`;
+                    await this.graph.query(`
+                        MATCH (c:Conversation {id: '${id}'})
+                        CREATE (d:ResearchDoc {
+                            id: '${docId}',
+                            title: '${escapeString(doc.title)}',
+                            content: '${escapeString(doc.content)}',
+                            sources: '${escapeString(JSON.stringify(doc.sources || []))}',
+                            reasoningSteps: '${escapeString(JSON.stringify(doc.reasoningSteps || []))}',
+                            capturedAt: ${capturedAt}
+                        })
+                        CREATE (c)-[:HAS_RESEARCH_DOC]->(d)
+                    `);
+                }
+            }
+
+            console.log(`[GraphStore] Synced new conversation: ${id} (${data.turns.length} turns)`);
+        } else {
+            // Update capturedAt only
+            await this.graph.query(`
+                MATCH (c:Conversation {id: '${id}'})
+                SET c.capturedAt = ${capturedAt}
+            `);
+            console.log(`[GraphStore] Updated conversation: ${id}`);
+        }
+
+        return { id, isNew };
+    }
+
+    /**
+     * Get conversations by platform
+     */
+    async getConversationsByPlatform(
+        platform: 'gemini' | 'perplexity',
+        limit = 50
+    ): Promise<Array<{
+        id: string;
+        platformId: string;
+        title: string;
+        type: string;
+        createdAt: number;
+        capturedAt: number;
+        turnCount: number;
+    }>> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {platform: '${platform}'})
+            OPTIONAL MATCH (c)-[:HAS_TURN]->(t:Turn)
+            RETURN c, count(t) as turnCount
+            ORDER BY c.capturedAt DESC
+            LIMIT ${limit}
+        `);
+
+        return (result.data || []).map((row: any) => {
+            const props = row.c.properties || row.c;
+            return {
+                id: props.id,
+                platformId: props.platformId,
+                title: props.title,
+                type: props.type,
+                createdAt: props.createdAt,
+                capturedAt: props.capturedAt,
+                turnCount: row.turnCount || 0
+            };
+        });
+    }
+
+    /**
+     * Get conversation with content filters
+     */
+    async getConversationWithFilters(
+        conversationId: string,
+        filters: { questionsOnly?: boolean; answersOnly?: boolean; includeResearchDocs?: boolean } = {}
+    ): Promise<{
+        conversation: { id: string; platform: string; title: string; type: string; capturedAt: number } | null;
+        turns: Array<{ role: string; content: string; timestamp: number }>;
+        researchDocs?: Array<{ title: string; content: string; sources: any[]; reasoningSteps: any[] }>;
+    }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        // Get conversation
+        const convResult = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {id: '${escapeString(conversationId)}'})
+            RETURN c
+        `);
+
+        if (!convResult.data || convResult.data.length === 0) {
+            return { conversation: null, turns: [] };
+        }
+
+        const row = convResult.data[0] as any;
+        const convProps = row.c?.properties || row.c || row;
+        const conversation = {
+            id: convProps.id,
+            platform: convProps.platform,
+            title: convProps.title,
+            type: convProps.type,
+            capturedAt: convProps.capturedAt
+        };
+
+        // Build role filter
+        let roleFilter = '';
+        if (filters.questionsOnly) {
+            roleFilter = " AND t.role = 'user'";
+        } else if (filters.answersOnly) {
+            roleFilter = " AND t.role = 'assistant'";
+        }
+
+        // Get turns
+        const turnsResult = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {id: '${escapeString(conversationId)}'})-[:HAS_TURN]->(t:Turn)
+            WHERE true ${roleFilter}
+            RETURN t
+            ORDER BY t.idx ASC, t.timestamp ASC
+        `);
+
+        const turns = (turnsResult.data || []).map((row: any) => {
+            const props = row.t.properties || row.t;
+            return {
+                role: props.role,
+                content: props.content,
+                timestamp: props.timestamp
+            };
+        });
+
+        // Get research docs if requested
+        let researchDocs: any[] | undefined;
+        if (filters.includeResearchDocs && conversation.type === 'deep-research') {
+            const docsResult = await this.graph.query<any[]>(`
+                MATCH (c:Conversation {id: '${escapeString(conversationId)}'})-[:HAS_RESEARCH_DOC]->(d:ResearchDoc)
+                RETURN d
+            `);
+
+            researchDocs = (docsResult.data || []).map((row: any) => {
+                const props = row.d.properties || row.d;
+                return {
+                    title: props.title,
+                    content: props.content,
+                    sources: JSON.parse(props.sources || '[]'),
+                    reasoningSteps: JSON.parse(props.reasoningSteps || '[]')
+                };
+            });
+        }
+
+        return { conversation, turns, researchDocs };
+    }
+
+    // ====================
     // LINEAGE TRACKING
     // ====================
 

@@ -697,6 +697,56 @@ async function main() {
             } else {
                 console.log('Server mode for list-research-docs not yet implemented. Use --local.');
             }
+        } else if (subArg1 === 'sync-conversations') {
+            // gemini sync-conversations [--limit=N] [--offset=M] [--local] [--headed]
+            let limit = 10;
+            let offset = 0;
+
+            for (const arg of args) {
+                if (arg.startsWith('--limit=')) {
+                    limit = parseInt(arg.split('=')[1]) || 10;
+                } else if (arg.startsWith('--offset=')) {
+                    offset = parseInt(arg.split('=')[1]) || 0;
+                }
+            }
+
+            if (isLocalExecution) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                await store.connect(graphHost, 6379);
+
+                try {
+                    await runLocalGeminiAction(async (client, gemini) => {
+                        console.log(`\n[Sync] Scraping Gemini conversations (limit: ${limit}, offset: ${offset})...\n`);
+
+                        const conversations = await gemini.scrapeConversations(limit, offset);
+
+                        console.log(`\n[Sync] Found ${conversations.length} conversations`);
+
+                        let synced = 0;
+                        let updated = 0;
+                        for (const conv of conversations) {
+                            const result = await store.syncConversation({
+                                platform: 'gemini',
+                                platformId: conv.platformId,
+                                title: conv.title,
+                                type: conv.type,
+                                turns: conv.turns,
+                                researchDocs: conv.researchDocs
+                            });
+                            if (result.isNew) synced++;
+                            else updated++;
+                        }
+
+                        console.log(`\n[Sync] Complete: ${synced} new, ${updated} updated\n`);
+                    });
+                } finally {
+                    await store.disconnect();
+                }
+            } else {
+                console.log('Server mode for sync-conversations not yet implemented. Use --local.');
+            }
         } else {
             console.log('Gemini commands:');
             console.log('  rsrch gemini research "Query" [--local]');
@@ -709,6 +759,7 @@ async function main() {
             console.log('  rsrch gemini open-session "ID or Name" [--local] [--headed]');
             console.log('  rsrch gemini export-to-docs [SessionID] [--local] [--headed]');
             console.log('  rsrch gemini list-sessions [Limit] [Offset] [--local]');
+            console.log('  rsrch gemini sync-conversations [--limit=N] [--offset=M] [--local]  # Sync conversations to graph');
             console.log('');
             console.log('Flags:');
             console.log('  --local    Use local browser (required for Google services)');
@@ -876,11 +927,73 @@ async function main() {
                     if (chain.document) console.log(`  Document: ${chain.document.id} - "${chain.document.title}"`);
                     if (chain.audio) console.log(`  Audio: ${chain.audio.id} - ${chain.audio.path}`);
                 }
+            } else if (graphArg1 === 'conversations') {
+                // graph conversations [--platform=gemini|perplexity] [--limit=N]
+                let platform: 'gemini' | 'perplexity' = 'gemini';
+                let limit = 20;
+
+                for (const arg of args) {
+                    if (arg.startsWith('--platform=')) {
+                        platform = arg.split('=')[1] as 'gemini' | 'perplexity';
+                    } else if (arg.startsWith('--limit=')) {
+                        limit = parseInt(arg.split('=')[1]) || 20;
+                    }
+                }
+
+                const conversations = await store.getConversationsByPlatform(platform, limit);
+                console.log(`\n${platform.toUpperCase()} Conversations (${conversations.length}):`);
+                for (const conv of conversations) {
+                    const captured = new Date(conv.capturedAt).toISOString().split('T')[0];
+                    const typeTag = conv.type === 'deep-research' ? ' [DR]' : '';
+                    console.log(`  ${conv.id}${typeTag} - "${conv.title.substring(0, 40)}..." (${conv.turnCount} turns, synced: ${captured})`);
+                }
+            } else if (graphArg1 === 'conversation') {
+                // graph conversation <id> [--questions-only] [--answers-only] [--research-docs]
+                if (!graphArg2) {
+                    console.error('Usage: rsrch graph conversation <id> [--questions-only] [--answers-only] [--research-docs]');
+                    process.exit(1);
+                }
+
+                const questionsOnly = args.includes('--questions-only');
+                const answersOnly = args.includes('--answers-only');
+                const includeResearchDocs = args.includes('--research-docs');
+
+                const data = await store.getConversationWithFilters(graphArg2, {
+                    questionsOnly,
+                    answersOnly,
+                    includeResearchDocs
+                });
+
+                if (!data.conversation) {
+                    console.log(`Conversation not found: ${graphArg2}`);
+                } else {
+                    console.log(`\n=== ${data.conversation.title} ===`);
+                    console.log(`Platform: ${data.conversation.platform} | Type: ${data.conversation.type}`);
+                    console.log(`Synced: ${new Date(data.conversation.capturedAt).toISOString()}\n`);
+
+                    for (const turn of data.turns) {
+                        const roleLabel = turn.role === 'user' ? '👤 User' : '🤖 Assistant';
+                        console.log(`${roleLabel}:`);
+                        console.log(turn.content.substring(0, 500) + (turn.content.length > 500 ? '...' : ''));
+                        console.log('');
+                    }
+
+                    if (data.researchDocs && data.researchDocs.length > 0) {
+                        console.log('\n--- Research Documents ---');
+                        for (const doc of data.researchDocs) {
+                            console.log(`\n📄 ${doc.title}`);
+                            console.log(`Sources: ${doc.sources.length}`);
+                            console.log(doc.content.substring(0, 300) + '...');
+                        }
+                    }
+                }
             } else {
                 console.log('Graph Database Commands:');
-                console.log('  rsrch graph status          - Show connection status and job counts');
-                console.log('  rsrch graph jobs [status]   - List jobs (optional: queued|running|completed|failed)');
-                console.log('  rsrch graph lineage <id>    - Show lineage chain for artifact');
+                console.log('  rsrch graph status                - Show connection status and job counts');
+                console.log('  rsrch graph jobs [status]         - List jobs (optional: queued|running|completed|failed)');
+                console.log('  rsrch graph lineage <id>          - Show lineage chain for artifact');
+                console.log('  rsrch graph conversations         - List synced conversations [--platform=gemini] [--limit=N]');
+                console.log('  rsrch graph conversation <id>     - View conversation [--questions-only] [--answers-only] [--research-docs]');
             }
         } catch (e: any) {
             console.error('FalkorDB connection failed:', e.message);
