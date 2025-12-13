@@ -852,64 +852,111 @@ export class GeminiClient {
     }
 
     /**
+     * Wait for DOM to stabilize (no mutations for stabilityMs).
+     * Uses MutationObserver injected into the page for event-driven detection.
+     */
+    private async waitForDomStabilization(stabilityMs = 3000, maxWait = 600000): Promise<string> {
+        console.log(`[Gemini] Waiting for DOM stabilization (${stabilityMs}ms quiet period)...`);
+
+        return this.page.evaluate(({ stabilityMs, maxWait }) => {
+            return new Promise<string>((resolve, reject) => {
+                let timer: any;
+                let changeCount = 0;
+
+                const observer = new MutationObserver(() => {
+                    changeCount++;
+                    if (timer) clearTimeout(timer);
+                    timer = setTimeout(() => {
+                        observer.disconnect();
+                        resolve(`stable after ${changeCount} changes`);
+                    }, stabilityMs);
+                });
+
+                // Start observing
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    characterData: true
+                });
+
+                // Initial timer in case page is already stable
+                timer = setTimeout(() => {
+                    observer.disconnect();
+                    resolve('already stable');
+                }, stabilityMs);
+
+                // Fallback timeout
+                setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error(`DOM stabilization timeout after ${maxWait}ms`));
+                }, maxWait);
+            });
+        }, { stabilityMs, maxWait });
+    }
+
+    /**
      * Wait for the Deep Research to complete.
-     * Look for completion indicators and stabilize on final content.
+     * Uses event-driven approach: waits for Export button OR DOM stabilization.
      */
     private async waitForResearchCompletion(): Promise<void> {
         const maxWait = 600000; // 10 minutes max
-        const pollInterval = 5000;
-        let elapsed = 0;
-        let lastContentLength = 0;
-        let stableCount = 0;
 
-        console.log('[Gemini] Waiting for research completion (max 10 min)...');
+        console.log('[Gemini] Waiting for research completion (event-driven)...');
 
-        while (elapsed < maxWait) {
-            // Check for completion indicators
-            const completionIndicators = [
-                'deep-research-immersive-panel',
-                'button[aria-label*="Export"]',
-                'button[aria-label*="Nabídka pro export"]',
-            ];
+        try {
+            // Use Promise.race to wait for first completion signal
+            const result = await Promise.race([
+                // Signal 1: Export button appears (strongest signal)
+                this.page.locator('button[aria-label*="Export"], button[aria-label*="Nabídka pro export"], button:has-text("Export")').first()
+                    .waitFor({ state: 'visible', timeout: maxWait })
+                    .then(() => 'export-button-visible'),
 
-            let completed = false;
-            for (const selector of completionIndicators) {
-                if (await this.page.locator(selector).count() > 0) {
-                    // Found completion indicator - wait for content to stabilize
-                    const content = await this.page.locator('model-response').last().innerText().catch(() => '');
+                // Signal 2: Deep research panel with content
+                this.page.locator('deep-research-immersive-panel').first()
+                    .waitFor({ state: 'visible', timeout: maxWait })
+                    .then(async () => {
+                        // Panel visible, wait for stability
+                        await this.waitForDomStabilization(5000, maxWait);
+                        return 'panel-stabilized';
+                    }),
 
-                    if (content.length === lastContentLength && content.length > 500) {
-                        stableCount++;
-                        if (stableCount >= 3) {
-                            console.log('[Gemini] Research content stabilized');
-                            return;
+                // Signal 3: Pure DOM stabilization fallback (5s quiet = done)
+                this.waitForDomStabilization(5000, maxWait)
+                    .then(result => `dom-${result}`),
+
+                // Signal 4: Check for error states periodically
+                (async () => {
+                    const checkInterval = 5000;
+                    let elapsed = 0;
+                    while (elapsed < maxWait) {
+                        const errorIndicators = this.page.locator('text="Something went wrong", text="Error", text="Try again"');
+                        if (await errorIndicators.count() > 0) {
+                            throw new Error('Research encountered an error');
                         }
-                    } else {
-                        stableCount = 0;
-                        lastContentLength = content.length;
+                        await this.page.waitForTimeout(checkInterval);
+                        elapsed += checkInterval;
+
+                        if (elapsed % 30000 === 0) {
+                            console.log(`[Gemini] Still researching... (${Math.round(elapsed / 1000)}s elapsed)`);
+                        }
                     }
-                    completed = true;
-                    break;
-                }
-            }
+                    return 'timeout-fallback';
+                })()
+            ]);
 
-            if (!completed) {
-                // Check for error states
-                const errorIndicators = this.page.locator('text="Something went wrong", text="Error", text="Try again"');
-                if (await errorIndicators.count() > 0) {
-                    throw new Error('Research encountered an error');
-                }
-            }
+            console.log(`[Gemini] Research completion detected via: ${result}`);
 
-            await this.page.waitForTimeout(pollInterval);
-            elapsed += pollInterval;
+            // Give a short buffer for any final rendering
+            await this.page.waitForTimeout(1000);
 
-            if (elapsed % 30000 === 0) {
-                console.log(`[Gemini] Still researching... (${Math.round(elapsed / 1000)}s elapsed)`);
+        } catch (error: any) {
+            if (error.message.includes('timeout')) {
+                console.warn('[Gemini] Research wait timeout - proceeding anyway');
+            } else {
+                throw error;
             }
         }
-
-        console.warn('[Gemini] Research wait timeout - proceeding anyway');
     }
 
     async dumpState(name: string) {
