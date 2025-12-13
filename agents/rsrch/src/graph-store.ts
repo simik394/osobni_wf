@@ -37,6 +37,41 @@ export interface Relationship {
     properties?: Record<string, any>;
 }
 
+// Lineage node types
+export interface Session {
+    id: string;
+    platform: 'gemini' | 'perplexity' | 'notebooklm';
+    externalId: string;
+    query: string;
+    createdAt: number;
+}
+
+export interface Document {
+    id: string;
+    title: string;
+    url?: string;
+    createdAt: number;
+}
+
+export interface Audio {
+    id: string;
+    path: string;
+    duration?: number;
+    createdAt: number;
+}
+
+export interface Conversation {
+    id: string;
+    agentId: string;
+    createdAt: number;
+}
+
+export interface Turn {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: number;
+}
+
 // Helper to escape strings for Cypher queries
 function escapeString(str: string): string {
     return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
@@ -141,8 +176,8 @@ export class GraphStore {
         `);
 
         if (result.data && result.data.length > 0) {
-            const node = result.data[0][0];
-            return this.nodeToJob(node);
+            const row = result.data[0] as any;
+            return this.nodeToJob(row.j);
         }
         return null;
     }
@@ -161,7 +196,7 @@ export class GraphStore {
 
         const result = await this.graph.query<any[]>(query);
 
-        return (result.data || []).map((row) => this.nodeToJob(row[0]));
+        return (result.data || []).map((row: any) => this.nodeToJob(row.j));
     }
 
     /**
@@ -207,7 +242,8 @@ export class GraphStore {
         `);
 
         if (result.data && result.data.length > 0) {
-            return this.nodeToJob(result.data[0][0]);
+            const row = result.data[0] as any;
+            return this.nodeToJob(row.j);
         }
         return null;
     }
@@ -263,7 +299,7 @@ export class GraphStore {
             LIMIT ${limit}
         `);
 
-        return (result.data || []).map((row) => this.nodeToEntity(row[0]));
+        return (result.data || []).map((row: any) => this.nodeToEntity(row.e));
     }
 
     /**
@@ -279,7 +315,7 @@ export class GraphStore {
         query += ' RETURN b';
 
         const result = await this.graph.query<any[]>(query);
-        return (result.data || []).map((row) => this.nodeToEntity(row[0]));
+        return (result.data || []).map((row: any) => this.nodeToEntity(row.b));
     }
 
     // ====================
@@ -320,7 +356,278 @@ export class GraphStore {
             LIMIT ${limit}
         `);
 
-        return (result.data || []).map((row) => row[0]);
+        return (result.data || []).map((row: any) => row['f.content']);
+    }
+
+    // ====================
+    // CONVERSATION HISTORY
+    // ====================
+
+    /**
+     * Start a new conversation for an agent
+     */
+    async startConversation(agentId: string): Promise<Conversation> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const id = Math.random().toString(36).substring(2, 12);
+        const createdAt = Date.now();
+
+        await this.graph.query(`
+            MERGE (a:Agent {id: '${escapeString(agentId)}'})
+            CREATE (c:Conversation {
+                id: '${id}',
+                agentId: '${escapeString(agentId)}',
+                createdAt: ${createdAt}
+            })
+            CREATE (a)-[:HAD]->(c)
+        `);
+
+        console.log(`[GraphStore] Conversation started: ${id} for agent ${agentId}`);
+        return { id, agentId, createdAt };
+    }
+
+    /**
+     * Add a turn to a conversation
+     */
+    async addTurn(conversationId: string, role: Turn['role'], content: string): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const timestamp = Date.now();
+
+        // Create turn and link to conversation
+        await this.graph.query(`
+            MATCH (c:Conversation {id: '${escapeString(conversationId)}'})
+            CREATE (t:Turn {
+                role: '${role}',
+                content: '${escapeString(content)}',
+                timestamp: ${timestamp}
+            })
+            CREATE (c)-[:HAS_TURN]->(t)
+        `);
+
+        // Link to previous turn if exists
+        await this.graph.query(`
+            MATCH (c:Conversation {id: '${escapeString(conversationId)}'})-[:HAS_TURN]->(prev:Turn)
+            WHERE NOT (prev)-[:NEXT]->(:Turn)
+            WITH prev ORDER BY prev.timestamp DESC LIMIT 1
+            MATCH (c)-[:HAS_TURN]->(curr:Turn)
+            WHERE curr.timestamp = ${timestamp}
+            CREATE (prev)-[:NEXT]->(curr)
+        `).catch(() => { }); // Ignore if no previous turn
+    }
+
+    /**
+     * Get conversation history
+     */
+    async getConversation(conversationId: string): Promise<Turn[]> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {id: '${escapeString(conversationId)}'})-[:HAS_TURN]->(t:Turn)
+            RETURN t
+            ORDER BY t.timestamp ASC
+        `);
+
+        return (result.data || []).map((row: any) => {
+            const props = row.t.properties || row.t;
+            return {
+                role: props.role,
+                content: props.content,
+                timestamp: props.timestamp
+            };
+        });
+    }
+
+    /**
+     * Get recent conversations for an agent
+     */
+    async getRecentConversations(agentId: string, limit = 10): Promise<Conversation[]> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (a:Agent {id: '${escapeString(agentId)}'})-[:HAD]->(c:Conversation)
+            RETURN c
+            ORDER BY c.createdAt DESC
+            LIMIT ${limit}
+        `);
+
+        return (result.data || []).map((row: any) => {
+            const props = row.c.properties || row.c;
+            return {
+                id: props.id,
+                agentId: props.agentId,
+                createdAt: props.createdAt
+            };
+        });
+    }
+
+    // ====================
+    // LINEAGE TRACKING
+    // ====================
+
+    /**
+     * Create a session node (research session on a platform)
+     */
+    async createSession(session: Omit<Session, 'createdAt'>): Promise<Session> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const createdAt = Date.now();
+        await this.graph.query(`
+            CREATE (s:Session {
+                id: '${escapeString(session.id)}',
+                platform: '${session.platform}',
+                externalId: '${escapeString(session.externalId)}',
+                query: '${escapeString(session.query)}',
+                createdAt: ${createdAt}
+            })
+        `);
+
+        console.log(`[GraphStore] Session created: ${session.id} (${session.platform})`);
+        return { ...session, createdAt };
+    }
+
+    /**
+     * Create a document node
+     */
+    async createDocument(doc: Omit<Document, 'createdAt'>): Promise<Document> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const createdAt = Date.now();
+        const url = doc.url ? escapeString(doc.url) : '';
+        await this.graph.query(`
+            CREATE (d:Document {
+                id: '${escapeString(doc.id)}',
+                title: '${escapeString(doc.title)}',
+                url: '${url}',
+                createdAt: ${createdAt}
+            })
+        `);
+
+        console.log(`[GraphStore] Document created: ${doc.id}`);
+        return { ...doc, createdAt };
+    }
+
+    /**
+     * Create an audio node
+     */
+    async createAudio(audio: Omit<Audio, 'createdAt'>): Promise<Audio> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const createdAt = Date.now();
+        await this.graph.query(`
+            CREATE (a:Audio {
+                id: '${escapeString(audio.id)}',
+                path: '${escapeString(audio.path)}',
+                duration: ${audio.duration || 0},
+                createdAt: ${createdAt}
+            })
+        `);
+
+        console.log(`[GraphStore] Audio created: ${audio.id}`);
+        return { ...audio, createdAt };
+    }
+
+    /**
+     * Link job to session (Job -[:STARTED]-> Session)
+     */
+    async linkJobToSession(jobId: string, sessionId: string): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        await this.graph.query(`
+            MATCH (j:Job {id: '${escapeString(jobId)}'}), (s:Session {id: '${escapeString(sessionId)}'})
+            CREATE (j)-[:STARTED {createdAt: ${Date.now()}}]->(s)
+        `);
+
+        console.log(`[GraphStore] Linked: Job ${jobId} -> Session ${sessionId}`);
+    }
+
+    /**
+     * Link session to document (Session -[:EXPORTED_TO]-> Document)
+     */
+    async linkSessionToDocument(sessionId: string, documentId: string): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        await this.graph.query(`
+            MATCH (s:Session {id: '${escapeString(sessionId)}'}), (d:Document {id: '${escapeString(documentId)}'})
+            CREATE (s)-[:EXPORTED_TO {createdAt: ${Date.now()}}]->(d)
+        `);
+
+        console.log(`[GraphStore] Linked: Session ${sessionId} -> Document ${documentId}`);
+    }
+
+    /**
+     * Link document to audio (Document -[:CONVERTED_TO]-> Audio)
+     */
+    async linkDocumentToAudio(documentId: string, audioId: string): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        await this.graph.query(`
+            MATCH (d:Document {id: '${escapeString(documentId)}'}), (a:Audio {id: '${escapeString(audioId)}'})
+            CREATE (d)-[:CONVERTED_TO {createdAt: ${Date.now()}}]->(a)
+        `);
+
+        console.log(`[GraphStore] Linked: Document ${documentId} -> Audio ${audioId}`);
+    }
+
+    /**
+     * Get full lineage chain for any artifact ID
+     * Returns the chain from Job -> Session -> Document -> Audio
+     */
+    async getLineage(artifactId: string): Promise<any[]> {
+        if (!this.graph) throw new Error('Not connected');
+
+        // Try to find lineage starting from any node type
+        const result = await this.graph.query<any[]>(`
+            MATCH path = (start)-[*0..5]->(end)
+            WHERE start.id = '${escapeString(artifactId)}' OR end.id = '${escapeString(artifactId)}'
+            UNWIND nodes(path) AS n
+            RETURN DISTINCT n
+            ORDER BY n.createdAt ASC
+        `);
+
+        return (result.data || []).map((row: any) => {
+            const node = row.n;
+            return {
+                id: node.properties?.id,
+                type: node.labels?.[0],
+                ...node.properties
+            };
+        });
+    }
+
+    /**
+     * Get lineage by following the chain from a starting node
+     */
+    async getLineageChain(startId: string): Promise<{
+        job?: GraphJob;
+        session?: Session;
+        document?: Document;
+        audio?: Audio;
+    }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (j:Job)-[:STARTED]->(s:Session)-[:EXPORTED_TO]->(d:Document)
+            OPTIONAL MATCH (d)-[:CONVERTED_TO]->(a:Audio)
+            WHERE j.id = '${escapeString(startId)}' 
+               OR s.id = '${escapeString(startId)}' 
+               OR d.id = '${escapeString(startId)}'
+               OR a.id = '${escapeString(startId)}'
+            RETURN j, s, d, a
+            LIMIT 1
+        `);
+
+        if (!result.data || result.data.length === 0) {
+            return {};
+        }
+
+        const row = result.data[0] as any;
+        return {
+            job: row.j ? this.nodeToJob(row.j) : undefined,
+            session: row.s ? this.nodeToSession(row.s) : undefined,
+            document: row.d ? this.nodeToDocument(row.d) : undefined,
+            audio: row.a ? this.nodeToAudio(row.a) : undefined
+        };
     }
 
     // ====================
@@ -350,6 +657,37 @@ export class GraphStore {
             type: props.type,
             name: props.name,
             properties: props.properties ? JSON.parse(props.properties) : {}
+        };
+    }
+
+    private nodeToSession(node: any): Session {
+        const props = node.properties || node;
+        return {
+            id: props.id,
+            platform: props.platform,
+            externalId: props.externalId,
+            query: props.query,
+            createdAt: props.createdAt
+        };
+    }
+
+    private nodeToDocument(node: any): Document {
+        const props = node.properties || node;
+        return {
+            id: props.id,
+            title: props.title,
+            url: props.url || undefined,
+            createdAt: props.createdAt
+        };
+    }
+
+    private nodeToAudio(node: any): Audio {
+        const props = node.properties || node;
+        return {
+            id: props.id,
+            path: props.path,
+            duration: props.duration || undefined,
+            createdAt: props.createdAt
         };
     }
 
