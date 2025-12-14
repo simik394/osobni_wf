@@ -1208,8 +1208,39 @@ async function runLegacyMode() {
         } else {
             console.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
         }
+    } else if (command === 'notify') {
+        // rsrch notify "Message" [--title "Title"] [--channel ntfy|discord|all] [--priority low|default|high|urgent]
+        const { sendNotification, loadConfigFromEnv } = await import('./notify');
+
+        let message = '';
+        let title: string | undefined;
+        let priority: 'low' | 'default' | 'high' | 'urgent' = 'default';
+
+        for (let i = 1; i < args.length; i++) {
+            if (args[i] === '--title') {
+                title = args[++i];
+            } else if (args[i] === '--priority') {
+                priority = args[++i] as any;
+            } else if (!args[i].startsWith('--')) {
+                message = args[i];
+            }
+        }
+
+        if (!message) {
+            console.log('Usage: rsrch notify "Message" [--title "Title"] [--priority low|default|high|urgent]');
+            console.log('\nEnvironment variables:');
+            console.log('  NTFY_TOPIC      - ntfy.sh topic (e.g., my-research)');
+            console.log('  NTFY_SERVER     - ntfy server (default: https://ntfy.sh)');
+            console.log('  DISCORD_WEBHOOK - Discord webhook URL');
+            process.exit(1);
+        }
+
+        loadConfigFromEnv();
+
+        console.log(`📬 Sending notification: "${message}"`);
+        const results = await sendNotification(message, { title, priority });
+        console.log('Results:', results);
     }
 }
 
 main().catch(console.error);
-```
