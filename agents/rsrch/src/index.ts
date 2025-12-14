@@ -1129,6 +1129,38 @@ async function main() {
             await store.disconnect();
         }
 
+    } else if (command === 'watch') {
+        // rsrch watch [--audio] [--folder PATH] [--once]
+        const { watchForResearch, checkAndProcess } = await import('./watcher');
+
+        let generateAudio = args.includes('--audio');
+        let audioFolder = process.env.HOME + '/research/audio';
+        let once = args.includes('--once');
+
+        for (let i = 1; i < args.length; i++) {
+            if (args[i] === '--folder') {
+                audioFolder = args[++i];
+            }
+        }
+
+        if (!generateAudio && !once) {
+            console.log('Usage: rsrch watch [--audio] [--folder PATH] [--once]');
+            console.log('\nOptions:');
+            console.log('  --audio      Generate NotebookLM audio on completion');
+            console.log('  --folder     Save audio to folder (default: ~/research/audio)');
+            console.log('  --once       Check once and exit (no continuous polling)');
+            console.log('\nEnvironment:');
+            console.log('  NTFY_TOPIC      - ntfy.sh topic for notifications');
+            console.log('  DISCORD_WEBHOOK - Discord webhook URL');
+            process.exit(0);
+        }
+
+        if (once) {
+            await checkAndProcess({ generateAudio, audioFolder });
+        } else {
+            await watchForResearch({ generateAudio, audioFolder });
+        }
+
     } else if (command === 'notify') {
         // rsrch notify "Message" [--title "Title"] [--priority low|default|high|urgent]
         const { sendNotification, loadConfigFromEnv } = await import('./notify');
@@ -1174,6 +1206,7 @@ async function main() {
         console.log('  rsrch unified "Query"            - Run One-Click Research-to-Podcast flow (requires server)');
         console.log('  rsrch graph <cmd> ...            - Graph database commands (status, jobs, lineage)');
         console.log('  rsrch notify "Message"           - Send notification (ntfy.sh/Discord)');
+        console.log('  rsrch watch --audio              - Watch for research, generate audio, notify');
         console.log('  rsrch query "Question"           - Run localized query (standalone)');
         console.log('  rsrch query                      - Run queries from data/queries.json (standalone)');
         console.log('    Options: --session=ID|new|latest, --name=NAME, --deep, --keep-alive');
