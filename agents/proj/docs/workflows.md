@@ -53,7 +53,8 @@ Workflows are organized into hierarchical categories based on their function:
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │                  DISCOVERY FLOWS                             │   │
 │  │  (Finding and connecting information)                        │   │
-│  │  ├── Search           - Finding past work                    │   │
+│  │  ├── Search           - Exploring (new)available sources     │   │
+│  │  ├── Seek             - Finding previously seen sources      │   │
 │  │  ├── Related          - Surfacing connections                │   │
 │  │  └── Template         - Reusing patterns                     │   │
 │  └─────────────────────────────────────────────────────────────┘   │
