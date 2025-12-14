@@ -1129,6 +1129,39 @@ async function main() {
             await store.disconnect();
         }
 
+    } else if (command === 'notify') {
+        // rsrch notify "Message" [--title "Title"] [--priority low|default|high|urgent]
+        const { sendNotification, loadConfigFromEnv } = await import('./notify');
+
+        let message = '';
+        let title: string | undefined;
+        let priority: 'low' | 'default' | 'high' | 'urgent' = 'default';
+
+        for (let i = 1; i < args.length; i++) {
+            if (args[i] === '--title') {
+                title = args[++i];
+            } else if (args[i] === '--priority') {
+                priority = args[++i] as any;
+            } else if (!args[i].startsWith('--')) {
+                message = args[i];
+            }
+        }
+
+        if (!message) {
+            console.log('Usage: rsrch notify "Message" [--title "Title"] [--priority low|default|high|urgent]');
+            console.log('\nEnvironment variables:');
+            console.log('  NTFY_TOPIC      - ntfy.sh topic (e.g., my-research)');
+            console.log('  NTFY_SERVER     - ntfy server (default: https://ntfy.sh)');
+            console.log('  DISCORD_WEBHOOK - Discord webhook URL');
+            process.exit(1);
+        }
+
+        loadConfigFromEnv();
+
+        console.log(`📬 Sending notification: "${message}"`);
+        const results = await sendNotification(message, { title, priority });
+        console.log('Results:', results);
+
     } else {
         console.log('Usage:');
         console.log('  rsrch auth                       - Login to Perplexity');
@@ -1140,6 +1173,7 @@ async function main() {
         console.log('  rsrch gemini <cmd> ...           - Gemini commands (research, deep-research, sessions...)');
         console.log('  rsrch unified "Query"            - Run One-Click Research-to-Podcast flow (requires server)');
         console.log('  rsrch graph <cmd> ...            - Graph database commands (status, jobs, lineage)');
+        console.log('  rsrch notify "Message"           - Send notification (ntfy.sh/Discord)');
         console.log('  rsrch query "Question"           - Run localized query (standalone)');
         console.log('  rsrch query                      - Run queries from data/queries.json (standalone)');
         console.log('    Options: --session=ID|new|latest, --name=NAME, --deep, --keep-alive');
@@ -1208,39 +1242,6 @@ async function runLegacyMode() {
         } else {
             console.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
         }
-    } else if (command === 'notify') {
-        // rsrch notify "Message" [--title "Title"] [--channel ntfy|discord|all] [--priority low|default|high|urgent]
-        const { sendNotification, loadConfigFromEnv } = await import('./notify');
-
-        let message = '';
-        let title: string | undefined;
-        let priority: 'low' | 'default' | 'high' | 'urgent' = 'default';
-
-        for (let i = 1; i < args.length; i++) {
-            if (args[i] === '--title') {
-                title = args[++i];
-            } else if (args[i] === '--priority') {
-                priority = args[++i] as any;
-            } else if (!args[i].startsWith('--')) {
-                message = args[i];
-            }
-        }
-
-        if (!message) {
-            console.log('Usage: rsrch notify "Message" [--title "Title"] [--priority low|default|high|urgent]');
-            console.log('\nEnvironment variables:');
-            console.log('  NTFY_TOPIC      - ntfy.sh topic (e.g., my-research)');
-            console.log('  NTFY_SERVER     - ntfy server (default: https://ntfy.sh)');
-            console.log('  DISCORD_WEBHOOK - Discord webhook URL');
-            process.exit(1);
-        }
-
-        loadConfigFromEnv();
-
-        console.log(`📬 Sending notification: "${message}"`);
-        const results = await sendNotification(message, { title, priority });
-        console.log('Results:', results);
     }
-}
 
-main().catch(console.error);
+    main().catch(console.error);
