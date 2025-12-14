@@ -64,7 +64,68 @@ The services are exposed via Traefik. By default, they are configured to use `ni
 - **Obsidian**: `http://obsidian.<SERVER_IP>.nip.io`
 - **n8n**: `http://n8n.<SERVER_IP>.nip.io`
 
-*Note: For production use, configure a proper domain and enable HTTPS in `traefik.nomad.hcl`.*
+## Production Configuration: Custom Domain & HTTPS
+
+For a secure production environment, you should move away from `nip.io` and HTTP. Follow these steps to configure a custom domain and enable automatic HTTPS (SSL) via Let's Encrypt.
+
+### 1. DNS Configuration
+Point your custom domain (e.g., `youtrack.example.com`, `obsidian.example.com`) to your server's **Public IP** using an **A Record** in your DNS provider's dashboard.
+
+### 2. Prepare Host Directory
+SSH into your server and create a directory to store Let's Encrypt certificates persistently:
+
+```bash
+sudo mkdir -p /opt/traefik/acme
+sudo chmod 600 /opt/traefik/acme
+```
+
+### 3. Update Traefik Job (`traefik.nomad.hcl`)
+Edit the Traefik job file (on the server at `/opt/nomad/jobs/traefik.nomad.hcl` or in your Ansible templates) to enable the ACME resolver.
+
+Uncomment the relevant lines in the `args` section:
+
+```hcl
+args = [
+  ...
+  # Redirect HTTP to HTTPS
+  "--entrypoints.web.http.redirections.entryPoint.to=websecure",
+  "--entrypoints.web.http.redirections.entryPoint.scheme=https",
+
+  # Enable Let's Encrypt
+  "--certificatesresolvers.myresolver.acme.email=your-email@example.com", # <--- Set your email
+  "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json",
+  "--certificatesresolvers.myresolver.acme.httpchallenge=true",
+  "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web",
+]
+```
+
+Then redeploy Traefik:
+```bash
+nomad job run /opt/nomad/jobs/traefik.nomad.hcl
+```
+
+### 4. Update Service Jobs
+Update your service jobs (YouTrack, Obsidian, etc.) to use your custom domain and request the certificate.
+
+Example `youtrack.nomad.hcl`:
+
+```hcl
+service {
+  tags = [
+    "traefik.enable=true",
+    # Use your real domain
+    "traefik.http.routers.youtrack.rule=Host(`youtrack.example.com`)",
+    "traefik.http.routers.youtrack.entrypoints=websecure",
+    # Enable TLS using the resolver defined in Traefik
+    "traefik.http.routers.youtrack.tls.certresolver=myresolver"
+  ]
+}
+```
+
+Redeploy the service:
+```bash
+nomad job run /opt/nomad/jobs/youtrack.nomad.hcl
+```
 
 ## Troubleshooting
 

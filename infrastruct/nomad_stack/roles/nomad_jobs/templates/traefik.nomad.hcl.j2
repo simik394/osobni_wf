@@ -17,23 +17,19 @@ job "traefik" {
       }
     }
 
-    service {
-      name = "traefik"
-      check {
-        name     = "alive"
-        type     = "tcp"
-        port     = "http"
-        interval = "10s"
-        timeout  = "2s"
-      }
-    }
-
+    # Create a volume for storing ACME certificates
+    # Note: You must create this directory on the host first: mkdir -p /opt/traefik/acme
     task "traefik" {
       driver = "docker"
 
       config {
         image        = "traefik:v2.10"
         network_mode = "host"
+
+        # Mount the volume for certificates
+        volumes = [
+           "/opt/traefik/acme:/letsencrypt"
+        ]
 
         args = [
           "--api.insecure=true",
@@ -42,10 +38,31 @@ job "traefik" {
           "--providers.consulcatalog.endpoint.address=127.0.0.1:8500",
           "--entrypoints.web.address=:80",
           "--entrypoints.websecure.address=:443",
-          # Minimal configuration for HTTP.
-          # For HTTPS with LetsEncrypt, user needs to configure resolvers and domain.
-          # Here we just set up the entrypoints.
+
+          # --- HTTPS / Let's Encrypt Configuration (Uncomment to Enable) ---
+
+          # 1. HTTP to HTTPS Redirection
+          # "--entrypoints.web.http.redirections.entryPoint.to=websecure",
+          # "--entrypoints.web.http.redirections.entryPoint.scheme=https",
+
+          # 2. Certificate Resolver (LetsEncrypt)
+          # Replace 'your-email@example.com' with your actual email
+          # "--certificatesresolvers.myresolver.acme.email=your-email@example.com",
+          # "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json",
+          # "--certificatesresolvers.myresolver.acme.httpchallenge=true",
+          # "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web",
         ]
+      }
+
+      service {
+        name = "traefik"
+        check {
+          name     = "alive"
+          type     = "tcp"
+          port     = "http"
+          interval = "10s"
+          timeout  = "2s"
+        }
       }
     }
   }
