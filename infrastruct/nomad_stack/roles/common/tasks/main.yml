@@ -1,0 +1,52 @@
+---
+- name: Install common packages
+  apt:
+    name:
+      - curl
+      - wget
+      - vim
+      - git
+      - unzip
+      - ufw
+      - fail2ban
+      - jq
+      - qemu-user-static
+      - binfmt-support
+    state: present
+    update_cache: yes
+
+- name: Setup UFW
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Allow SSH
+  ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Allow HTTP
+  ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+
+- name: Allow HTTPS
+  ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+
+# Allow Nomad/Consul/Vault RPC/Gossip ports only from local network or trusted sources
+# For simplicity on OCI, we assume internal communication is via localhost or private IP
+# We might need to open ports for cluster communication if we had multiple nodes,
+# but for single node (plus clients), localhost is often enough for binding,
+# but docker containers need to reach them.
+# The user said "all running on OCI arm always free instanci" (singular).
+# So we primarily bind to docker bridge or tailscale/VPN if available.
+# But for now, let's open 4646 (Nomad), 8500 (Consul), 8200 (Vault) ONLY to localhost/tailscale
+# or allow from anywhere if secured.
+# Better practice: Don't expose them publicly. Use Traefik to proxy if needed.
+# Accessing the UI: User can use SSH tunnel `ssh -L 4646:localhost:4646 ...`
+# So we don't open these ports in UFW for public interface.

@@ -1,0 +1,127 @@
+---
+- name: Add HashiCorp GPG key
+  shell: |
+    wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+- name: Add HashiCorp repository
+  shell: |
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+  args:
+    creates: /etc/apt/sources.list.d/hashicorp.list
+
+- name: Install Consul, Vault, Nomad
+  apt:
+    name:
+      - consul
+      - vault
+      - nomad
+    state: present
+    update_cache: yes
+
+- name: Create data directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /opt/consul
+    - /opt/vault
+    - /opt/nomad
+
+- name: Configure Consul (Server)
+  copy:
+    dest: /etc/consul.d/consul.hcl
+    content: |
+      datacenter = "dc1"
+      data_dir = "/opt/consul"
+      log_level = "INFO"
+      node_name = "halvarm"
+      server = true
+      bootstrap_expect = 1
+      bind_addr = "{{ ansible_default_ipv4.address }}"
+      client_addr = "0.0.0.0"
+      ui_config {
+        enabled = true
+      }
+      connect {
+        enabled = true
+      }
+      ports {
+        grpc = 8502
+      }
+  notify: Restart Consul
+
+- name: Configure Vault
+  copy:
+    dest: /etc/vault.d/vault.hcl
+    content: |
+      ui = true
+      storage "consul" {
+        address = "127.0.0.1:8500"
+        path    = "vault/"
+      }
+      listener "tcp" {
+        address     = "0.0.0.0:8200"
+        tls_disable = 1
+      }
+      api_addr = "http://{{ ansible_default_ipv4.address }}:8200"
+      cluster_addr = "http://{{ ansible_default_ipv4.address }}:8201"
+  notify: Restart Vault
+
+- name: Configure Nomad
+  copy:
+    dest: /etc/nomad.d/nomad.hcl
+    content: |
+      datacenter = "dc1"
+      data_dir = "/opt/nomad"
+      bind_addr = "0.0.0.0"
+      server {
+        enabled = true
+        bootstrap_expect = 1
+      }
+      client {
+        enabled = true
+        network_interface = "{{ ansible_default_ipv4.interface }}"
+      }
+      plugin "docker" {
+        config {
+          allow_privileged = true
+        }
+      }
+      consul {
+        address = "127.0.0.1:8500"
+      }
+      vault {
+        enabled = true
+        address = "http://127.0.0.1:8200"
+      }
+  notify: Restart Nomad
+
+- name: Enable and start services
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  loop:
+    - consul
+    - vault
+    - nomad
+
+- name: Wait for Consul to start
+  wait_for:
+    port: 8500
+    delay: 5
+
+- name: Wait for Vault to start
+  wait_for:
+    port: 8200
+    delay: 5
+
+- name: Wait for Nomad to start
+  wait_for:
+    port: 4646
+    delay: 5

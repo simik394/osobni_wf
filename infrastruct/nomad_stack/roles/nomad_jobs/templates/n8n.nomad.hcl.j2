@@ -1,0 +1,48 @@
+job "n8n" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "n8n" {
+    count = 1
+
+    network {
+      port "http" {
+        to = 5678
+      }
+    }
+
+    task "n8n" {
+      driver = "docker"
+
+      config {
+        image = "n8nio/n8n:latest"
+        ports = ["http"]
+        volumes = [
+          "/opt/n8n/data:/home/node/.n8n"
+        ]
+      }
+
+      env {
+        N8N_HOST = "n8n.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+        N8N_PORT = "5678"
+        N8N_PROTOCOL = "http"
+        WEBHOOK_URL = "http://n8n.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io/"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
+
+      service {
+        name = "n8n"
+        port = "http"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.n8n.rule=Host(`n8n.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) || PathPrefix(`/n8n`)",
+          "traefik.http.routers.n8n.entrypoints=web"
+        ]
+      }
+    }
+  }
+}
