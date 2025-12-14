@@ -2,6 +2,10 @@
  * Discord notification helper
  */
 import { config } from './config';
+import { sendNotification, loadConfigFromEnv } from './notify';
+
+// Load ntfy/discord config from env on module load
+loadConfigFromEnv();
 
 export async function sendDiscordNotification(message: string, embed?: {
     title?: string;
@@ -49,7 +53,9 @@ export async function sendDiscordNotification(message: string, embed?: {
 export function notifyJobCompleted(jobId: string, type: string, query: string, success: boolean, resultSummary?: string) {
     const color = success ? 0x00FF00 : 0xFF0000; // Green or Red
     const status = success ? '✅ Completed' : '❌ Failed';
+    const priority = success ? 'default' : 'high';
 
+    // Send to Discord (rich embed)
     sendDiscordNotification('', {
         title: `Job ${status}`,
         description: `**Type:** ${type}\n**Query:** ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`,
@@ -59,4 +65,12 @@ export function notifyJobCompleted(jobId: string, type: string, query: string, s
             ...(resultSummary ? [{ name: 'Result', value: resultSummary.substring(0, 200), inline: false }] : [])
         ]
     });
+
+    // Send to ntfy.sh (simple message)
+    const ntfyMessage = `${status} ${type}: ${query.substring(0, 50)}${query.length > 50 ? '...' : ''}`;
+    sendNotification(ntfyMessage, {
+        title: `rsrch: ${type}`,
+        priority: priority as any
+    }).catch(e => console.error('[Notify] Failed:', e.message));
 }
+
