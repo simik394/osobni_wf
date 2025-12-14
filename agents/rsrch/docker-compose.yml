@@ -26,12 +26,12 @@ services:
       - ${HOME}/.config/rsrch:/app/config
     environment:
       - PORT=${PORT:-3001}
-      - BROWSER_CDP_ENDPOINT=http://chromium:9223
+      - BROWSER_CDP_ENDPOINT=http://host.docker.internal:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: npm run serve
-    depends_on:
-      - chromium
     restart: unless-stopped
 
   falkordb:
