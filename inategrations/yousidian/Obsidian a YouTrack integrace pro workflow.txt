@@ -1,0 +1,273 @@
+﻿Architektonická analýza a implementační strategie nativní integrace systémů Obsidian a YouTrack v kontejnerizovaných prostředích
+1. Úvod do problematiky a definice cílů
+V moderním ekosystému správy znalostí a projektového řízení se setkáváme s fundamentálním dichotomií mezi "stavem znalostí" (State of Knowledge) a "stavem akce" (State of Action). Pro uživatele, který operuje na pokročilé technologické úrovni – využívající nástroje jako Zotero pro správu citací, Obsidian pro osobní znalostní bázi (PKM), Neovim (Nvim) pro efektivní editaci textu, Google Workspace pro kolaboraci, n8n pro orchestraci automatizací, Kubernetes (k8s) pro správu infrastruktury a YouTrack pro řízení úkolů – představuje absence hluboké integrace mezi těmito systémy významnou kognitivní zátěž.
+Cílem této analýzy je navrhnout, architektonicky rozpracovat a detailně popsat implementaci "nativní" integrace mezi Obsidianem a YouTrackem. Pojem "nativní úroveň" v tomto kontextu neznamená pouze povrchní zobrazení odkazů, ale stav, kdy se data, stavy a kontexty plynule přelévají mezi oběma systémy bez nutnosti manuální duplikace nebo přepínání kontextu. Zaměříme se specificky na workflow zahrnující správu inventáře (technického, softwarového či výzkumného) a správu úkolů, s využitím plného potenciálu zmíněného technologického stacku.
+1.1 Definice "Nativní Integrace" v distribuovaném prostředí
+Abychom mohli hovořit o nativní integraci v prostředí, kde jedna aplikace běží lokálně na souborovém systému (Obsidian) a druhá v cloudu nebo na serveru (YouTrack), musíme překonat bariéry síťové topologie a datových modelů. Nativní integrace musí splňovat následující kritéria:
+1. Datová konzistence: Změna stavu v YouTracku (např. změna stavu tiketu na "Resolved") se musí okamžitě a automaticky propsat do metadat příslušné poznámky v Obsidianu.
+2. Navigační kontinuita: Odkaz v YouTracku musí otevřít konkrétní poznámku v lokální aplikaci Obsidian (nebo Nvim) na přesném řádku či bloku, a naopak.
+3. Vizuální unifikace: Možnost zobrazit kontext úkolu přímo v poznámce nebo kontext poznámky přímo v detailu úkolu.
+1.2 Role jednotlivých komponent v architektuře
+V navrhovaném řešení hraje každá komponenta uživatelova stacku klíčovou roli:
+Komponenta
+	Role v architektuře
+	Typ dat
+	Obsidian
+	Znalostní graf, dokumentace, specifikace
+	Statická a evoluční data (Markdown)
+	YouTrack
+	Exekuční engine, workflow management, time-tracking
+	Transakční data, stavy, historie změn
+	n8n
+	Integrační sběrnice, transformace dat, logika synchronizace
+	Přechodná data (JSON payloady)
+	k8s
+	Hosting pro n8n, tunely a proxy služby
+	Infrastruktura
+	Nvim
+	Rychlá editace, hromadné operace nad textem
+	Rozhraní pro "Power Usera"
+	Zotero
+	Zdroj referencí a bibliografie pro inventář
+	Metadata o zdrojích
+	Google Workspace
+	Úložiště binárních příloh, nákupní seznamy
+	Tabulková data, soubory
+	2. Teoretický rámec a datová ontologie
+Předtím, než přistoupíme k technické implementaci, je nutné definovat, jakým způsobem budeme mapovat entity mezi striktně strukturovaným světem databáze YouTracku a volným, textově orientovaným světem Obsidianu.
+2.1 Koncept "Inventární Položky" jako sdílené entity
+V kontextu správy inventáře (např. serverů, softwarových licencí nebo výzkumných témat) existuje entita, kterou nazvěme "Inventární Položka". Tato položka musí existovat v obou systémech současně, avšak s různými atributy.
+V Obsidianu je Inventární Položka reprezentována souborem Markdown (např. Server-Alpha.md). Její vlastnosti jsou uloženy v YAML Frontmatter (hlavičce souboru) a její obsah tvoří volný text, diagramy a odkazy na související entity (např. ] pro definici závislostí).
+V YouTracku je tatáž položka reprezentována jako Issue (Úkol) nebo Article (Článek) v Knowledge Base. Její vlastnosti jsou uloženy v Custom Fields (Vlastní pole) a její životní cyklus je řízen stavovým automatem (State Machine).
+Klíčovým problémem, který musíme vyřešit, je mapování datových typů. YouTrack používá typované pole (Enum, Date, String, User), zatímco Obsidian používá prostý text v YAML, který je interpretován pouze konvencí nebo pluginy jako Dataview.
+2.2 Analýza Markdown syntaxe a inkompatibilit
+Ačkoliv oba systémy deklarují podporu Markdownu, jejich implementace se liší, což představuje překážku pro "nativní" zobrazení.1
+* Obsidian Flavored Markdown: Podporuje ], ![[Embeds]], callouty > [!INFO], a matematické zápisy MathJax. Tyto prvky jsou pro efektivní práci v Obsidianu klíčové, ale v jiných interpretech se nezobrazují správně.2
+* YouTrack Markdown: Vychází z CommonMark specifikace s rozšířeními JetBrains. Podporuje checklisty, tabulky a zmínky uživatelů (@user), ale nativně nerozumí syntaxi ]. Místo toho používá standardní odkazy (URL) nebo specifické odkazy na issues.4
+Důsledkem této inkompatibility je, že prostá synchronizace obsahu (Copy-Paste) nefunguje. Text poznámky z Obsidianu se v YouTracku zobrazí s rozbitými odkazy a nefunkčními embedy. Proto musí integrační vrstva (n8n) fungovat také jako transpiler (překladač), který konvertuje syntaxi za běhu.5
+2.3 Role Zotera v ontologii inventáře
+Zotero vstupuje do hry v momentě, kdy je inventární položka vázána na externí dokumentaci (manuály, faktury, výzkumné papíry). Zotero poskytuje unikátní klíče (Citation Keys) a URI schéma zotero://select/items/.... V našem modelu by měl Obsidian sloužit jako centrální uzel, kde metadata: zotero_link odkazuje na zdroj, a YouTrack přebírá tento odkaz do pole typu "Link" nebo do popisu, aby technik řešící úkol měl přístup k manuálu jedním kliknutím.
+3. Technická architektura konektivity
+Propojení lokální aplikace (Obsidian) s cloudovou či serverovou službou (YouTrack) přes prostředníka v Kubernetes (n8n) vyžaduje sofistikovanou síťovou architekturu.
+3.1 Problém "Localhost" a jeho řešení v k8s
+Obsidian je "local-first" aplikace. Data jsou soubory na disku. Pro automatizaci zvenčí (z n8n) musíme tato data zpřístupnit přes síť. K tomu slouží plugin Local REST API.7 Ten otevře na počítači uživatele (např. na portu 27124) zabezpečený HTTPS server, který umožňuje číst a zapisovat soubory.
+Problém nastává v tom, že n8n běžící v k8s clusteru (i kdyby to byl homelab) nemůže přímo přistoupit na localhost vašeho notebooku, pokud nejsou ve stejné síti.
+3.1.1 Řešení A: Secure Tunneling (Cloudflared / Tailscale)
+Pro uživatele znalého k8s je nejrobustnějším řešením vytvoření zabezpečeného tunelu.
+1. Na pracovní stanici (Obsidian): Běží proces cloudflared nebo tailscale, který exponuje port 27124 pluginu Local REST API do privátní sítě.
+2. V k8s clusteru (n8n):
+   * V případě Tailscale: Pod s n8n může mít sidecar kontejner s Tailscale, nebo lze využít subnet router. N8n pak volá adresu https://obsidian-workstation.tailnet:27124.
+   * V případě Cloudflared: Vytvoří se Ingress pravidlo, které směruje požadavky z n8n přes Cloudflare Tunnel přímo na lokální port počítače.
+Tímto způsobem n8n získává schopnost posílat GET, POST, PUT a PATCH požadavky přímo do běžící instance Obsidianu, čímž se otevírá cesta k plné obousměrné synchronizaci.
+3.2 YouTrack API a Webhooky
+Na straně YouTracku je situace jednodušší. YouTrack je serverová aplikace s veřejně dostupným REST API.
+* Inbound (Do YouTracku): n8n volá standardní endpointy https://youtrack.instance/api/....10
+* Outbound (Z YouTracku): YouTrack Workflows (skriptované v JavaScriptu) mohou odesílat HTTP požadavky na webhooky n8n při splnění určitých podmínek (např. změna pole).12
+4. Integrační Vektor A: Vizuální Integrace (Single Pane of Glass)
+Prvním krokem k nativní integraci je zajistit, aby uživatel viděl relevantní informace tam, kde se právě nachází, bez nutnosti přepínání oken.
+4.1 Embedding YouTracku do Obsidianu
+Díky tomu, že Obsidian je v podstatě prohlížeč (Electron), zvládá zobrazování webového obsahu přes iframe velmi dobře.
+4.1.1 Dashboard přes Obsidian Canvas
+Pro správu inventáře lze vytvořit specializovaný Obsidian Canvas.
+* Levá část: Diagram infrastruktury (vykreslený pomocí pluginu Excalidraw nebo Mermaid), kde jednotlivé uzly jsou odkazy na poznámky inventáře.
+* Pravá část: Živé okno YouTracku filtrované na relevantní projekt nebo Agile Board.
+   * Kód: <iframe src="https://vas-youtrack.cz/agiles/120-42?embed=true" style="width:100%; height:100%"></iframe>.
+* Výzva autentizace: Iframe v Obsidianu nesdílí cookies s hlavním prohlížečem systému. Řešením je plugin Custom Frames, který umožňuje definovat persistentní webová okna, která si pamatují přihlášení. Uživatel si tak může definovat "YouTrack Frame" a vložit jej do postranního panelu Obsidianu, čímž získá plnohodnotné rozhraní YouTracku přímo v IDE.
+4.2 Embedding Obsidianu do YouTracku
+Toto je složitější směr. YouTrack je webová aplikace a z bezpečnostních důvodů (CORS, mixed content policy) nedovolí načíst obsah z file:/// nebo localhost.
+4.2.1 Strategie statického publikování přes k8s
+Abychom dostali obsah poznámek do YouTracku "nativně" (např. přes Widget "Embedded Sites" 14), musíme je publikovat.
+1. Export: Plugin v Obsidianu (nebo Git hook) exportuje vybranou složku "Inventář" do Markdown souborů.
+2. Build Pipeline: CI/CD pipeline v k8s (např. Jenkins nebo GitHub Actions runner) vezme tyto soubory a pomocí generátoru statických stránek (MkDocs, Hugo) vytvoří HTML reprezentaci.
+3. Hosting: Výsledek je nasazen do kontejneru (Nginx) v k8s, dostupný na interní doméně (např. https://docs.internal).
+4. Integrace: V YouTracku se v nastavení "Global Settings" > "Server Configuration" povolí doména docs.internal na whitelistu.16 Následně lze v dashboardu nebo v popisu issue použít widget/iframe, který zobrazuje aktuální dokumentaci k danému zařízení přímo z vygenerovaného webu.
+Tato metoda zajišťuje, že technik v YouTracku vidí vždy aktuální specifikaci, i když je originál uložen v lokálním Obsidianu autora.
+5. Integrační Vektor B: Navigace a Deep Linking
+Pokud vizuální integrace slouží k náhledu, navigační integrace slouží k rychlé akci. Odkazy musí fungovat oběma směry a musí být odolné vůči změnám názvů souborů.
+5.1 Protokol obsidian:// v YouTracku
+Standardní odkaz (obsidian://open?vault=Vault&file=Server) může být v YouTracku problematický. Některé verze a konfigurace Markdown parseru v YouTracku mohou sanitizovat neznámé protokoly (jiné než http/https/ftp) a zobrazit je jako prostý text.18
+5.1.1 Řešení: Redirect Service v k8s
+Jako zkušený uživatel k8s můžete nasadit mikroslužbu (např. v Node.js nebo Nginx), která bude fungovat jako prostředník.
+* Mechanismus: Vytvoříte odkaz https://link.vase-domena.cz/open?id=uuid-1234.
+* Chování: Tento odkaz je validní HTTPS, takže jej YouTrack renderuje jako klikatelný. Po kliknutí server odpoví HTTP statusem 301 Moved Permanently s hlavičkou Location: obsidian://advanced-uri?vault=Vault&uid=uuid-1234.
+* Výsledek: Prohlížeč přijme přesměrování a vyzve operační systém k otevření aplikace Obsidian.
+Tímto obcházíte omezení YouTracku a získáváte robustní prolinkování. Použití pluginu Advanced URI 21 a UUID (místo názvů souborů) je kritické, protože názvy souborů v Obsidianu se mohou měnit (refactoring), zatímco UUID v frontmatteru zůstává konstantní.
+5.2 Odkazy z Obsidianu do YouTracku a Nvim
+Zde je situace přívětivější.
+* Obsidian: Automaticky detekuje URL. Pro lepší UX lze využít plugin YouTrack Fetcher 23, nikoliv pro synchronizaci (která je limitovaná), ale pro rychlé vložení odkazu s názvem úkolu. Alternativně lze použít šablony (Templates/Templater), které z ID úkolu INV-42 vygenerují formátovaný odkaz [INV-42: Výměna disku](https://youtrack.../issue/INV-42).
+* Nvim: V prostředí Neovimu lze nakonfigurovat plugin, který na základě regulárního výrazu (např. INV-\d+) vytvoří hyperlink. Při stisku klávesové zkratky (např. gx) se otevře prohlížeč s daným tiketem.
+6. Integrační Vektor C: Logika a Synchronizace (n8n Orchestrace)
+Toto je nejdůležitější část pro "nativní" pocit. Data musí být synchronizována. Zde využijeme n8n jako centrální mozek.
+6.1 Scénář 1: Změna v YouTracku -> Update v Obsidianu
+Představme si workflow: Technik v terénu označí úkol "Výměna UPS" v YouTracku jako "Dokončeno". Chceme, aby se v Obsidianu u poznámky "Serverovna A" změnilo datum poslední údržby a status UPS.
+Implementace:
+1. YouTrack Trigger: Vytvoříme "On-change" pravidlo v YouTrack Workflow Editoru (JS).13
+JavaScript
+// JS Workflow v YouTracku
+var entities = require('@jetbrains/youtrack-scripting-api/entities');
+var http = require('@jetbrains/youtrack-scripting-api/http');
+
+exports.rule = entities.Issue.onChange({
+ title: 'Sync to Obsidian',
+ guard: function(ctx) {
+   // Spustit pouze pokud se změní stav a issue má vyplněné pole "Obsidian UUID"
+   return ctx.issue.fields.State.name === 'Fixed' && ctx.issue.fields.ObsidianUUID;
+ },
+ action: function(ctx) {
+   var connection = new http.Connection('https://n8n.vase-domena.cz');
+   connection.addHeader('Content-Type', 'application/json');
+   connection.postSync('/webhook/yt-to-obsidian', null, JSON.stringify({
+       uuid: ctx.issue.fields.ObsidianUUID,
+       state: ctx.issue.fields.State.name,
+       resolvedDate: Date.now(),
+       summary: ctx.issue.summary
+   }));
+ }
+});
+
+2. n8n Workflow:
+   * Webhook Node: Přijme JSON.
+   * HTTP Request Node (Patch Vault File): Volá přes tunel Local REST API Obsidianu.
+   * Endpoint: PATCH /search/ (pro nalezení souboru podle UUID ve frontmatter) nebo přímo PATCH /vault/{path} pokud známe cestu.
+   * Metoda Local REST API pro patch: Použijeme endpoint, který umí modifikovat frontmatter.8
+   * Payload:
+JSON
+{
+ "frontmatter": {
+   "status": "Operational",
+   "last_maintenance": "{{$json.resolvedDate}}"
+ }
+}
+
+   * Append Text (Log): Volitelně můžeme přidat na konec poznámky záznam o provedené akci: \n- [x] Údržba dokončena (via YouTrack {{ $json.id }}).27
+6.2 Scénář 2: Změna v Obsidianu -> Update v YouTracku
+Uživatel sedí u počítače, v Nvimu nebo Obsidianu sepisuje specifikaci nového serveru a ve frontmatteru nastaví purchase_status: approved. Toto má automaticky posunout tiket v YouTracku.
+Implementace:
+      1. Obsidian Trigger: Použijeme plugin Post Webhook.29
+      * Uživatel vyvolá příkaz Send to n8n. Plugin vezme obsah poznámky a její frontmatter a odešle je jako JSON na webhook n8n.
+      * Alternativa pro Nvim: Uživatel může napsat jednoduchý Lua skript nebo bash alias, který pomocí curl odešle aktuální buffer na webhook n8n. Toto je pro uživatele Nvimu často rychlejší než GUI interakce.
+      2. n8n Workflow:
+      * Webhook Node: Přijme data poznámky.
+      * Decision Node: Zkontroluje, zda existuje vazba na YouTrack (např. pole youtrack_id ve frontmatteru).
+      * Pokud neexistuje: Zavolá YouTrack API POST /api/issues 10 pro vytvoření nového úkolu. Následně pošle zpět do Obsidianu (přes Local REST API) ID nového úkolu a zapíše ho do frontmatteru (youtrack_id: INV-50).
+      * Pokud existuje: Porovná data. Pokud se liší (např. popis), zavolá YouTrack API POST /api/issues/{id} a aktualizuje pole nebo popis.11
+      * Markdown to HTML Converter: Před odesláním popisu do YouTracku je nutné provést konverzi. N8n má uzel "Markdown", který podporuje konverzi do HTML.5 Je však nutné ošetřit specifika Obsidianu (odstranit [[ a ]] nebo je nahradit standardními odkazy). K tomu poslouží "Function" node s JavaScriptem (regulární výrazy).
+6.3 Řešení konfliktů a zacyklení
+Při obousměrné synchronizaci hrozí riziko "nekonečné smyčky" (Obsidian update -> YouTrack update -> Obsidian update...).
+Strategie prevence:
+      1. "Actor" Check: V YouTrack workflow zkontrolujte, kdo změnu provedl. Pokud je autorem změny "n8n-bot" (servisní účet API), workflow se nesmí spustit.
+      2. Časová razítka: Porovnávejte last_updated timestamp. Aktualizujte pouze pokud je příchozí změna novější než cílový stav.
+7. Dopad na Workflow: Správa Inventáře a Úkolů
+Integrace na této úrovni zásadně mění způsob práce.
+7.1 "Inventory as Code" (IaC)
+Díky tomu, že inventář je primárně v Markdownu v Obsidianu, může uživatel aplikovat principy IaC.
+      * Hromadné operace: Potřebujete označit 50 serverů jako "Deprecated"? V Nvimu nebo pomocí sed v terminálu upravíte frontmatter u 50 souborů.
+      * Sync: Spustíte skript, který přes Local REST API nebo Post Webhook plugin odešle tyto změny do n8n.
+      * Výsledek: N8n během chvíle aktualizuje 50 tiketů v YouTracku, spustí notifikace, uzavře nákupní požadavky atd. Toto je řádově efektivnější než klikání v GUI YouTracku.
+7.2 Obohacený kontext úkolů
+Když se v YouTracku objeví úkol "Chyba na serveru X", automatizace (n8n) může:
+      1. Podle názvu serveru najít poznámku v Obsidianu.
+      2. Vytáhnout z ní klíčové informace (IP adresa, OS, odkaz na manuál v Zoteru, poslední známé problémy).
+      3. Vložit tyto informace do popisu úkolu v YouTracku jako "Context Block".
+Technik tak při otevření úkolu nemusí nic hledat; vše má naservírované.
+7.3 Google Workspace jako auditní vrstva
+V tomto workflow může Google Sheets sloužit jako "ReadOnly" auditní log. N8n může každou synchronizační operaci zapsat do tabulky. To je užitečné pro reportování managementu, který nemá přístup do vašeho Obsidianu ani detailní znalost YouTrack query jazyka.
+8. Tabulkový přehled API a Nástrojů
+Pro přehlednost shrnujeme klíčové body integrace v tabulce:
+Funkce
+	Obsidian Nástroj
+	YouTrack Nástroj
+	Role n8n / k8s
+	Čtení dat
+	Local REST API GET /vault/...
+	REST API GET /api/issues/...
+	Webhook Trigger & Polling
+	Zápis dat
+	Local REST API PATCH /vault/...
+	REST API POST /api/issues/...
+	Transformace JSON payloadů
+	Metadata
+	YAML Frontmatter
+	Custom Fields (Types)
+	Mapování typů (String <-> Enum)
+	Trigger
+	Plugin "Post Webhook" / Command
+	JS Workflows (onChange)
+	Orchestrace toku
+	Bezpečnost
+	API Key (Header), HTTPS
+	Permanent Token (Bearer)
+	Secrets Management (k8s secrets)
+	Infrastruktura
+	Cloudflared / Tailscale Tunnel
+	Povolené domény (CORS)
+	Hosting kontejnerů, Ingress
+	9. Závěr a doporučení
+Pro uživatele s vaším profilem (Zotero, Nvim, k8s...) není limitující technická proveditelnost, ale spíše složitost počátečního nastavení. Doporučený postup je:
+         1. Fáze 1 (Konektivita): Zprovozněte Local REST API v Obsidianu a zajistěte k němu bezpečný přístup z vašeho k8s clusteru (tunel).
+         2. Fáze 2 (Jednosměrný Sync - Znalosti): Nastavte n8n workflow, které při změně v Obsidianu (přes Post Webhook) aktualizuje popis a pole v YouTracku. To vám umožní používat Nvim jako primární editor pro YouTrack issues.
+         3. Fáze 3 (Obousměrný Sync - Stavy): Implementujte JS Workflows v YouTracku pro zpětnou synchronizaci stavů (State -> Frontmatter status).
+         4. Fáze 4 (Vizuální integrace): Pokud to bezpečnostní politika dovolí, experimentujte s exportem statického webu pro embedding do YouTracku.
+Tato architektura transformuje váš Obsidian z pasivního zápisníku na aktivní ovládací konzoli vaší infrastruktury a projektů, přičemž YouTrack zůstává robustním backendem pro sledování stavu a týmovou spolupráci.
+________________
+Detailní rozbor implementace n8n uzlů (Appendix A)
+Pro praktickou realizaci je klíčové správné nastavení n8n uzlů. Zde je hlubší pohled na konfiguraci.
+A.1 Konverze Markdownu (Obsidian -> YouTrack)
+Obsidian používá specifické značkování, které je třeba vyčistit. V n8n použijte uzel Code (JavaScript):
+
+
+JavaScript
+
+
+
+
+// Příklad JS kódu pro n8n Code Node
+const content = items.json.content;
+let cleanContent = content;
+
+// 1. Odstranění WikiLinks [[Link]] -> Link
+cleanContent = cleanContent.replace(/\[\[([^\]|]+)\]\]/g, '$1');
+// 2. Konverze WikiLinks s aliasem [[Link|Alias]] -> Alias
+cleanContent = cleanContent.replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, '$1');
+// 3. Odstranění Calloutů (zjednodušení na blockquote)
+cleanContent = cleanContent.replace(/> \[!.*?\]\n/g, '> ');
+
+return [{json: {...items.json, cleanContent }}];
+
+Následně tento cleanContent předejte uzlu Markdown (režim Markdown to HTML), protože YouTrack API preferuje HTML v poli description pro maximální kompatibilitu, nebo čistý Markdown, pokud si jste jisti podporovanou syntaxí.
+A.2 Práce s přílohami (Zotero/Files)
+Pokud inventární položka obsahuje PDF (např. v Zoteru), metadata v Obsidianu budou pravděpodobně obsahovat odkaz zotero://....
+V n8n workflow byste měli tento odkaz extrahovat a vložit do YouTracku jako "Link" (typ pole) spíše než se snažit soubor fyzicky přenášet. Binární synchronizace je náchylná k chybám a duplikaci dat. Odkazování na "Source of Truth" (Zotero/Google Drive) je architektonicky čistší.
+A.3 Bezpečnostní aspekty tunelu
+Při exponování Local REST API přes Cloudflared do k8s clusteru, nezapomeňte v config.yaml tunelu nastavit ověřování mTLS nebo alespoň Access Policy, aby se k vašemu API nedostal nikdo jiný než vaše n8n instance. V n8n pak v HTTP Request node použijte sekci "Authentication" > "Header Auth" a přidejte Authorization: Bearer Váš-Obsidian-API-Key.
+Citovaná díla
+         1. Explain to me Markdown and Obsidian for taking notes or doing anything else. Also word processing preferences, použito prosince 14, 2025, https://boards.straightdope.com/t/explain-to-me-markdown-and-obsidian-for-taking-notes-or-doing-anything-else-also-word-processing-preferences/1013141
+         2. Obsidian Flavored Markdown, použito prosince 14, 2025, https://help.obsidian.md/obsidian-flavored-markdown
+         3. New User - Should I stay with pure markdown or use Obsidian extra commands/syntax? : r/ObsidianMD - Reddit, použito prosince 14, 2025, https://www.reddit.com/r/ObsidianMD/comments/pvi1r3/new_user_should_i_stay_with_pure_markdown_or_use/
+         4. Markdown Syntax | YouTrack Server Documentation - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/server/youtrack-markdown-syntax-issues.html
+         5. Markdown - n8n Docs, použito prosince 14, 2025, https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.markdown/
+         6. Markdown to HTML Made Simple in n8n! - YouTube, použito prosince 14, 2025, https://www.youtube.com/watch?v=rmLi4KdLF0Y
+         7. Obsidian Local REST API MCP Server |... - LobeHub, použito prosince 14, 2025, https://lobehub.com/mcp/j-shelfwood-obsidian-local-rest-api-mcp
+         8. Local Rest API for Obsidian: Interactive API Documentation, použito prosince 14, 2025, https://coddingtonbear.github.io/obsidian-local-rest-api/
+         9. Plugins - Obsidian, použito prosince 14, 2025, https://obsidian.md/plugins
+         10. YouTrack REST API | Developer Portal for YouTrack and Hub Documentation - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/devportal/youtrack-rest-api.html
+         11. Update Issue Custom Fields | Developer Portal for YouTrack and Hub - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/devportal/api-how-to-update-custom-fields-values.html
+         12. Using REST API Methods in JavaScript Workflows | Developer Portal for YouTrack and Hub, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/devportal/JS-Workflow-REST-API.html
+         13. On-change Rules | Developer Portal for YouTrack and Hub Documentation - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/devportal/on-change-rules.html
+         14. Embedded Sites YouTrack App - JetBrains Marketplace, použito prosince 14, 2025, https://plugins.jetbrains.com/plugin/27288-embedded-sites
+         15. jjideenschmiede/youtrack-embedded-sites-app: To embed different sites with widgets to dashboards & knowledge base. - GitHub, použito prosince 14, 2025, https://github.com/jjideenschmiede/youtrack-embedded-sites-app
+         16. Domain Settings | YouTrack Cloud Documentation - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/cloud/domain-settings.html
+         17. Configuring the Whitelist | Knowledge Base - iSharkFly, použito prosince 14, 2025, https://track.ossez.com/articles/OSS-A-62624536/Configuring-the-Whitelist
+         18. YouTrack Integration Plugin - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/cloud/youtrack-integration-plugin.html
+         19. URL Scheme - Feature archive - Obsidian Forum, použito prosince 14, 2025, https://forum.obsidian.md/t/url-scheme/653
+         20. Render links/urls in bases correctly - Help - Obsidian Forum, použito prosince 14, 2025, https://forum.obsidian.md/t/render-links-urls-in-bases-correctly/105197
+         21. Obsidian Advanced URI - GitHub Pages, použito prosince 14, 2025, https://vinzent03.github.io/obsidian-advanced-uri/
+         22. Home - Advanced URI Documentation - Obsidian Publish, použito prosince 14, 2025, https://publish.obsidian.md/advanced-uri-doc/Home
+         23. forketyfork/obsidian-youtrack-fetcher: Obsidian plugin for ... - GitHub, použito prosince 14, 2025, https://github.com/forketyfork/obsidian-youtrack-fetcher
+         24. On-change Rules | YouTrack Server Documentation - JetBrains, použito prosince 14, 2025, https://www.jetbrains.com/help/youtrack/server/on-change-rules.html
+         25. MCP for Local REST API | MCP Servers · LobeHub, použito prosince 14, 2025, https://lobehub.com/mcp/hyphagroup-obsidian-mcp
+         26. A semantic MCP server for Obsidian that simplifies 20+ tools into 5 AI-optimized operations with intelligent workflow hints and state-aware suggestions. - GitHub, použito prosince 14, 2025, https://github.com/aaronsb/obsidian-semantic-mcp
+         27. Appending text to an existing note : r/ObsidianMD - Reddit, použito prosince 14, 2025, https://www.reddit.com/r/ObsidianMD/comments/1m0sg0r/appending_text_to_an_existing_note/
+         28. ObsidianAPI: How can I insert/append text to a specific location, without recreating the whole document? - Developers: Plugin & API - Obsidian Forum, použito prosince 14, 2025, https://forum.obsidian.md/t/obsidianapi-how-can-i-insert-append-text-to-a-specific-location-without-recreating-the-whole-document/84510
+         29. Masterb1234/obsidian-post-webhook: A plugin for Obsidian that sends notes to Webhook endpoints (e.g. n8n, Make.com, Zapier) for streamlined automation and integration. - GitHub, použito prosince 14, 2025, https://github.com/Masterb1234/obsidian-post-webhook
+         30. New plugin: Post Webhook - Send notes to any Webhook endpoint - Obsidian Forum, použito prosince 14, 2025, https://forum.obsidian.md/t/new-plugin-post-webhook-send-notes-to-any-webhook-endpoint/92647
