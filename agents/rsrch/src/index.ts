@@ -1212,3 +1212,4 @@ async function runLegacyMode() {
 }
 
 main().catch(console.error);
+```
