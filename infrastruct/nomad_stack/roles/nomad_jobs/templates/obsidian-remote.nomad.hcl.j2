@@ -14,6 +14,11 @@ job "obsidian-remote" {
     task "obsidian" {
       driver = "docker"
 
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
       config {
         image = "ghcr.io/sglmr/obsidian-remote:latest"
         ports = ["http"]

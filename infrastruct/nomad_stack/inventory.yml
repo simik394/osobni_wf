@@ -4,9 +4,13 @@ servers:
     halvarm:
       ansible_user: ubuntu
       # ansible_host is inherited from ~/.ssh/config alias 'halvarm'
+      node_class: cloud
+      nomad_role: server
 
-# For running ansible from 'halvarm' itself
+# For running ansible from 'halvarm' itself or the laptop 'ntb'
 local:
   hosts:
     localhost:
       ansible_connection: local
+      node_class: laptop
+      nomad_role: non_voting_server

@@ -32,18 +32,37 @@
     - /opt/vault
     - /opt/nomad
 
-- name: Configure Consul (Server)
+- name: Get Tailscale IP
+  ansible.builtin.command: tailscale ip -4
+  register: tailscale_ip
+  changed_when: false
+  failed_when: false
+
+- name: Set Bind IP Fact
+  ansible.builtin.set_fact:
+    bind_ip: "{{ tailscale_ip.stdout | default(ansible_default_ipv4.address) }}"
+
+- name: Configure Consul
   ansible.builtin.copy:
     dest: /etc/consul.d/consul.hcl
     content: |
       datacenter = "dc1"
       data_dir = "/opt/consul"
       log_level = "INFO"
-      node_name = "halvarm"
+      node_name = "{{ inventory_hostname }}"
       server = true
+
+      # Bootstrap only on the cloud server
+      {% if nomad_role == 'server' %}
       bootstrap_expect = 1
-      bind_addr = "{{ ansible_default_ipv4.address }}"
+      {% else %}
+      retry_join = ["halvarm"]
+      {% endif %}
+
+      bind_addr = "{{ bind_ip }}"
       client_addr = "0.0.0.0"
+      advertise_addr = "{{ bind_ip }}"
+
       ui_config {
         enabled = true
       }
@@ -68,8 +87,8 @@
         address     = "0.0.0.0:8200"
         tls_disable = 1
       }
-      api_addr = "http://{{ ansible_default_ipv4.address }}:8200"
-      cluster_addr = "http://{{ ansible_default_ipv4.address }}:8201"
+      api_addr = "http://{{ bind_ip }}:8200"
+      cluster_addr = "http://{{ bind_ip }}:8201"
   notify: Restart Vault
 
 - name: Configure Nomad
@@ -79,25 +98,50 @@
       datacenter = "dc1"
       data_dir = "/opt/nomad"
       bind_addr = "0.0.0.0"
+
       server {
         enabled = true
+
+        {% if nomad_role == 'server' %}
         bootstrap_expect = 1
+        {% endif %}
+
+        {% if nomad_role == 'non_voting_server' %}
+        non_voting_server = true
+        server_join {
+          retry_join = ["halvarm"]
+        }
+        {% endif %}
       }
+
       client {
         enabled = true
-        network_interface = "{{ ansible_default_ipv4.interface }}"
+        network_interface = "{{ ansible_default_ipv4.interface }}" # Use physical interface for bridge networking
+        node_class = "{{ node_class }}"
+        meta {
+          connect.sidecar_image = "envoyproxy/envoy:v1.25.1"
+        }
       }
+
       plugin "docker" {
         config {
           allow_privileged = true
         }
       }
+
       consul {
         address = "127.0.0.1:8500"
       }
+
       vault {
         enabled = true
         address = "http://127.0.0.1:8200"
+      }
+
+      advertise {
+        http = "{{ bind_ip }}"
+        rpc  = "{{ bind_ip }}"
+        serf = "{{ bind_ip }}"
       }
   notify: Restart Nomad
 

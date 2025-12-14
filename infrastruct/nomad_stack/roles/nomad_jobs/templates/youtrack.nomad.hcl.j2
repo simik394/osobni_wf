@@ -20,6 +20,11 @@ job "youtrack" {
     task "youtrack" {
       driver = "docker"
 
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
       config {
         image = "jetbrains/youtrack:2024.1.28299" # Use a specific version or latest
         ports = ["http"]

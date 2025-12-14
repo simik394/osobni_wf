@@ -1,11 +1,12 @@
 ---
 - name: Deploy Self-Hosted Stack
-  hosts: servers
+  hosts: all
   become: true
   vars:
     ansible_python_interpreter: /usr/bin/python3
   roles:
     - role: common
+    - role: tailscale
     - role: docker
     - role: hashicorp
     - role: nomad_jobs

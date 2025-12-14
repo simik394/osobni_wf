@@ -14,6 +14,11 @@ job "n8n" {
     task "n8n" {
       driver = "docker"
 
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
       config {
         image = "n8nio/n8n:latest"
         ports = ["http"]

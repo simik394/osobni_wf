@@ -27,9 +27,12 @@ ansible-playbook -i infrastruct/nomad_stack/inventory.yml infrastruct/nomad_stac
 
 This single command will:
 1.  **Detect Public IP**: Automatically find your server's OCI public IP for configuring routing.
-2.  **Harden Security**: Configure UFW firewall, install Fail2Ban, and setup QEMU for ARM emulation.
-3.  **Install & Configure HashiCorp Stack**: Nomad, Consul, and Vault.
-4.  **Auto-Init Vault**:
+2.  **Install & Setup Tailscale**: Automatically installs Tailscale to create a secure mesh network between your Laptop and the Cloud Server. **You will be prompted to authenticate** (run `sudo tailscale up` manually) on the first run.
+3.  **Harden Security**: Configure UFW firewall, install Fail2Ban, and setup QEMU for ARM emulation.
+4.  **Install & Configure HashiCorp Stack**: Nomad, Consul, and Vault.
+    *   **Cloud Server**: Acts as the primary cluster leader (Voting Server).
+    *   **Laptop**: Joins as a "Non-Voting Server" (Client + Control Plane), allowing you to submit jobs and view state without breaking cluster quorum if you go offline.
+5.  **Auto-Init Vault**:
     *   Automatically initializes Vault.
     *   Saves the **Unseal Keys and Root Token** to a file named `vault_keys.json` in your local directory (on your laptop, not the server).
     *   **Automatically Unseals** Vault so it's ready to use immediately.
