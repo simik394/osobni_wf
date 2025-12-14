@@ -5,8 +5,8 @@
  * NotebookLM audio generation.
  * 
  * Usage:
- *   rsrch watch                    # Watch and notify on completion
- *   rsrch watch --audio            # Also generate NotebookLM audio
+ *   rsrch watch --audio            # Generate audio inline
+ *   rsrch watch --queue            # Submit to server queue (recommended)
  *   rsrch watch --folder ~/audio   # Save audio to specific folder
  */
 
@@ -19,6 +19,8 @@ import * as fs from 'fs';
 
 export interface WatcherOptions {
     generateAudio: boolean;
+    submitToQueue: boolean;  // Submit to server queue instead of inline
+    serverUrl: string;
     audioFolder: string;
     pollIntervalMs: number;
     notifyTopic?: string;
@@ -26,6 +28,8 @@ export interface WatcherOptions {
 
 const DEFAULT_OPTIONS: WatcherOptions = {
     generateAudio: false,
+    submitToQueue: false,
+    serverUrl: 'http://localhost:3000',
     audioFolder: process.env.HOME + '/research/audio',
     pollIntervalMs: 30000, // 30 seconds
 };
@@ -45,8 +49,10 @@ export async function watchForResearch(options: Partial<WatcherOptions> = {}): P
 
     console.log('🔍 Starting Research Watcher...');
     console.log(`   Poll interval: ${opts.pollIntervalMs / 1000}s`);
-    console.log(`   Audio generation: ${opts.generateAudio ? 'enabled' : 'disabled'}`);
-    if (opts.generateAudio) {
+    console.log(`   Mode: ${opts.submitToQueue ? 'queue (server)' : opts.generateAudio ? 'inline' : 'notify only'}`);
+    if (opts.submitToQueue) {
+        console.log(`   Server: ${opts.serverUrl}`);
+    } else if (opts.generateAudio) {
         console.log(`   Audio folder: ${opts.audioFolder}`);
     }
     console.log('');
@@ -136,8 +142,11 @@ async function processCompletedResearch(
 
     let audioPath: string | undefined;
 
-    if (opts.generateAudio) {
-        console.log('\n🎧 Generating NotebookLM audio...');
+    // Queue mode: submit to server
+    if (opts.submitToQueue) {
+        await submitToServerQueue(state, opts);
+    } else if (opts.generateAudio) {
+        console.log('\n🎧 Generating NotebookLM audio (inline)...');
 
         try {
             // Create audio folder if needed
@@ -182,6 +191,50 @@ async function processCompletedResearch(
     console.log('\n📬 Sending notification...');
     await notifyResearchComplete(title, audioPath);
     console.log('✅ Notification sent!');
+}
+
+/**
+ * Submit research to server queue for processing
+ */
+async function submitToServerQueue(
+    state: ResearchState,
+    opts: WatcherOptions
+): Promise<void> {
+    const title = state.title || 'Research';
+    console.log(`\n📤 Submitting to server queue: "${title}"`);
+
+    try {
+        const response = await fetch(`${opts.serverUrl}/notebook/generate-audio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                notebookTitle: `Research: ${title}`,
+                // The server will handle:
+                // 1. Creating notebook
+                // 2. Adding source
+                // 3. Generating audio
+                // 4. Storing in graph DB
+                dryRun: false,
+                metadata: {
+                    source: 'watcher',
+                    sessionId: state.sessionId,
+                    detectedAt: new Date().toISOString()
+                }
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log(`✅ Job queued: ${data.jobId}`);
+            console.log(`   Status: ${opts.serverUrl}${data.statusUrl}`);
+        } else {
+            const error = await response.text();
+            console.error(`❌ Queue submission failed: ${response.status} - ${error}`);
+        }
+    } catch (e: any) {
+        console.error(`❌ Server connection failed: ${e.message}`);
+        console.log('   Is the server running? Start with: rsrch serve');
+    }
 }
 
 function sleep(ms: number): Promise<void> {

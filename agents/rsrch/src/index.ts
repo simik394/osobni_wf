@@ -1130,10 +1130,11 @@ async function main() {
         }
 
     } else if (command === 'watch') {
-        // rsrch watch [--audio] [--folder PATH] [--once]
+        // rsrch watch [--audio] [--queue] [--folder PATH] [--once]
         const { watchForResearch, checkAndProcess } = await import('./watcher');
 
         let generateAudio = args.includes('--audio');
+        let submitToQueue = args.includes('--queue');
         let audioFolder = process.env.HOME + '/research/audio';
         let once = args.includes('--once');
 
@@ -1143,10 +1144,12 @@ async function main() {
             }
         }
 
-        if (!generateAudio && !once) {
-            console.log('Usage: rsrch watch [--audio] [--folder PATH] [--once]');
+        if (!generateAudio && !submitToQueue && !once) {
+            console.log('Usage: rsrch watch [--audio | --queue] [--folder PATH] [--once]');
+            console.log('\nModes:');
+            console.log('  --audio      Generate audio inline (uses local browser)');
+            console.log('  --queue      Submit to server queue (recommended for production)');
             console.log('\nOptions:');
-            console.log('  --audio      Generate NotebookLM audio on completion');
             console.log('  --folder     Save audio to folder (default: ~/research/audio)');
             console.log('  --once       Check once and exit (no continuous polling)');
             console.log('\nEnvironment:');
@@ -1156,9 +1159,9 @@ async function main() {
         }
 
         if (once) {
-            await checkAndProcess({ generateAudio, audioFolder });
+            await checkAndProcess({ generateAudio, submitToQueue, audioFolder });
         } else {
-            await watchForResearch({ generateAudio, audioFolder });
+            await watchForResearch({ generateAudio, submitToQueue, audioFolder });
         }
 
     } else if (command === 'notify') {
