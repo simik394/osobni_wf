@@ -1,18 +1,18 @@
 ---
 - name: Add HashiCorp GPG key
-  shell: |
+  ansible.builtin.shell: |
     wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
   args:
     creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
 
 - name: Add HashiCorp repository
-  shell: |
+  ansible.builtin.shell: |
     echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
   args:
     creates: /etc/apt/sources.list.d/hashicorp.list
 
 - name: Install Consul, Vault, Nomad
-  apt:
+  ansible.builtin.apt:
     name:
       - consul
       - vault
@@ -21,7 +21,7 @@
     update_cache: yes
 
 - name: Create data directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -33,7 +33,7 @@
     - /opt/nomad
 
 - name: Configure Consul (Server)
-  copy:
+  ansible.builtin.copy:
     dest: /etc/consul.d/consul.hcl
     content: |
       datacenter = "dc1"
@@ -56,7 +56,7 @@
   notify: Restart Consul
 
 - name: Configure Vault
-  copy:
+  ansible.builtin.copy:
     dest: /etc/vault.d/vault.hcl
     content: |
       ui = true
@@ -73,7 +73,7 @@
   notify: Restart Vault
 
 - name: Configure Nomad
-  copy:
+  ansible.builtin.copy:
     dest: /etc/nomad.d/nomad.hcl
     content: |
       datacenter = "dc1"
@@ -102,7 +102,7 @@
   notify: Restart Nomad
 
 - name: Enable and start services
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
     enabled: yes
     state: started
@@ -112,16 +112,89 @@
     - nomad
 
 - name: Wait for Consul to start
-  wait_for:
+  ansible.builtin.wait_for:
     port: 8500
     delay: 5
 
 - name: Wait for Vault to start
-  wait_for:
+  ansible.builtin.wait_for:
     port: 8200
     delay: 5
 
 - name: Wait for Nomad to start
-  wait_for:
+  ansible.builtin.wait_for:
     port: 4646
     delay: 5
+
+# --- Automated Vault Initialization & Unseal ---
+
+- name: Check Vault initialization status
+  ansible.builtin.command: vault operator init -status -address=http://127.0.0.1:8200
+  register: vault_init_status
+  failed_when: vault_init_status.rc not in [0, 2]
+  changed_when: false
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+
+- name: Initialize Vault (if not initialized)
+  block:
+    - name: Run Vault Init
+      ansible.builtin.command: vault operator init -key-shares=1 -key-threshold=1 -format=json -address=http://127.0.0.1:8200
+      register: vault_init_output
+      environment:
+        VAULT_ADDR: "http://127.0.0.1:8200"
+
+    - name: Save Vault Keys to Local File
+      ansible.builtin.copy:
+        content: "{{ vault_init_output.stdout }}"
+        dest: "./vault_keys.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: Set facts for unsealing (newly initialized)
+      ansible.builtin.set_fact:
+        vault_unseal_key: "{{ (vault_init_output.stdout | from_json).unseal_keys_b64[0] }}"
+        vault_root_token: "{{ (vault_init_output.stdout | from_json).root_token }}"
+
+  when: vault_init_status.rc == 2
+
+- name: Check Vault seal status
+  ansible.builtin.command: vault status -format=json -address=http://127.0.0.1:8200
+  register: vault_seal_status
+  failed_when: false
+  changed_when: false
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+
+- name: Read Vault keys from local file (if existing)
+  block:
+    - name: Read keys file
+      ansible.builtin.command: cat ./vault_keys.json
+      delegate_to: localhost
+      become: false
+      register: vault_keys_file
+      changed_when: false
+
+    - name: Set facts for unsealing (from file)
+      ansible.builtin.set_fact:
+        vault_unseal_key: "{{ (vault_keys_file.stdout | from_json).unseal_keys_b64[0] }}"
+
+  when:
+    - vault_init_status.rc == 0
+    - (vault_seal_status.stdout | from_json).sealed == true
+    - vault_unseal_key is not defined
+
+- name: Unseal Vault
+  ansible.builtin.command: "vault operator unseal -address=http://127.0.0.1:8200 {{ vault_unseal_key }}"
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+  when:
+    - (vault_seal_status.stdout | from_json).sealed == true
+    - vault_unseal_key is defined
+  register: unseal_result
+
+- name: Display Root Token (Only if newly initialized)
+  ansible.builtin.debug:
+    msg: "Vault Root Token: {{ vault_root_token }}"
+  when: vault_root_token is defined

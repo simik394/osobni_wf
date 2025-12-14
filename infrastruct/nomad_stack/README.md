@@ -17,9 +17,7 @@ This project automates the deployment of a self-hosted stack comprising **Nomad,
 - **Ansible** installed on your local machine.
 - **SSH Access** to the target server (`halvarm` in the inventory). Ensure your `~/.ssh/config` has an alias for `halvarm` or update `infrastruct/nomad_stack/inventory.yml` with the IP/hostname.
 - **Git** to clone this repository.
-- **Configure Public IP**: Edit `infrastruct/nomad_stack/group_vars/servers.yml` and set the `public_ip` variable to your OCI instance's public IP address. This is required for external access via Traefik.
-
-## Quick Start (Single Command)
+## Quick Start (Zero-Touch Deployment)
 
 To deploy the entire stack, run the following command from the repository root:
 
@@ -27,36 +25,23 @@ To deploy the entire stack, run the following command from the repository root:
 ansible-playbook -i infrastruct/nomad_stack/inventory.yml infrastruct/nomad_stack/playbook.yml
 ```
 
-This will:
-1.  **Harden Security**: Configure UFW firewall, install Fail2Ban.
-2.  **Install Docker**: Required for running containerized workloads.
-3.  **Install HashiCorp Stack**: Nomad, Consul, Vault.
-4.  **Deploy Jobs**: Submit Nomad jobs for Traefik, YouTrack, Obsidian-Remote, and n8n.
+This single command will:
+1.  **Detect Public IP**: Automatically find your server's OCI public IP for configuring routing.
+2.  **Harden Security**: Configure UFW firewall, install Fail2Ban, and setup QEMU for ARM emulation.
+3.  **Install & Configure HashiCorp Stack**: Nomad, Consul, and Vault.
+4.  **Auto-Init Vault**:
+    *   Automatically initializes Vault.
+    *   Saves the **Unseal Keys and Root Token** to a file named `vault_keys.json` in your local directory (on your laptop, not the server).
+    *   **Automatically Unseals** Vault so it's ready to use immediately.
+5.  **Deploy Jobs**: Launches Traefik, YouTrack, Obsidian-Remote, and n8n.
 
-## Post-Deployment Steps (Manual)
+**After the command finishes, your stack is live!**
 
-### 1. Initialize Vault
-Vault starts in a sealed state. You must initialize and unseal it manually.
+### Secrets Management
+The Ansible playbook generates a file named `vault_keys.json` in your current directory.
+**IMPORTANT**: Move this file to a secure location (Password Manager, encrypted volume) immediately. It contains the keys to your Kingdom.
 
-1.  SSH into the server:
-    ```bash
-    ssh halvarm
-    ```
-2.  Initialize Vault (save the output!):
-    ```bash
-    export VAULT_ADDR='http://127.0.0.1:8200'
-    vault operator init
-    ```
-    *This will output 5 Unseal Keys and a Root Token. Store these securely (e.g., in a password manager).*
-
-3.  Unseal Vault (repeat 3 times with different keys):
-    ```bash
-    vault operator unseal <Unseal Key 1>
-    vault operator unseal <Unseal Key 2>
-    vault operator unseal <Unseal Key 3>
-    ```
-
-### 2. Access Services
+### Access Services
 The services are exposed via Traefik. By default, they are configured to use `nip.io` with the server's public IP.
 
 - **Traefik Dashboard**: `http://<SERVER_IP>:8080` (tunneling recommended)
@@ -71,15 +56,7 @@ For a secure production environment, you should move away from `nip.io` and HTTP
 ### 1. DNS Configuration
 Point your custom domain (e.g., `youtrack.example.com`, `obsidian.example.com`) to your server's **Public IP** using an **A Record** in your DNS provider's dashboard.
 
-### 2. Prepare Host Directory
-SSH into your server and create a directory to store Let's Encrypt certificates persistently:
-
-```bash
-sudo mkdir -p /opt/traefik/acme
-sudo chmod 600 /opt/traefik/acme
-```
-
-### 3. Update Traefik Job (`traefik.nomad.hcl`)
+### 2. Update Traefik Job (`traefik.nomad.hcl`)
 Edit the Traefik job file (on the server at `/opt/nomad/jobs/traefik.nomad.hcl` or in your Ansible templates) to enable the ACME resolver.
 
 Uncomment the relevant lines in the `args` section:

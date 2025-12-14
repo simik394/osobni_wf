@@ -5,6 +5,14 @@
     state: directory
     mode: '0755'
 
+- name: Create Traefik ACME directory with secure permissions
+  ansible.builtin.file:
+    path: /opt/traefik/acme
+    state: directory
+    mode: '0600'
+    owner: root
+    group: root
+
 - name: Create YouTrack data directories with correct permissions (UID 13001)
   ansible.builtin.file:
     path: "{{ item }}"
