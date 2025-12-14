@@ -72,3 +72,47 @@ docker compose up -d perplexity-server
 
 # Note: Requires angrav-browser or rsrch-chromium running on port 9223
 ```
+
+---
+
+## Job Queue (FalkorDB)
+
+Jobs are stored in FalkorDB for async processing.
+
+```bash
+# Start FalkorDB
+docker compose up -d falkordb
+
+# Submit async job
+curl -X POST http://localhost:3001/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "AI trends 2025", "deepResearch": true}'
+
+# Response: {"jobId": "abc123", "statusUrl": "/jobs/abc123"}
+
+# Check status
+curl http://localhost:3001/jobs/abc123
+```
+
+**Job Statuses:** `queued` → `running` → `completed` | `failed`
+
+---
+
+## Notifications
+
+Supports **ntfy.sh** and **Discord webhooks**.
+
+```bash
+# Setup
+export NTFY_TOPIC="your-topic-name"
+# OR
+export DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
+
+# Send notification
+rsrch notify "Research complete!" --title "Rsrch"
+
+# Watcher with notifications
+rsrch watch --queue  # Notifies when research completes
+```
+
+See [[ntfy-guide|ntfy-guide.md]] for detailed setup.
