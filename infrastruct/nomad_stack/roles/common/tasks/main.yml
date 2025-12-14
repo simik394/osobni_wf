@@ -31,6 +31,53 @@
   ansible.builtin.debug:
     msg: "Detected Public IP: {{ public_ip }}"
 
+# --- Swap Configuration ---
+# Critical for 1GB RAM instances running Java apps (YouTrack)
+
+- name: Check if swap file exists
+  ansible.builtin.stat:
+    path: /swapfile
+  register: swap_file
+
+- name: Create swap file (4GB)
+  ansible.builtin.command: fallocate -l 4G /swapfile
+  when: not swap_file.stat.exists
+
+- name: Set swap file permissions
+  ansible.builtin.file:
+    path: /swapfile
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Format swap file
+  ansible.builtin.command: mkswap /swapfile
+  when: not swap_file.stat.exists
+
+- name: Enable swap
+  ansible.builtin.command: swapon /swapfile
+  when: not swap_file.stat.exists
+
+- name: Persist swap in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: '/swapfile none swap sw 0 0'
+    state: present
+
+- name: Set swappiness to 10 (prefer RAM, but use swap when needed)
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: '10'
+    state: present
+
+- name: Set vfs_cache_pressure to 50
+  ansible.posix.sysctl:
+    name: vm.vfs_cache_pressure
+    value: '50'
+    state: present
+
+# --- Firewall ---
+
 - name: Setup UFW
   community.general.ufw:
     state: enabled
