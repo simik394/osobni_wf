@@ -1243,5 +1243,6 @@ async function runLegacyMode() {
             console.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
         }
     }
+}
 
-    main().catch(console.error);
+main().catch(console.error);
