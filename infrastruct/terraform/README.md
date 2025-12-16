@@ -34,10 +34,19 @@ This folder contains Terraform configuration to provision an **Always Free** ins
     *   **Availability Domain**: You can find this by running `oci iam availability-domain list` or looking in the OCI Console when creating a VM.
 
     **Using Existing Infrastructure?**
-    If you already have a VCN and Subnet, add these lines to your `terraform.tfvars`:
+    If you already have a VCN and Subnet, you can skip creating them. You have two options:
+
+    *Option A: By Name (Easier)*
     ```hcl
-    create_network      = false
-    existing_subnet_id  = "ocid1.subnet.oc1..aaaa..."
+    create_network       = false
+    existing_vcn_name    = "nomad-vcn"
+    existing_subnet_name = "nomad-subnet"
+    ```
+
+    *Option B: By OCID (Precise)*
+    ```hcl
+    create_network       = false
+    existing_subnet_id   = "ocid1.subnet.oc1..aaaa..."
     ```
 
 3.  **Deploy**:
@@ -47,10 +56,8 @@ This folder contains Terraform configuration to provision an **Always Free** ins
     *   Type `yes` to confirm.
 
 4.  **Post-Deploy**:
-    *   Terraform will output the `server_public_ip`.
-    *   Update your **Ansible Inventory** (`infrastruct/nomad_stack/inventory.yml`):
-        *   Replace the IP/Hostname for `halvarm`.
-    *   Update your `~/.ssh/config` if necessary to use the `ubuntu` user and this new IP.
+    *   Terraform will **automatically update** your Ansible inventory (`infrastruct/nomad_stack/inventory.yml`) and variables with the new server's IP.
+    *   You can immediately run the Ansible playbook step.
 
 ## Notes on "Always Free" Limits
 *   The `VM.Standard.E2.1.Micro` is the x86 Always Free tier.

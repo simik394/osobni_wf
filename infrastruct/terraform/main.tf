@@ -15,7 +15,39 @@ provider "oci" {
   region           = var.region
 }
 
-# --- Network (Conditional Creation) ---
+# --- Network Logic (New vs Existing) ---
+
+# Lookup existing VCN by Name (if provided and create_network is false)
+data "oci_core_vcns" "existing_vcns" {
+  count          = (!var.create_network && var.existing_vcn_name != "") ? 1 : 0
+  compartment_id = var.compartment_ocid
+  display_name   = var.existing_vcn_name
+}
+
+# Lookup existing Subnet by Name (if provided and create_network is false)
+# We need VCN ID first, either from lookup or we assume user might know just subnet name?
+# OCI core_subnets requires compartment_id and vcn_id.
+# So if user provides just VCN Name + Subnet Name, we can find it.
+data "oci_core_subnets" "existing_subnets" {
+  count          = (!var.create_network && var.existing_vcn_name != "" && var.existing_subnet_name != "") ? 1 : 0
+  compartment_id = var.compartment_ocid
+  vcn_id         = data.oci_core_vcns.existing_vcns[0].virtual_networks[0].id
+  display_name   = var.existing_subnet_name
+}
+
+locals {
+  # Determine final Subnet ID
+  # Priority:
+  # 1. New Network (create_network=true) -> oci_core_subnet.nomad_subnet[0].id
+  # 2. Existing ID (create_network=false, existing_subnet_id set) -> var.existing_subnet_id
+  # 3. Existing Name (create_network=false, existing_subnet_name set) -> data lookup
+  final_subnet_id = var.create_network ? oci_core_subnet.nomad_subnet[0].id : (
+    var.existing_subnet_id != "" ? var.existing_subnet_id : (
+      length(data.oci_core_subnets.existing_subnets) > 0 ? data.oci_core_subnets.existing_subnets[0].subnets[0].id : ""
+    )
+  )
+}
+
 
 resource "oci_core_vcn" "nomad_vcn" {
   count          = var.create_network ? 1 : 0
@@ -134,7 +166,7 @@ resource "oci_core_instance" "nomad_server" {
   shape               = "VM.Standard.E2.1.Micro"
 
   create_vnic_details {
-    subnet_id        = var.create_network ? oci_core_subnet.nomad_subnet[0].id : var.existing_subnet_id
+    subnet_id        = local.final_subnet_id
     display_name     = "primaryvnic"
     assign_public_ip = true
     hostname_label   = "halvarm"
@@ -150,6 +182,26 @@ resource "oci_core_instance" "nomad_server" {
     ssh_authorized_keys = var.ssh_public_key
   }
 }
+
+# --- Post-Provisioning Automation ---
+# Generate/Update the Ansible Inventory file with the new Public IP
+
+resource "local_file" "ansible_inventory" {
+  content = templatefile("${path.module}/inventory.tpl", {
+    public_ip = oci_core_instance.nomad_server.public_ip
+    ssh_user  = "ubuntu"
+  })
+  filename = "${path.module}/../../infrastruct/nomad_stack/inventory.yml"
+}
+
+# Also update group_vars/servers.yml with the public IP
+resource "local_file" "ansible_group_vars" {
+  content = templatefile("${path.module}/group_vars.tpl", {
+    public_ip = oci_core_instance.nomad_server.public_ip
+  })
+  filename = "${path.module}/../../infrastruct/nomad_stack/group_vars/servers.yml"
+}
+
 
 output "server_public_ip" {
   value = oci_core_instance.nomad_server.public_ip

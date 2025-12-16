@@ -45,7 +45,19 @@ variable "create_network" {
 }
 
 variable "existing_subnet_id" {
-  description = "OCID of the existing subnet (Required if create_network = false)"
+  description = "OCID of the existing subnet (Optional if create_network=false and existing_vcn_name/subnet_name provided)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_vcn_name" {
+  description = "Display Name of the existing VCN (Used for lookup if ID not provided)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_subnet_name" {
+  description = "Display Name of the existing Subnet (Used for lookup if ID not provided)"
   type        = string
   default     = ""
 }
