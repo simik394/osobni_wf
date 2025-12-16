@@ -33,6 +33,13 @@ This folder contains Terraform configuration to provision an **Always Free** ins
     *   Edit `terraform.tfvars` and fill in your OCI details.
     *   **Availability Domain**: You can find this by running `oci iam availability-domain list` or looking in the OCI Console when creating a VM.
 
+    **Using Existing Infrastructure?**
+    If you already have a VCN and Subnet, add these lines to your `terraform.tfvars`:
+    ```hcl
+    create_network      = false
+    existing_subnet_id  = "ocid1.subnet.oc1..aaaa..."
+    ```
+
 3.  **Deploy**:
     ```bash
     terraform apply

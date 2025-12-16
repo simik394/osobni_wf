@@ -37,3 +37,15 @@ variable "ssh_public_key" {
   description = "SSH Public Key content (e.g., 'ssh-rsa AAAA...')"
   type        = string
 }
+
+variable "create_network" {
+  description = "Set to false to use an existing VCN and Subnet"
+  type        = bool
+  default     = true
+}
+
+variable "existing_subnet_id" {
+  description = "OCID of the existing subnet (Required if create_network = false)"
+  type        = string
+  default     = ""
+}

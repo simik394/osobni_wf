@@ -15,9 +15,10 @@ provider "oci" {
   region           = var.region
 }
 
-# --- Network ---
+# --- Network (Conditional Creation) ---
 
 resource "oci_core_vcn" "nomad_vcn" {
+  count          = var.create_network ? 1 : 0
   cidr_block     = "10.0.0.0/16"
   compartment_id = var.compartment_ocid
   display_name   = "nomad-vcn"
@@ -25,27 +26,30 @@ resource "oci_core_vcn" "nomad_vcn" {
 }
 
 resource "oci_core_internet_gateway" "nomad_ig" {
+  count          = var.create_network ? 1 : 0
   compartment_id = var.compartment_ocid
   display_name   = "nomad-ig"
-  vcn_id         = oci_core_vcn.nomad_vcn.id
+  vcn_id         = oci_core_vcn.nomad_vcn[0].id
   enabled        = true
 }
 
 resource "oci_core_route_table" "nomad_rt" {
+  count          = var.create_network ? 1 : 0
   compartment_id = var.compartment_ocid
-  vcn_id         = oci_core_vcn.nomad_vcn.id
+  vcn_id         = oci_core_vcn.nomad_vcn[0].id
   display_name   = "nomad-rt"
 
   route_rules {
     destination       = "0.0.0.0/0"
     destination_type  = "CIDR_BLOCK"
-    network_entity_id = oci_core_internet_gateway.nomad_ig.id
+    network_entity_id = oci_core_internet_gateway.nomad_ig[0].id
   }
 }
 
 resource "oci_core_security_list" "nomad_sl" {
+  count          = var.create_network ? 1 : 0
   compartment_id = var.compartment_ocid
-  vcn_id         = oci_core_vcn.nomad_vcn.id
+  vcn_id         = oci_core_vcn.nomad_vcn[0].id
   display_name   = "nomad-security-list"
 
   egress_security_rules {
@@ -101,13 +105,14 @@ resource "oci_core_security_list" "nomad_sl" {
 }
 
 resource "oci_core_subnet" "nomad_subnet" {
+  count             = var.create_network ? 1 : 0
   cidr_block        = "10.0.1.0/24"
   display_name      = "nomad-subnet"
   dns_label         = "nomadsub"
-  security_list_ids = [oci_core_security_list.nomad_sl.id]
+  security_list_ids = [oci_core_security_list.nomad_sl[0].id]
   compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.nomad_vcn.id
-  route_table_id    = oci_core_route_table.nomad_rt.id
+  vcn_id            = oci_core_vcn.nomad_vcn[0].id
+  route_table_id    = oci_core_route_table.nomad_rt[0].id
 }
 
 # --- Compute ---
@@ -129,7 +134,7 @@ resource "oci_core_instance" "nomad_server" {
   shape               = "VM.Standard.E2.1.Micro"
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.nomad_subnet.id
+    subnet_id        = var.create_network ? oci_core_subnet.nomad_subnet[0].id : var.existing_subnet_id
     display_name     = "primaryvnic"
     assign_public_ip = true
     hostname_label   = "halvarm"
