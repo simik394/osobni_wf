@@ -1,0 +1,114 @@
+job "windmill" {
+  datacenters = ["dc1"]
+  region      = "cloud" # Enforce running on Cloud Region for DB persistence
+  type        = "service"
+
+  group "windmill" {
+    count = 1
+
+    network {
+      port "http" {
+        to = 8000
+      }
+      port "db" {
+        to = 5432
+      }
+    }
+
+    # Volume for Postgres Data
+    # Requires: mkdir -p /opt/windmill/postgres
+    task "postgres" {
+      driver = "docker"
+
+      config {
+        image = "postgres:14"
+        ports = ["db"]
+        volumes = [
+          "/opt/windmill/postgres:/var/lib/postgresql/data"
+        ]
+      }
+
+      env {
+        POSTGRES_USER = "windmill"
+        POSTGRES_PASSWORD = "changeme123" # In prod, use Vault!
+        POSTGRES_DB = "windmill"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
+
+      service {
+        name = "windmill-db"
+        port = "db"
+        check {
+          name     = "alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+
+    task "windmill-server" {
+      driver = "docker"
+
+      config {
+        image = "ghcr.io/windmill-labs/windmill:latest"
+        ports = ["http"]
+      }
+
+      env {
+        DATABASE_URL = "postgres://windmill:changeme123@${NOMAD_ADDR_db}/windmill?sslmode=disable"
+        BASE_URL = "http://windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
+
+      service {
+        name = "windmill"
+        port = "http"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.windmill.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) || PathPrefix(`/windmill`)",
+          "traefik.http.routers.windmill.entrypoints=web"
+        ]
+        check {
+          name     = "alive"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+
+    # Optional: Separate Worker Task if needed for scale,
+    # but for "minimal" setup, the server image usually includes a worker or we run one alongside.
+    # Windmill architecture splits Server and Worker.
+
+    task "windmill-worker" {
+      driver = "docker"
+
+      config {
+        image = "ghcr.io/windmill-labs/windmill:latest"
+        command = "windmill"
+        args = ["worker"]
+      }
+
+      env {
+         DATABASE_URL = "postgres://windmill:changeme123@${NOMAD_ADDR_db}/windmill?sslmode=disable"
+         BASE_URL = "http://windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+      }
+
+      resources {
+        cpu = 200
+        memory = 256
+      }
+    }
+  }
+}
