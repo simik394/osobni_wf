@@ -20,17 +20,29 @@
     state: present
     update_cache: yes
 
-- name: Create data directories
+- name: Create Consul data directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: /opt/consul
+    state: directory
+    owner: consul
+    group: consul
+    mode: '0755'
+
+- name: Create Vault data directory
+  ansible.builtin.file:
+    path: /opt/vault
+    state: directory
+    owner: vault
+    group: vault
+    mode: '0755'
+
+- name: Create Nomad data directory
+  ansible.builtin.file:
+    path: /opt/nomad
     state: directory
     owner: root
     group: root
     mode: '0755'
-  loop:
-    - /opt/consul
-    - /opt/vault
-    - /opt/nomad
 
 - name: Get Tailscale IP
   ansible.builtin.command: tailscale ip -4

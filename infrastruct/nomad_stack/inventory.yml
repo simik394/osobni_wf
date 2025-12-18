@@ -8,22 +8,25 @@ servers:
       # Federation Config: Cloud Region
       nomad_region: cloud
       nomad_datacenter: oci-eu
+      node_class: cloud
 
       # Both are now full servers for their respective regions
       nomad_role: server
 
       # Peer to join via WAN (Tailscale)
-      wan_peer: ntb
+      wan_peer: 100.92.153.10
 
 # For running ansible from 'halvarm' itself or the laptop 'ntb'
 local:
   hosts:
     localhost:
       ansible_connection: local
+      ansible_python_interpreter: /usr/bin/python3
 
       # Federation Config: Local Region
       nomad_region: local
       nomad_datacenter: laptop
+      node_class: local
 
       # Both are now full servers for their respective regions
       nomad_role: server
