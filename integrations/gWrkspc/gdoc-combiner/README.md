@@ -7,6 +7,7 @@ This Google Apps Script project provides a Web App endpoint that functions as a 
 - **Combine Docs**: Combines multiple source Google Docs into a single new document using the "Tabs" feature.
 - **List Recent Docs**: Returns a list of the most recently modified Google Docs in your Drive.
 - **Inspect Doc Structure**: Returns the JSON structure of a document (tabs, paragraphs, tables) for debugging.
+- **Create Test Doc**: Creates a simple document with text content for testing purposes.
 - **Secure Access**: Protected by a shared secret token.
 
 ## Setup & Deployment
@@ -67,21 +68,6 @@ Lists the most recently modified Google Docs (useful for finding IDs).
 }
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "documents": [
-    {
-      "id": "123...",
-      "title": "My Doc",
-      "modifiedDate": "2024-12-18T10:00:00.000Z",
-      "url": "..."
-    }
-  ]
-}
-```
-
 #### 3. Get Document Structure
 Returns the internal structure (tabs, children) of a document.
 
@@ -94,7 +80,20 @@ Returns the internal structure (tabs, children) of a document.
 }
 ```
 
-#### 4. Ping (Health Check)
+#### 4. Create Test Document
+Creates a document with specified content.
+
+**Payload:**
+```json
+{
+  "action": "createTestDoc",
+  "secret": "super-secret-password-123",
+  "title": "My Test Doc",
+  "content": "Hello World"
+}
+```
+
+#### 5. Ping (Health Check)
 Verifies the endpoint is active.
 
 **Payload:**

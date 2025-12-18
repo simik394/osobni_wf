@@ -41,6 +41,15 @@ function doPost(e) {
           structure: structure
         })).setMimeType(ContentService.MimeType.JSON);
 
+      case 'createTestDoc':
+        const testTitle = data.title || 'Auto-Generated Test Doc';
+        const content = data.content || 'This is some test content.';
+        const newTestDocUrl = createTestDoc(testTitle, content);
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          url: newTestDocUrl
+        })).setMimeType(ContentService.MimeType.JSON);
+
       case 'combineDocs':
       default:
         const docIds = data.docIds;
@@ -62,6 +71,13 @@ function doPost(e) {
       stack: err.stack
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function createTestDoc(title, content) {
+  const doc = DocumentApp.create(title);
+  doc.getBody().appendParagraph(content);
+  doc.saveAndClose();
+  return doc.getUrl();
 }
 
 function getDocStructure(docId) {
@@ -139,7 +155,7 @@ function listRecentDocs(limit) {
 }
 
 function combineDocsWithTabs(docIds, title) {
-  // 1. Create the new document structure with one tab per source doc
+  // 1. Create structure
   const tabsResource = docIds.map((id, index) => {
     let tabTitle = `Doc ${index + 1}`;
     try {
@@ -151,60 +167,73 @@ function combineDocsWithTabs(docIds, title) {
   const resource = { title: title, tabs: tabsResource };
   const newDocResource = Docs.Documents.create(resource);
   const newDocId = newDocResource.documentId;
+  
+  // Small delay to ensure doc is ready for DocumentApp
+  Utilities.sleep(1500);
+
   const newDoc = DocumentApp.openById(newDocId);
   const newDocTabs = newDoc.getTabs();
 
-  // 2. Fill each target tab with content from source doc (including all its tabs)
+  // 2. Fill content
   for (let i = 0; i < docIds.length; i++) {
     if (i >= newDocTabs.length) break;
 
-    const srcDoc = DocumentApp.openById(docIds[i]);
-    const targetTabBody = newDocTabs[i].asDocumentTab().getBody();
+    const srcDocId = docIds[i];
+    try {
+      const srcDoc = DocumentApp.openById(srcDocId);
+      const targetTabBody = newDocTabs[i].asDocumentTab().getBody();
 
-    // Helper to copy content from a body
-    function copyContent(sourceBody, destinationBody) {
-      const numChildren = sourceBody.getNumChildren();
-      for (let j = 0; j < numChildren; j++) {
-        const element = sourceBody.getChild(j).copy();
-        const type = element.getType();
-        try {
-          if (type === DocumentApp.ElementType.PARAGRAPH) {
-            destinationBody.appendParagraph(element);
-          } else if (type === DocumentApp.ElementType.TABLE) {
-            destinationBody.appendTable(element);
-          } else if (type === DocumentApp.ElementType.LIST_ITEM) {
-            destinationBody.appendListItem(element);
-          } else if (type === DocumentApp.ElementType.PAGE_BREAK) {
-            destinationBody.appendPageBreak(element);
-          }
-        } catch (e) {
-          console.warn(`Skipped element type ${type}: ${e.message}`);
-        }
+      let srcTabs = [];
+      if (typeof srcDoc.getTabs === 'function') {
+        srcTabs = srcDoc.getTabs();
       }
-    }
 
-    // Copy content from ALL tabs of the source document
-    if (typeof srcDoc.getTabs === 'function') {
-      const srcTabs = srcDoc.getTabs();
-      srcTabs.forEach((tab, tIdx) => {
-        if (tab.getType() === DocumentApp.TabType.DOCUMENT_TAB) {
-          if (tIdx > 0) targetTabBody.appendParagraph("--- Source Tab: " + tab.getTitle() + " ---").setHeading(DocumentApp.ParagraphHeading.HEADING3);
-          copyContent(tab.asDocumentTab().getBody(), targetTabBody);
-        }
-      });
-    } else {
-      copyContent(srcDoc.getBody(), targetTabBody);
-    }
-    
-    // Remove the initial empty paragraph added by the API during creation
-    if (targetTabBody.getNumChildren() > 1) {
-       const firstChild = targetTabBody.getChild(0);
-       if (firstChild.getType() === DocumentApp.ElementType.PARAGRAPH && firstChild.asParagraph().getText().trim() === "") {
-           targetTabBody.removeChild(firstChild);
-       }
+      if (srcTabs.length > 0) {
+        srcTabs.forEach((tab, tIdx) => {
+          if (tab.getType() === DocumentApp.TabType.DOCUMENT_TAB) {
+             if (srcTabs.length > 1) {
+               targetTabBody.appendParagraph(`--- Tab: ${tab.getTitle()} ---`).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+             }
+             copyContent(tab.asDocumentTab().getBody(), targetTabBody);
+          }
+        });
+      } else {
+        copyContent(srcDoc.getBody(), targetTabBody);
+      }
+      
+      // Cleanup initial empty paragraph
+      if (targetTabBody.getNumChildren() > 1) {
+         const firstChild = targetTabBody.getChild(0);
+         if (firstChild.getType() === DocumentApp.ElementType.PARAGRAPH && firstChild.asParagraph().getText().trim() === "") {
+             targetTabBody.removeChild(firstChild);
+         }
+      }
+    } catch (e) {
+      console.error(`Error processing doc ${srcDocId}: ${e.message}`);
     }
   }
 
   newDoc.saveAndClose();
   return newDoc.getUrl();
+}
+
+function copyContent(sourceBody, destinationBody) {
+  const numChildren = sourceBody.getNumChildren();
+  for (let j = 0; j < numChildren; j++) {
+    const element = sourceBody.getChild(j).copy();
+    const type = element.getType();
+    try {
+      if (type === DocumentApp.ElementType.PARAGRAPH) {
+        destinationBody.appendParagraph(element);
+      } else if (type === DocumentApp.ElementType.TABLE) {
+        destinationBody.appendTable(element);
+      } else if (type === DocumentApp.ElementType.LIST_ITEM) {
+        destinationBody.appendListItem(element);
+      } else if (type === DocumentApp.ElementType.PAGE_BREAK) {
+        destinationBody.appendPageBreak(element);
+      }
+    } catch (e) {
+      console.warn(`Failed to append element type ${type}: ${e.message}`);
+    }
+  }
 }
