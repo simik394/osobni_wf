@@ -21,7 +21,7 @@ function doPost(e) {
       case 'ping':
         return ContentService.createTextOutput(JSON.stringify({
           status: 'success',
-          message: 'pong',
+          message: 'pong v100', 
           timestamp: new Date().toISOString()
         })).setMimeType(ContentService.MimeType.JSON);
 
@@ -41,6 +41,14 @@ function doPost(e) {
           structure: structure
         })).setMimeType(ContentService.MimeType.JSON);
 
+      case 'checkTabsSupport':
+        if (!data.docId) throw new Error("docId is required for checkTabsSupport");
+        const supportInfo = checkTabsSupport(data.docId);
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          info: supportInfo
+        })).setMimeType(ContentService.MimeType.JSON);
+
       case 'createTestDoc':
         const testTitle = data.title || 'Auto-Generated Test Doc';
         const content = data.content || 'This is some test content.';
@@ -57,10 +65,11 @@ function doPost(e) {
         if (!docIds || !Array.isArray(docIds) || docIds.length === 0) {
           throw new Error("Invalid input: 'docIds' array is required.");
         }
-        const newDocUrl = combineDocsWithTabs(docIds, title);
+        const result = combineDocsWithTabs(docIds, title);
         return ContentService.createTextOutput(JSON.stringify({
           status: 'success',
-          url: newDocUrl
+          url: result.url,
+          debug: result.debug
         })).setMimeType(ContentService.MimeType.JSON);
     }
   } catch (err) {
@@ -73,68 +82,29 @@ function doPost(e) {
   }
 }
 
-function createTestDoc(title, content) {
-  const doc = DocumentApp.create(title);
-  doc.getBody().appendParagraph(content);
-  doc.saveAndClose();
-  return doc.getUrl();
-}
-
-function getDocStructure(docId) {
-  const doc = DocumentApp.openById(docId);
+/**
+ * Checks if the Docs API v1 actually sees the 'tabs' property for a document.
+ */
+function checkTabsSupport(docId) {
   const result = {
-    id: doc.getId(),
-    title: doc.getName(),
-    tabs: []
+    method: "Docs.Documents.get(docId)",
+    hasTabsProperty: false,
+    tabsCount: 0,
+    message: ""
   };
-
-  function processTabs(tabs) {
-    return tabs.map(tab => {
-      const tabObj = {
-        title: tab.getTitle(),
-        id: tab.getId(),
-        type: tab.getType().toString(),
-        childTabs: []
-      };
-      
-      if (tab.getType() === DocumentApp.TabType.DOCUMENT_TAB) {
-        tabObj.elements = getBodyStructure(tab.asDocumentTab().getBody());
-      }
-      
-      const children = tab.getChildTabs();
-      if (children && children.length > 0) {
-        tabObj.childTabs = processTabs(children);
-      }
-      return tabObj;
-    });
-  }
-
-  if (typeof doc.getTabs === 'function') {
-    result.tabs = processTabs(doc.getTabs());
-  } else {
-    result.elements = getBodyStructure(doc.getBody());
-  }
-
-  return result;
-}
-
-function getBodyStructure(body) {
-  const children = [];
-  const numChildren = body.getNumChildren();
-  for (let i = 0; i < numChildren; i++) {
-    const child = body.getChild(i);
-    const type = child.getType().toString();
-    const item = { type: type };
-    if (type === 'PARAGRAPH') {
-      item.text = child.asParagraph().getText();
-    } else if (type === 'TABLE') {
-      item.rows = child.asTable().getNumRows();
-    } else if (type === 'LIST_ITEM') {
-      item.text = child.asListItem().getText();
+  try {
+    const doc = Docs.Documents.get(docId);
+    if (doc.tabs) {
+      result.hasTabsProperty = true;
+      result.tabsCount = doc.tabs.length;
+      result.message = "API v1 sees 'tabs' property.";
+    } else {
+      result.message = "API v1 does NOT see 'tabs' property. This doc is in legacy single-body mode.";
     }
-    children.push(item);
+  } catch (e) {
+    result.error = e.message;
   }
-  return children;
+  return result;
 }
 
 function listRecentDocs(limit) {
@@ -154,67 +124,86 @@ function listRecentDocs(limit) {
   }));
 }
 
+function getDocStructure(docId) {
+  const doc = DocumentApp.openById(docId);
+  const result = { id: doc.getId(), title: doc.getName(), tabs: [] };
+  function processTabs(tabs) {
+    return tabs.map(tab => {
+      const tabObj = { title: tab.getTitle(), id: tab.getId(), type: tab.getType().toString() };
+      if (tab.getType() === DocumentApp.TabType.DOCUMENT_TAB) {
+        tabObj.elementsCount = tab.asDocumentTab().getBody().getNumChildren();
+      }
+      const children = tab.getChildTabs();
+      if (children && children.length > 0) tabObj.childTabs = processTabs(children);
+      return tabObj;
+    });
+  }
+  if (typeof doc.getTabs === 'function') {
+    result.tabs = processTabs(doc.getTabs());
+  } else {
+    result.elementsCount = doc.getBody().getNumChildren();
+  }
+  return result;
+}
+
+function createTestDoc(title, content) {
+  const doc = DocumentApp.create(title);
+  doc.getBody().appendParagraph(content);
+  doc.saveAndClose();
+  return doc.getUrl();
+}
+
 function combineDocsWithTabs(docIds, title) {
-  // 1. Create structure
-  const tabsResource = docIds.map((id, index) => {
-    let tabTitle = `Doc ${index + 1}`;
-    try {
-       tabTitle = DocumentApp.openById(id).getName();
-    } catch (e) {}
-    return { tabProperties: { title: tabTitle } };
+  // Create doc with initial tabs using Docs API schema
+  const tabsConfig = docIds.map((id, index) => {
+    let tTitle = "Tab " + (index + 1);
+    try { tTitle = DocumentApp.openById(id).getName(); } catch (e) {}
+    return {
+      tabProperties: { title: tTitle },
+      documentTab: {
+        body: { content: [{ paragraph: { elements: [{ textRun: { content: "\n" } }] } }] }
+      }
+    };
   });
 
-  const resource = { title: title, tabs: tabsResource };
-  const newDocResource = Docs.Documents.create(resource);
-  const newDocId = newDocResource.documentId;
+  const createdDoc = Docs.Documents.create({ title: title, tabs: tabsConfig });
+  const newDocId = createdDoc.documentId;
   
-  // Small delay to ensure doc is ready for DocumentApp
-  Utilities.sleep(1500);
+  Utilities.sleep(3000); 
 
   const newDoc = DocumentApp.openById(newDocId);
-  const newDocTabs = newDoc.getTabs();
+  const appTabs = newDoc.getTabs();
 
-  // 2. Fill content
   for (let i = 0; i < docIds.length; i++) {
-    if (i >= newDocTabs.length) break;
+    let targetBody;
+    if (i < appTabs.length) {
+      targetBody = appTabs[i].asDocumentTab().getBody();
+    } else {
+      targetBody = appTabs[0].asDocumentTab().getBody();
+      targetBody.appendParagraph("--- " + DocumentApp.openById(docIds[i]).getName() + " ---").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    }
 
-    const srcDocId = docIds[i];
     try {
-      const srcDoc = DocumentApp.openById(srcDocId);
-      const targetTabBody = newDocTabs[i].asDocumentTab().getBody();
-
-      let srcTabs = [];
-      if (typeof srcDoc.getTabs === 'function') {
-        srcTabs = srcDoc.getTabs();
-      }
-
-      if (srcTabs.length > 0) {
-        srcTabs.forEach((tab, tIdx) => {
-          if (tab.getType() === DocumentApp.TabType.DOCUMENT_TAB) {
-             if (srcTabs.length > 1) {
-               targetTabBody.appendParagraph(`--- Tab: ${tab.getTitle()} ---`).setHeading(DocumentApp.ParagraphHeading.HEADING3);
-             }
-             copyContent(tab.asDocumentTab().getBody(), targetTabBody);
-          }
-        });
-      } else {
-        copyContent(srcDoc.getBody(), targetTabBody);
-      }
-      
-      // Cleanup initial empty paragraph
-      if (targetTabBody.getNumChildren() > 1) {
-         const firstChild = targetTabBody.getChild(0);
-         if (firstChild.getType() === DocumentApp.ElementType.PARAGRAPH && firstChild.asParagraph().getText().trim() === "") {
-             targetTabBody.removeChild(firstChild);
+      const srcDoc = DocumentApp.openById(docIds[i]);
+      copyContent(srcDoc.getBody(), targetBody);
+      if (targetBody.getNumChildren() > 1) {
+         const first = targetBody.getChild(0);
+         if (first.getType() === DocumentApp.ElementType.PARAGRAPH && first.asParagraph().getText().trim() === "") {
+             targetBody.removeChild(first);
          }
       }
-    } catch (e) {
-      console.error(`Error processing doc ${srcDocId}: ${e.message}`);
-    }
+    } catch (e) {}
   }
 
   newDoc.saveAndClose();
-  return newDoc.getUrl();
+  return {
+    url: newDoc.getUrl(),
+    debug: {
+      action: "Docs.create full-tabs-v100",
+      totalTabs: appTabs.length,
+      requestedTabs: docIds.length
+    }
+  };
 }
 
 function copyContent(sourceBody, destinationBody) {
@@ -232,8 +221,6 @@ function copyContent(sourceBody, destinationBody) {
       } else if (type === DocumentApp.ElementType.PAGE_BREAK) {
         destinationBody.appendPageBreak(element);
       }
-    } catch (e) {
-      console.warn(`Failed to append element type ${type}: ${e.message}`);
-    }
+    } catch (e) {}
   }
 }

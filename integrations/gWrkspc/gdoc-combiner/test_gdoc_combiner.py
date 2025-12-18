@@ -2,6 +2,9 @@ import urllib.request
 import json
 import sys
 import re
+import os
+
+STATE_FILE = "gdoc-combiner/test_state.json"
 
 def run_test(url, secret):
     print(f"Testing Endpoint: {url}")
@@ -10,13 +13,10 @@ def run_test(url, secret):
     # 1. Ping
     if not ping(url, secret): return
 
-    # 2. Create Test Docs
-    print("\n[2] Creating Test Documents...")
-    id1 = create_doc(url, secret, "Test Source 1", "Content of Source 1")
-    id2 = create_doc(url, secret, "Test Source 2", "Content of Source 2")
-
+    # 2. Get Source Docs (Reuse or Create)
+    id1, id2 = get_source_docs(url, secret)
     if not id1 or not id2:
-        print("❌ Failed to create source documents.")
+        print("❌ Could not obtain source docs.")
         return
 
     # 3. Combine Docs
@@ -39,11 +39,36 @@ def run_test(url, secret):
     
     verify_combined_content(structure, ["Content of Source 1", "Content of Source 2"])
 
+def get_source_docs(url, secret):
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                id1 = state.get('id1')
+                id2 = state.get('id2')
+                print(f"\n[2] Using existing Test Docs from {STATE_FILE}:")
+                print(f"    - {id1}")
+                print(f"    - {id2}")
+                return id1, id2
+        except Exception as e:
+            print(f"Warning: Could not read state file: {e}")
+
+    print("\n[2] Creating NEW Test Documents...")
+    id1 = create_doc(url, secret, "Test Source 1", "Content of Source 1")
+    id2 = create_doc(url, secret, "Test Source 2", "Content of Source 2")
+    
+    if id1 and id2:
+        with open(STATE_FILE, 'w') as f:
+            json.dump({'id1': id1, 'id2': id2}, f)
+            print(f"    (Saved IDs to {STATE_FILE} for reuse)")
+    
+    return id1, id2
+
 def ping(url, secret):
     print("   Pinging...", end=" ")
     res = send_request(url, {"action": "ping", "secret": secret})
     if res and res.get("status") == "success":
-        print("✅ OK")
+        print(f"✅ OK ({res.get('message')})")
         return True
     print("❌ Failed")
     return False
@@ -75,6 +100,8 @@ def combine_docs(url, secret, ids, title):
     if res and res.get("status") == "success":
         print("✅ Success")
         print(f"   URL: {res.get('url')}")
+        if 'debug' in res:
+            print(f"   DEBUG: {json.dumps(res['debug'], indent=2)}")
         return res.get("url")
     print(f"❌ Failed: {res}")
     return None
@@ -97,25 +124,37 @@ def verify_combined_content(structure, expected_texts):
     print(f"   Found {len(tabs)} tabs in result.")
     
     found_count = 0
+    all_content = ""
+
+    # Check tabs
     for i, tab in enumerate(tabs):
         print(f"   Tab {i+1}: '{tab.get('title')}'")
         elements = tab.get("elements", [])
         text_content = " ".join([e.get("text", "") for e in elements])
+        all_content += text_content + " "
         print(f"     Content: {text_content[:50]}...")
-        
-        # Check if expected text is in this tab
-        for text in expected_texts:
-            if text in text_content:
-                print(f"     ✅ Found expected text: '{text}'")
-                found_count += 1
+
+    # Fallback: Check main body if no tabs found or empty
+    if not tabs:
+        elements = structure.get("elements", [])
+        text_content = " ".join([e.get("text", "") for e in elements])
+        all_content += text_content
+        print(f"   (Main Body Content): {text_content[:50]}...")
+
+    # Verify Logic
+    for text in expected_texts:
+        if text in all_content:
+            print(f"     ✅ Found expected text: '{text}'")
+            found_count += 1
+        else:
+            print(f"     ❌ MISSING text: '{text}'")
     
     if found_count >= len(expected_texts):
-        print("\n✅ VERIFICATION PASSED: All source content found in result.")
+        print("\n✅ VERIFICATION PASSED: All source content found.")
     else:
         print(f"\n❌ VERIFICATION FAILED: Found {found_count}/{len(expected_texts)} expected texts.")
 
 def extract_id(url):
-    # Matches /d/ID/ or ?id=ID
     match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
     if match: return match.group(1)
     match = re.search(r'id=([a-zA-Z0-9-_]+)', url)

@@ -13,10 +13,10 @@ set -e
 
 # --- 1. Configuration ---
 APP_NAME="antigravity"
-# --- 1. Configuration ---
-APP_NAME="antigravity"
 REPO_URL="https://api.github.com/repos/google/antigravity/releases/latest" # Example
-FALLBACK_VERSION="1.2.0"
+FALLBACK_VERSION="1.3.0"
+ICON_URL="https://raw.githubusercontent.com/google/material-design-icons/master/src/action/auto_awesome_motion/materialicons/24px.svg" # Placeholder icon
+CACHE_DIR="/var/cache/$APP_NAME"
 
 # --- 2. Styles & Helpers ---
 GREEN='\033[0;32m'
@@ -109,7 +109,7 @@ chmod +x "$WORK_DIR/usr/bin/$APP_NAME"
 
 log_info "Downloading icon..."
 # In a real script, you might extract this from a tarball
-mkdir -p "$CACHE_DIR"
+$SUDO_CMD mkdir -p "$CACHE_DIR"
 ICON_PATH="$CACHE_DIR/${APP_NAME}.jpg"
 if [ ! -f "$ICON_PATH" ]; then
     curl -L -o "$ICON_PATH" "$ICON_URL"
