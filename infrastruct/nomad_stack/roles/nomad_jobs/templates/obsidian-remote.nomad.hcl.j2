@@ -1,0 +1,54 @@
+job "obsidian-remote" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "obsidian" {
+    count = 1
+
+    network {
+      port "http" {
+        to = 8080
+      }
+    }
+
+    task "obsidian" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "ghcr.io/sglmr/obsidian-remote:latest"
+        ports = ["http"]
+        volumes = [
+           "/opt/obsidian/config:/config",
+           "/opt/obsidian/vaults:/vaults"
+        ]
+      }
+
+      resources {
+        cpu    = 1000
+        memory = 1024
+      }
+
+      service {
+        name = "obsidian"
+        port = "http"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.obsidian.rule=Host(`obsidian.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) || PathPrefix(`/obsidian`)",
+          "traefik.http.routers.obsidian.entrypoints=web"
+        ]
+        check {
+          name     = "alive"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# For running ansible from a local machine (e.g., ntb) to provision 'halvarm'
+servers:
+  hosts:
+    halvarm:
+      ansible_user: ubuntu
+      # ansible_host is inherited from ~/.ssh/config alias 'halvarm'
+
+      # Federation Config: Cloud Region
+      nomad_region: cloud
+      nomad_datacenter: oci-eu
+
+      # Both are now full servers for their respective regions
+      nomad_role: server
+
+      # Peer to join via WAN (Tailscale)
+      wan_peer: ntb
+
+# For running ansible from 'halvarm' itself or the laptop 'ntb'
+local:
+  hosts:
+    localhost:
+      ansible_connection: local
+
+      # Federation Config: Local Region
+      nomad_region: local
+      nomad_datacenter: laptop
+
+      # Both are now full servers for their respective regions
+      nomad_role: server
+
+      # Peer to join via WAN (Tailscale)
+      wan_peer: halvarm

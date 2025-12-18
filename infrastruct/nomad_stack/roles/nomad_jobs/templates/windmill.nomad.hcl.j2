@@ -1,0 +1,193 @@
+job "windmill" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "windmill" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "http" {
+        to = 8000
+      }
+      port "lsp" {
+        to = 3001
+      }
+      port "db" {
+        to = 5432
+      }
+    }
+
+    # Database Task (Postgres)
+    task "db" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "postgres:14"
+        ports = ["db"]
+        volumes = [
+          "/opt/windmill/db:/var/lib/postgresql/data"
+        ]
+      }
+
+      env {
+        POSTGRES_PASSWORD = "changeme"
+        POSTGRES_DB       = "windmill"
+        POSTGRES_USER     = "windmill"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
+
+      service {
+        name = "windmill-db"
+        port = "db"
+        check {
+          name     = "alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+
+    # Windmill Server Task
+    task "server" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "ghcr.io/windmill-labs/windmill:latest"
+        ports = ["http"]
+      }
+
+      env {
+        DATABASE_URL = "postgres://windmill:changeme@localhost:5432/windmill?sslmode=disable"
+        MODE         = "server"
+        BASE_URL     = "http://windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 512
+      }
+
+      service {
+        name = "windmill-server"
+        port = "http"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.windmill.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
+          "traefik.http.routers.windmill.entrypoints=web"
+        ]
+        check {
+          name     = "alive"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+
+    # Windmill Worker Task
+    task "worker" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "ghcr.io/windmill-labs/windmill:latest"
+        volumes = [
+          "/var/run/docker.sock:/var/run/docker.sock",
+          "/opt/windmill/worker_cache:/tmp/windmill/cache"
+        ]
+      }
+
+      env {
+        DATABASE_URL = "postgres://windmill:changeme@localhost:5432/windmill?sslmode=disable"
+        MODE         = "worker"
+        WORKER_GROUP = "default"
+        BASE_URL     = "http://windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
+    }
+
+    # Windmill Native Worker Task
+    task "worker_native" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "ghcr.io/windmill-labs/windmill:latest"
+      }
+
+      env {
+        DATABASE_URL = "postgres://windmill:changeme@localhost:5432/windmill?sslmode=disable"
+        MODE         = "worker"
+        WORKER_GROUP = "native"
+        BASE_URL     = "http://windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 256
+      }
+    }
+
+    # Windmill LSP Task
+    task "lsp" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "ghcr.io/windmill-labs/windmill-lsp:latest"
+        ports = ["lsp"]
+        volumes = [
+           "/opt/windmill/lsp_cache:/root/.cache"
+        ]
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+
+      service {
+        name = "windmill-lsp"
+        port = "lsp"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.windmill-lsp.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) && PathPrefix(`/ws/`)",
+          "traefik.http.routers.windmill-lsp.entrypoints=web"
+        ]
+      }
+    }
+  }
+}

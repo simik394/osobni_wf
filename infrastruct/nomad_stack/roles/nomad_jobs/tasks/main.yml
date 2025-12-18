@@ -1,0 +1,107 @@
+---
+- name: Ensure jobs directory exists
+  ansible.builtin.file:
+    path: /opt/nomad/jobs
+    state: directory
+    mode: '0755'
+
+- name: Create Traefik ACME directory with secure permissions
+  ansible.builtin.file:
+    path: /opt/traefik/acme
+    state: directory
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Create YouTrack data directories with correct permissions (UID 13001)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 13001
+    group: 13001
+    mode: '0750'
+  loop:
+    - /opt/youtrack/data
+    - /opt/youtrack/conf
+    - /opt/youtrack/logs
+    - /opt/youtrack/backups
+
+- name: Create n8n data directory with correct permissions (UID 1000)
+  ansible.builtin.file:
+    path: /opt/n8n/data
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: '0750'
+
+- name: Create Obsidian data directories with correct permissions (UID 1000)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: '0750'
+  loop:
+    - /opt/obsidian/config
+    - /opt/obsidian/vaults
+
+- name: Create Windmill DB directory with correct permissions (UID 999)
+  ansible.builtin.file:
+    path: /opt/windmill/db
+    state: directory
+    owner: 999
+    group: 999
+    mode: '0750'
+
+- name: Create Windmill cache directories with correct permissions (UID 1000)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: '0750'
+  loop:
+    - /opt/windmill/worker_cache
+    - /opt/windmill/lsp_cache
+
+- name: Copy Nomad job files
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/opt/nomad/jobs/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    mode: '0644'
+  loop:
+    - traefik.nomad.hcl.j2
+    - youtrack.nomad.hcl.j2
+    - obsidian-remote.nomad.hcl.j2
+    - n8n.nomad.hcl.j2
+    - windmill.nomad.hcl.j2
+
+- name: Run Traefik
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/traefik.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run Windmill
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/windmill.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run YouTrack
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/youtrack.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run Obsidian Remote
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/obsidian-remote.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run n8n
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/n8n.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
