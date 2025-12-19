@@ -9,6 +9,12 @@
 %% target_field(Name, Type, Project) - Desired field from rules
 %% bundle_value(BundleId, ValueId, ValueName) - Bundle values
 %% depends_on(ActionA, ActionB) - ActionA depends on ActionB
+%% field_uses_bundle(FieldName, BundleName) - Field uses bundle
+
+:- dynamic curr_field/3.
+:- dynamic target_field/3.
+:- dynamic bundle_value/3.
+:- dynamic field_uses_bundle/2.
 
 %% =============================================================================
 %% DIFF LOGIC - Detect missing/drifted resources
