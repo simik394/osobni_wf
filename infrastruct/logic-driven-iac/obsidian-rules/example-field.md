@@ -1,17 +1,31 @@
-# Example: Defining a Required Field
+# My Project Configuration
 
-This rule ensures the "Priority" enum field exists in Project "DEMO".
-
-```prolog
-target_field("Priority", enum, "DEMO").
-field_uses_bundle("Priority", "PriorityBundle").
-```
-
-## Bundle Values
+## Custom Fields
 
 ```prolog
-target_bundle_value("PriorityBundle", "Critical").
-target_bundle_value("PriorityBundle", "High").
-target_bundle_value("PriorityBundle", "Medium").
-target_bundle_value("PriorityBundle", "Low").
+% === PROJECT: DEMO ===
+
+% Priority field (dropdown)
+target_field('Priority', enum, 'DEMO').
+field_uses_bundle('Priority', 'PriorityBundle').
+
+target_bundle_value('PriorityBundle', 'Critical').
+target_bundle_value('PriorityBundle', 'High').
+target_bundle_value('PriorityBundle', 'Medium').
+target_bundle_value('PriorityBundle', 'Low').
+
+% Severity field (dropdown)  
+target_field('Severity', enum, 'DEMO').
+field_uses_bundle('Severity', 'SeverityBundle').
+
+target_bundle_value('SeverityBundle', 'Blocker').
+target_bundle_value('SeverityBundle', 'Major').
+target_bundle_value('SeverityBundle', 'Minor').
+target_bundle_value('SeverityBundle', 'Trivial').
+
+% Sprint field (text)
+target_field('Sprint', string, 'DEMO').
+
+% Story Points (number)
+target_field('Story Points', integer, 'DEMO').
 ```
