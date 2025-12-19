@@ -130,7 +130,7 @@ const DEFAULT_WEIGHTS: PriorityWeights = {
 ## CLI Command
 
 ```bash
-rsrch questions prioritize [--top=5] [--weights=0.2,0.25,0.15,0.25,0.15]
+questDiscov questions prioritize [--top=5] [--weights=0.2,0.25,0.15,0.25,0.15]
 ```
 
 ## Output Format
