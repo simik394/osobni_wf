@@ -54,13 +54,16 @@ graph TB
 
 After deployment, services are available via two methods:
 
-| Service | Consul DNS (Local/VPN) | IP-based (nip.io) | Default Credentials |
+| Service | Consul DNS (Local/VPN) | IP-based (nip.io / direct) | Default Credentials |
 |---------|------------------------|-------------------|---------------------|
-| **Windmill** | `http://windmill.service.consul` | `http://windmill.<IP>.nip.io` | `admin@windmill.dev` / `changeme` |
-| **YouTrack** | `http://youtrack.service.consul` | `http://youtrack.<IP>.nip.io` | Setup wizard on first run |
-| **n8n** | `http://n8n.service.consul` | `http://n8n.<IP>.nip.io` | Create owner on first run |
-| **Obsidian** | `http://obsidian.service.consul` | `http://obsidian.<IP>.nip.io` | Direct vault access |
-| **Traefik** | `http://traefik.service.consul:8080` | `http://<IP>:8080` | Dashboard (insecure) |
+| **Windmill** | `http://windmill.service.consul` | `http://windmill.<SERVER_IP>.nip.io` | `admin@windmill.dev` / `changeme` |
+| **YouTrack** | `http://youtrack.service.consul` | `http://youtrack.<SERVER_IP>.nip.io` | Setup wizard on first run |
+| **n8n** | `http://n8n.service.consul` | `http://n8n.<SERVER_IP>.nip.io` | Create owner on first run |
+| **Obsidian** | `http://obsidian.service.consul` | `http://obsidian.<SERVER_IP>.nip.io` | Direct vault access |
+| **Traefik** | `http://traefik.service.consul:8080` | `http://<SERVER_IP>:8080` | Dashboard (insecure) |
+| **Consul UI** | `http://consul.service.consul:8500` | `http://<SERVER_IP>:8500` | Service discovery dash |
+| **Nomad UI** | `http://nomad.service.consul:4646` | `http://<SERVER_IP>:4646` | Workload orchestrator |
+| **Vault UI** | `http://vault.service.consul:8200` | `http://<SERVER_IP>:8200` | Secrets management |
 
 > [!TIP]
 > Consul DNS requires [[#consul-dns-setup|DNS forwarding]] to be configured on your machine. The IP-based `nip.io` method works without extra config as long as you use the server's public or Tailscale IP.
