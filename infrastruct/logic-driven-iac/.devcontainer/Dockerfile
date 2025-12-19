@@ -28,21 +28,14 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
-# Install Janus (Python-Prolog bridge)
+# Install Janus (Python-Prolog bridge) globally
 RUN pip3 install --break-system-packages janus-swi
 
 # Set up workspace
 WORKDIR /workspaces/logic-driven-iac
 
-# Copy and install Python dependencies
-COPY requirements.txt .
-RUN pip3 install --break-system-packages -r requirements.txt
-
 # Add src to Python path
 ENV PYTHONPATH=/workspaces/logic-driven-iac
-
-# Switch to non-root user
-USER $USERNAME
 
 # Default shell
 CMD ["/bin/bash"]

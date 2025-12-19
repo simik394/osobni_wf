@@ -5,6 +5,7 @@
         "context": ".."
     },
     "workspaceFolder": "/workspaces/logic-driven-iac",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/logic-driven-iac,type=bind",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -20,7 +21,7 @@
             }
         }
     },
-    "postCreateCommand": "pip3 install --break-system-packages -e '.[dev]'",
+    "postCreateCommand": "sudo pip3 install --break-system-packages -r requirements.txt",
     "remoteUser": "vscode",
     "containerEnv": {
         "PYTHONDONTWRITEBYTECODE": "1",
