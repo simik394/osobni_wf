@@ -1,6 +1,15 @@
 ---
-- name: Deploy Self-Hosted Stack
-  hosts: all
+# Pre-flight checks run first on all targets
+- name: Pre-flight Checks
+  hosts: servers:local
+  gather_facts: true
+  become: false
+  roles:
+    - role: preflight
+
+# Infrastructure deployment on both cloud (servers) and local (ntb)
+- name: Deploy Infrastructure
+  hosts: servers:local
   become: true
   vars:
     ansible_python_interpreter: /usr/bin/python3
@@ -9,4 +18,12 @@
     - role: tailscale
     - role: docker
     - role: hashicorp
+
+# Jobs only deploy on cloud servers (constraint: node_class=cloud)
+- name: Deploy Jobs (Server Only)
+  hosts: servers
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  roles:
     - role: nomad_jobs

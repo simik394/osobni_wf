@@ -1,5 +1,5 @@
 job "n8n" {
-  datacenters = ["dc1"]
+  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
   type        = "service"
 
   group "n8n" {

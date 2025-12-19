@@ -1,4 +1,10 @@
 ---
+- name: Release apt locks (Kill PackageKit)
+  ansible.builtin.shell: killall packagekitd
+  ignore_errors: true
+  failed_when: false
+  when: inventory_hostname == 'localhost'
+
 - name: Install common packages
   ansible.builtin.apt:
     name:

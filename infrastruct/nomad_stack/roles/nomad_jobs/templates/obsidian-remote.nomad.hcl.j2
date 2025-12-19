@@ -1,5 +1,5 @@
 job "obsidian-remote" {
-  datacenters = ["dc1"]
+  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
   type        = "service"
 
   group "obsidian" {

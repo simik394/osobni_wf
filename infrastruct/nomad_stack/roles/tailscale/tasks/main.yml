@@ -30,7 +30,10 @@
   failed_when: false
   changed_when: false
 
-- name: Prompt for Tailscale Authentication
-  ansible.builtin.pause:
-    prompt: "Tailscale is not authenticated on {{ inventory_hostname }}. Please run 'sudo tailscale up' on the host manually now, authenticate it, and then press Enter to continue."
+- name: Fail if Tailscale is not authenticated
+  ansible.builtin.fail:
+    msg: |
+      Tailscale is not authenticated on {{ inventory_hostname }}.
+      Please run 'sudo tailscale up' on this host to authenticate, then re-run the playbook.
+      You can verify authentication with: tailscale status
   when: tailscale_status.rc != 0
