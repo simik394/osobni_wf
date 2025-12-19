@@ -52,15 +52,15 @@ graph TB
 
 ## Services & Access
 
-After deployment, services are available at these URLs (using `nip.io` DNS):
+After deployment, services are available via Consul DNS (requires [[#consul-dns-setup|DNS forwarding]]):
 
 | Service | URL | Default Credentials |
 |---------|-----|---------------------|
-| **Windmill** | `http://windmill.<SERVER_IP>.nip.io` | `admin@windmill.dev` / `changeme` |
-| **YouTrack** | `http://youtrack.<SERVER_IP>.nip.io` | Setup wizard on first run |
-| **n8n** | `http://n8n.<SERVER_IP>.nip.io` | Create owner on first run |
-| **Obsidian** | `http://obsidian.<SERVER_IP>.nip.io` | Direct vault access |
-| **Traefik** | `http://<SERVER_IP>:8080` | Dashboard (insecure) |
+| **Windmill** | `http://windmill.service.consul` | `admin@windmill.dev` / `changeme` |
+| **YouTrack** | `http://youtrack.service.consul` | Setup wizard on first run |
+| **n8n** | `http://n8n.service.consul` | Create owner on first run |
+| **Obsidian** | `http://obsidian.service.consul` | Direct vault access |
+| **Traefik** | `http://traefik.service.consul:8080` | Dashboard (insecure) |
 
 ## Ports Reference
 
@@ -236,3 +236,30 @@ nomad alloc logs <alloc_id> windmill-server
    ```
 3. Add template to `roles/nomad_jobs/tasks/main.yml`
 4. Run Ansible again
+
+## Consul DNS Setup
+
+To resolve `*.service.consul` names, configure your system to forward `.consul` queries to Consul's DNS (port 8600).
+
+### systemd-resolved (Ubuntu/Pop!_OS)
+
+```bash
+sudo mkdir -p /etc/systemd/resolved.conf.d/
+sudo tee /etc/systemd/resolved.conf.d/consul.conf << 'EOF'
+[Resolve]
+DNS=127.0.0.1:8600
+Domains=~consul
+EOF
+
+sudo systemctl restart systemd-resolved
+```
+
+### Verify DNS Resolution
+
+```bash
+# Test Consul DNS directly
+dig @127.0.0.1 -p 8600 traefik.service.consul
+
+# Test system resolution (after setup)
+ping traefik.service.consul
+```
