@@ -2,65 +2,79 @@
 
 > Model-based configuration management for JetBrains YouTrack using logic programming.
 
-## Overview
+## How It Works
 
-Replace imperative IaC scripts with **declarative logic inference** — instead of "if X doesn't exist, create X", define axioms and let the Prolog solver compute the delta.
+1. **You define** what your YouTrack should look like in `obsidian-rules/*.md`
+2. **The tool reads** your actual YouTrack via API
+3. **Prolog computes** what's missing/different
+4. **Changes are applied** automatically
 
-## Architecture
+## Defining Your YouTrack Structure
 
+Edit files in `obsidian-rules/` folder. Write Prolog facts in code blocks:
+
+```markdown
+# My Project Config
+
+​```prolog
+% I want a Priority dropdown in project DEMO
+target_field('Priority', enum, 'DEMO').
+field_uses_bundle('Priority', 'PriorityBundle').
+
+% With these values
+target_bundle_value('PriorityBundle', 'Critical').
+target_bundle_value('PriorityBundle', 'High').
+target_bundle_value('PriorityBundle', 'Medium').
+target_bundle_value('PriorityBundle', 'Low').
+​```
 ```
-┌─────────────────┐     ┌──────────────────────────────────────┐
-│  Obsidian Vault │────▶│         Nomad Batch Job              │
-│  (Rules in MD)  │     │  ┌──────────┐  ┌───────┐  ┌───────┐  │
-└─────────────────┘     │  │Controller│─▶│ Prolog│─▶│Actuator│ │
-                        │  │ (Python) │  │ Logic │  │(Python)│ │
-┌─────────────────┐     │  └──────────┘  └───────┘  └───────┘  │
-│  YouTrack API   │◀───▶│                                      │
-│ (Current State) │     └──────────────────────────────────────┘
-└─────────────────┘                    ▲
-                                       │
-                        ┌──────────────┴──────────────┐
-                        │       n8n Orchestrator      │
-                        │   (Triggers & Monitoring)   │
-                        └─────────────────────────────┘
-```
+
+### Available Facts
+
+| Fact | Meaning |
+|------|---------|
+| `target_field(Name, Type, Project)` | You want field `Name` of `Type` in `Project` |
+| `field_uses_bundle(Field, Bundle)` | Field uses this bundle for values |
+| `target_bundle_value(Bundle, Value)` | Bundle should have this value |
+
+### Field Types
+
+- `enum` - Dropdown list
+- `state` - Workflow state  
+- `string` - Text field
+- `integer` - Number field
+
+---
 
 ## Quick Start
 
 ```bash
-# Build the Docker image
-docker build -t ldi-logic-core docker/
+# Run tests
+./dev.sh test
 
-# Run locally (dry-run)
-docker run --rm \
-  -e YOUTRACK_TOKEN=$YOUTRACK_TOKEN \
-  -e YOUTRACK_URL=https://youtrack.example.com \
-  -v $(pwd)/obsidian-rules:/rules:ro \
-  ldi-logic-core --dry-run
+# Start interactive shell (Prolog + Python available)
+./dev.sh
 
-# Deploy via Nomad
-nomad job run nomad/logic-core.nomad.hcl
+# Run with YouTrack (dry-run)
+YOUTRACK_TOKEN=xxx ./dev.sh shell
+# then inside: python3 -m src.controller.main --youtrack-url https://yt.example.com --dry-run
+```
+
+## Architecture
+
+```
+obsidian-rules/*.md  →  Controller  →  Prolog  →  Actuator  →  YouTrack API
+     (YOUR RULES)       (reads API)    (diff)     (writes)
 ```
 
 ## Directory Structure
 
 ```
-logic-driven-iac/
-├── docker/Dockerfile        # Prolog + Python runtime
-├── nomad/logic-core.nomad.hcl
+├── obsidian-rules/     ← YOUR CONFIG GOES HERE
 ├── src/
-│   ├── controller/          # Python sensing layer
-│   ├── logic/               # Prolog inference rules
-│   └── actuator/            # Python API execution
-├── obsidian-rules/          # Markdown rule definitions
-└── docs/                    # Architecture docs
+│   ├── controller/     # Python: reads YouTrack API
+│   ├── logic/          # Prolog: computes diff
+│   └── actuator/       # Python: applies changes
+├── dev.sh              # Run dev environment
+└── tests/              # Python + Prolog tests
 ```
-
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [API Reference](docs/api-reference.md)
-
-## License
-
-MIT
