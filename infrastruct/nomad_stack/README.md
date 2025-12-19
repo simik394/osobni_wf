@@ -2,144 +2,237 @@
 
 This project automates the deployment of a **federated** self-hosted stack across a **Cloud Server (`halvarm`)** and a **Local Machine (`ntb`)**.
 
-**Architecture:**
-*   **Region: Cloud (`halvarm`)**: Runs heavy workloads (Windmill, YouTrack, n8n) and serves as the public ingress.
-*   **Region: Local (`ntb`)**: Part of the same cluster but runs on your laptop. Useful for local development or offloading specific tasks.
-*   **Network**: Nodes are connected via **Tailscale** (Mesh VPN), ensuring secure communication regardless of physical location.
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Region: Cloud (halvarm)"
+        CS[Cloud Server<br/>node_class=cloud]
+        CS --> Traefik[Traefik<br/>:80/:443]
+        CS --> Windmill[Windmill]
+        CS --> YouTrack[YouTrack]
+        CS --> N8N[n8n]
+        CS --> Obsidian[Obsidian Remote]
+    end
+    
+    subgraph "Region: Local (ntb)"
+        LS[Laptop<br/>node_class=local]
+        LS --> LocalJobs[Future Local Jobs]
+    end
+    
+    CS <-->|Tailscale VPN<br/>WAN Federation| LS
+    
+    Internet((Internet)) --> Traefik
+```
+
+**Key Points:**
+- **Cloud (`halvarm`)**: Runs heavy workloads and serves as public ingress
+- **Local (`ntb`)**: Part of the same cluster, useful for development or offloading tasks
+- **Network**: Nodes connected via **Tailscale** mesh VPN
+
+## Requirements
+
+| Component | Version | Notes |
+|-----------|---------|-------|
+| Ansible | ≥2.14 | With `community.general` collection |
+| Python | ≥3.10 | On control node |
+| SSH | - | Passwordless access to `halvarm` |
+| Tailscale | Latest | Installed & authenticated on both nodes |
+
+## Ansible Roles
+
+| Role | Description |
+|------|-------------|
+| `preflight` | Pre-deployment validation (Tailscale, disk space, connectivity) |
+| `common` | Base packages, swap, firewall (UFW), public IP detection |
+| `tailscale` | Tailscale installation and authentication check |
+| `docker` | Docker CE installation with Compose plugin |
+| `hashicorp` | Consul, Vault, Nomad installation and configuration |
+| `nomad_jobs` | Deploys Nomad job files (Traefik, Windmill, YouTrack, n8n, Obsidian) |
 
 ## Services & Access
 
-After deployment, services are available at the following URLs (using `nip.io` DNS by default):
+After deployment, services are available at these URLs (using `nip.io` DNS):
 
-| Service | Location | URL | Description |
-| :--- | :--- | :--- | :--- |
-| **Windmill** | Cloud | `http://windmill.<SERVER_IP>.nip.io` | Developer platform & script orchestration. |
-| **YouTrack** | Cloud | `http://youtrack.<SERVER_IP>.nip.io` | Project management. |
-| **n8n** | Cloud | `http://n8n.<SERVER_IP>.nip.io` | Workflow automation. |
-| **Obsidian** | Cloud | `http://obsidian.<SERVER_IP>.nip.io` | Remote Obsidian web interface. |
-| **Traefik** | Cloud | `http://<SERVER_IP>:8080` | Edge router dashboard. |
+| Service | URL | Default Credentials |
+|---------|-----|---------------------|
+| **Windmill** | `http://windmill.<SERVER_IP>.nip.io` | `admin@windmill.dev` / `changeme` |
+| **YouTrack** | `http://youtrack.<SERVER_IP>.nip.io` | Setup wizard on first run |
+| **n8n** | `http://n8n.<SERVER_IP>.nip.io` | Create owner on first run |
+| **Obsidian** | `http://obsidian.<SERVER_IP>.nip.io` | Direct vault access |
+| **Traefik** | `http://<SERVER_IP>:8080` | Dashboard (insecure) |
 
-## Prerequisites
+## Ports Reference
 
-1.  **Tailscale**: Must be installed and running on both your laptop and the server.
-2.  **SSH Config**: Ensure you can `ssh halvarm` from your laptop.
-3.  **Inventory**: `infrastruct/nomad_stack/inventory.yml` must contain:
-    *   The **Tailscale IP** of your laptop (`wan_peer`).
-    *   The correct `node_class` (`cloud` vs `local`).
+| Port | Service | Protocol | Notes |
+|------|---------|----------|-------|
+| 22 | SSH | TCP | Remote access |
+| 80 | Traefik | TCP | HTTP ingress |
+| 443 | Traefik | TCP | HTTPS ingress |
+| 4646 | Nomad | TCP | API/UI |
+| 4647 | Nomad | TCP | RPC |
+| 4648 | Nomad | TCP/UDP | Serf (gossip) |
+| 8200 | Vault | TCP | API/UI |
+| 8300-8302 | Consul | TCP/UDP | Server RPC, Serf |
+| 8500 | Consul | TCP | API/UI |
+| 8080 | Traefik | TCP | Dashboard |
 
-## Deployment (Zero-Touch)
+## Deployment
 
-To deploy or update the entire stack on **both** the server and your laptop:
+### Quick Start
 
 ```bash
 cd infrastruct/nomad_stack
 ansible-playbook -i inventory.yml playbook.yml -K
 ```
-*The `-K` flag prompts for your local sudo password to configure your laptop.*
 
-### What this does:
-1.  **Configures `halvarm`**: Installs Nomad/Consul/Vault, sets firewall rules, creates swap.
-2.  **Configures `localhost`**: Installs Nomad/Consul/Vault (skips firewall/swap to be safe).
-3.  **Federates**: Connects both nodes into a single cluster via Tailscale.
-4.  **Deploys Jobs**: Submits Nomad jobs with constraints (e.g., `node_class = "cloud"` for Windmill).
+The `-K` flag prompts for your local sudo password.
 
-## Operational Guide
+### What This Does
 
-### 1. Accessing GUIs & Default Credentials
+1. **Pre-flight Checks**: Validates Tailscale auth, disk space, connectivity
+2. **Configures `halvarm`**: Installs stack, sets firewall rules, creates swap
+3. **Configures `localhost`**: Installs stack (skips firewall/swap for safety)
+4. **Federates**: Connects both nodes into single cluster via Tailscale
+5. **Deploys Jobs**: Submits Nomad jobs with node constraints
 
-**Windmill**
-*   **URL:** `http://windmill.<SERVER_IP>.nip.io`
-*   **Default Login:** `admin@windmill.dev` / `changeme`
-*   **Action:** Change the password immediately after logging in.
+### Deploy to Server Only
 
-**YouTrack**
-*   **URL:** `http://youtrack.<SERVER_IP>.nip.io`
-*   **First Run:** You will be greeted by the **JetBrains Setup Wizard**.
-*   **Setup:** Select "Set up" (not Upgrade), generate a Token from your JetBrains account if requested, and configure the admin account.
-
-**n8n**
-*   **URL:** `http://n8n.<SERVER_IP>.nip.io`
-*   **First Run:** You will be prompted to create an owner account.
-
-**Obsidian Remote**
-*   **URL:** `http://obsidian.<SERVER_IP>.nip.io`
-*   **Access:** Direct access to the vault hosted on the server.
-
-### 2. Managing Nomad Jobs
-
-While Ansible automates the initial deployment, you can manage jobs manually for development or debugging.
-
-**List Running Jobs:**
 ```bash
-nomad job status
+ansible-playbook -i inventory.yml playbook.yml -l servers
 ```
 
-**Deploy/Update a Job Manually:**
-1.  Navigate to the job file location (on the server or local machine).
-    *   *Note: Ansible templates are in `roles/nomad_jobs/templates/` but need variables replaced.*
-    *   *On the server, rendered jobs are stored in `/opt/nomad/jobs/`.*
-2.  Run the job:
-    ```bash
-    nomad job run /opt/nomad/jobs/windmill.nomad.hcl
-    ```
+### Skip Pre-flight Checks
 
-**Stop a Job:**
 ```bash
-nomad job stop windmill
+ansible-playbook -i inventory.yml playbook.yml --skip-tags preflight
 ```
 
-**View Logs:**
-```bash
-# Find the Allocation ID first
-nomad job status windmill
-# Then view logs
-nomad alloc logs <alloc_id> windmill-server
+## HTTPS/TLS Setup (Let's Encrypt)
+
+To enable HTTPS with automatic certificates:
+
+1. **Edit** `roles/nomad_jobs/templates/traefik.nomad.hcl.j2`
+2. **Uncomment** the ACME configuration:
+
+```hcl
+args = [
+  # ... existing args ...
+  
+  # 1. HTTP to HTTPS Redirection
+  "--entrypoints.web.http.redirections.entryPoint.to=websecure",
+  "--entrypoints.web.http.redirections.entryPoint.scheme=https",
+  
+  # 2. Certificate Resolver (LetsEncrypt)
+  "--certificatesresolvers.myresolver.acme.email=your-email@example.com",
+  "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json",
+  "--certificatesresolvers.myresolver.acme.httpchallenge=true",
+  "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web",
+]
 ```
 
-## Maintenance & Troubleshooting
+3. **Update service tags** in job files to use the resolver:
 
-### 1. "Stuck" Deployment or Split Brain
-If the deployment hangs or nodes cannot see each other (e.g., after IP changes), perform a **Full Cluster Reset**:
+```hcl
+tags = [
+  "traefik.enable=true",
+  "traefik.http.routers.myapp.rule=Host(`myapp.example.com`)",
+  "traefik.http.routers.myapp.entrypoints=websecure",
+  "traefik.http.routers.myapp.tls.certresolver=myresolver",
+]
+```
 
-**On the Server (`halvarm`):**
+4. **Re-run Ansible** to apply changes.
+
+## Backup & Restore
+
+### Vault Keys (Critical!)
+
+The first run generates `vault_keys.json` in `infrastruct/nomad_stack/`.
+
+> [!CAUTION]
+> Move this file to a secure password manager immediately! It contains your Unseal Keys and Root Token.
+
+### YouTrack Backup
+
 ```bash
+# On server - data is in /opt/youtrack/backups/
+ssh halvarm "ls -la /opt/youtrack/backups/"
+
+# Download backup
+scp halvarm:/opt/youtrack/backups/<backup_file> ./
+```
+
+### Full Data Directories
+
+| Service | Data Path |
+|---------|-----------|
+| YouTrack | `/opt/youtrack/{data,conf,logs,backups}` |
+| Windmill | `/opt/windmill/{db,worker_cache,lsp_cache}` |
+| n8n | `/opt/n8n/data` |
+| Obsidian | `/opt/obsidian/{config,vaults}` |
+| Traefik | `/opt/traefik/acme` |
+
+## Troubleshooting
+
+### Pre-flight Check Failed
+
+If preflight fails, check the specific error message. Common issues:
+
+| Error | Solution |
+|-------|----------|
+| "Tailscale not authenticated" | Run `sudo tailscale up` on the failing host |
+| "Cannot reach WAN peer" | Check Tailscale status on both nodes |
+| "Low disk space" | Free up space or expand disk |
+
+### Stuck Deployment / Split Brain
+
+If nodes can't see each other after IP changes:
+
+```bash
+# On server
 ssh halvarm "sudo systemctl stop consul vault nomad && sudo rm -rf /opt/consul/* /opt/vault/* /opt/nomad/*"
-```
 
-**On Localhost (`ntb`):**
-```bash
+# On localhost
 sudo systemctl stop consul vault nomad
 sudo rm -rf /opt/consul/* /opt/vault/* /opt/nomad/*
-```
 
-**Then re-run Ansible:**
-```bash
+# Re-run Ansible
 ansible-playbook -i inventory.yml playbook.yml -K
 ```
 
-### 2. Secrets (Vault)
-The first run generates `vault_keys.json` in `infrastruct/nomad_stack/`. **Move this file to a secure password manager immediately.** It contains the Unseal Keys and Root Token.
-
-### 3. Check Cluster Status
-Verify that both nodes are alive and connected:
+### Check Cluster Health
 
 ```bash
-# Check Nomad Federation (Cloud + Local)
+# Nomad federation
 nomad server members
 
-# Check Consul WAN (Cloud + Local)
+# Consul WAN
 consul members -wan
+
+# Vault status
+vault status
 ```
 
-## Advanced: Adding New Services
+### View Job Logs
 
-1.  Create a Nomad job file in `roles/nomad_jobs/templates/`.
-2.  Add a `constraint` to target the cloud or local node:
-    ```hcl
-    constraint {
-      attribute = "${node.class}"
-      value     = "cloud" # or "local"
-    }
-    ```
-3.  Add the template to the `Copy Nomad job files` task in `roles/nomad_jobs/tasks/main.yml`.
-4.  Run Ansible again.
+```bash
+# Find allocation ID
+nomad job status windmill
+
+# View logs
+nomad alloc logs <alloc_id> windmill-server
+```
+
+## Adding New Services
+
+1. Create job template in `roles/nomad_jobs/templates/myservice.nomad.hcl.j2`
+2. Add node constraint:
+   ```hcl
+   constraint {
+     attribute = "${node.class}"
+     value     = "cloud"  # or "local"
+   }
+   ```
+3. Add template to `roles/nomad_jobs/tasks/main.yml`
+4. Run Ansible again
