@@ -3,7 +3,7 @@
 import pytest
 import networkx as nx
 
-from src.algorithms import (
+from questDiscov.algorithms import (
     build_networkx_graph,
     topological_sort,
     detect_cycle,
@@ -12,7 +12,7 @@ from src.algorithms import (
     get_blocking_count,
     get_dependency_depth,
 )
-from src.graph import Question
+from questDiscov.graph import Question
 
 
 class TestBuildGraph:
@@ -165,12 +165,14 @@ class TestBlockingCount:
     """Tests for blocking count calculation."""
 
     def test_leaf_blocks_nothing(self):
-        """Test that leaf node blocks nothing."""
+        """Test that leaf node (root of DAG in dependency direction) has ancestors."""
         G = nx.DiGraph()
         G.add_edges_from([("Q1", "Q2"), ("Q2", "Q3")])
 
+        # Q3 has no outgoing edges (leaf in dependency direction)
+        # But Q1 and Q2 are ancestors - they depend on Q3 transitively
         count = get_blocking_count(G, "Q3")
-        assert count == 0
+        assert count == 2  # Q1 and Q2 both depend on Q3
 
     def test_root_blocked_by_all(self):
         """Test that root is blocked by all predecessors."""

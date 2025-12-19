@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.graph import Question, QuestionGraph
+from questDiscov.graph import Question, QuestionGraph
 
 
 @pytest.fixture
