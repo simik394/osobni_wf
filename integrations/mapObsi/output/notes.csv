@@ -1,0 +1,4 @@
+broken_links,broken_links_count,char_count,code_block_count,created,embeds,embeds_count,extension,h1,h2,h3,h4,h5,h6,has_frontmatter,is_orphan,line_count,list_item_count,modified,name,path,size_bytes,tags,tags_count,wikilinks,wikilinks_count,word_count
+,0,848,1,2025-12-19T12:22:51.327396,,0,.md,1,1,0,0,0,0,False,False,32,0,2025-12-19T12:22:51.327396,example-field,../../infrastruct/logic-driven-iac/obsidian-rules/example-field.md,848,,0,,0,63
+,0,2073,4,2025-12-19T12:27:13.793116,,0,.md,6,5,2,0,0,0,False,False,81,4,2025-12-19T12:27:13.793116,README,../../infrastruct/logic-driven-iac/README.md,2135,,0,,0,271
+,0,302,0,2025-12-19T10:59:21.039594,,0,.md,1,0,0,0,0,0,False,False,9,0,2025-12-19T10:59:21.039594,README,../../infrastruct/logic-driven-iac/.pytest_cache/README.md,302,,0,,0,40
