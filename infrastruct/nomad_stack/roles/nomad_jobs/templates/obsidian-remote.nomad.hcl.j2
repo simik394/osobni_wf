@@ -7,7 +7,7 @@ job "obsidian-remote" {
 
     network {
       port "http" {
-        to = 8080
+        to = 3000
       }
     }
 
@@ -20,7 +20,7 @@ job "obsidian-remote" {
       }
 
       config {
-        image = "ghcr.io/sglmr/obsidian-remote:latest"
+        image = "ghcr.io/linuxserver/obsidian:latest"
         ports = ["http"]
         volumes = [
            "/opt/obsidian/config:/config",
