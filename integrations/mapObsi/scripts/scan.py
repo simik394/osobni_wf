@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scan.py - Parse markdown files and extract metadata
+scan.py - Parse markdown files using tree-sitter AST
 Usage: cat files.txt | python scan.py --output notes.json
 """
 import sys
@@ -10,11 +10,208 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+from dataclasses import dataclass, asdict
+
+try:
+    from tree_sitter_languages import get_parser
+    TREE_SITTER_AVAILABLE = True
+except ImportError:
+    TREE_SITTER_AVAILABLE = False
+    print("Warning: tree-sitter-languages not installed, using regex fallback", file=sys.stderr)
 
 try:
     import frontmatter
 except ImportError:
     frontmatter = None
+
+
+@dataclass
+class NoteMetadata:
+    # File properties
+    path: str
+    name: str
+    extension: str
+    size_bytes: int
+    created: str
+    modified: str
+    
+    # Content stats
+    char_count: int
+    word_count: int
+    line_count: int
+    
+    # Structure (from tree-sitter)
+    h1: int = 0
+    h2: int = 0
+    h3: int = 0
+    h4: int = 0
+    h5: int = 0
+    h6: int = 0
+    code_block_count: int = 0
+    code_languages: list = None
+    list_item_count: int = 0
+    link_count: int = 0
+    image_count: int = 0
+    blockquote_count: int = 0
+    table_count: int = 0
+    
+    # Obsidian
+    frontmatter: dict = None
+    has_frontmatter: bool = False
+    tags: list = None
+    wikilinks: list = None
+    embeds: list = None
+    external_links: list = None
+    
+    # Quality
+    broken_links: list = None
+    is_orphan: bool = False
+    
+    def __post_init__(self):
+        self.code_languages = self.code_languages or []
+        self.frontmatter = self.frontmatter or {}
+        self.tags = self.tags or []
+        self.wikilinks = self.wikilinks or []
+        self.embeds = self.embeds or []
+        self.external_links = self.external_links or []
+        self.broken_links = self.broken_links or []
+
+
+class TreeSitterParser:
+    """Parse markdown using tree-sitter AST."""
+    
+    def __init__(self):
+        self.parser = get_parser('markdown')
+    
+    def parse(self, content: str) -> dict:
+        """Parse markdown and extract structure."""
+        tree = self.parser.parse(content.encode('utf-8'))
+        
+        result = {
+            'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0,
+            'code_block_count': 0,
+            'code_languages': [],
+            'list_item_count': 0,
+            'link_count': 0,
+            'image_count': 0,
+            'blockquote_count': 0,
+            'table_count': 0,
+            'external_links': [],
+        }
+        
+        self._walk_tree(tree.root_node, result, content)
+        return result
+    
+    def _walk_tree(self, node, result: dict, content: str):
+        """Recursively walk the AST."""
+        node_type = node.type
+        
+        # Headings
+        if node_type == 'atx_heading':
+            # Count # characters to determine level
+            text = content[node.start_byte:node.end_byte]
+            level = len(text.split()[0]) if text.split() else 1
+            level = min(level, 6)
+            result[f'h{level}'] += 1
+        
+        # Code blocks
+        elif node_type == 'fenced_code_block':
+            result['code_block_count'] += 1
+            # Extract language
+            for child in node.children:
+                if child.type == 'info_string':
+                    lang = content[child.start_byte:child.end_byte].strip()
+                    if lang and lang not in result['code_languages']:
+                        result['code_languages'].append(lang)
+        
+        elif node_type == 'code_block':
+            result['code_block_count'] += 1
+        
+        # Lists
+        elif node_type == 'list_item':
+            result['list_item_count'] += 1
+        
+        # Links
+        elif node_type == 'link' or node_type == 'inline_link':
+            result['link_count'] += 1
+            # Try to extract URL
+            for child in node.children:
+                if child.type == 'link_destination':
+                    url = content[child.start_byte:child.end_byte]
+                    if url.startswith('http'):
+                        result['external_links'].append(url)
+        
+        # Images  
+        elif node_type == 'image':
+            result['image_count'] += 1
+        
+        # Blockquotes
+        elif node_type == 'block_quote':
+            result['blockquote_count'] += 1
+        
+        # Tables
+        elif node_type == 'table' or node_type == 'pipe_table':
+            result['table_count'] += 1
+        
+        # Recurse into children
+        for child in node.children:
+            self._walk_tree(child, result, content)
+
+
+class RegexParser:
+    """Fallback regex-based parser."""
+    
+    def parse(self, content: str) -> dict:
+        result = {
+            'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0,
+            'code_block_count': 0,
+            'code_languages': [],
+            'list_item_count': 0,
+            'link_count': 0,
+            'image_count': 0,
+            'blockquote_count': 0,
+            'table_count': 0,
+            'external_links': [],
+        }
+        
+        for line in content.split('\n'):
+            line = line.strip()
+            # Headings
+            if line.startswith('#'):
+                match = re.match(r'^(#{1,6})\s', line)
+                if match:
+                    level = len(match.group(1))
+                    result[f'h{level}'] += 1
+            # Lists
+            elif re.match(r'^[-*+]\s', line) or re.match(r'^\d+\.\s', line):
+                result['list_item_count'] += 1
+            # Blockquotes
+            elif line.startswith('>'):
+                result['blockquote_count'] += 1
+        
+        # Code blocks
+        result['code_block_count'] = len(re.findall(r'^```', content, re.MULTILINE)) // 2
+        
+        # Code languages
+        for match in re.finditer(r'^```(\w+)', content, re.MULTILINE):
+            lang = match.group(1)
+            if lang not in result['code_languages']:
+                result['code_languages'].append(lang)
+        
+        # Links
+        result['link_count'] = len(re.findall(r'\[([^\]]+)\]\(([^)]+)\)', content))
+        
+        # External links
+        for match in re.finditer(r'\[([^\]]+)\]\((https?://[^)]+)\)', content):
+            result['external_links'].append(match.group(2))
+        
+        # Images
+        result['image_count'] = len(re.findall(r'!\[([^\]]*)\]\(([^)]+)\)', content))
+        
+        # Tables (simplified)
+        result['table_count'] = len(re.findall(r'^\|.+\|$', content, re.MULTILINE)) // 3
+        
+        return result
 
 
 def parse_frontmatter(content: str) -> dict:
@@ -26,7 +223,6 @@ def parse_frontmatter(content: str) -> dict:
         except Exception:
             pass
     
-    # Fallback: manual parsing
     if content.startswith('---'):
         parts = content.split('---', 2)
         if len(parts) >= 3:
@@ -37,18 +233,19 @@ def parse_frontmatter(content: str) -> dict:
 def extract_wikilinks(content: str) -> list[str]:
     """Extract [[wikilinks]] from content."""
     pattern = r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]'
-    return re.findall(pattern, content)
+    return list(set(re.findall(pattern, content)))
 
 
 def extract_embeds(content: str) -> list[str]:
     """Extract ![[embeds]] from content."""
     pattern = r'!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]'
-    return re.findall(pattern, content)
+    return list(set(re.findall(pattern, content)))
 
 
 def extract_tags(content: str, fm: dict) -> list[str]:
     """Extract #tags from content and frontmatter."""
-    # Inline tags
+    # Inline tags (not inside code blocks)
+    # Simple approach: find all #tags
     inline = re.findall(r'(?:^|\s)#([a-zA-Z][a-zA-Z0-9_/-]*)', content)
     
     # Frontmatter tags
@@ -61,30 +258,7 @@ def extract_tags(content: str, fm: dict) -> list[str]:
     return list(set(inline + fm_tags))
 
 
-def count_headings(content: str) -> dict[str, int]:
-    """Count headings by level."""
-    counts = {'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0}
-    for line in content.split('\n'):
-        line = line.strip()
-        if line.startswith('#'):
-            match = re.match(r'^(#{1,6})\s', line)
-            if match:
-                level = len(match.group(1))
-                counts[f'h{level}'] += 1
-    return counts
-
-
-def count_code_blocks(content: str) -> int:
-    """Count fenced code blocks."""
-    return len(re.findall(r'^```', content, re.MULTILINE)) // 2
-
-
-def count_list_items(content: str) -> int:
-    """Count list items (- or *)."""
-    return len(re.findall(r'^[\s]*[-*]\s', content, re.MULTILINE))
-
-
-def scan_file(filepath: str) -> Optional[dict]:
+def scan_file(filepath: str, md_parser) -> Optional[NoteMetadata]:
     """Scan a single markdown file and extract metadata."""
     path = Path(filepath.strip())
     
@@ -94,42 +268,45 @@ def scan_file(filepath: str) -> Optional[dict]:
     try:
         content = path.read_text(encoding='utf-8')
     except Exception as e:
-        return {'path': str(path), 'error': str(e)}
+        return NoteMetadata(
+            path=str(path), name=path.stem, extension=path.suffix,
+            size_bytes=0, created='', modified='',
+            char_count=0, word_count=0, line_count=0,
+        )
     
     stat = path.stat()
     fm = parse_frontmatter(content)
-    headings = count_headings(content)
+    structure = md_parser.parse(content)
     
-    return {
+    return NoteMetadata(
         # File properties
-        'path': str(path),
-        'name': path.stem,
-        'extension': path.suffix,
-        'size_bytes': stat.st_size,
-        'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
-        'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        path=str(path),
+        name=path.stem,
+        extension=path.suffix,
+        size_bytes=stat.st_size,
+        created=datetime.fromtimestamp(stat.st_ctime).isoformat(),
+        modified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
         
         # Content stats
-        'char_count': len(content),
-        'word_count': len(content.split()),
-        'line_count': content.count('\n') + 1,
+        char_count=len(content),
+        word_count=len(content.split()),
+        line_count=content.count('\n') + 1,
         
-        # Structure
-        **headings,
-        'code_block_count': count_code_blocks(content),
-        'list_item_count': count_list_items(content),
+        # Structure (from parser)
+        **{k: v for k, v in structure.items() if k in [
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'code_block_count', 'code_languages',
+            'list_item_count', 'link_count', 'image_count',
+            'blockquote_count', 'table_count', 'external_links'
+        ]},
         
         # Obsidian
-        'frontmatter': fm,
-        'has_frontmatter': bool(fm),
-        'tags': extract_tags(content, fm),
-        'wikilinks': extract_wikilinks(content),
-        'embeds': extract_embeds(content),
-        
-        # Quality (placeholder - computed later)
-        'broken_links': [],
-        'is_orphan': False,
-    }
+        frontmatter=fm,
+        has_frontmatter=bool(fm),
+        tags=extract_tags(content, fm),
+        wikilinks=extract_wikilinks(content),
+        embeds=extract_embeds(content),
+    )
 
 
 def main():
@@ -139,6 +316,14 @@ def main():
     parser.add_argument('--orphans', help='List orphans from existing JSON')
     parser.add_argument('--broken', help='List broken links from existing JSON')
     args = parser.parse_args()
+    
+    # Choose parser
+    if TREE_SITTER_AVAILABLE:
+        md_parser = TreeSitterParser()
+        print("Using tree-sitter parser", file=sys.stderr)
+    else:
+        md_parser = RegexParser()
+        print("Using regex parser (fallback)", file=sys.stderr)
     
     # Read file list from stdin
     files = [line.strip() for line in sys.stdin if line.strip()]
@@ -150,9 +335,9 @@ def main():
     # Scan each file
     results = []
     for filepath in files:
-        result = scan_file(filepath)
+        result = scan_file(filepath, md_parser)
         if result:
-            results.append(result)
+            results.append(asdict(result))
             print(f"Scanned: {filepath}", file=sys.stderr)
     
     # Load existing data if incremental

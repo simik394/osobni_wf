@@ -1,0 +1,4 @@
+# mapObsi dependencies
+tree-sitter==0.21.3
+tree-sitter-languages>=1.10.0
+python-frontmatter>=1.0.0
