@@ -52,15 +52,18 @@ graph TB
 
 ## Services & Access
 
-After deployment, services are available via Consul DNS (requires [[#consul-dns-setup|DNS forwarding]]):
+After deployment, services are available via two methods:
 
-| Service | URL | Default Credentials |
-|---------|-----|---------------------|
-| **Windmill** | `http://windmill.service.consul` | `admin@windmill.dev` / `changeme` |
-| **YouTrack** | `http://youtrack.service.consul` | Setup wizard on first run |
-| **n8n** | `http://n8n.service.consul` | Create owner on first run |
-| **Obsidian** | `http://obsidian.service.consul` | Direct vault access |
-| **Traefik** | `http://traefik.service.consul:8080` | Dashboard (insecure) |
+| Service | Consul DNS (Local/VPN) | IP-based (nip.io) | Default Credentials |
+|---------|------------------------|-------------------|---------------------|
+| **Windmill** | `http://windmill.service.consul` | `http://windmill.<IP>.nip.io` | `admin@windmill.dev` / `changeme` |
+| **YouTrack** | `http://youtrack.service.consul` | `http://youtrack.<IP>.nip.io` | Setup wizard on first run |
+| **n8n** | `http://n8n.service.consul` | `http://n8n.<IP>.nip.io` | Create owner on first run |
+| **Obsidian** | `http://obsidian.service.consul` | `http://obsidian.<IP>.nip.io` | Direct vault access |
+| **Traefik** | `http://traefik.service.consul:8080` | `http://<IP>:8080` | Dashboard (insecure) |
+
+> [!TIP]
+> Consul DNS requires [[#consul-dns-setup|DNS forwarding]] to be configured on your machine. The IP-based `nip.io` method works without extra config as long as you use the server's public or Tailscale IP.
 
 ## Ports Reference
 
