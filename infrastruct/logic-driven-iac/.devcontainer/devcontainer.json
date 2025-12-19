@@ -1,0 +1,35 @@
+{
+    "name": "Logic-Driven IaC",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "arthurwang.vsc-prolog",
+                "redhat.vscode-yaml"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/bin/python3",
+                "python.testing.pytestEnabled": true,
+                "python.testing.pytestPath": "/usr/bin/pytest",
+                "editor.formatOnSave": true
+            }
+        }
+    },
+    "postCreateCommand": "pip install -e .",
+    "remoteUser": "vscode",
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {}
+    },
+    "mounts": [
+        "source=${localWorkspaceFolder}/obsidian-rules,target=/workspaces/logic-driven-iac/obsidian-rules,type=bind"
+    ],
+    "forwardPorts": [],
+    "containerEnv": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1"
+    }
+}
