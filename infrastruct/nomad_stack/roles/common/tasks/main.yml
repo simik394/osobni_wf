@@ -61,7 +61,7 @@
     path: /swapfile
     owner: root
     group: root
-    mode: '0600'
+    mode: "0600"
   when: inventory_hostname != 'localhost'
 
 - name: Format swap file
@@ -75,21 +75,21 @@
 - name: Persist swap in fstab
   ansible.builtin.lineinfile:
     path: /etc/fstab
-    line: '/swapfile none swap sw 0 0'
+    line: "/swapfile none swap sw 0 0"
     state: present
   when: inventory_hostname != 'localhost'
 
 - name: Set swappiness to 10 (prefer RAM, but use swap when needed)
   ansible.posix.sysctl:
     name: vm.swappiness
-    value: '10'
+    value: "10"
     state: present
   when: inventory_hostname != 'localhost'
 
 - name: Set vfs_cache_pressure to 50
   ansible.posix.sysctl:
     name: vm.vfs_cache_pressure
-    value: '50'
+    value: "50"
     state: present
   when: inventory_hostname != 'localhost'
 
@@ -111,13 +111,54 @@
 - name: Allow HTTP
   community.general.ufw:
     rule: allow
-    port: '80'
+    port: "80"
     proto: tcp
   when: inventory_hostname != 'localhost'
 
 - name: Allow HTTPS
   community.general.ufw:
     rule: allow
-    port: '443'
+    port: "443"
     proto: tcp
   when: inventory_hostname != 'localhost'
+
+- name: Allow Traefik Dashboard
+  community.general.ufw:
+    rule: allow
+    port: "8080"
+    proto: tcp
+  when: inventory_hostname != 'localhost'
+
+# NOTE: Admin UI ports (4646, 8500, 8200) are NOT opened via UFW.
+# Access these via Tailscale only for security.
+
+# --- OCI Firewall Bypass ---
+# Oracle Cloud ARM instances have pre-configured iptables rules that REJECT traffic
+# at the end of the INPUT chain, AFTER UFW chains return.
+# We must explicitly ACCEPT these ports in the main INPUT chain to bypass the REJECT.
+
+- name: OCI Bypass - Explicitly accept HTTP/80
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: 80
+    ctstate: NEW
+    jump: ACCEPT
+    action: insert
+    rule_num: 12
+  ignore_errors: true
+  when: inventory_hostname != 'localhost'
+
+- name: OCI Bypass - Explicitly accept HTTP/8080
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: 8080
+    ctstate: NEW
+    jump: ACCEPT
+    action: insert
+    rule_num: 13
+  ignore_errors: true
+  when: inventory_hostname != 'localhost'
+# NOTE: Admin UI ports (4646, 8500, 8200) are intentionally NOT bypassed.
+# Access these via Tailscale only for security.

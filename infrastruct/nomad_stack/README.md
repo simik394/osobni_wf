@@ -52,36 +52,40 @@ graph TB
 
 ## Services & Access
 
-After deployment, services are available via two methods:
+After deployment, services are available via:
 
-| Service | Consul DNS (Local/VPN) | IP-based (nip.io / direct) | Default Credentials |
-|---------|------------------------|-------------------|---------------------|
-| **Windmill** | `http://windmill.service.consul` | `http://windmill.<SERVER_IP>.nip.io` | `admin@windmill.dev` / `changeme` |
-| **YouTrack** | `http://youtrack.service.consul` | `http://youtrack.<SERVER_IP>.nip.io` | Setup wizard on first run |
-| **n8n** | `http://n8n.service.consul` | `http://n8n.<SERVER_IP>.nip.io` | Create owner on first run |
-| **Obsidian** | `http://obsidian.service.consul` | `http://obsidian.<SERVER_IP>.nip.io` | Direct vault access |
-| **Traefik** | `http://traefik.service.consul:8080` | `http://<SERVER_IP>:8080` | Dashboard (insecure) |
-| **Consul UI** | `http://consul.service.consul:8500` | `http://<SERVER_IP>:8500` | Service discovery dash |
-| **Nomad UI** | `http://nomad.service.consul:4646` | `http://<SERVER_IP>:4646` | Workload orchestrator |
-| **Vault UI** | `http://vault.service.consul:8200` | `http://<SERVER_IP>:8200` | Secrets management |
+### Web Services (Public via Traefik)
 
-> [!TIP]
-> Consul DNS requires [[#consul-dns-setup|DNS forwarding]] to be configured on your machine. The IP-based `nip.io` method works without extra config as long as you use the server's public or Tailscale IP.
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **Windmill** | `http://windmill.130.61.225.114.nip.io` | First user becomes Super Admin |
+| **YouTrack** | `http://youtrack.130.61.225.114.nip.io` | Setup wizard on first run |
+| **n8n** | `http://n8n.130.61.225.114.nip.io` | Create owner on first run |
+| **Obsidian** | `http://obsidian.130.61.225.114.nip.io` | `admin` / `ObsidianSecure2025!` |
+| **Traefik** | `http://130.61.225.114:8080` | Dashboard (no auth) |
+
+### Admin UIs (Tailscale Only - Secured)
+
+> [!IMPORTANT]
+> These ports are **blocked from public internet**. Access only via Tailscale VPN.
+
+| Service | Tailscale URL | Notes |
+|---------|---------------|-------|
+| **Nomad UI** | `http://100.73.45.27:4646` | Workload orchestrator |
+| **Consul UI** | `http://100.73.45.27:8500` | Service discovery |
+| **Vault UI** | `http://100.73.45.27:8200` | Secrets management |
 
 ## Ports Reference
 
-| Port | Service | Protocol | Notes |
-|------|---------|----------|-------|
-| 22 | SSH | TCP | Remote access |
-| 80 | Traefik | TCP | HTTP ingress |
-| 443 | Traefik | TCP | HTTPS ingress |
-| 4646 | Nomad | TCP | API/UI |
-| 4647 | Nomad | TCP | RPC |
-| 4648 | Nomad | TCP/UDP | Serf (gossip) |
-| 8200 | Vault | TCP | API/UI |
-| 8300-8302 | Consul | TCP/UDP | Server RPC, Serf |
-| 8500 | Consul | TCP | API/UI |
-| 8080 | Traefik | TCP | Dashboard |
+| Port | Service | Public | Notes |
+|------|---------|--------|-------|
+| 22 | SSH | ✓ | Remote access |
+| 80 | Traefik | ✓ | HTTP ingress |
+| 443 | Traefik | ✓ | HTTPS ingress |
+| 8080 | Traefik | ✓ | Dashboard |
+| 4646 | Nomad | ❌ | Tailscale only |
+| 8500 | Consul | ❌ | Tailscale only |
+| 8200 | Vault | ❌ | Tailscale only |
 
 ## Deployment
 
