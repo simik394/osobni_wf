@@ -4,3 +4,6 @@
   become: false
   roles:
     - role: julia
+    - role: swiprolog
+      # vars:
+      #   swiprolog_enabled: false  # Uncomment to skip SWI-Prolog installation

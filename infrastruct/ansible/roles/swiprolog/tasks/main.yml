@@ -1,0 +1,44 @@
+---
+# Install SWI-Prolog and janus-swi for Python-Prolog integration
+# This is optional - controlled by swiprolog_enabled variable
+
+- name: Skip SWI-Prolog installation if disabled
+  meta: end_play
+  when: not swiprolog_enabled
+
+- name: Add SWI-Prolog PPA repository
+  apt_repository:
+    repo: ppa:swi-prolog/stable
+    state: present
+  become: true
+
+- name: Install SWI-Prolog
+  apt:
+    name: swi-prolog
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Install Python development headers (required for janus-swi)
+  apt:
+    name:
+      - python3-dev
+      - python3-pip
+    state: present
+  become: true
+
+- name: Install janus-swi Python package
+  pip:
+    name: janus-swi>={{ swiprolog_version | default('1.3.0') }}
+    executable: "{{ swiprolog_python | default('pip3') }}"
+    extra_args: --user
+  when: swiprolog_install_janus | default(true)
+
+- name: Verify SWI-Prolog installation
+  command: swipl --version
+  register: swipl_version
+  changed_when: false
+
+- name: Display SWI-Prolog version
+  debug:
+    msg: "SWI-Prolog installed: {{ swipl_version.stdout }}"

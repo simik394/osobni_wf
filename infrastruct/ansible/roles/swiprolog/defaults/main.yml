@@ -1,0 +1,13 @@
+---
+# Defaults for swiprolog role
+# Set to false to skip installation
+swiprolog_enabled: true
+
+# SWI-Prolog version
+swiprolog_version: "9.2.9"
+
+# Install janus-swi Python package
+swiprolog_install_janus: true
+
+# Python executable to use for pip
+swiprolog_python: "python3"
