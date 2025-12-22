@@ -280,14 +280,11 @@ function main()
     end
     
     num_threads = Threads.nthreads()
-    println(stderr, "Scanning $(length(files)) files with $num_threads threads")
+    println(stderr, "Scanning $(length(files)) files with $num_threads threads (using @spawn)")
     
-    # Scan files in parallel using threads
-    results = Vector{Union{NoteMetadata, Nothing}}(undef, length(files))
-    
-    Threads.@threads for i in eachindex(files)
-        results[i] = scan_file(files[i])
-    end
+    # Scan files in parallel using @spawn tasks (best performance)
+    tasks = [Threads.@spawn scan_file(f) for f in files]
+    results = [fetch(t) for t in tasks]
     
     # Filter and convert results
     valid_results = filter(!isnothing, results)
