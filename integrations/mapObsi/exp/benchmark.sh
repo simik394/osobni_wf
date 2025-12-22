@@ -12,6 +12,9 @@ VAULT_PATH="${1:-/home/sim/Obsi/Prods/01-pwf}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULTS_FILE="$SCRIPT_DIR/results_${TIMESTAMP}.md"
 
+# Ensure local julia is found
+export PATH="$HOME/.local/bin:$PATH"
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -80,6 +83,30 @@ for workers in 1 2 4 $(nproc); do
     echo "${ELAPSED}s (${RATE} files/sec)"
     
     echo "| Python (multiprocessing) | $workers | $ELAPSED | $RATE | tree-sitter |" >> "$RESULTS_FILE"
+done
+
+echo ""
+
+# Benchmark Python (Regex)
+echo -e "${GREEN}Testing Python (Regex)...${NC}"
+
+for workers in 1 2 4 $(nproc); do
+    echo -n "  Workers=$workers: "
+    
+    START_TIME=$(date +%s.%N)
+    cat "$FILE_LIST" | python3 "$PROJECT_DIR/scripts/scan.py" \
+        --output "$PYTHON_OUTPUT" \
+        --workers "$workers" \
+        --regex \
+        --full 2>/dev/null
+    END_TIME=$(date +%s.%N)
+    
+    ELAPSED=$(echo "$END_TIME - $START_TIME" | bc)
+    RATE=$(echo "scale=1; $FILE_COUNT / $ELAPSED" | bc)
+    
+    echo "${ELAPSED}s (${RATE} files/sec)"
+    
+    echo "| Python (multiprocessing) | $workers | $ELAPSED | $RATE | regex |" >> "$RESULTS_FILE"
 done
 
 echo ""

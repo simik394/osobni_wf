@@ -31,12 +31,13 @@ except ImportError:
 
 # Global parser instance (created per-process)
 _PARSER = None
+_FORCE_REGEX = False
 
 def get_md_parser():
     """Get or create parser for current process."""
     global _PARSER
     if _PARSER is None:
-        if TREE_SITTER_AVAILABLE:
+        if TREE_SITTER_AVAILABLE and not _FORCE_REGEX:
             _PARSER = TreeSitterParser()
         else:
             _PARSER = RegexParser()
@@ -328,6 +329,10 @@ def scan_file(filepath: str) -> Optional[NoteMetadata]:
     )
 
 
+def init_worker(force_regex):
+    global _FORCE_REGEX
+    _FORCE_REGEX = force_regex
+
 def main():
     parser = argparse.ArgumentParser(description='Scan markdown files')
     parser.add_argument('--output', '-o', required=True, help='Output JSON file')
@@ -336,11 +341,18 @@ def main():
                         help='Number of worker processes (default: CPU count)')
     parser.add_argument('--orphans', help='List orphans from existing JSON')
     parser.add_argument('--broken', help='List broken links from existing JSON')
+    parser.add_argument('--regex', action='store_true', help='Force regex parser even if tree-sitter is available')
     args = parser.parse_args()
     
+    # Global flag for worker to know which parser to use
+    global _FORCE_REGEX
+    _FORCE_REGEX = args.regex
+    
     # Report parser type
-    if TREE_SITTER_AVAILABLE:
+    if TREE_SITTER_AVAILABLE and not args.regex:
         print("Using tree-sitter parser", file=sys.stderr)
+    elif args.regex:
+        print("Using regex parser (forced)", file=sys.stderr)
     else:
         print("Using regex parser (fallback)", file=sys.stderr)
     
@@ -356,7 +368,7 @@ def main():
     print(f"Scanning {len(files)} files with {num_workers} workers", file=sys.stderr)
     
     # Scan files in parallel
-    with Pool(num_workers) as pool:
+    with Pool(num_workers, initializer=init_worker, initargs=(args.regex,)) as pool:
         raw_results = pool.map(scan_file, files)
     
     # Filter None results and convert to dicts
