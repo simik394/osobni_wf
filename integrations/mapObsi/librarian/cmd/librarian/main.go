@@ -41,7 +41,7 @@ func main() {
 	case "watch":
 		runWatch(cfg)
 	case "scan":
-		runScan(cfg)
+		runScan(cfg, os.Args[2:])
 	case "query":
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: librarian query <orphans|backlinks|tags|functions|classes> [arg]")
@@ -60,14 +60,21 @@ func printUsage() {
 	fmt.Println(`Vault Librarian - Knowledge Graph for Obsidian
 
 Usage:
-  librarian watch          Start watching vault for changes
-  librarian scan           Perform full vault scan
-  librarian query orphans  List notes with no incoming links
-  librarian query backlinks <note>  List notes linking to <note>
-  librarian query tags <tag>        List notes with <tag>
-  librarian query functions <name>  Find function definitions
-  librarian query classes <name>    Find class definitions
-  librarian stats          Show graph statistics
+  librarian watch              Start watching vault for changes
+  librarian scan [path]        Perform vault scan (optional: specific path)
+  librarian scan --profile X   Scan using named profile from config
+  librarian query orphans      List notes with no incoming links
+  librarian query backlinks <note>   List notes linking to <note>
+  librarian query tags <tag>         List notes with <tag>
+  librarian query functions <name>   Find function definitions
+  librarian query classes <name>     Find class definitions
+  librarian stats              Show graph statistics
+
+Examples:
+  librarian scan                        # Full vault scan
+  librarian scan agents/                # Scan only agents/ folder
+  librarian scan Prods/01-pwf/          # Scan specific project
+  librarian scan --profile notes        # Use 'notes' profile from config
 
 Configuration:
   Place config.yaml at ~/.config/librarian/config.yaml
@@ -115,7 +122,7 @@ func runWatch(cfg *config.Config) {
 	w.Stop()
 }
 
-func runScan(cfg *config.Config) {
+func runScan(cfg *config.Config, scanArgs []string) {
 	dbClient, err := db.NewClient(cfg.FalkorDB.Addr, cfg.FalkorDB.Graph)
 	if err != nil {
 		log.Fatalf("Failed to connect to FalkorDB: %v", err)
@@ -126,12 +133,38 @@ func runScan(cfg *config.Config) {
 		log.Fatalf("Failed to init schema: %v", err)
 	}
 
-	w, err := watcher.NewWatcher(cfg, dbClient)
+	// Determine scan path
+	scanPath := cfg.VaultPath
+	if len(scanArgs) > 0 && scanArgs[0] != "" {
+		arg := scanArgs[0]
+		if arg == "--profile" && len(scanArgs) > 1 {
+			// TODO: Load profile from config
+			log.Printf("Profile scanning not yet implemented, using full scan")
+		} else {
+			// Treat as path - resolve relative to vault or absolute
+			if filepath.IsAbs(arg) {
+				scanPath = arg
+			} else {
+				scanPath = filepath.Join(cfg.VaultPath, arg)
+			}
+		}
+	}
+
+	// Verify path exists
+	if _, err := os.Stat(scanPath); os.IsNotExist(err) {
+		log.Fatalf("Path does not exist: %s", scanPath)
+	}
+
+	// Create watcher with custom path
+	cfgCopy := *cfg
+	cfgCopy.VaultPath = scanPath
+
+	w, err := watcher.NewWatcher(&cfgCopy, dbClient)
 	if err != nil {
 		log.Fatalf("Failed to create watcher: %v", err)
 	}
 
-	log.Println("Scanning vault...")
+	log.Printf("Scanning: %s", scanPath)
 	start := time.Now()
 	notes, code, assets, err := w.FullScan()
 	if err != nil {
