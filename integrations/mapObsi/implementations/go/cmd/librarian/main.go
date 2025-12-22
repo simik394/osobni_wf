@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	"bytes"
+	"encoding/json"
+	"net/http"
 
 	"github.com/simik394/vault-librarian/internal/config"
 	"github.com/simik394/vault-librarian/internal/db"
@@ -50,6 +53,12 @@ func main() {
 		runQuery(ctx, cfg, os.Args[2:])
 	case "stats":
 		runStats(ctx, cfg)
+	case "analyze":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: librarian analyze <project_name>")
+			os.Exit(1)
+		}
+		runAnalyze(cfg, os.Args[2])
 	default:
 		printUsage()
 		os.Exit(1)
@@ -62,7 +71,7 @@ func printUsage() {
 Usage:
   librarian watch              Start watching vault for changes
   librarian scan [path]        Perform vault scan (optional: specific path)
-  librarian scan --profile X   Scan using named profile from config
+  librarian scan --dump        Dump Cypher queries to dump.cypher
   librarian query orphans      List notes with no incoming links
   librarian query backlinks <note>   List notes linking to <note>
   librarian query tags <tag>         List notes with <tag>
@@ -73,8 +82,8 @@ Usage:
 Examples:
   librarian scan                        # Full vault scan
   librarian scan agents/                # Scan only agents/ folder
-  librarian scan Prods/01-pwf/          # Scan specific project
   librarian scan --profile notes        # Use 'notes' profile from config
+  librarian analyze 01-pwf              # Trigger AI analysis for project
 
 Configuration:
   Place config.yaml at ~/.config/librarian/config.yaml
@@ -87,7 +96,7 @@ Environment:
 }
 
 func runWatch(cfg *config.Config) {
-	dbClient, err := db.NewClient(cfg.FalkorDB.Addr, cfg.FalkorDB.Graph)
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
 	if err != nil {
 		log.Fatalf("Failed to connect to FalkorDB: %v", err)
 	}
@@ -101,201 +110,179 @@ func runWatch(cfg *config.Config) {
 	if err != nil {
 		log.Fatalf("Failed to create watcher: %v", err)
 	}
-
-	log.Println("Performing initial scan...")
-	start := time.Now()
-	notes, code, assets, err := w.FullScan()
-	if err != nil {
-		log.Fatalf("Initial scan failed: %v", err)
-	}
-	log.Printf("Initial scan complete: notes=%d, code=%d, assets=%d in %v", notes, code, assets, time.Since(start))
+	defer w.Stop()
 
 	if err := w.Start(); err != nil {
 		log.Fatalf("Failed to start watcher: %v", err)
 	}
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-
-	log.Println("Shutting down...")
-	w.Stop()
+	
+	// Create channel to listen for signals
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+	
+	log.Println("Stopping watcher...")
 }
 
-func runScan(cfg *config.Config, scanArgs []string) {
-	// Parse args
-	var pathArgs []string
+func runScan(cfg *config.Config, args []string) {
+	scanPath := ""
 	dumpMode := false
-	for _, arg := range scanArgs {
+	
+	for _, arg := range args {
 		if arg == "--dump" {
 			dumpMode = true
-		} else {
-			pathArgs = append(pathArgs, arg)
+		} else if arg != "" && arg[0] != '-' {
+			scanPath = arg
 		}
 	}
 
-	dbClient, err := db.NewClient(cfg.FalkorDB.Addr, cfg.FalkorDB.Graph)
+	if scanPath != "" {
+		absPath, err := filepath.Abs(scanPath)
+		if err != nil {
+			log.Fatalf("Invalid path: %v", err)
+		}
+		log.Printf("Scanning path: %s", absPath)
+	} else {
+		log.Println("Scanning all configured sources...")
+	}
+
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
 	if err != nil {
-		// In dump mode, we might want to proceed even if DB is down,
-		// but NewClient enforces Ping. We'll accept this for now.
 		log.Fatalf("Failed to connect to FalkorDB: %v", err)
 	}
 
 	if dumpMode {
+		log.Println("Dump mode enabled. Writing to dump.cypher...")
 		f, err := os.Create("dump.cypher")
 		if err != nil {
 			log.Fatalf("Failed to create dump file: %v", err)
 		}
 		defer f.Close()
 		dbClient.SetDumpWriter(f)
-		log.Println("Dump mode enabled: writing Cypher queries to dump.cypher")
 	}
 
 	ctx := context.Background()
-	if err := dbClient.InitSchema(ctx); err != nil {
-		log.Fatalf("Failed to init schema: %v", err)
-	}
-
-	// Determine scan path
-	scanPath := cfg.VaultPath
-	if len(pathArgs) > 0 && pathArgs[0] != "" {
-		arg := pathArgs[0]
-		if arg == "--profile" && len(pathArgs) > 1 {
-			// TODO: Load profile from config
-			log.Printf("Profile scanning not yet implemented, using full scan")
-		} else {
-			// Treat as path - resolve relative to vault or absolute
-			if filepath.IsAbs(arg) {
-				scanPath = arg
-			} else {
-				scanPath = filepath.Join(cfg.VaultPath, arg)
-			}
+	if !dumpMode {
+		if err := dbClient.InitSchema(ctx); err != nil {
+			log.Fatalf("Failed to init schema: %v", err)
 		}
 	}
 
-	// Verify path exists
-	if _, err := os.Stat(scanPath); os.IsNotExist(err) {
-		log.Fatalf("Path does not exist: %s", scanPath)
-	}
-
-	// Create watcher with custom path
-	cfgCopy := *cfg
-	cfgCopy.VaultPath = scanPath
-
-	w, err := watcher.NewWatcher(&cfgCopy, dbClient)
+	w, err := watcher.NewWatcher(cfg, dbClient)
 	if err != nil {
 		log.Fatalf("Failed to create watcher: %v", err)
 	}
 
-	log.Printf("Scanning: %s", scanPath)
 	start := time.Now()
-	notes, code, assets, err := w.FullScan()
+	notes, code, assets, err := w.FullScan(scanPath) 
 	if err != nil {
 		log.Fatalf("Scan failed: %v", err)
 	}
 
-	if dumpMode {
-		log.Printf("Dump complete: notes=%d, code=%d, assets=%d in %v (Use: cat dump.cypher | redis-cli --pipe)", notes, code, assets, time.Since(start))
-	} else {
-		log.Printf("Scan complete: notes=%d, code=%d, assets=%d in %v", notes, code, assets, time.Since(start))
-	}
+	duration := time.Since(start)
+	log.Printf("Scan completed in %v", duration)
+	log.Printf("Processed: %d notes, %d code files, %d assets", notes, code, assets)
 }
 
 func runQuery(ctx context.Context, cfg *config.Config, args []string) {
-	dbClient, err := db.NewClient(cfg.FalkorDB.Addr, cfg.FalkorDB.Graph)
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
 	if err != nil {
 		log.Fatalf("Failed to connect to FalkorDB: %v", err)
 	}
 
-	switch args[0] {
+	cmd := args[0]
+	
+	switch cmd {
 	case "orphans":
-		orphans, err := dbClient.GetOrphans(ctx)
+		results, err := dbClient.GetOrphans(ctx)
 		if err != nil {
 			log.Fatalf("Query failed: %v", err)
 		}
-		fmt.Printf("Found %d orphan notes:\n", len(orphans))
-		for _, p := range orphans {
-			fmt.Println("  " + p)
-		}
-
+		printResults(results)
 	case "backlinks":
 		if len(args) < 2 {
-			fmt.Println("Usage: librarian query backlinks <note-name>")
-			os.Exit(1)
+			log.Fatal("Missing note name")
 		}
-		backlinks, err := dbClient.GetBacklinks(ctx, args[1])
+		results, err := dbClient.GetBacklinks(ctx, args[1])
 		if err != nil {
 			log.Fatalf("Query failed: %v", err)
 		}
-		fmt.Printf("Found %d backlinks to '%s':\n", len(backlinks), args[1])
-		for _, p := range backlinks {
-			fmt.Println("  " + p)
-		}
-
+		printResults(results)
 	case "tags":
 		if len(args) < 2 {
-			fmt.Println("Usage: librarian query tags <tag>")
-			os.Exit(1)
+			log.Fatal("Missing tag name")
 		}
-		notes, err := dbClient.GetNotesByTag(ctx, args[1])
+		results, err := dbClient.GetNotesByTag(ctx, args[1])
 		if err != nil {
 			log.Fatalf("Query failed: %v", err)
 		}
-		fmt.Printf("Found %d notes with tag #%s:\n", len(notes), args[1])
-		for _, p := range notes {
-			fmt.Println("  " + p)
-		}
-
-	case "functions":
-		if len(args) < 2 {
-			fmt.Println("Usage: librarian query functions <name>")
-			os.Exit(1)
-		}
-		funcs, err := dbClient.GetFunctions(ctx, args[1])
-		if err != nil {
-			log.Fatalf("Query failed: %v", err)
-		}
-		fmt.Printf("Found %d functions named '%s':\n", len(funcs), args[1])
-		for _, f := range funcs {
-			fmt.Println("  " + f)
-		}
-
-	case "classes":
-		if len(args) < 2 {
-			fmt.Println("Usage: librarian query classes <name>")
-			os.Exit(1)
-		}
-		classes, err := dbClient.GetClasses(ctx, args[1])
-		if err != nil {
-			log.Fatalf("Query failed: %v", err)
-		}
-		fmt.Printf("Found %d classes named '%s':\n", len(classes), args[1])
-		for _, c := range classes {
-			fmt.Println("  " + c)
-		}
-
+		printResults(results)
 	default:
-		fmt.Printf("Unknown query type: %s\n", args[0])
-		os.Exit(1)
+		log.Fatalf("Unknown query command: %s", cmd)
 	}
 }
 
 func runStats(ctx context.Context, cfg *config.Config) {
-	dbClient, err := db.NewClient(cfg.FalkorDB.Addr, cfg.FalkorDB.Graph)
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
 	if err != nil {
 		log.Fatalf("Failed to connect to FalkorDB: %v", err)
 	}
 
-	notes, links, tags, code, funcs, classes, err := dbClient.GetFullStats(ctx)
+	notes, links, tags, err := dbClient.GetStats(ctx)
 	if err != nil {
-		log.Fatalf("Failed to get stats: %v", err)
+		log.Fatalf("Stats failed: %v", err)
 	}
 
-	fmt.Printf("Vault Statistics:\n")
-	fmt.Printf("  Notes:     %d\n", notes)
-	fmt.Printf("  Links:     %d\n", links)
-	fmt.Printf("  Tags:      %d\n", tags)
-	fmt.Printf("  Code:      %d\n", code)
-	fmt.Printf("  Functions: %d\n", funcs)
-	fmt.Printf("  Classes:   %d\n", classes)
+	fmt.Printf("Graph Statistics:\n")
+	fmt.Printf("  Notes: %d\n", notes)
+	fmt.Printf("  Links: %d\n", links)
+	fmt.Printf("  Tags:  %d\n", tags)
+}
+
+func printResults(results []string) {
+	for _, r := range results {
+		fmt.Println(r)
+	}
+}
+
+func runAnalyze(cfg *config.Config, projectName string) {
+	if cfg.Windmill.WebhookURL == "" {
+		log.Fatal("Windmill Webhook URL not configured. Set windmill.webhook_url in config or WINDMILL_WEBHOOK_URL env var.")
+	}
+
+	log.Printf("Triggering analysis for project: %s", projectName)
+
+	payload := map[string]string{
+		"project": projectName,
+		// Assuming standard path for now, or could look it up
+		"path": filepath.Join("Prods", projectName),
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		log.Fatalf("Failed to marshal payload: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", cfg.Windmill.WebhookURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatalf("Failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if cfg.Windmill.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.Windmill.Token)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("Failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		log.Printf("Analysis triggered successfully! Status: %s", resp.Status)
+	} else {
+		log.Fatalf("Failed to trigger analysis. Status: %s", resp.Status)
+	}
 }

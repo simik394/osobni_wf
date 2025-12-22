@@ -23,3 +23,11 @@ We attempted to implement a "Library" version in Julia using `Redis.jl` to match
 ## 4. Concurrency Strategies
 *   **Go (Goroutines + Channels)**: Easier to model "Worker Pools" for IO-bound work. Correctness comes naturally.
 *   **Julia (Task + Channels)**: Powerful, but heavier for simple IO multiplexing. Best suited for CPU-heavy tasks.
+
+## 5. Struct Mismatch Pitfalls
+Go's struct tags (`yaml:"..."`) must strictly match input keys. A mismatch (e.g., `yaml:"files"` vs input `processing`) causes silent failures where fields remain zero-valued.
+**Lesson**: Always validate configuration structure against schema or use strict decoding where possible.
+
+## 6. Separating Logic Layers
+Refactoring the configuration to explicit `Sources` and `Processing` rules allowed cleanly adding `ProjectRoots` logic without breaking the core watcher loop.
+**Lesson**: Grouping config by domain (Processing vs IO) is cleaner than flat lists.

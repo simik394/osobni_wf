@@ -90,7 +90,9 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		"CREATE INDEX ON :Code(path)",
 		"CREATE INDEX ON :Code(language)",
 		"CREATE INDEX ON :Function(name)",
+		"CREATE INDEX ON :Function(name)",
 		"CREATE INDEX ON :Class(name)",
+		"CREATE INDEX ON :Project(name)",
 	}
 
 	for _, q := range queries {
@@ -102,7 +104,7 @@ func (c *Client) InitSchema(ctx context.Context) error {
 }
 
 // UpsertCode creates or updates a code file node and its relationships
-func (c *Client) UpsertCode(ctx context.Context, meta *parser.CodeMetadata) error {
+func (c *Client) UpsertCode(ctx context.Context, meta *parser.CodeMetadata, projectName string) error {
 	path := escapeCypher(meta.Path)
 	name := escapeCypher(meta.Name)
 	lang := escapeCypher(meta.Language)
@@ -118,6 +120,16 @@ func (c *Client) UpsertCode(ctx context.Context, meta *parser.CodeMetadata) erro
 
 	if _, err := c.query(ctx, query); err != nil {
 		return fmt.Errorf("failed to upsert code: %w", err)
+	}
+
+	// Link to Project
+	if projectName != "" {
+		projQuery := fmt.Sprintf(`
+			MATCH (c:Code {path: '%s'})
+			MERGE (p:Project {name: '%s'})
+			MERGE (p)-[:CONTAINS]->(c)
+		`, path, escapeCypher(projectName))
+		c.query(ctx, projQuery)
 	}
 
 	// Clear existing relationships
@@ -176,7 +188,7 @@ func (c *Client) DeleteCode(ctx context.Context, path string) error {
 }
 
 // UpsertNote creates or updates a note node and its relationships
-func (c *Client) UpsertNote(ctx context.Context, meta *parser.NoteMetadata) error {
+func (c *Client) UpsertNote(ctx context.Context, meta *parser.NoteMetadata, projectName string) error {
 	// Escape strings for Cypher
 	path := escapeCypher(meta.Path)
 	name := escapeCypher(meta.Name)
@@ -191,6 +203,16 @@ func (c *Client) UpsertNote(ctx context.Context, meta *parser.NoteMetadata) erro
 
 	if _, err := c.query(ctx, query); err != nil {
 		return fmt.Errorf("failed to upsert note: %w", err)
+	}
+
+	// Link to Project
+	if projectName != "" {
+		projQuery := fmt.Sprintf(`
+			MATCH (n:Note {path: '%s'})
+			MERGE (p:Project {name: '%s'})
+			MERGE (p)-[:CONTAINS]->(n)
+		`, path, escapeCypher(projectName))
+		c.query(ctx, projQuery)
 	}
 
 	// Clear existing relationships for this note

@@ -50,13 +50,25 @@ func NewWatcher(cfg *config.Config, dbClient *db.Client) (*Watcher, error) {
 	return w, nil
 }
 
-// Start begins watching the vault directory
+// Start begins watching the configured sources
 func (w *Watcher) Start() error {
-	if err := w.addWatchRecursive(w.cfg.VaultPath); err != nil {
-		return err
+	for _, src := range w.cfg.Sources {
+		if src.Enabled {
+			path := src.Path
+			// Expand home dir if needed (handled in config loader, but double check)
+			if strings.HasPrefix(path, "~") {
+				home, _ := os.UserHomeDir()
+				path = filepath.Join(home, path[1:])
+			}
+			
+			if err := w.addWatchRecursive(path); err != nil {
+				// Don't fail completely if one source is missing?
+				log.Printf("Warning: failed to watch source %s: %v", path, err)
+				continue
+			}
+			log.Printf("Watching %s for changes...", path)
+		}
 	}
-
-	log.Printf("Watching %s for changes...", w.cfg.VaultPath)
 
 	go w.eventLoop()
 	return nil
@@ -81,7 +93,7 @@ func (w *Watcher) addWatchRecursive(root string) error {
 				return filepath.SkipDir
 			}
 			// Check global excludes
-			for _, pattern := range w.cfg.GlobalExclude {
+			for _, pattern := range w.cfg.GlobalIgnore.Patterns {
 				if config.MatchGlob(pattern, path) {
 					return filepath.SkipDir
 				}
@@ -149,7 +161,7 @@ func (w *Watcher) debounce(path string, fn func()) {
 		timer.Stop()
 	}
 
-	w.pending[path] = time.AfterFunc(time.Duration(w.cfg.DebounceMs)*time.Millisecond, func() {
+	w.pending[path] = time.AfterFunc(time.Duration(w.cfg.Watcher.DebounceMs)*time.Millisecond, func() {
 		w.mu.Lock()
 		delete(w.pending, path)
 		w.mu.Unlock()
@@ -176,6 +188,8 @@ func (w *Watcher) processFile(path string, fileType string, op fsnotify.Op) {
 		return
 	}
 
+	projectName := w.getProjectName(path)
+
 	switch fileType {
 	case "markdown":
 		meta, err := parser.ParseMarkdown(path)
@@ -183,8 +197,8 @@ func (w *Watcher) processFile(path string, fileType string, op fsnotify.Op) {
 			log.Printf("Error parsing markdown %s: %v", path, err)
 			return
 		}
-		log.Printf("Updated: %s (tags=%d, links=%d)", path, len(meta.Tags), len(meta.Wikilinks))
-		if err := w.db.UpsertNote(ctx, meta); err != nil {
+		log.Printf("Updated: %s [Project: %s] (tags=%d, links=%d)", path, projectName, len(meta.Tags), len(meta.Wikilinks))
+		if err := w.db.UpsertNote(ctx, meta, projectName); err != nil {
 			log.Printf("Error syncing note %s: %v", path, err)
 		}
 
@@ -194,20 +208,61 @@ func (w *Watcher) processFile(path string, fileType string, op fsnotify.Op) {
 			log.Printf("Error parsing code %s: %v", path, err)
 			return
 		}
-		log.Printf("Updated: %s [%s] (funcs=%d, classes=%d)", path, meta.Language, len(meta.Functions), len(meta.Classes))
-		if err := w.db.UpsertCode(ctx, meta); err != nil {
+		log.Printf("Updated: %s [Project: %s] [%s]", path, projectName, meta.Language)
+		if err := w.db.UpsertCode(ctx, meta, projectName); err != nil {
 			log.Printf("Error syncing code %s: %v", path, err)
 		}
 
 	case "asset":
-		// Just track existence for now
 		log.Printf("Asset: %s", path)
 	}
 }
 
-// FullScan performs an initial full scan of the vault parallely
-func (w *Watcher) FullScan() (notes, code, assets int, err error) {
-	// Worker pool setup
+// getProjectName determines the project name from the file path
+func (w *Watcher) getProjectName(path string) string {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+
+	for _, src := range w.cfg.Sources {
+		if !src.Enabled {
+			continue
+		}
+		
+		// Check if file is in this source
+		srcPath := src.Path
+		if strings.HasPrefix(srcPath, "~") {
+			home, _ := os.UserHomeDir()
+			srcPath = filepath.Join(home, srcPath[1:])
+		}
+		srcPath, _ = filepath.Abs(srcPath)
+
+		if strings.HasPrefix(absPath, srcPath) {
+			// Calculate relative path
+			rel, err := filepath.Rel(srcPath, absPath)
+			if err != nil {
+				continue
+			}
+			
+			// Detect project based on roots
+			// Loop config ProjectRoots (e.g. "Prods")
+			// If rel starts with "Prods/ProjectName/...", extract ProjectName
+			parts := strings.Split(rel, string(os.PathSeparator))
+			
+			for _, root := range w.cfg.ProjectRoots {
+				if len(parts) >= 2 && parts[0] == root {
+					// parts[1] is the project name
+					return parts[1]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// FullScan performs scan of all sources or a specific path override
+func (w *Watcher) FullScan(overridePath string) (notes, code, assets int, err error) {
 	numWorkers := runtime.NumCPU()
 	type job struct {
 		path     string
@@ -228,10 +283,11 @@ func (w *Watcher) FullScan() (notes, code, assets int, err error) {
 		go func() {
 			defer wg.Done()
 			ctx := context.Background()
-			
 			localNotes, localCode, localAssets := 0, 0, 0
 
 			for j := range jobs {
+				projectName := w.getProjectName(j.path)
+
 				switch j.fileType {
 				case "markdown":
 					meta, parseErr := parser.ParseMarkdown(j.path)
@@ -239,7 +295,7 @@ func (w *Watcher) FullScan() (notes, code, assets int, err error) {
 						log.Printf("Warning: could not parse %s: %v", j.path, parseErr)
 						continue
 					}
-					if syncErr := w.db.UpsertNote(ctx, meta); syncErr != nil {
+					if syncErr := w.db.UpsertNote(ctx, meta, projectName); syncErr != nil {
 						log.Printf("Warning: could not sync %s: %v", j.path, syncErr)
 						continue
 					}
@@ -251,7 +307,7 @@ func (w *Watcher) FullScan() (notes, code, assets int, err error) {
 						log.Printf("Warning: could not parse %s: %v", j.path, parseErr)
 						continue
 					}
-					if syncErr := w.db.UpsertCode(ctx, meta); syncErr != nil {
+					if syncErr := w.db.UpsertCode(ctx, meta, projectName); syncErr != nil {
 						log.Printf("Warning: could not sync %s: %v", j.path, syncErr)
 						continue
 					}
@@ -261,8 +317,6 @@ func (w *Watcher) FullScan() (notes, code, assets int, err error) {
 					localAssets++
 				}
 			}
-			
-			// Send aggregated results
 			results <- result{notes: localNotes, code: localCode, assets: localAssets}
 		}()
 	}
@@ -274,40 +328,51 @@ func (w *Watcher) FullScan() (notes, code, assets int, err error) {
 			notes += res.notes
 			code += res.code
 			assets += res.assets
-			// Ignoring individual errors for now in aggregation
 		}
 		done <- true
 	}()
 
-	// Walk and push jobs
-	err = filepath.Walk(w.cfg.VaultPath, func(path string, info os.FileInfo, walkErr error) error {
+	// Job Generators
+	walkFn := func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-
-		// Skip hidden directories
 		if info.IsDir() {
 			if strings.HasPrefix(info.Name(), ".") {
 				return filepath.SkipDir
 			}
-			// Check global excludes
-			for _, pattern := range w.cfg.GlobalExclude {
+			for _, pattern := range w.cfg.GlobalIgnore.Patterns {
 				if config.MatchGlob(pattern, path) {
 					return filepath.SkipDir
 				}
 			}
 			return nil
 		}
-
-		// Check if file should be processed
 		fileType, should := w.cfg.ShouldProcess(path)
-		if !should {
-			return nil
+		if should {
+			jobs <- job{path: path, fileType: fileType}
 		}
-
-		jobs <- job{path: path, fileType: fileType}
 		return nil
-	})
+	}
+
+	if overridePath != "" {
+		err = filepath.Walk(overridePath, walkFn)
+	} else {
+		for _, src := range w.cfg.Sources {
+			if src.Enabled {
+				path := src.Path
+				if strings.HasPrefix(path, "~") {
+					home, _ := os.UserHomeDir()
+					path = filepath.Join(home, path[1:])
+				}
+				if walkErr := filepath.Walk(path, walkFn); walkErr != nil {
+					log.Printf("Error walking source %s: %v", path, walkErr)
+					// Don't fail entire scan for one source?
+					// err = walkErr 
+				}
+			}
+		}
+	}
 
 	close(jobs)
 	wg.Wait()
