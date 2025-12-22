@@ -13,23 +13,30 @@
 export async function main(
     query: string,
     deep_research: boolean = false,
-    session_id?: string
+    session_id?: string,
+    worker_tag?: string  // Optional: specify worker group (e.g., 'server', 'ntb-local')
 ): Promise<{ job_id: string; status: string }> {
 
     // @ts-ignore - Windmill provides this globally
     const wmill = await import('windmill-client');
 
-    // Run the execute script asynchronously
-    const jobId = await wmill.runScriptAsync({
+    // Build the job options
+    const jobOptions: any = {
         path: 'f/rsrch/execute',
         args: {
             query,
             deep_research,
             session_id
-        },
-        // Tag ensures it runs on the NTB worker that has access to rsrch-chromium
-        tag: 'ntb-local'
-    });
+        }
+    };
+
+    // Only add tag if specified (otherwise uses default worker group)
+    if (worker_tag) {
+        jobOptions.tag = worker_tag;
+    }
+
+    // Run the execute script asynchronously
+    const jobId = await wmill.runScriptAsync(jobOptions);
 
     console.log(`📋 Submitted Rsrch query with job_id: ${jobId}`);
 
@@ -38,3 +45,4 @@ export async function main(
         status: 'queued'
     };
 }
+
