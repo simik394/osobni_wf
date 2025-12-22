@@ -200,7 +200,7 @@ function has_frontmatter(content::String)
 end
 
 # Scan a single file
-function scan_file(filepath::String)::Union{NoteMetadata, Nothing}
+function scan_file(filepath::AbstractString)::Union{NoteMetadata, Nothing}
     filepath = strip(filepath)
     
     if !isfile(filepath)
