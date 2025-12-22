@@ -10,16 +10,12 @@ job "rsrch-browser" {
     count = 1
 
     network {
-      mode = "bridge"
+      mode = "host"
       port "cdp" {
         static = 9223
-        to     = 9223
-      }
-      port "vnc" {
-        static = 5900
-        to     = 5900
       }
     }
+
 
     constraint {
       attribute = "${node.class}"
@@ -30,43 +26,28 @@ job "rsrch-browser" {
       driver = "docker"
 
       config {
-        image = "mcr.microsoft.com/playwright:v1.40.0-focal"
-        ports = ["cdp", "vnc"]
+        # Use browserless/chrome which has proper VNC and CDP support
+        image = "browserless/chrome:latest"
+        
+        # Use host networking for direct port access
+        network_mode = "host"
         
         # Docker bind mount for persistent Chrome profile
         volumes = [
           "/opt/rsrch/chrome-profile:/app/user-data"
         ]
-        
-        # Entrypoint that starts Xvfb, VNC, and Chrome with debugging port
-        entrypoint = ["/bin/bash", "-c"]
-        args = [<<EOF
-set -e
-# Start virtual framebuffer
-Xvfb :99 -screen 0 1920x1080x24 &
-export DISPLAY=:99
-sleep 1
+      }
 
-# Start VNC server (optional, for debugging)
-x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw || true
-
-# Start Chromium with remote debugging
-chromium-browser \
-  --no-sandbox \
-  --disable-setuid-sandbox \
-  --disable-dev-shm-usage \
-  --disable-gpu \
-  --remote-debugging-address=0.0.0.0 \
-  --remote-debugging-port=9223 \
-  --user-data-dir=/app/user-data \
-  --disable-blink-features=AutomationControlled \
-  --window-size=1920,1080 \
-  about:blank
-
-# Keep container running
-wait
-EOF
-        ]
+      env {
+        # Port for browserless to listen on
+        PORT = "9223"
+        # Enable CDP
+        CONNECTION_TIMEOUT = "600000"
+        MAX_CONCURRENT_SESSIONS = "5"
+        ENABLE_DEBUGGER = "true"
+        # User data directory for persistence
+        CHROME_REFRESH_TIME = "0"
+        DEFAULT_USER_DATA_DIR = "/app/user-data"
       }
 
       resources {
@@ -90,16 +71,6 @@ EOF
           interval = "10s"
           timeout  = "5s"
         }
-      }
-
-      service {
-        name = "rsrch-browser-vnc"
-        port = "vnc"
-        
-        tags = [
-          "vnc",
-          "debug"
-        ]
       }
     }
   }
