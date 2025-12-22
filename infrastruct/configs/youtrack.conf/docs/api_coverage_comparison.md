@@ -8,7 +8,7 @@
 |----------|---------------|-------------|----------|
 | **Custom Fields** | ✅ Full CRUD | ✅ Sensing + Create + Attach | ~75% |
 | **Bundles (enum)** | ✅ Full CRUD | ✅ Sensing + Create + Add Values | ~75% |
-| **Projects** | ✅ Full CRUD | ❌ Not implemented | 0% |
+| **Projects** | ✅ Full CRUD | ✅ Sensing + Create | ~50% |
 | **Workflows** | ✅ Management + JS | ❌ Not implemented | 0% |
 | **Issues** | ✅ Full CRUD + Search | ❌ Not implemented | 0% |
 | **Time Tracking** | ✅ Settings + Work Items | ❌ Not implemented | 0% |
