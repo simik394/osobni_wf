@@ -1,0 +1,6 @@
+---
+- name: Setup Local Environment
+  hosts: local
+  become: false
+  roles:
+    - role: julia

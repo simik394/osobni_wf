@@ -1,0 +1,25 @@
+---
+- name: Ensure local bin directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+- name: Ensure separate directory for julia versions
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/julia_versions"
+    state: directory
+    mode: "0755"
+
+- name: Download and extract Julia 1.10.0
+  unarchive:
+    src: https://julialang-s3.julialang.org/bin/linux/x64/1.10/julia-1.10.0-linux-x86_64.tar.gz
+    dest: "{{ ansible_env.HOME }}/.local/share/julia_versions"
+    remote_src: yes
+    creates: "{{ ansible_env.HOME }}/.local/share/julia_versions/julia-1.10.0/bin/julia"
+
+- name: Create symlink in ~/.local/bin
+  file:
+    src: "{{ ansible_env.HOME }}/.local/share/julia_versions/julia-1.10.0/bin/julia"
+    dest: "{{ ansible_env.HOME }}/.local/bin/julia"
+    state: link
