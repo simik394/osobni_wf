@@ -11,38 +11,51 @@
 
 ## Defining Your YouTrack Structure
 
-Edit files in `obsidian-rules/` folder. Write Prolog facts in code blocks:
+Create YAML files in `obsidian-rules/` folder:
 
-```markdown
-# My Project Config
+```yaml
+# obsidian-rules/my-project.yaml
+project:
+  name: My Project
+  shortName: DEMO
+  leader: admin
 
-​```prolog
-% I want a Priority dropdown in project DEMO
-target_field('Priority', enum, 'DEMO').
-field_uses_bundle('Priority', 'PriorityBundle').
+fields:
+  - name: State
+    type: state
+    bundle: StateBundle
+    values:
+      - name: Open
+        resolved: false
+      - name: Done
+        resolved: true
 
-% With these values
-target_bundle_value('PriorityBundle', 'Critical').
-target_bundle_value('PriorityBundle', 'High').
-target_bundle_value('PriorityBundle', 'Medium').
-target_bundle_value('PriorityBundle', 'Low').
-​```
+  - name: Priority
+    type: enum
+    bundle: PriorityBundle
+    values: [Critical, High, Medium, Low]
 ```
-
-### Available Facts
-
-| Fact | Meaning |
-|------|---------|
-| `target_field(Name, Type, Project)` | You want field `Name` of `Type` in `Project` |
-| `field_uses_bundle(Field, Bundle)` | Field uses this bundle for values |
-| `target_bundle_value(Bundle, Value)` | Bundle should have this value |
 
 ### Field Types
 
-- `enum` - Dropdown list
-- `state` - Workflow state  
-- `string` - Text field
-- `integer` - Number field
+| Type | Description |
+|------|-------------|
+| `enum` | Dropdown list |
+| `state` | Workflow state (with resolved flag) |
+| `string` | Text field |
+| `integer` | Number field |
+| `text` | Multi-line text |
+| `period` | Time duration |
+
+### Advanced: Prolog Facts
+
+For complex logic, you can also write raw Prolog facts:
+
+```prolog
+target_field('Priority', 'enum', 'DEMO').
+field_uses_bundle('Priority', 'PriorityBundle').
+target_bundle_value('PriorityBundle', 'Critical').
+```
 
 ---
 

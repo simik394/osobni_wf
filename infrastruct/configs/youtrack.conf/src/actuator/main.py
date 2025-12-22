@@ -116,6 +116,75 @@ class YouTrackActuator:
             logger.error(f"Failed to add value to bundle: {error}")
             return ActionResult(action=action, success=False, error=error)
     
+    def add_state_value(self, bundle_id: str, value_name: str,
+                        is_resolved: bool = False) -> ActionResult:
+        """
+        Add a state value to a state bundle.
+        
+        Args:
+            bundle_id: State bundle ID
+            value_name: State name (e.g., "Open", "Done")
+            is_resolved: Whether this state means the issue is resolved
+        """
+        action = f"add_state_value({bundle_id}, {value_name}, resolved={is_resolved})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            resp = self.session.post(
+                f'{self.url}/api/admin/customFieldSettings/bundles/state/{bundle_id}/values',
+                json={'name': value_name, 'isResolved': is_resolved}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            logger.info(f"Added state '{value_name}' (resolved={is_resolved}) to bundle {bundle_id}")
+            return ActionResult(action=action, success=True, resource_id=data.get('id'))
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to add state value: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
+    # =========================================================================
+    # PROJECT OPERATIONS
+    # =========================================================================
+    
+    def create_project(self, name: str, short_name: str, 
+                       leader_id: str) -> ActionResult:
+        """
+        Create a new project.
+        
+        Args:
+            name: Project full name
+            short_name: Project short name (used in issue IDs, e.g., "DEMO")
+            leader_id: ID of the project leader (user ID)
+        """
+        action = f"create_project({name}, {short_name})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            resp = self.session.post(
+                f'{self.url}/api/admin/projects',
+                json={
+                    'name': name,
+                    'shortName': short_name,
+                    'leader': {'id': leader_id}
+                },
+                params={'fields': 'id,name,shortName'}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            logger.info(f"Created project: {name} ({short_name}) id={data.get('id')}")
+            return ActionResult(action=action, success=True, resource_id=data.get('id'))
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to create project {name}: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
     # =========================================================================
     # CUSTOM FIELD OPERATIONS
     # =========================================================================
@@ -221,15 +290,21 @@ class YouTrackActuator:
             
             if action_type == 'create_bundle':
                 result = self.create_bundle(*args)
+            elif action_type == 'create_state_bundle':
+                result = self.create_bundle(args[0], bundle_type='state')
             elif action_type == 'ensure_bundle':
                 # ensure_bundle is idempotent - check if exists, create if not
                 result = self.create_bundle(args[0])
             elif action_type == 'add_bundle_value':
                 result = self.add_bundle_value(*args)
+            elif action_type == 'add_state_value':
+                result = self.add_state_value(*args)
             elif action_type == 'create_field':
                 result = self.create_field(*args)
             elif action_type == 'attach_field':
                 result = self.attach_field_to_project(*args)
+            elif action_type == 'create_project':
+                result = self.create_project(*args)
             else:
                 logger.warning(f"Unknown action type: {action_type}")
                 result = ActionResult(

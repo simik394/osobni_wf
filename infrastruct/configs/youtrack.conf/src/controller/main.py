@@ -41,6 +41,24 @@ class YouTrackClient:
         )
         resp.raise_for_status()
         return resp.json()
+    
+    def get_state_bundles(self) -> list[dict]:
+        """Fetch all state bundles."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/customFieldSettings/bundles/state',
+            params={'fields': 'id,name,values(id,name,isResolved,archived)'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+    
+    def get_projects(self) -> list[dict]:
+        """Fetch all projects."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/projects',
+            params={'fields': 'id,name,shortName,leader(id,login),archived,customFields(id,field(id,name))'}
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 def inject_facts_to_prolog(fields: list, bundles: list):
