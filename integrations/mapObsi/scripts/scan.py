@@ -2,15 +2,20 @@
 """
 scan.py - Parse markdown files using tree-sitter AST
 Usage: cat files.txt | python scan.py --output notes.json
+
+Supports multiprocessing for parallel file scanning.
 """
 import sys
 import json
 import re
 import argparse
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass, asdict
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
 try:
     from tree_sitter_languages import get_parser
@@ -23,6 +28,19 @@ try:
     import frontmatter
 except ImportError:
     frontmatter = None
+
+# Global parser instance (created per-process)
+_PARSER = None
+
+def get_md_parser():
+    """Get or create parser for current process."""
+    global _PARSER
+    if _PARSER is None:
+        if TREE_SITTER_AVAILABLE:
+            _PARSER = TreeSitterParser()
+        else:
+            _PARSER = RegexParser()
+    return _PARSER
 
 
 @dataclass
@@ -258,8 +276,9 @@ def extract_tags(content: str, fm: dict) -> list[str]:
     return list(set(inline + fm_tags))
 
 
-def scan_file(filepath: str, md_parser) -> Optional[NoteMetadata]:
+def scan_file(filepath: str) -> Optional[NoteMetadata]:
     """Scan a single markdown file and extract metadata."""
+    md_parser = get_md_parser()
     path = Path(filepath.strip())
     
     if not path.exists() or not path.is_file():
@@ -313,16 +332,16 @@ def main():
     parser = argparse.ArgumentParser(description='Scan markdown files')
     parser.add_argument('--output', '-o', required=True, help='Output JSON file')
     parser.add_argument('--full', action='store_true', help='Full rescan mode')
+    parser.add_argument('--workers', '-w', type=int, default=None, 
+                        help='Number of worker processes (default: CPU count)')
     parser.add_argument('--orphans', help='List orphans from existing JSON')
     parser.add_argument('--broken', help='List broken links from existing JSON')
     args = parser.parse_args()
     
-    # Choose parser
+    # Report parser type
     if TREE_SITTER_AVAILABLE:
-        md_parser = TreeSitterParser()
         print("Using tree-sitter parser", file=sys.stderr)
     else:
-        md_parser = RegexParser()
         print("Using regex parser (fallback)", file=sys.stderr)
     
     # Read file list from stdin
@@ -332,13 +351,17 @@ def main():
         print("No files to scan", file=sys.stderr)
         sys.exit(0)
     
-    # Scan each file
-    results = []
-    for filepath in files:
-        result = scan_file(filepath, md_parser)
-        if result:
-            results.append(asdict(result))
-            print(f"Scanned: {filepath}", file=sys.stderr)
+    # Determine worker count
+    num_workers = args.workers or cpu_count()
+    print(f"Scanning {len(files)} files with {num_workers} workers", file=sys.stderr)
+    
+    # Scan files in parallel
+    with Pool(num_workers) as pool:
+        raw_results = pool.map(scan_file, files)
+    
+    # Filter None results and convert to dicts
+    results = [asdict(r) for r in raw_results if r is not None]
+    print(f"Successfully scanned {len(results)} files", file=sys.stderr)
     
     # Load existing data if incremental
     output_path = Path(args.output)
@@ -360,7 +383,7 @@ def main():
     with open(output_path, 'w') as f:
         json.dump(list(existing.values()), f, indent=2)
     
-    print(f"Scanned {len(results)} files, total {len(existing)} in database", file=sys.stderr)
+    print(f"Total {len(existing)} notes in database", file=sys.stderr)
 
 
 if __name__ == '__main__':
