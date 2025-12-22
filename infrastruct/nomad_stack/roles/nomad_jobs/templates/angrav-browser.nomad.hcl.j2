@@ -4,7 +4,7 @@ job "angrav-browser" {
 
   # This job can be stopped when not needed
   # Use: nomad job stop angrav-browser
-  # Start: nomad job run angrav-browser.nomad
+  # Start: nomad job run angrav-browser.nomad.hcl
 
   group "browser" {
     count = 1
@@ -13,7 +13,7 @@ job "angrav-browser" {
       mode = "bridge"
       port "cdp" {
         static = 9224
-        to     = 9223
+        to      = 9223
       }
       port "vnc" {
         static = 5901
@@ -21,25 +21,23 @@ job "angrav-browser" {
       }
     }
 
-    # Persistent volume for Angrav data
-    volume "angrav-data" {
-      type      = "host"
-      source    = "angrav-data"
-      read_only = false
+    # Run on cloud nodes by default
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
     }
 
     task "angrav" {
       driver = "docker"
 
-      # Run on cloud nodes by default
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "mcr.microsoft.com/playwright:v1.40.0-focal"
         ports = ["cdp", "vnc"]
+        
+        # Docker bind mount for persistent data
+        volumes = [
+          "/opt/angrav/data:/app/user-data"
+        ]
         
         # Entrypoint that starts Xvfb, VNC, and Chrome with debugging port
         entrypoint = ["/bin/bash", "-c"]
@@ -51,10 +49,10 @@ export DISPLAY=:99
 sleep 1
 
 # Start VNC server
-x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw
+x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw || true
 
-# Start Chromium with Angrav extension
-# Note: You'll need to mount or install the Angrav extension
+# Start Chromium with debugging
+# Note: Install Angrav extension manually via VNC on first run
 chromium-browser \
   --no-sandbox \
   --disable-setuid-sandbox \
@@ -70,12 +68,6 @@ chromium-browser \
 wait
 EOF
         ]
-      }
-
-      volume_mount {
-        volume      = "angrav-data"
-        destination = "/app/user-data"
-        read_only   = false
       }
 
       resources {

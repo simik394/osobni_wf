@@ -4,7 +4,7 @@ job "rsrch-browser" {
 
   # This job can be stopped when not needed
   # Use: nomad job stop rsrch-browser
-  # Start: nomad job run rsrch-browser.nomad
+  # Start: nomad job run rsrch-browser.nomad.hcl
 
   group "browser" {
     count = 1
@@ -21,25 +21,22 @@ job "rsrch-browser" {
       }
     }
 
-    # Persistent volume for Chrome profile (cookies, sessions)
-    volume "chrome-profile" {
-      type      = "host"
-      source    = "rsrch-chrome-profile"
-      read_only = false
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
     }
 
     task "chromium" {
       driver = "docker"
 
-      # Run on cloud nodes by default, can be changed to run on NTB
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "mcr.microsoft.com/playwright:v1.40.0-focal"
         ports = ["cdp", "vnc"]
+        
+        # Docker bind mount for persistent Chrome profile
+        volumes = [
+          "/opt/rsrch/chrome-profile:/app/user-data"
+        ]
         
         # Entrypoint that starts Xvfb, VNC, and Chrome with debugging port
         entrypoint = ["/bin/bash", "-c"]
@@ -51,7 +48,7 @@ export DISPLAY=:99
 sleep 1
 
 # Start VNC server (optional, for debugging)
-x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw
+x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw || true
 
 # Start Chromium with remote debugging
 chromium-browser \
@@ -70,12 +67,6 @@ chromium-browser \
 wait
 EOF
         ]
-      }
-
-      volume_mount {
-        volume      = "chrome-profile"
-        destination = "/app/user-data"
-        read_only   = false
       }
 
       resources {

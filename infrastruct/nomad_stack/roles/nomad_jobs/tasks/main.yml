@@ -3,13 +3,13 @@
   ansible.builtin.file:
     path: /opt/nomad/jobs
     state: directory
-    mode: '0755'
+    mode: "0755"
 
 - name: Create Traefik ACME directory with secure permissions
   ansible.builtin.file:
     path: /opt/traefik/acme
     state: directory
-    mode: '0600'
+    mode: "0600"
     owner: root
     group: root
 
@@ -19,7 +19,7 @@
     state: directory
     owner: 13001
     group: 13001
-    mode: '0750'
+    mode: "0750"
   loop:
     - /opt/youtrack/data
     - /opt/youtrack/conf
@@ -32,7 +32,7 @@
     state: directory
     owner: 1000
     group: 1000
-    mode: '0750'
+    mode: "0750"
 
 - name: Create Obsidian data directories with correct permissions (UID 1000)
   ansible.builtin.file:
@@ -40,7 +40,7 @@
     state: directory
     owner: 1000
     group: 1000
-    mode: '0750'
+    mode: "0750"
   loop:
     - /opt/obsidian/config
     - /opt/obsidian/vaults
@@ -51,7 +51,7 @@
     state: directory
     owner: 999
     group: 999
-    mode: '0750'
+    mode: "0750"
 
 - name: Create Windmill cache directories with correct permissions (UID 1000)
   ansible.builtin.file:
@@ -59,22 +59,41 @@
     state: directory
     owner: 1000
     group: 1000
-    mode: '0750'
+    mode: "0750"
   loop:
     - /opt/windmill/worker_cache
     - /opt/windmill/lsp_cache
+
+# Browser agent data directories
+- name: Create rsrch browser data directory
+  ansible.builtin.file:
+    path: /opt/rsrch/chrome-profile
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+
+- name: Create angrav browser data directory
+  ansible.builtin.file:
+    path: /opt/angrav/data
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
 
 - name: Copy Nomad job files
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/opt/nomad/jobs/{{ item | basename | regex_replace('\\.j2$', '') }}"
-    mode: '0644'
+    mode: "0644"
   loop:
     - traefik.nomad.hcl.j2
     - youtrack.nomad.hcl.j2
     - obsidian-remote.nomad.hcl.j2
     - n8n.nomad.hcl.j2
     - windmill.nomad.hcl.j2
+    - rsrch-browser.nomad.hcl.j2
+    - angrav-browser.nomad.hcl.j2
 
 - name: Run Traefik
   ansible.builtin.command: nomad job run /opt/nomad/jobs/traefik.nomad.hcl
@@ -105,3 +124,15 @@
   environment:
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false
+
+# Browser jobs are NOT started automatically - they're on-demand
+# Use Windmill's start-browser.ts or: nomad job run /opt/nomad/jobs/rsrch-browser.nomad.hcl
+- name: Register browser jobs (but don't start)
+  ansible.builtin.debug:
+    msg: |
+      Browser jobs registered at:
+        - /opt/nomad/jobs/rsrch-browser.nomad.hcl
+        - /opt/nomad/jobs/angrav-browser.nomad.hcl
+
+      To start manually: nomad job run /opt/nomad/jobs/rsrch-browser.nomad.hcl
+      Or use Windmill: start-browser(agent='rsrch')
