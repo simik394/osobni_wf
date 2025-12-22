@@ -1,0 +1,115 @@
+job "angrav-browser" {
+  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
+  type        = "service"
+
+  # This job can be stopped when not needed
+  # Use: nomad job stop angrav-browser
+  # Start: nomad job run angrav-browser.nomad
+
+  group "browser" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "cdp" {
+        static = 9224
+        to     = 9223
+      }
+      port "vnc" {
+        static = 5901
+        to     = 5900
+      }
+    }
+
+    # Persistent volume for Angrav data
+    volume "angrav-data" {
+      type      = "host"
+      source    = "angrav-data"
+      read_only = false
+    }
+
+    task "angrav" {
+      driver = "docker"
+
+      # Run on cloud nodes by default
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "mcr.microsoft.com/playwright:v1.40.0-focal"
+        ports = ["cdp", "vnc"]
+        
+        # Entrypoint that starts Xvfb, VNC, and Chrome with debugging port
+        entrypoint = ["/bin/bash", "-c"]
+        args = [<<EOF
+set -e
+# Start virtual framebuffer
+Xvfb :99 -screen 0 1920x1080x24 &
+export DISPLAY=:99
+sleep 1
+
+# Start VNC server
+x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw
+
+# Start Chromium with Angrav extension
+# Note: You'll need to mount or install the Angrav extension
+chromium-browser \
+  --no-sandbox \
+  --disable-setuid-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
+  --remote-debugging-address=0.0.0.0 \
+  --remote-debugging-port=9223 \
+  --user-data-dir=/app/user-data \
+  --disable-blink-features=AutomationControlled \
+  --window-size=1920,1080 \
+  about:blank
+
+wait
+EOF
+        ]
+      }
+
+      volume_mount {
+        volume      = "angrav-data"
+        destination = "/app/user-data"
+        read_only   = false
+      }
+
+      resources {
+        cpu    = 1000
+        memory = 2048
+      }
+
+      service {
+        name = "angrav-browser"
+        port = "cdp"
+        
+        tags = [
+          "browser",
+          "angrav"
+        ]
+        
+        check {
+          name     = "cdp-health"
+          type     = "http"
+          path     = "/json/version"
+          interval = "10s"
+          timeout  = "5s"
+        }
+      }
+
+      service {
+        name = "angrav-browser-vnc"
+        port = "vnc"
+        
+        tags = [
+          "vnc",
+          "debug"
+        ]
+      }
+    }
+  }
+}
