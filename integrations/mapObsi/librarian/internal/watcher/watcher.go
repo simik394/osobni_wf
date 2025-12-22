@@ -10,16 +10,16 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/simik394/vault-librarian/internal/config"
 	"github.com/simik394/vault-librarian/internal/db"
 	"github.com/simik394/vault-librarian/internal/parser"
 )
 
-// Watcher watches a directory for markdown file changes
+// Watcher watches a directory for file changes
 type Watcher struct {
-	vaultPath  string
-	debounceMs int
-	db         *db.Client
-	watcher    *fsnotify.Watcher
+	cfg       *config.Config
+	db        *db.Client
+	watcher   *fsnotify.Watcher
 
 	// Debouncing
 	mu       sync.Mutex
@@ -29,7 +29,7 @@ type Watcher struct {
 }
 
 // NewWatcher creates a new file watcher
-func NewWatcher(vaultPath string, debounceMs int, dbClient *db.Client) (*Watcher, error) {
+func NewWatcher(cfg *config.Config, dbClient *db.Client) (*Watcher, error) {
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -38,13 +38,12 @@ func NewWatcher(vaultPath string, debounceMs int, dbClient *db.Client) (*Watcher
 	ctx, cancel := context.WithCancel(context.Background())
 
 	w := &Watcher{
-		vaultPath:  vaultPath,
-		debounceMs: debounceMs,
-		db:         dbClient,
-		watcher:    fsWatcher,
-		pending:    make(map[string]*time.Timer),
-		ctx:        ctx,
-		cancel:     cancel,
+		cfg:     cfg,
+		db:      dbClient,
+		watcher: fsWatcher,
+		pending: make(map[string]*time.Timer),
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 
 	return w, nil
@@ -52,12 +51,11 @@ func NewWatcher(vaultPath string, debounceMs int, dbClient *db.Client) (*Watcher
 
 // Start begins watching the vault directory
 func (w *Watcher) Start() error {
-	// Add all directories recursively
-	if err := w.addWatchRecursive(w.vaultPath); err != nil {
+	if err := w.addWatchRecursive(w.cfg.VaultPath); err != nil {
 		return err
 	}
 
-	log.Printf("Watching %s for changes...", w.vaultPath)
+	log.Printf("Watching %s for changes...", w.cfg.VaultPath)
 
 	go w.eventLoop()
 	return nil
@@ -76,12 +74,17 @@ func (w *Watcher) addWatchRecursive(root string) error {
 			return err
 		}
 
-		// Skip hidden directories
-		if info.IsDir() && strings.HasPrefix(info.Name(), ".") {
-			return filepath.SkipDir
-		}
-
+		// Skip hidden directories and global excludes
 		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
+			// Check global excludes
+			for _, pattern := range w.cfg.GlobalExclude {
+				if config.MatchGlob(pattern, path) {
+					return filepath.SkipDir
+				}
+			}
 			if err := w.watcher.Add(path); err != nil {
 				log.Printf("Warning: could not watch %s: %v", path, err)
 			}
@@ -117,25 +120,22 @@ func (w *Watcher) eventLoop() {
 func (w *Watcher) handleEvent(event fsnotify.Event) {
 	path := event.Name
 
-	// Only process markdown files
-	if !strings.HasSuffix(path, ".md") {
-		// But watch new directories
-		if event.Op&fsnotify.Create != 0 {
-			if info, err := os.Stat(path); err == nil && info.IsDir() {
-				w.addWatchRecursive(path)
-			}
+	// Check if new directory
+	if event.Op&fsnotify.Create != 0 {
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			w.addWatchRecursive(path)
 		}
-		return
 	}
 
-	// Skip hidden files
-	if strings.Contains(path, "/.") {
+	// Check if file should be processed
+	fileType, should := w.cfg.ShouldProcess(path)
+	if !should {
 		return
 	}
 
 	// Debounce the event
 	w.debounce(path, func() {
-		w.processFile(path, event.Op)
+		w.processFile(path, fileType, event.Op)
 	})
 }
 
@@ -144,13 +144,11 @@ func (w *Watcher) debounce(path string, fn func()) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Cancel existing timer
 	if timer, exists := w.pending[path]; exists {
 		timer.Stop()
 	}
 
-	// Set new timer
-	w.pending[path] = time.AfterFunc(time.Duration(w.debounceMs)*time.Millisecond, func() {
+	w.pending[path] = time.AfterFunc(time.Duration(w.cfg.DebounceMs)*time.Millisecond, func() {
 		w.mu.Lock()
 		delete(w.pending, path)
 		w.mu.Unlock()
@@ -159,72 +157,119 @@ func (w *Watcher) debounce(path string, fn func()) {
 }
 
 // processFile handles a file change
-func (w *Watcher) processFile(path string, op fsnotify.Op) {
+func (w *Watcher) processFile(path string, fileType string, op fsnotify.Op) {
 	ctx := context.Background()
 
 	if op&fsnotify.Remove != 0 || op&fsnotify.Rename != 0 {
-		// File was deleted or renamed
 		log.Printf("Deleted: %s", path)
-		if err := w.db.DeleteNote(ctx, path); err != nil {
-			log.Printf("Error deleting note: %v", err)
+		switch fileType {
+		case "markdown":
+			w.db.DeleteNote(ctx, path)
+		case "code":
+			w.db.DeleteCode(ctx, path)
 		}
 		return
 	}
 
-	// File was created or modified
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return // File doesn't exist anymore
-	}
-
-	meta, err := parser.ParseFile(path)
-	if err != nil {
-		log.Printf("Error parsing %s: %v", path, err)
 		return
 	}
 
-	log.Printf("Updated: %s (tags=%d, links=%d)", path, len(meta.Tags), len(meta.Wikilinks))
+	switch fileType {
+	case "markdown":
+		meta, err := parser.ParseMarkdown(path)
+		if err != nil {
+			log.Printf("Error parsing markdown %s: %v", path, err)
+			return
+		}
+		log.Printf("Updated: %s (tags=%d, links=%d)", path, len(meta.Tags), len(meta.Wikilinks))
+		if err := w.db.UpsertNote(ctx, meta); err != nil {
+			log.Printf("Error syncing note %s: %v", path, err)
+		}
 
-	if err := w.db.UpsertNote(ctx, meta); err != nil {
-		log.Printf("Error syncing %s: %v", path, err)
+	case "code":
+		meta, err := parser.ParseCode(path)
+		if err != nil {
+			log.Printf("Error parsing code %s: %v", path, err)
+			return
+		}
+		log.Printf("Updated: %s [%s] (funcs=%d, classes=%d)", path, meta.Language, len(meta.Functions), len(meta.Classes))
+		if err := w.db.UpsertCode(ctx, meta); err != nil {
+			log.Printf("Error syncing code %s: %v", path, err)
+		}
+
+	case "asset":
+		// Just track existence for now
+		log.Printf("Asset: %s", path)
 	}
 }
 
 // FullScan performs an initial full scan of the vault
-func (w *Watcher) FullScan() (int, error) {
-	count := 0
+func (w *Watcher) FullScan() (notes, code, assets int, err error) {
 	ctx := context.Background()
 
-	err := filepath.Walk(w.vaultPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	err = filepath.Walk(w.cfg.VaultPath, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
 
 		// Skip hidden directories
-		if info.IsDir() && strings.HasPrefix(info.Name(), ".") {
-			return filepath.SkipDir
+		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
+			// Check global excludes
+			for _, pattern := range w.cfg.GlobalExclude {
+				if config.MatchGlob(pattern, path) {
+					return filepath.SkipDir
+				}
+			}
+			return nil
 		}
 
-		// Only process markdown files
-		if !info.IsDir() && strings.HasSuffix(path, ".md") {
-			meta, err := parser.ParseFile(path)
-			if err != nil {
-				log.Printf("Warning: could not parse %s: %v", path, err)
+		// Check if file should be processed
+		fileType, should := w.cfg.ShouldProcess(path)
+		if !should {
+			return nil
+		}
+
+		switch fileType {
+		case "markdown":
+			meta, parseErr := parser.ParseMarkdown(path)
+			if parseErr != nil {
+				log.Printf("Warning: could not parse %s: %v", path, parseErr)
 				return nil
 			}
-
-			if err := w.db.UpsertNote(ctx, meta); err != nil {
-				log.Printf("Warning: could not sync %s: %v", path, err)
+			if syncErr := w.db.UpsertNote(ctx, meta); syncErr != nil {
+				log.Printf("Warning: could not sync %s: %v", path, syncErr)
 				return nil
 			}
+			notes++
 
-			count++
-			if count%100 == 0 {
-				log.Printf("Scanned %d files...", count)
+		case "code":
+			meta, parseErr := parser.ParseCode(path)
+			if parseErr != nil {
+				log.Printf("Warning: could not parse %s: %v", path, parseErr)
+				return nil
 			}
+			if syncErr := w.db.UpsertCode(ctx, meta); syncErr != nil {
+				log.Printf("Warning: could not sync %s: %v", path, syncErr)
+				return nil
+			}
+			code++
+
+		case "asset":
+			// Just count for now
+			assets++
+		}
+
+		total := notes + code + assets
+		if total%100 == 0 && total > 0 {
+			log.Printf("Scanned %d files (notes=%d, code=%d, assets=%d)...", total, notes, code, assets)
 		}
 
 		return nil
 	})
 
-	return count, err
+	return notes, code, assets, err
 }

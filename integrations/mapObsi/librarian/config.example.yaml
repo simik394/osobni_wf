@@ -1,0 +1,55 @@
+# Vault Librarian Configuration
+# Place this file at: ~/.config/librarian/config.yaml
+# Or specify: LIBRARIAN_CONFIG=/path/to/config.yaml
+
+# Vault path to watch
+vault_path: ~/Obsi
+
+# FalkorDB connection
+falkordb:
+  addr: localhost:6379
+  graph: vault
+
+# Debounce delay for file changes (milliseconds)
+debounce_ms: 100
+
+# File processing rules
+files:
+  # Extensions to process (by category)
+  markdown:
+    extensions: [".md"]
+    extract:
+      - frontmatter
+      - wikilinks
+      - tags
+      - embeds
+      - headings
+
+  code:
+    extensions: [".py", ".go", ".ts", ".js", ".rs", ".jl"]
+    extract:
+      - functions
+      - classes
+      - imports
+    # Only process code files in these paths (glob patterns)
+    include:
+      - "agents/**"
+      - "scripts/**"
+      - "integrations/**"
+    # Exclude these paths
+    exclude:
+      - "**/node_modules/**"
+      - "**/.venv/**"
+      - "**/vendor/**"
+      - "**/__pycache__/**"
+
+  # Other file types (just track existence, no parsing)
+  assets:
+    extensions: [".pdf", ".png", ".jpg", ".mp3"]
+    extract: []
+
+# Global exclude patterns (apply to all file types)
+global_exclude:
+  - "**/.git/**"
+  - "**/.obsidian/**"
+  - "**/.*" # Hidden files
