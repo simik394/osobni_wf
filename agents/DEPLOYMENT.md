@@ -54,29 +54,100 @@ Windmill scripts live in the UI, not in files. To update:
 
 ---
 
-## Fresh Browser Profile
+## Fresh Browser Profile (Google Auth)
 
-### Option 1: Delete and Restart
+> [!IMPORTANT]
+> Google blocks automated logins on cloud servers. You MUST authenticate locally first, then sync the profile to the cloud.
+
+### Step 1: Create Profile Locally
 
 ```bash
-ssh halvarm
-
-# Stop the job
-nomad job stop rsrch-browser
-
-# Clear the Chrome profile
-sudo rm -rf /opt/rsrch/chrome-profile/*
-
-# Restart the job
-nomad job run /opt/nomad/jobs/rsrch-browser.nomad.hcl
+# On your NTB, run a temporary Chrome with a fresh profile
+mkdir -p /tmp/rsrch-profile
+chromium-browser \
+  --user-data-dir=/tmp/rsrch-profile \
+  --disable-blink-features=AutomationControlled \
+  https://perplexity.ai
 ```
 
-### Option 2: Login via VNC
+Login to Perplexity (and Google if needed) in this browser, then close it.
 
-1. Start the browser job
-2. Connect to VNC: `vncviewer halvarm:5900`
-3. Login to Perplexity/Google in the browser
-4. Close VNC (session persists)
+### Step 2: Sync to Cloud
+
+```bash
+# Stop the cloud browser first
+ssh halvarm "nomad job stop rsrch-browser"
+
+# Clear old profile on cloud
+ssh halvarm "sudo rm -rf /opt/rsrch/chrome-profile/*"
+
+# Sync the authenticated profile to cloud
+rsync -avz --delete /tmp/rsrch-profile/ halvarm:/opt/rsrch/chrome-profile/
+
+# Fix permissions
+ssh halvarm "sudo chown -R 1000:1000 /opt/rsrch/chrome-profile"
+
+# Restart the browser job
+ssh halvarm "nomad job run /opt/nomad/jobs/rsrch-browser.nomad.hcl"
+```
+
+### Step 3: Verify
+
+```bash
+# Check CDP is responding
+curl http://halvarm:9223/json/version
+
+# Or connect via VNC to visually confirm session
+vncviewer halvarm:5900
+```
+
+### Quick Refresh Script
+
+Save this as `sync-profile.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+AGENT="${1:-rsrch}"
+LOCAL_PROFILE="${2:-/tmp/${AGENT}-profile}"
+REMOTE_HOST="halvarm"
+
+case $AGENT in
+  rsrch)
+    REMOTE_PATH="/opt/rsrch/chrome-profile"
+    JOB_FILE="rsrch-browser.nomad.hcl"
+    ;;
+  angrav)
+    REMOTE_PATH="/opt/angrav/data"
+    JOB_FILE="angrav-browser.nomad.hcl"
+    ;;
+  *)
+    echo "Unknown agent: $AGENT"
+    exit 1
+    ;;
+esac
+
+echo "🛑 Stopping ${AGENT} browser on cloud..."
+ssh $REMOTE_HOST "nomad job stop ${AGENT}-browser" || true
+
+echo "📤 Syncing profile to ${REMOTE_HOST}:${REMOTE_PATH}..."
+ssh $REMOTE_HOST "sudo rm -rf ${REMOTE_PATH}/*"
+rsync -avz --delete "${LOCAL_PROFILE}/" "${REMOTE_HOST}:${REMOTE_PATH}/"
+ssh $REMOTE_HOST "sudo chown -R 1000:1000 ${REMOTE_PATH}"
+
+echo "🚀 Starting ${AGENT} browser..."
+ssh $REMOTE_HOST "nomad job run /opt/nomad/jobs/${JOB_FILE}"
+
+echo "✅ Done! Profile synced and browser started."
+```
+
+Usage:
+```bash
+./sync-profile.sh rsrch /tmp/rsrch-profile
+./sync-profile.sh angrav /tmp/angrav-profile
+```
+
 
 ---
 
