@@ -1,0 +1,136 @@
+# Vault Librarian Configuration
+# Place at: ~/.config/librarian/config.yaml
+# Or set: LIBRARIAN_CONFIG=/path/to/config.yaml
+#
+# Format: YAML with structured sections for sources, processing rules,
+# and output settings.
+
+# =============================================================================
+# SOURCES - Define what to index
+# =============================================================================
+sources:
+  # Primary vault (required)
+  - name: "main-vault"
+    path: ~/Obsi
+    enabled: true
+    priority: 1
+
+  # Additional sources (optional)
+  # - name: "zotero-library"
+  #   path: ~/Zotero
+  #   enabled: false
+  #   priority: 2
+
+# =============================================================================
+# PROCESSING RULES - Define how to process different file types
+# =============================================================================
+processing:
+  # Markdown/Notes
+  markdown:
+    extensions: [".md", ".markdown"]
+    enabled: true
+    extract:
+      - frontmatter # YAML front matter
+      - wikilinks # [[links]]
+      - embeds # ![[embeds]]
+      - tags # #tags
+      - headings # # Headings
+      - code_blocks # ```code```
+
+  # Code files
+  code:
+    extensions: [".py", ".go", ".ts", ".js", ".rs", ".jl", ".rb", ".java"]
+    enabled: true
+    extract:
+      - functions
+      - classes
+      - imports
+    # Only process code in these paths (glob patterns, relative to source root)
+    include:
+      - "agents/**"
+      - "scripts/**"
+      - "integrations/**"
+      - "src/**"
+      - "lib/**"
+    # Never process these paths
+    exclude:
+      - "**/node_modules/**"
+      - "**/.venv/**"
+      - "**/venv/**"
+      - "**/vendor/**"
+      - "**/__pycache__/**"
+      - "**/dist/**"
+      - "**/build/**"
+      - "**/.git/**"
+
+  # Assets (track existence only)
+  assets:
+    extensions: [".pdf", ".png", ".jpg", ".jpeg", ".gif", ".mp3", ".mp4"]
+    enabled: true
+    extract: [] # No parsing, just track
+
+# =============================================================================
+# GLOBAL IGNORES - Applied to all file types
+# =============================================================================
+global_ignore:
+  patterns:
+    - "**/.git/**"
+    - "**/.obsidian/**"
+    - "**/.trash/**"
+    - "**/.*" # Hidden files
+    - "**/*.min.js" # Minified files
+    - "**/*.map" # Source maps
+
+  # Max file size to process (bytes, 0 = unlimited)
+  max_file_size: 10485760 # 10MB
+
+# =============================================================================
+# DATABASE - FalkorDB connection
+# =============================================================================
+database:
+  type: falkordb
+  addr: localhost:6379
+  graph: vault
+  # Batch size for bulk operations
+  batch_size: 100
+
+# =============================================================================
+# WATCHER - File watching settings
+# =============================================================================
+watcher:
+  # Debounce delay (ms) - wait for file changes to settle
+  debounce_ms: 100
+
+  # Use inotify/fsevents for real-time watching
+  realtime: true
+
+  # Rescan interval (seconds, 0 = disabled)
+  # Falls back to periodic scan if inotify fails
+  rescan_interval: 0
+
+# =============================================================================
+# QUICK SCAN PROFILES - For running specific scans
+# =============================================================================
+profiles:
+  # librarian scan --profile agents
+  agents:
+    paths:
+      - agents/
+    file_types: [code, markdown]
+    description: "Scan only agent directories"
+
+  # librarian scan --profile notes
+  notes:
+    paths:
+      - myDM/
+      - Inv/
+      - Class/
+    file_types: [markdown]
+    description: "Scan only markdown notes"
+
+  # librarian scan --profile code
+  code:
+    paths:
+      - Prods/
+    file_types: [code]
+    description: "Scan only code in Prods/"

@@ -1,69 +1,49 @@
-# mapObsi - Obsidian Vault Metadata Mapper
+# Vault Librarian: Implementations
 
-Extracts metadata and stats from Obsidian vault notes into JSON/CSV/SQLite.
+This directory contains three different implementations of the "Vault Librarian" system, designed to parse and index the Obsidian vault into FalkorDB.
 
-## Quick Start
+**[[BENCHMARKS|See Full Benchmark Report]]**
 
+## Directory Structure
+
+*   **`implementations/go/`**: The primary, production-grade daemon.
+    *   **Features**: `fsnotify` file watching, robust configuration, standardized CLI.
+    *   **Status**: **RECOMMENDED**. Production Ready.
+    *   **Performance**:
+        *   **Dump Mode**: ~4,000 files in **0.42s** (Parallel).
+        *   **Direct Sync**: ~3.0s (Parallel with Connection Pool).
+
+*   **`implementations/julia/`**: A high-performance experimental implementation.
+    *   **Features**: Parallel regex parsing, raw TCP/RESP DB sync.
+    *   **Status**: Benchmark / Analysis Tool.
+    *   **Performance**:
+        *   **Dump Mode**: ~4,000 files in **0.35s** (Parallel).
+        *   **Direct Sync**: ~14s (Sequential Socket).
+    *   *Note*: An attempt to use `Redis.jl` for parallel sync failed due to driver issues (see `librarian_lib.jl`).
+
+*   **`implementations/python/`**: The original prototype scripts.
+    *   **Features**: Tree-sitter parsing (more accurate but slower).
+    *   **Status**: Legacy / Reference.
+
+## Usage
+
+### Recommended: Bulk Load (Go)
+This is the fastest way to index the vault (sub-second).
 ```bash
-cd integrations/mapObsi
-
-# Scan changed files (incremental)
-make scan
-
-# Scan specific subfolder
-make scan VAULT=agents/rsrch
-
-# Full rescan (rebuild from scratch)
-make full
-
-# Export to CSV
-make csv
-
-# Export to SQLite
-make sqlite
+cd implementations/go
+go build -o librarian ./cmd/librarian
+./librarian scan --dump
+cat dump.cypher | redis-cli --pipe
 ```
 
-## What It Extracts
-
-| Category | Properties |
-|----------|------------|
-| **File** | path, name, size, created, modified |
-| **Content** | char_count, word_count, line_count |
-| **Structure** | h1-h6 counts, code_blocks, list_items |
-| **Obsidian** | frontmatter, tags, wikilinks, embeds |
-
-## Output
-
-All output goes to `output/`:
-- `notes.json` - Full data (always generated)
-- `notes.csv` - Flat table (`make csv`)
-- `vault.db` - SQLite database (`make sqlite`)
-
-## Subvault Selection
-
+### Go Daemon (Live Watch)
 ```bash
-# Only scan a specific folder
-make scan VAULT=projects/myproject
-
-# Scan entire vault
-make scan VAULT=.
+./librarian watch
 ```
 
-## How It Works
-
-1. `detect_changes.sh` - Finds modified files (git status or mtime)
-2. `scan.py` - Parses markdown, extracts metadata
-3. `output.py` - Converts JSON to CSV/SQLite
-
-Incremental by default - only scans files changed since last run.
-
-## All Commands
-
+### Julia (Benchmark)
 ```bash
-make help      # Show all commands
-make scan      # Scan changed files
-make full      # Full rescan
-make csv       # Export to CSV
-make sqlite    # Export to SQLite
-make clean     # Delete output files
+cd implementations/julia
+export JULIA_NUM_THREADS=8
+julia --project=. librarian.jl dump
 ```

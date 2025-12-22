@@ -1,0 +1,13 @@
+# Binaries
+implementations/go/librarian
+implementations/julia/librarian
+
+# Artifacts
+*.cypher
+*.log
+*.so
+dump.cypher
+__pycache__/
+
+# Package Managers
+implementations/julia/Manifest.toml
