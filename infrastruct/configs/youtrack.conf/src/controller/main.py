@@ -1,14 +1,25 @@
 """
 Logic-Driven IaC Controller
-Sensing layer that fetches current state from YouTrack API and injects facts into Prolog.
+Main entry point that orchestrates sensing, inference, and actuation.
 """
 import os
 import argparse
-import json
+import logging
 from pathlib import Path
 
 import requests
-# import janus_swi as janus  # Uncomment when janus is installed
+
+from src.config import load_configs_from_dir, config_to_prolog_facts
+from src.actuator import YouTrackActuator
+
+# Optional Janus import - will fail gracefully if not available
+try:
+    from src.logic.inference import run_inference, JANUS_AVAILABLE
+except ImportError:
+    JANUS_AVAILABLE = False
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class YouTrackClient:
@@ -61,41 +72,91 @@ class YouTrackClient:
         return resp.json()
 
 
-def inject_facts_to_prolog(fields: list, bundles: list):
-    """Inject current state as Prolog facts using Janus."""
-    # TODO: Implement Janus integration
-    # for field in fields:
-    #     janus.query(f"assertz(curr_field('{field['id']}', '{field['name']}', '{field['fieldType']['name']}'))")
-    pass
-
-
 def main():
     parser = argparse.ArgumentParser(description='Logic-Driven IaC Controller')
     parser.add_argument('--youtrack-url', required=True, help='YouTrack base URL')
-    parser.add_argument('--rules-dir', default='/rules', help='Directory with Prolog rules')
+    parser.add_argument('--config-dir', default='obsidian-rules', help='Directory with YAML configs')
     parser.add_argument('--dry-run', action='store_true', help='Print plan without executing')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     args = parser.parse_args()
+    
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
     
     token = os.environ.get('YOUTRACK_TOKEN')
     if not token:
         raise ValueError('YOUTRACK_TOKEN environment variable required')
     
+    # 1. SENSE - Fetch current state from YouTrack
+    logger.info('Fetching current state from YouTrack...')
     client = YouTrackClient(args.youtrack_url, token)
     
-    print('[*] Fetching current state from YouTrack...')
     fields = client.get_custom_fields()
     bundles = client.get_bundles()
+    state_bundles = client.get_state_bundles()
+    projects = client.get_projects()
     
-    print(f'[*] Found {len(fields)} fields, {len(bundles)} bundles')
+    # Merge enum and state bundles
+    all_bundles = bundles + state_bundles
     
-    # TODO: Load rules from Obsidian markdown
-    # TODO: Inject facts into Prolog
-    # TODO: Run inference
-    # TODO: Execute plan (or print if dry-run)
+    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects')
     
+    # 2. LOAD CONFIG - Read YAML configs and convert to Prolog facts
+    config_dir = Path(args.config_dir)
+    if not config_dir.exists():
+        logger.warning(f'Config directory not found: {config_dir}')
+        return
+    
+    configs = load_configs_from_dir(config_dir)
+    if not configs:
+        logger.warning(f'No YAML configs found in {config_dir}')
+        return
+    
+    # Merge all configs and generate Prolog facts
+    from src.config.parser import merge_configs
+    merged_config = merge_configs(configs)
+    target_facts = config_to_prolog_facts(merged_config)
+    
+    logger.debug(f'Generated target facts:\n{target_facts}')
+    
+    # 3. INFER - Run Prolog inference to compute action plan
+    if not JANUS_AVAILABLE:
+        logger.error('Janus not available - cannot run inference')
+        logger.info('Install janus-swi or run in Docker container')
+        return
+    
+    logger.info('Running Prolog inference...')
+    plan = run_inference(fields, all_bundles, target_facts, projects)
+    
+    if not plan:
+        logger.info('No changes needed - configuration is in sync!')
+        return
+    
+    logger.info(f'Computed plan with {len(plan)} actions:')
+    for i, action in enumerate(plan, 1):
+        logger.info(f'  {i}. {action}')
+    
+    # 4. ACTUATE - Execute the plan
     if args.dry_run:
-        print('[*] DRY RUN - No changes made')
+        logger.info('DRY RUN - no changes made')
+        return
     
+    logger.info('Executing plan...')
+    actuator = YouTrackActuator(args.youtrack_url, token, dry_run=False)
+    results = actuator.execute_plan(plan)
+    
+    # Report results
+    succeeded = sum(1 for r in results if r.success)
+    failed = len(results) - succeeded
+    
+    if failed > 0:
+        logger.error(f'Plan execution: {succeeded} succeeded, {failed} failed')
+        for r in results:
+            if not r.success:
+                logger.error(f'  FAILED: {r.action} - {r.error}')
+    else:
+        logger.info(f'Plan execution complete: {succeeded} actions succeeded')
+
 
 if __name__ == '__main__':
     main()

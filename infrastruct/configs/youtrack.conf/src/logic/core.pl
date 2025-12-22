@@ -6,15 +6,29 @@
 %% =============================================================================
 
 %% curr_field(Id, Name, Type) - Current field in YouTrack
+%% curr_project(Id, Name, ShortName) - Current project
+%% curr_bundle(Id, Name, Type) - Current bundle
 %% target_field(Name, Type, Project) - Desired field from rules
-%% bundle_value(BundleId, ValueId, ValueName) - Bundle values
+%% target_project(ShortName, Name) - Desired project
+%% target_project(ShortName, Name, Leader) - Desired project with leader
+%% target_bundle_value(Bundle, Value) - Desired bundle value
+%% target_state_value(Bundle, Value, IsResolved) - Desired state value
+%% bundle_value(BundleId, ValueId, ValueName) - Current bundle values
 %% depends_on(ActionA, ActionB) - ActionA depends on ActionB
 %% field_uses_bundle(FieldName, BundleName) - Field uses bundle
+%% field_required(FieldName, Project) - Field is required
 
 :- dynamic curr_field/3.
+:- dynamic curr_project/3.
+:- dynamic curr_bundle/3.
 :- dynamic target_field/3.
+:- dynamic target_project/2.
+:- dynamic target_project/3.
+:- dynamic target_bundle_value/2.
+:- dynamic target_state_value/3.
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
+:- dynamic field_required/2.
 
 %% =============================================================================
 %% DIFF LOGIC - Detect missing/drifted resources
