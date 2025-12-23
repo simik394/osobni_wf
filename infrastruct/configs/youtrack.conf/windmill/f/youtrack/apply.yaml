@@ -1,0 +1,24 @@
+summary: Apply YouTrack IaC Plan
+description: Executes the plan computed by plan.py
+schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    youtrack_url:
+      type: string
+      description: YouTrack Base URL
+    youtrack_token:
+      type: string
+      description: Permanent Token
+      format: password
+    plan:
+      type: array
+      description: Plan object from step 1
+      default: []
+  required:
+    - youtrack_url
+    - youtrack_token
+    - plan
+lockfile: ../../../requirements.txt
+kind: script
+language: python3

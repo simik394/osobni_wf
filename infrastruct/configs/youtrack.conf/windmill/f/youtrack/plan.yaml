@@ -1,0 +1,25 @@
+summary: Compute YouTrack IaC Plan
+description: Connects to YouTrack and computes the diff plan.
+schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    youtrack_url:
+      type: string
+      description: YouTrack Base URL
+      default: ""
+    youtrack_token:
+      type: string
+      description: Permanent Token
+      format: password
+    yaml_config:
+      type: string
+      description: Content of the YAML config file
+      format: textarea
+  required:
+    - youtrack_url
+    - youtrack_token
+    - yaml_config
+lockfile: ../../../requirements.txt
+kind: script
+language: python3

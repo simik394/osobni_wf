@@ -1,0 +1,66 @@
+summary: Sync YouTrack Config
+description: Computes plan, waits for approval, then applies changes.
+schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    youtrack_url:
+      type: string
+      default: ""
+    youtrack_token:
+      type: string
+      format: password
+    yaml_config:
+      type: string
+      format: textarea
+  required:
+    - youtrack_url
+    - youtrack_token
+    - yaml_config
+value:
+  modules:
+    - id: a
+      value:
+        type: script
+        input_transforms:
+          youtrack_url:
+            type: javascript
+            expr: flow_input.youtrack_url
+          youtrack_token:
+            type: javascript
+            expr: flow_input.youtrack_token
+          yaml_config:
+            type: javascript
+            expr: flow_input.yaml_config
+        path: f/youtrack/plan
+        tag: youtrack-iac
+    - id: b
+      value:
+        type: approval
+        header: Approve Plan
+        description: "Review the plan below before proceeding."
+        input_transforms:
+          value:
+            type: javascript
+            expr: |
+              var p = results.a.plan;
+              if (!p || p.length === 0) {
+                return "No changes needed.";
+              }
+              return JSON.stringify(p, null, 2);
+    - id: c
+      value:
+        type: script
+        input_transforms:
+          plan:
+            type: javascript
+            expr: results.a.plan
+          youtrack_url:
+            type: javascript
+            expr: flow_input.youtrack_url
+          youtrack_token:
+            type: javascript
+            expr: flow_input.youtrack_token
+        path: f/youtrack/apply
+        tag: youtrack-iac
+kind: flow
