@@ -41,6 +41,14 @@ cat dump.cypher | redis-cli --pipe
 ./librarian watch
 ```
 
+### AI Analysis (Windmill)
+Trigger an AI analysis workflow for a specific project.
+```bash
+./librarian analyze <project_name>
+# Example: ./librarian analyze 01-pwf
+```
+Requires `windmill.webhook_url` in `config.yaml`.
+
 ### Julia (Benchmark)
 ```bash
 cd implementations/julia
