@@ -3,7 +3,7 @@ views:
     name: Table
     filters:
       and:
-        - file.inFolder("Prods/01-pwf")
+        - file.inFolder("Prods/01-pwf/_progress/todos")
     order:
       - file.name
       - file.ctime
@@ -14,7 +14,7 @@ views:
       - property: file.ctime
         direction: DESC
     columnSize:
-      file.ctime: 58
+      file.ctime: 173
       note.about: 244
       note.aim: 360
   - type: table
