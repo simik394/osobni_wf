@@ -1,0 +1,28 @@
+name: Deploy to Windmill
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastruct/configs/youtrack.conf/windmill/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install wmill
+        run: npm install -g wmill
+
+      - name: Sync Windmill Scripts
+        env:
+          WMILL_TOKEN: ${{ secrets.WMILL_TOKEN }}
+        run: |
+          # Navigate to the windmill workspace root
+          cd infrastruct/configs/youtrack.conf/windmill
+
+          # Sync to Windmill
+          # Adjust url and workspace id as needed
+          wmill sync --workspace ${{ secrets.WMILL_WORKSPACE }} ${{ secrets.WMILL_URL }}
