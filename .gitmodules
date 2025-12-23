@@ -1,0 +1,4 @@
+[submodule "agents/angrav"]
+	path = agents/angrav
+	url = git@github.com:simik394/angrav.git
+	ignore = dirty
