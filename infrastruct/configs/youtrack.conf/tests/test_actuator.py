@@ -100,7 +100,7 @@ class TestFieldOperations:
         mock_session.post.return_value = mock_response
         
         actuator = YouTrackActuator("https://yt.example.com", "token")
-        result = actuator.create_field("Priority", "enum", bundle_id="bundle-123")
+        result = actuator.create_field("Priority", "enum", bundle_name_or_id="bundle-123")
         
         assert result.success is True
         assert result.resource_id == "field-789"
@@ -142,7 +142,7 @@ class TestPlanExecution:
         
         plan = [
             ('create_bundle', 'PriorityBundle', 'enum'),
-            ('create_field', 'Priority', 'enum', 'bundle-id'),
+            ('create_field', 'Priority', 'enum', 'PriorityBundle'),
         ]
         
         results = actuator.execute_plan(plan)
@@ -162,8 +162,8 @@ class TestPlanExecution:
         
         plan = [
             ('create_bundle', 'TestBundle', 'enum'),
-            ('add_bundle_value', 'TestBundle', 'High'),
-            ('create_field', 'TestField', 'enum'),
+            ('add_bundle_value', 'TestBundle', 'High', 'enum'),
+            ('create_field', 'TestField', 'enum', 'TestBundle'),
         ]
         
         results = actuator.execute_plan(plan)

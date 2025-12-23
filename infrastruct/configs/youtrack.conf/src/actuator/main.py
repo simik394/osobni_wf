@@ -53,19 +53,52 @@ class YouTrackActuator:
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         })
-    
+        # Cache for bundle IDs: name -> id
+        self._bundle_cache = {}
+
+    def _resolve_bundle_id(self, name_or_id: str, bundle_type: str = 'enum') -> str:
+        """
+        Resolve a bundle name to an ID. 
+        If it looks like an ID, return it. If it's in cache, return cached ID.
+        Otherwise, try to find it in YouTrack (unless dry_run).
+        """
+        if not name_or_id:
+            return name_or_id
+            
+        # Check cache
+        if name_or_id in self._bundle_cache:
+            return self._bundle_cache[name_or_id]
+            
+        # If it looks like a UUID (simple heuristic), assume it's an ID
+        if len(name_or_id) > 30 and '-' in name_or_id:
+            return name_or_id
+            
+        if self.dry_run:
+            return f"dry-run-id-for-{name_or_id}"
+            
+        # Try to find by name via API
+        try:
+            resp = self.session.get(
+                f'{self.url}/api/admin/customFieldSettings/bundles/{bundle_type}',
+                params={'fields': 'id,name', 'query': name_or_id}
+            )
+            resp.raise_for_status()
+            for bundle in resp.json():
+                if bundle['name'] == name_or_id:
+                    self._bundle_cache[name_or_id] = bundle['id']
+                    return bundle['id']
+        except Exception as e:
+            logger.warning(f"Failed to lookup bundle ID for {name_or_id}: {e}")
+            
+        # Fallback: return as is, hoping it's an ID
+        return name_or_id
+
     # =========================================================================
     # BUNDLE OPERATIONS
     # =========================================================================
     
     def create_bundle(self, name: str, bundle_type: str = 'enum') -> ActionResult:
-        """
-        Create a new bundle.
-        
-        Args:
-            name: Bundle name
-            bundle_type: One of 'enum', 'state', 'version', 'build', 'user', 'ownedField'
-        """
+        """Create a new bundle."""
         action = f"create_bundle({name}, {bundle_type})"
         
         if self.dry_run:
@@ -73,30 +106,34 @@ class YouTrackActuator:
             return ActionResult(action=action, success=True)
         
         try:
+            # Check if already exists (idempotency)
+            # This is "ensure_bundle" logic basically
+            existing_id = self._resolve_bundle_id(name, bundle_type)
+            if existing_id and existing_id != name and not existing_id.startswith('dry-run'):
+                logger.info(f"Bundle {name} already exists (id={existing_id})")
+                return ActionResult(action=action, success=True, resource_id=existing_id)
+
             resp = self.session.post(
                 f'{self.url}/api/admin/customFieldSettings/bundles/{bundle_type}',
                 json={'name': name}
             )
             resp.raise_for_status()
             data = resp.json()
-            logger.info(f"Created bundle: {name} (id={data.get('id')})")
-            return ActionResult(action=action, success=True, resource_id=data.get('id'))
+            bundle_id = data.get('id')
+            self._bundle_cache[name] = bundle_id
+            logger.info(f"Created bundle: {name} (id={bundle_id})")
+            return ActionResult(action=action, success=True, resource_id=bundle_id)
         except requests.HTTPError as e:
+            # specific 409 handling if needed
             error = f"HTTP {e.response.status_code}: {e.response.text}"
             logger.error(f"Failed to create bundle {name}: {error}")
             return ActionResult(action=action, success=False, error=error)
     
-    def add_bundle_value(self, bundle_id: str, value_name: str, 
+    def add_bundle_value(self, bundle_name_or_id: str, value_name: str, 
                          bundle_type: str = 'enum') -> ActionResult:
-        """
-        Add a value to an existing bundle.
-        
-        Args:
-            bundle_id: Bundle ID or name
-            value_name: Value to add
-            bundle_type: Bundle type for correct endpoint
-        """
-        action = f"add_bundle_value({bundle_id}, {value_name})"
+        """Add a value to an existing bundle."""
+        bundle_id = self._resolve_bundle_id(bundle_name_or_id, bundle_type)
+        action = f"add_bundle_value({bundle_name_or_id}, {value_name})"
         
         if self.dry_run:
             logger.info(f"[DRY RUN] {action}")
@@ -109,24 +146,18 @@ class YouTrackActuator:
             )
             resp.raise_for_status()  
             data = resp.json()
-            logger.info(f"Added value '{value_name}' to bundle {bundle_id}")
+            logger.info(f"Added value '{value_name}' to bundle {bundle_name_or_id}")
             return ActionResult(action=action, success=True, resource_id=data.get('id'))
         except requests.HTTPError as e:
             error = f"HTTP {e.response.status_code}: {e.response.text}"
             logger.error(f"Failed to add value to bundle: {error}")
             return ActionResult(action=action, success=False, error=error)
     
-    def add_state_value(self, bundle_id: str, value_name: str,
+    def add_state_value(self, bundle_name_or_id: str, value_name: str,
                         is_resolved: bool = False) -> ActionResult:
-        """
-        Add a state value to a state bundle.
-        
-        Args:
-            bundle_id: State bundle ID
-            value_name: State name (e.g., "Open", "Done")
-            is_resolved: Whether this state means the issue is resolved
-        """
-        action = f"add_state_value({bundle_id}, {value_name}, resolved={is_resolved})"
+        """Add a state value to a state bundle."""
+        bundle_id = self._resolve_bundle_id(bundle_name_or_id, 'state')
+        action = f"add_state_value({bundle_name_or_id}, {value_name}, resolved={is_resolved})"
         
         if self.dry_run:
             logger.info(f"[DRY RUN] {action}")
@@ -139,7 +170,7 @@ class YouTrackActuator:
             )
             resp.raise_for_status()
             data = resp.json()
-            logger.info(f"Added state '{value_name}' (resolved={is_resolved}) to bundle {bundle_id}")
+            logger.info(f"Added state '{value_name}' (resolved={is_resolved}) to bundle {bundle_name_or_id}")
             return ActionResult(action=action, success=True, resource_id=data.get('id'))
         except requests.HTTPError as e:
             error = f"HTTP {e.response.status_code}: {e.response.text}"
@@ -151,29 +182,25 @@ class YouTrackActuator:
     # =========================================================================
     
     def create_project(self, name: str, short_name: str, 
-                       leader_id: str) -> ActionResult:
-        """
-        Create a new project.
-        
-        Args:
-            name: Project full name
-            short_name: Project short name (used in issue IDs, e.g., "DEMO")
-            leader_id: ID of the project leader (user ID)
-        """
+                       leader_id: Optional[str] = None) -> ActionResult:
+        """Create a new project."""
         action = f"create_project({name}, {short_name})"
         
         if self.dry_run:
             logger.info(f"[DRY RUN] {action}")
             return ActionResult(action=action, success=True)
         
+        payload = {
+            'name': name,
+            'shortName': short_name,
+        }
+        if leader_id:
+            payload['leader'] = {'id': leader_id}
+            
         try:
             resp = self.session.post(
                 f'{self.url}/api/admin/projects',
-                json={
-                    'name': name,
-                    'shortName': short_name,
-                    'leader': {'id': leader_id}
-                },
+                json=payload,
                 params={'fields': 'id,name,shortName'}
             )
             resp.raise_for_status()
@@ -190,15 +217,8 @@ class YouTrackActuator:
     # =========================================================================
     
     def create_field(self, name: str, field_type: str, 
-                     bundle_id: Optional[str] = None) -> ActionResult:
-        """
-        Create a new custom field.
-        
-        Args:
-            name: Field name
-            field_type: Field type (enum, state, string, integer, etc.)
-            bundle_id: Bundle ID for enum/state fields (required for those types)
-        """
+                     bundle_name_or_id: Optional[str] = None) -> ActionResult:
+        """Create a new custom field."""
         action = f"create_field({name}, {field_type})"
         
         if self.dry_run:
@@ -213,7 +233,8 @@ class YouTrackActuator:
         }
         
         # For enum/state fields, we need to specify the bundle
-        if bundle_id and field_type in ('enum', 'state'):
+        if bundle_name_or_id and field_type in ('enum', 'state'):
+            bundle_id = self._resolve_bundle_id(bundle_name_or_id, field_type)
             payload['bundle'] = {'id': bundle_id}
         
         try:
@@ -224,6 +245,7 @@ class YouTrackActuator:
             )
             resp.raise_for_status()
             data = resp.json()
+            # Cache field ID if needed? Not yet.
             logger.info(f"Created field: {name} (id={data.get('id')})")
             return ActionResult(action=action, success=True, resource_id=data.get('id'))
         except requests.HTTPError as e:
@@ -231,17 +253,33 @@ class YouTrackActuator:
             logger.error(f"Failed to create field {name}: {error}")
             return ActionResult(action=action, success=False, error=error)
     
-    def attach_field_to_project(self, field_id: str, project_id: str,
+    def attach_field_to_project(self, field_name_or_id: str, project_id: str,
                                 can_be_empty: bool = True) -> ActionResult:
-        """
-        Attach an existing custom field to a project.
+        """Attach an existing custom field to a project."""
+        # Simple fix: Assume name for field, act needs ID.
+        # But we don't have a field cache yet.
+        # For now, let's assume if it doesn't look like ID, we lookup.
+        # Minimal implementation for now: fetch ALL fields and find ID?
+        # Or assumes caller passes ID (which Prolog curr_field was doing, but create_field creates with Name).
         
-        Args:
-            field_id: Custom field ID
-            project_id: Project short name or ID
-            can_be_empty: Whether the field can be empty
-        """
-        action = f"attach_field({field_id}, {project_id})"
+        # NOTE: create_field returns ID, but we don't store it for next steps in simplistic execute_plan.
+        # We need lookup here too.
+        field_id = field_name_or_id
+        if not (len(field_id) > 20 and '-' in field_id) and not self.dry_run:
+             # Try lookup field by name
+             try:
+                resp = self.session.get(
+                    f'{self.url}/api/admin/customFieldSettings/customFields',
+                    params={'fields': 'id,name', 'query': field_name_or_id}
+                )
+                resp.raise_for_status()
+                for f in resp.json():
+                    if f['name'] == field_name_or_id:
+                        field_id = f['id']
+                        break
+             except: pass
+        
+        action = f"attach_field({field_name_or_id}, {project_id})"
         
         if self.dry_run:
             logger.info(f"[DRY RUN] {action}")
@@ -258,7 +296,7 @@ class YouTrackActuator:
             )
             resp.raise_for_status()
             data = resp.json()
-            logger.info(f"Attached field {field_id} to project {project_id}")
+            logger.info(f"Attached field {field_name_or_id} to project {project_id}")
             return ActionResult(action=action, success=True, resource_id=data.get('id'))
         except requests.HTTPError as e:
             error = f"HTTP {e.response.status_code}: {e.response.text}"
@@ -270,36 +308,33 @@ class YouTrackActuator:
     # =========================================================================
     
     def execute_plan(self, actions: list[tuple]) -> list[ActionResult]:
-        """
-        Execute a list of actions from Prolog plan.
-        
-        Args:
-            actions: List of action tuples from Prolog, e.g.:
-                     [('create_bundle', 'PriorityBundle', 'enum'),
-                      ('create_field', 'Priority', 'enum', 'bundle-id'),
-                      ('attach_field', 'field-id', 'DEMO')]
-        
-        Returns:
-            List of ActionResult for each action
-        """
+        """Execute a list of actions from Prolog plan."""
         results = []
         
         for action in actions:
             action_type = action[0]
-            args = action[1:]
+            args = list(action[1:])  # Convert to list to modify if needed
             
+            # Map Prolog args to Python method args
             if action_type == 'create_bundle':
                 result = self.create_bundle(*args)
             elif action_type == 'create_state_bundle':
+                # Prolog: create_state_bundle(Name) -> create_bundle(Name, 'state')
                 result = self.create_bundle(args[0], bundle_type='state')
             elif action_type == 'ensure_bundle':
-                # ensure_bundle is idempotent - check if exists, create if not
-                result = self.create_bundle(args[0])
+                # ensure_bundle(Name, Type)
+                name = args[0]
+                btype = args[1] if len(args) > 1 else 'enum'
+                result = self.create_bundle(name, bundle_type=btype)
             elif action_type == 'add_bundle_value':
-                result = self.add_bundle_value(*args)
+                # add_bundle_value(BundleName, Value, Type)
+                # Prolog passes Type as 3rd arg, Actuator takes (Name, Value, Type)
+                result = self.add_bundle_value(args[0], args[1], bundle_type=args[2])
             elif action_type == 'add_state_value':
-                result = self.add_state_value(*args)
+                # add_state_value(BundleName, Value, IsResolved)
+                result = self.add_state_value(args[0], args[1], is_resolved=args[2])
             elif action_type == 'create_field':
+                # create_field(Name, Type, BundleName) or (Name, Type)
                 result = self.create_field(*args)
             elif action_type == 'attach_field':
                 result = self.attach_field_to_project(*args)
@@ -315,9 +350,9 @@ class YouTrackActuator:
             
             results.append(result)
             
-            # Stop on first failure (atomic execution)
             if not result.success and not self.dry_run:
                 logger.error(f"Stopping plan execution due to failure: {result.error}")
                 break
         
         return results
+

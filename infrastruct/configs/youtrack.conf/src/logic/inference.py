@@ -144,23 +144,24 @@ class PrologInferenceEngine:
         self.initialize()
         
         # Query the plan
-        result = janus.query_once("plan(Actions)", {"Actions": None})
+        # We transform terms to lists (univ =..) to assume robust conversion 
+        # by Janus (which might fail on compound terms in some envs)
+        # We underscore _Actions to prevent Janus from trying to return the 
+        # intermediate term list (which would cause a py_term domain error)
+        query = "plan(_Actions), maplist(=.., _Actions, ActionLists)"
+        result = janus.query_once(query)
         
         if result is None:
             logger.warning("Prolog plan query returned no results")
             return []
         
-        actions = result.get("Actions", [])
+        action_lists = result.get("ActionLists", [])
+        if action_lists is None:
+             # Logic failed
+             return []
         
-        # Convert Prolog terms to Python tuples
-        plan = []
-        for action in actions:
-            if hasattr(action, 'functor'):
-                # Janus term object
-                plan.append(self._term_to_tuple(action))
-            else:
-                # Already a Python structure
-                plan.append(action)
+        # Convert lists to tuples for consistency
+        plan = [tuple(a) for a in action_lists]
         
         logger.info(f"Computed plan with {len(plan)} actions")
         return plan

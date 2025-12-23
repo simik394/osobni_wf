@@ -49,21 +49,60 @@ drifted_field(Id, Name, CurrentType, TargetType) :-
 %% ACTION GENERATION
 %% =============================================================================
 
-%% Generate create action for missing fields
-action(create_field(Name, Type, Project)) :-
-    missing_field(Name, Type, Project).
+%% 1. Bundles
+%% Ensure bundle exists if used by any field
+action(ensure_bundle(Name, Type)) :-
+    field_uses_bundle(FieldName, Name),
+    target_field(FieldName, FieldType, _),
+    (FieldType = state -> Type = state ; Type = enum),
+    \+ curr_bundle(_, Name, _).
 
-%% Generate update action for drifted fields (WARNING: destructive!)
-action(update_field_type(Id, Name, NewType)) :-
-    drifted_field(Id, Name, _, NewType).
+%% Add values to bundles
+action(add_bundle_value(Bundle, Value, enum)) :-
+    target_bundle_value(Bundle, Value),
+    \+ (curr_bundle(Bid, Bundle, _), bundle_value(Bid, _, Value)).
+
+action(add_state_value(Bundle, Value, IsResolved)) :-
+    target_state_value(Bundle, Value, IsResolved),
+    \+ (curr_bundle(Bid, Bundle, _), bundle_value(Bid, _, Value)).
+
+%% 2. Fields
+%% Create global field definition if missing
+action(create_field(Name, Type, Bundle)) :-
+    target_field(Name, Type, _),
+    \+ curr_field(_, Name, _),
+    field_uses_bundle(Name, Bundle).
+
+action(create_field(Name, Type)) :-
+    target_field(Name, Type, _),
+    \+ curr_field(_, Name, _),
+    \+ field_uses_bundle(Name, _).
+
+%% Attach field to project if missing from project
+%% (Simplified: If we target it, we attach it. Actuator checks if already attached)
+action(attach_field(Name, Project)) :-
+    target_field(Name, _, Project).
+    % Ideally check if already attached, but we lack curr_project_field(Project, Field) fact yet.
+    % We'll rely on Actuator idempotency or add that fact later.
 
 %% =============================================================================
 %% DEPENDENCY GRAPH
 %% =============================================================================
 
-%% Field creation depends on bundle existence
-depends_on(create_field(Name, enum, _), ensure_bundle(BundleName)) :-
-    field_uses_bundle(Name, BundleName).
+%% Value addition depends on bundle creation
+depends_on(add_bundle_value(B, _, _), ensure_bundle(B, _)).
+depends_on(add_state_value(B, _, _), ensure_bundle(B, _)).
+
+%% Field creation depends on bundle creation
+depends_on(create_field(_, _, B), ensure_bundle(B, _)).
+
+%% Field attachment depends on field creation
+%% Field attachment depends on field creation
+depends_on(attach_field(F, _), create_field(F, _, B)) :-
+    field_uses_bundle(F, B).
+depends_on(attach_field(F, _), create_field(F, _)) :-
+    \+ field_uses_bundle(F, _).
+
 
 %% =============================================================================
 %% TOPOLOGICAL SORT

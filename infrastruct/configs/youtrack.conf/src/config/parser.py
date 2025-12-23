@@ -84,3 +84,29 @@ def merge_configs(configs: list[YouTrackConfig]) -> YouTrackConfig:
         projects=all_projects,
         bundles=all_bundles if all_bundles else None
     )
+
+
+def load_config_string(yaml_content: str) -> YouTrackConfig:
+    """
+    Load config from a YAML string.
+    
+    Args:
+        yaml_content: Raw YAML string
+        
+    Returns:
+        Parsed YouTrackConfig
+    """
+    data = yaml.safe_load(yaml_content)
+    
+    # Handle single project format (no 'projects' key)
+    if 'project' in data:
+        # Single project shorthand
+        project_data = data['project']
+        if 'fields' in data:
+            project_data['fields'] = data['fields']
+        return YouTrackConfig(
+            projects=[ProjectConfig(**project_data)],
+            bundles=data.get('bundles')
+        )
+            
+    return YouTrackConfig(**data)
