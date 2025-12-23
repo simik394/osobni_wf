@@ -27,18 +27,24 @@
     state: present
   become: true
 
-- name: Install janus-swi Python package
+- name: Install janus-swi Python package (system-wide)
   pip:
-    name: janus-swi>={{ swiprolog_version | default('1.3.0') }}
-    executable: "{{ swiprolog_python | default('pip3') }}"
-    extra_args: --user
-  when: swiprolog_install_janus | default(true)
+    name: janus-swi
+    executable: /usr/bin/pip3
+  become: true
 
 - name: Verify SWI-Prolog installation
   command: swipl --version
   register: swipl_version
   changed_when: false
 
-- name: Display SWI-Prolog version
+- name: Verify janus-swi installation
+  command: /usr/bin/python3 -c "import janus_swi; print('janus-swi OK')"
+  register: janus_check
+  changed_when: false
+
+- name: Display installation status
   debug:
-    msg: "SWI-Prolog installed: {{ swipl_version.stdout }}"
+    msg:
+      - "SWI-Prolog: {{ swipl_version.stdout }}"
+      - "Janus: {{ janus_check.stdout }}"
