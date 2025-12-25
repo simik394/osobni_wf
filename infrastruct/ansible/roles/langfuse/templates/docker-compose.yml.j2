@@ -4,6 +4,11 @@ services:
   # Langfuse Web Application
   langfuse-web:
     image: langfuse/langfuse:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "3000:3000"
     environment:
@@ -54,6 +59,11 @@ services:
   # Langfuse Worker
   langfuse-worker:
     image: langfuse/langfuse-worker:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       TZ: Europe/Berlin # Adjust timezone as needed
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -125,6 +135,11 @@ services:
   # ClickHouse OLAP Database
   clickhouse:
     image: clickhouse/clickhouse-server:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8123:8123" # HTTP interface
       - "9000:9000" # Native client interface

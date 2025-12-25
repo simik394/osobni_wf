@@ -5,5 +5,6 @@
   roles:
     - role: julia
     - role: swiprolog
+    - role: obs-studio
       # vars:
       #   swiprolog_enabled: false  # Uncomment to skip SWI-Prolog installation

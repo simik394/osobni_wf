@@ -55,6 +55,7 @@ status: In Progress
 ### MSI NTB
 - [ ] instalovat pluginy do zotera
 - [ ] přenést configuraci custom frames do Obsidianu
+- [x] přidat OBS Studio přes Ansible
 
 # research do
 ## try 
