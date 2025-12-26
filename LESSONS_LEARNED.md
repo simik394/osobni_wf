@@ -32,3 +32,15 @@ When choosing between SWI-Prolog and ELPI (λProlog):
 - **Use SWI-Prolog** for: flat database queries, HTTP/JSON integration, constraint logic programming, rapid REPL prototyping.
 - **Use ELPI** for: data with lambdas/binders (AST manipulation), local hypothetical reasoning without side-effects, meta-programming over rules.
 - **Decision heuristic**: If your data has "holes" (variables that can be bound) or you need `(assume X => prove Y)` style reasoning, consider ELPI. Otherwise, start with SWI-Prolog.
+
+## Web Automation API Patterns
+
+When wrapping browser automation as OpenAI-compatible API:
+
+- **DOM Polling for SSE**: Poll the DOM every 300-500ms to extract partial responses while AI is generating. Send deltas (new text since last poll) as SSE chunks.
+- **Stability Detection**: Consider response complete when DOM content is stable for 2-3 consecutive polls (response stabilized).
+- **Sequential Processing**: NEVER run parallel interactions in multiple browser tabs - dead giveaway for bot detection. Use request queue for sequential processing.
+- **Human-like Behavior**: Paste whole prompts is fine (humans do this), but avoid superhuman interaction patterns like split-second multi-tab switches.
+- **Error via SSE**: When streaming fails, send error as final SSE chunk with `finish_reason: 'stop'` rather than throwing, to avoid unhandled rejections.
+- **Model Routing**: Use OpenAI `model` field to route requests to different backends (e.g., `gemini-rsrch` → Gemini, `perplexity` → Perplexity.ai).
+
