@@ -109,13 +109,13 @@
       #!/bin/bash
       # OBS Studio One-Click Recording Launcher
       # Starts OBS with recording active and minimized to tray
-      
+
       # Kill any existing OBS instance (optional - uncomment if needed)
       # pkill -x obs || true
-      
+
       # Start OBS with recording and minimize to tray
       obs --startrecording --minimize-to-tray &
-      
+
       echo "OBS recording started. Check system tray."
 
 - name: Ensure ~/bin is in PATH (add to .bashrc if not present)
@@ -140,3 +140,26 @@
       Terminal=false
       Categories=AudioVideo;Recorder;
       StartupNotify=false
+
+# ============================================
+# OBS PROFILE CONFIGURATION (DUMMY OUTPUT)
+# ============================================
+
+- name: Ensure OBS profiles directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/obs-studio/basic/profiles/{{ obs_profile_name }}"
+    state: directory
+    mode: "0755"
+
+- name: Ensure recording output directory exists
+  file:
+    path: "{{ obs_recording_path }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy OBS profile with dummy output settings
+  template:
+    src: basic.ini.j2
+    dest: "{{ ansible_env.HOME }}/.config/obs-studio/basic/profiles/{{ obs_profile_name }}/basic.ini"
+    mode: "0644"
+    backup: yes

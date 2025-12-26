@@ -1,0 +1,105 @@
+[General]
+Name={{ obs_profile_name }}
+
+[Output]
+Mode=Advanced
+FilenameFormatting=%CCYY-%MM-%DD %hh-%mm-%ss
+DelayEnable=false
+DelaySec=20
+DelayPreserve=true
+Reconnect=true
+RetryDelay=2
+MaxRetries=25
+BindIP=default
+IPFamily=IPv4+IPv6
+NewSocketLoopEnable=false
+LowLatencyEnable=false
+
+[Stream1]
+IgnoreRecommended=false
+EnableMultitrackVideo=false
+MultitrackVideoMaximumAggregateBitrateAuto=true
+MultitrackVideoMaximumVideoTracksAuto=true
+
+[SimpleOutput]
+FilePath={{ obs_recording_path }}
+RecFormat2={{ obs_recording_format }}
+VBitrate={{ obs_dummy_output.video_bitrate }}
+ABitrate={{ obs_dummy_output.audio_bitrate }}
+UseAdvanced=false
+Preset=ultrafast
+RecQuality=Small
+RecRB=false
+RecRBTime=20
+RecRBSize=512
+RecRBPrefix=Replay
+StreamAudioEncoder=aac
+RecAudioEncoder=aac
+RecTracks=1
+StreamEncoder=x264
+RecEncoder=x264
+
+[AdvOut]
+ApplyServiceSettings=true
+UseRescale=true
+RescaleRes={{ obs_output.width }}x{{ obs_output.height }}
+TrackIndex=1
+VodTrackIndex=2
+Encoder=obs_x264
+RecType=Standard
+RecFilePath={{ obs_recording_path }}
+RecFormat2={{ obs_recording_format }}
+RecUseRescale=true
+RecRescaleRes={{ obs_output.width }}x{{ obs_output.height }}
+RecTracks=1
+RecEncoder=obs_x264
+FLVTrack=1
+FFOutputToFile=true
+FFFilePath={{ obs_recording_path }}
+FFVBitrate={{ obs_dummy_output.video_bitrate }}
+FFVGOPSize=10
+FFUseRescale=true
+FFRescaleRes={{ obs_output.width }}x{{ obs_output.height }}
+FFIgnoreCompat=true
+FFABitrate={{ obs_dummy_output.audio_bitrate }}
+FFAudioMixes=1
+Track1Bitrate={{ obs_dummy_output.audio_bitrate }}
+Track2Bitrate={{ obs_dummy_output.audio_bitrate }}
+Track3Bitrate={{ obs_dummy_output.audio_bitrate }}
+Track4Bitrate={{ obs_dummy_output.audio_bitrate }}
+Track5Bitrate={{ obs_dummy_output.audio_bitrate }}
+Track6Bitrate={{ obs_dummy_output.audio_bitrate }}
+RecSplitFileTime=30
+RecSplitFileSize=2048
+RecRB=false
+RecRBTime=20
+RecRBSize=512
+RecSplitFileType=Time
+FFFormat=matroska
+FFFormatMimeType=video/x-matroska
+FFExtension=mkv
+
+[Video]
+BaseCX={{ obs_canvas.width }}
+BaseCY={{ obs_canvas.height }}
+OutputCX={{ obs_output.width }}
+OutputCY={{ obs_output.height }}
+FPSType=0
+FPSCommon={{ obs_fps }}
+FPSInt={{ obs_fps }}
+FPSNum={{ obs_fps }}
+FPSDen=1
+ScaleType=bilinear
+ColorFormat=NV12
+ColorSpace=709
+ColorRange=Partial
+SdrWhiteLevel=300
+HdrNominalPeakLevel=1000
+
+[Audio]
+MonitoringDeviceId=default
+MonitoringDeviceName=Default
+SampleRate=48000
+ChannelSetup=Stereo
+MeterDecayRate=23.53
+PeakMeterType=0

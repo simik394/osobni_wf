@@ -1,0 +1,32 @@
+# OBS Studio Role Variables
+# These can be overridden in your playbook or inventory
+
+# Profile name (will be created if doesn't exist)
+obs_profile_name: "Recording"
+
+# Recording output directory
+obs_recording_path: "{{ ansible_env.HOME }}/Videos/OBS"
+
+# Main output settings (kept minimal for Source Record workflow)
+# The actual recording is done by Source Record filters on individual sources
+obs_dummy_output:
+  resolution_width: 64
+  resolution_height: 64
+  video_bitrate: 100
+  audio_bitrate: 64
+
+# Base canvas resolution (should match your primary monitor)
+obs_canvas:
+  width: 1920
+  height: 1080
+
+# Output resolution for main stream (dummy - kept tiny)
+obs_output:
+  width: 64
+  height: 64
+
+# Recording format
+obs_recording_format: "mkv"
+
+# FPS
+obs_fps: 30
