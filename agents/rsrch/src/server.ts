@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import { PerplexityClient } from './client';
 import { config } from './config';
 
@@ -28,6 +29,7 @@ const app = express();
 const PORT = config.port;
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 
 // Initialize the client
