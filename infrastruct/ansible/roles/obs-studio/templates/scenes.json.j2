@@ -1,0 +1,191 @@
+{
+  "DesktopAudioDevice1": {
+    "prev_ver": 503447555,
+    "name": "Desktop Audio",
+    "uuid": "{{ obs_uuid_desktop_audio }}",
+    "id": "pulse_output_capture",
+    "versioned_id": "pulse_output_capture",
+    "settings": {"device_id": "default"},
+    "mixers": 255, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+    "enabled": true, "muted": false,
+    "push-to-mute": false, "push-to-mute-delay": 0,
+    "push-to-talk": false, "push-to-talk-delay": 0,
+    "hotkeys": {"libobs.mute": [], "libobs.unmute": [], "libobs.push-to-mute": [], "libobs.push-to-talk": []},
+    "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+    "private_settings": {}
+  },
+  "AuxAudioDevice1": {
+    "prev_ver": 503447555,
+    "name": "Mic/Aux",
+    "uuid": "{{ obs_uuid_mic }}",
+    "id": "pulse_input_capture",
+    "versioned_id": "pulse_input_capture",
+    "settings": {"device_id": "default"},
+    "mixers": 255, "sync": 0, "flags": 0, "volume": 0.75, "balance": 0.5,
+    "enabled": true, "muted": false,
+    "push-to-mute": false, "push-to-mute-delay": 0,
+    "push-to-talk": false, "push-to-talk-delay": 0,
+    "hotkeys": {"libobs.mute": [], "libobs.unmute": [], "libobs.push-to-mute": [], "libobs.push-to-talk": []},
+    "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+    "private_settings": {}
+  },
+  "current_scene": "Recording",
+  "current_program_scene": "Recording",
+  "scene_order": [{"name": "Recording"}],
+  "name": "{{ obs_scene_collection_name }}",
+  "sources": [
+    {
+      "prev_ver": 503447555,
+      "name": "Recording",
+      "uuid": "{{ obs_uuid_scene }}",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 4,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "Monitor1-HDMI",
+            "source_uuid": "{{ obs_uuid_monitor1 }}",
+            "visible": true, "locked": false, "rot": 0.0,
+            "pos": {"x": 0.0, "y": 0.0},
+            "scale": {"x": 1.0, "y": 1.0},
+            "align": 5, "bounds_type": 2, "bounds_align": 0, "bounds_crop": false,
+            "bounds": {"x": {{ obs_canvas.width }}.0, "y": {{ obs_canvas.height }}.0},
+            "crop_left": 0, "crop_top": 0, "crop_right": 0, "crop_bottom": 0,
+            "id": 1, "group_item_backup": false, "scale_filter": "disable",
+            "blend_method": "default", "blend_type": "normal",
+            "show_transition": {"duration": 0}, "hide_transition": {"duration": 0},
+            "private_settings": {}
+          },
+          {
+            "name": "Clock",
+            "source_uuid": "{{ obs_uuid_clock }}",
+            "visible": true, "locked": false, "rot": 0.0,
+            "pos": {"x": 10.0, "y": 10.0},
+            "scale": {"x": 2.0, "y": 2.0},
+            "align": 5, "bounds_type": 0, "bounds_align": 0, "bounds_crop": false,
+            "bounds": {"x": 0.0, "y": 0.0},
+            "crop_left": 0, "crop_top": 0, "crop_right": 0, "crop_bottom": 0,
+            "id": 3, "group_item_backup": false, "scale_filter": "disable",
+            "blend_method": "default", "blend_type": "normal",
+            "show_transition": {"duration": 0}, "hide_transition": {"duration": 0},
+            "private_settings": {}
+          }
+        ]
+      },
+      "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+      "enabled": true, "muted": false,
+      "push-to-mute": false, "push-to-mute-delay": 0,
+      "push-to-talk": false, "push-to-talk-delay": 0,
+      "hotkeys": {"OBSBasic.SelectScene": [], "libobs.show_scene_item.1": [], "libobs.hide_scene_item.1": [], "libobs.show_scene_item.3": [], "libobs.hide_scene_item.3": []},
+      "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+      "private_settings": {}
+    },
+    {
+      "prev_ver": 503447555,
+      "name": "Monitor1-HDMI",
+      "uuid": "{{ obs_uuid_monitor1 }}",
+      "id": "xshm_input",
+      "versioned_id": "xshm_input",
+      "settings": {"advanced": false, "screen": 0},
+      "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+      "enabled": true, "muted": false,
+      "push-to-mute": false, "push-to-mute-delay": 0,
+      "push-to-talk": false, "push-to-talk-delay": 0,
+      "hotkeys": {
+        "source_record.enable": [], "source_record.disable": [],
+        "source_record.PauseRecording": [], "source_record.UnpauseRecording": [],
+        "source_record.SplitRecording": [], "source_record.AddChapterMarker": []
+      },
+      "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+      "private_settings": {},
+      "filters": [
+        {
+          "prev_ver": 503447555,
+          "name": "SourceRecord-Monitor1",
+          "uuid": "{{ obs_uuid_filter_monitor1 }}",
+          "id": "source_record_filter",
+          "versioned_id": "source_record_filter",
+          "settings": {
+            "scale_type": 5,
+            "record_mode": 3,
+            "split_file": true,
+            "replay_buffer": false,
+            "scale": true,
+            "resolution": "{{ obs_source_record.width }}x{{ obs_source_record.height }}",
+            "width": {{ obs_source_record.width }},
+            "height": {{ obs_source_record.height }},
+            "filename_formatting": "monitor1_%CCYY-%MM-%DD_%hh-%mm-%ss",
+            "path": "{{ obs_recording_path }}",
+            "bitrate": {{ obs_source_record.bitrate }},
+            "keyint_sec": 10,
+            "gpu": 0
+          },
+          "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+          "enabled": true, "muted": false,
+          "push-to-mute": false, "push-to-mute-delay": 0,
+          "push-to-talk": false, "push-to-talk-delay": 0,
+          "hotkeys": {},
+          "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+          "private_settings": {}
+        }
+      ]
+    },
+    {
+      "prev_ver": 503447555,
+      "name": "Clock",
+      "uuid": "{{ obs_uuid_clock }}",
+      "id": "text_ft2_source",
+      "versioned_id": "text_ft2_source_v2",
+      "settings": {
+        "font": {"face": "Sans Serif", "size": 48, "flags": 0, "style": "Regular"},
+        "color1": 4294967295,
+        "color2": 4294967295,
+        "text": ""
+      },
+      "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+      "enabled": true, "muted": false,
+      "push-to-mute": false, "push-to-mute-delay": 0,
+      "push-to-talk": false, "push-to-talk-delay": 0,
+      "hotkeys": {},
+      "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+      "private_settings": {}
+    }
+  ],
+  "groups": [],
+  "quick_transitions": [
+    {"name": "Cut", "duration": 300, "hotkeys": [], "id": 1, "fade_to_black": false},
+    {"name": "Fade", "duration": 300, "hotkeys": [], "id": 2, "fade_to_black": false},
+    {"name": "Fade", "duration": 300, "hotkeys": [], "id": 3, "fade_to_black": true}
+  ],
+  "transitions": [],
+  "saved_projectors": [],
+  "current_transition": "Fade",
+  "transition_duration": 300,
+  "preview_locked": false,
+  "scaling_enabled": false,
+  "scaling_level": 0,
+  "scaling_off_x": 0.0,
+  "scaling_off_y": 0.0,
+  "modules": {
+    "scripts-tool": [
+      {
+        "path": "{{ ansible_env.HOME }}/.config/obs-studio/scripts/DateTimeMultiple.lua",
+        "settings": {
+          "source_name": "Clock",
+          "format": "%H:%M:%S"
+        }
+      }
+    ],
+    "output-timer": {
+      "streamTimerHours": 0, "streamTimerMinutes": 0, "streamTimerSeconds": 30,
+      "recordTimerHours": 0, "recordTimerMinutes": 0, "recordTimerSeconds": 30,
+      "autoStartStreamTimer": false, "autoStartRecordTimer": false, "pauseRecordTimer": true
+    },
+    "auto-scene-switcher": {
+      "interval": 300, "non_matching_scene": "", "switch_if_not_matching": false,
+      "active": false, "switches": []
+    }
+  }
+}

@@ -163,3 +163,20 @@
     dest: "{{ ansible_env.HOME }}/.config/obs-studio/basic/profiles/{{ obs_profile_name }}/basic.ini"
     mode: "0644"
     backup: yes
+
+# ============================================
+# OBS SCENE COLLECTION (SOURCES & FILTERS)
+# ============================================
+
+- name: Ensure OBS scenes directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/obs-studio/basic/scenes"
+    state: directory
+    mode: "0755"
+
+- name: Deploy OBS scene collection with sources and filters
+  template:
+    src: scenes.json.j2
+    dest: "{{ ansible_env.HOME }}/.config/obs-studio/basic/scenes/{{ obs_scene_collection_name }}.json"
+    mode: "0644"
+    backup: yes
