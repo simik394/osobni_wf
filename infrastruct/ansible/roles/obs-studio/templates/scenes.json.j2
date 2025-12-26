@@ -41,7 +41,7 @@
       "id": "scene",
       "versioned_id": "scene",
       "settings": {
-        "id_counter": 4,
+        "id_counter": 6,
         "custom_size": false,
         "items": [
           {
@@ -54,6 +54,20 @@
             "bounds": {"x": {{ obs_canvas.width }}.0, "y": {{ obs_canvas.height }}.0},
             "crop_left": 0, "crop_top": 0, "crop_right": 0, "crop_bottom": 0,
             "id": 1, "group_item_backup": false, "scale_filter": "disable",
+            "blend_method": "default", "blend_type": "normal",
+            "show_transition": {"duration": 0}, "hide_transition": {"duration": 0},
+            "private_settings": {}
+          },
+          {
+            "name": "Monitor2-Notebook",
+            "source_uuid": "{{ obs_uuid_monitor2 }}",
+            "visible": false, "locked": false, "rot": 0.0,
+            "pos": {"x": 0.0, "y": 0.0},
+            "scale": {"x": 1.0, "y": 1.0},
+            "align": 5, "bounds_type": 2, "bounds_align": 0, "bounds_crop": false,
+            "bounds": {"x": 1680.0, "y": 1050.0},
+            "crop_left": 0, "crop_top": 0, "crop_right": 0, "crop_bottom": 0,
+            "id": 2, "group_item_backup": false, "scale_filter": "disable",
             "blend_method": "default", "blend_type": "normal",
             "show_transition": {"duration": 0}, "hide_transition": {"duration": 0},
             "private_settings": {}
@@ -78,7 +92,7 @@
       "enabled": true, "muted": false,
       "push-to-mute": false, "push-to-mute-delay": 0,
       "push-to-talk": false, "push-to-talk-delay": 0,
-      "hotkeys": {"OBSBasic.SelectScene": [], "libobs.show_scene_item.1": [], "libobs.hide_scene_item.1": [], "libobs.show_scene_item.3": [], "libobs.hide_scene_item.3": []},
+      "hotkeys": {"OBSBasic.SelectScene": [], "libobs.show_scene_item.1": [], "libobs.hide_scene_item.1": [], "libobs.show_scene_item.2": [], "libobs.hide_scene_item.2": [], "libobs.show_scene_item.3": [], "libobs.hide_scene_item.3": []},
       "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
       "private_settings": {}
     },
@@ -88,7 +102,7 @@
       "uuid": "{{ obs_uuid_monitor1 }}",
       "id": "xshm_input",
       "versioned_id": "xshm_input",
-      "settings": {"advanced": false, "screen": 0},
+      "settings": {"advanced": true, "screen": 0},
       "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
       "enabled": true, "muted": false,
       "push-to-mute": false, "push-to-mute-delay": 0,
@@ -103,7 +117,7 @@
       "filters": [
         {
           "prev_ver": 503447555,
-          "name": "SourceRecord-Monitor1",
+          "name": "SourceRecord-HDMI",
           "uuid": "{{ obs_uuid_filter_monitor1 }}",
           "id": "source_record_filter",
           "versioned_id": "source_record_filter",
@@ -116,7 +130,57 @@
             "resolution": "{{ obs_source_record.width }}x{{ obs_source_record.height }}",
             "width": {{ obs_source_record.width }},
             "height": {{ obs_source_record.height }},
-            "filename_formatting": "monitor1_%CCYY-%MM-%DD_%hh-%mm-%ss",
+            "filename_formatting": "hdmi_%CCYY-%MM-%DD_%hh-%mm-%ss",
+            "path": "{{ obs_recording_path }}",
+            "bitrate": {{ obs_source_record.bitrate }},
+            "keyint_sec": 10,
+            "gpu": 0
+          },
+          "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+          "enabled": true, "muted": false,
+          "push-to-mute": false, "push-to-mute-delay": 0,
+          "push-to-talk": false, "push-to-talk-delay": 0,
+          "hotkeys": {},
+          "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+          "private_settings": {}
+        }
+      ]
+    },
+    {
+      "prev_ver": 503447555,
+      "name": "Monitor2-Notebook",
+      "uuid": "{{ obs_uuid_monitor2 }}",
+      "id": "xshm_input",
+      "versioned_id": "xshm_input",
+      "settings": {"advanced": true, "screen": 1},
+      "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
+      "enabled": true, "muted": false,
+      "push-to-mute": false, "push-to-mute-delay": 0,
+      "push-to-talk": false, "push-to-talk-delay": 0,
+      "hotkeys": {
+        "source_record.enable": [], "source_record.disable": [],
+        "source_record.PauseRecording": [], "source_record.UnpauseRecording": [],
+        "source_record.SplitRecording": [], "source_record.AddChapterMarker": []
+      },
+      "deinterlace_mode": 0, "deinterlace_field_order": 0, "monitoring_type": 0,
+      "private_settings": {},
+      "filters": [
+        {
+          "prev_ver": 503447555,
+          "name": "SourceRecord-Notebook",
+          "uuid": "{{ obs_uuid_filter_monitor2 }}",
+          "id": "source_record_filter",
+          "versioned_id": "source_record_filter",
+          "settings": {
+            "scale_type": 5,
+            "record_mode": 3,
+            "split_file": true,
+            "replay_buffer": false,
+            "scale": true,
+            "resolution": "{{ obs_source_record.width }}x{{ obs_source_record.height }}",
+            "width": {{ obs_source_record.width }},
+            "height": {{ obs_source_record.height }},
+            "filename_formatting": "notebook_%CCYY-%MM-%DD_%hh-%mm-%ss",
             "path": "{{ obs_recording_path }}",
             "bitrate": {{ obs_source_record.bitrate }},
             "keyint_sec": 10,
@@ -142,7 +206,7 @@
         "font": {"face": "Sans Serif", "size": 48, "flags": 0, "style": "Regular"},
         "color1": 4294967295,
         "color2": 4294967295,
-        "text": ""
+        "text": "00:00:00"
       },
       "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
       "enabled": true, "muted": false,
@@ -173,8 +237,9 @@
       {
         "path": "{{ ansible_env.HOME }}/.config/obs-studio/scripts/DateTimeMultiple.lua",
         "settings": {
-          "source_name": "Clock",
-          "format": "%H:%M:%S"
+          "source_name1": "Clock",
+          "format1": "%H:%M:%S",
+          "activated": true
         }
       }
     ],
