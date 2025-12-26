@@ -11,3 +11,48 @@
     state: present
     update_cache: yes
   become: true
+
+- name: Create temporary directory for plugin
+  tempfile:
+    state: directory
+    suffix: obs_plugin
+  register: plugin_temp_dir
+
+- name: Download Source Record plugin
+  get_url:
+    url: "https://github.com/Exeldro/obs-source-record/releases/download/0.4.6/obs-source-record-0.4.6-linux-x86_64.zip"
+    dest: "{{ plugin_temp_dir.path }}/source-record.zip"
+
+- name: Unarchive Source Record plugin
+  unarchive:
+    src: "{{ plugin_temp_dir.path }}/source-record.zip"
+    dest: "{{ plugin_temp_dir.path }}"
+    remote_src: yes
+
+- name: Copy Source Record plugin binary
+  copy:
+    src: "{{ plugin_temp_dir.path }}/bin/64bit/source-record.so"
+    dest: "/usr/lib/x86_64-linux-gnu/obs-plugins/source-record.so"
+    mode: '0755'
+    remote_src: yes
+  become: true
+
+- name: Create data directory for Source Record
+  file:
+    path: "/usr/share/obs/obs-plugins/source-record"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Copy Source Record plugin data
+  copy:
+    src: "{{ plugin_temp_dir.path }}/data/locale/"
+    dest: "/usr/share/obs/obs-plugins/source-record/locale/"
+    mode: '0644'
+    remote_src: yes
+  become: true
+
+- name: Clean up temporary directory
+  file:
+    path: "{{ plugin_temp_dir.path }}"
+    state: absent
