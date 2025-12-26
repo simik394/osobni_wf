@@ -355,6 +355,46 @@ function formatConversation(messages: ChatMessage[]): string {
         .join('\n\n---\n\n');
 }
 
+/**
+ * Validate messages array for common input errors.
+ * Returns null if valid, error message string if invalid.
+ */
+function validateMessages(messages: ChatMessage[]): string | null {
+    const validRoles = ['user', 'assistant', 'system'];
+
+    // Empty array check
+    if (messages.length === 0) {
+        return 'Messages array cannot be empty';
+    }
+
+    // Must have at least one user message
+    const hasUserMessage = messages.some(m => m.role === 'user');
+    if (!hasUserMessage) {
+        return 'At least one user message is required';
+    }
+
+    for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+
+        // Check role exists and is valid
+        if (!msg.role || !validRoles.includes(msg.role)) {
+            return `Invalid role '${msg.role}' at message ${i}. Must be one of: ${validRoles.join(', ')}`;
+        }
+
+        // Check content is string
+        if (typeof msg.content !== 'string') {
+            return `Message ${i} content must be a string, got ${typeof msg.content}`;
+        }
+
+        // Check content is not empty (for user messages)
+        if (msg.role === 'user' && msg.content.trim().length === 0) {
+            return `User message ${i} cannot have empty content`;
+        }
+    }
+
+    return null; // Valid
+}
+
 // ============================================================================
 // OpenAI-Compatible Endpoints
 // ============================================================================
@@ -414,6 +454,18 @@ app.post('/v1/chat/completions', async (req, res) => {
             return res.status(400).json({
                 error: {
                     message: 'Missing or invalid "messages" field',
+                    type: 'invalid_request_error',
+                    code: 400
+                }
+            });
+        }
+
+        // Validate message content
+        const validationError = validateMessages(request.messages);
+        if (validationError) {
+            return res.status(400).json({
+                error: {
+                    message: validationError,
                     type: 'invalid_request_error',
                     code: 400
                 }
