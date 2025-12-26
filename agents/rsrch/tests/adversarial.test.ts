@@ -9,10 +9,9 @@
  * Goal: Find bugs that realistic usage would trigger
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import http from 'http';
+import { describe, it, expect } from 'vitest';
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 
 describe('Adversarial: TOOLS-32 Multi-turn Context', () => {
 
