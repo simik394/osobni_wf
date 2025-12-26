@@ -33,36 +33,41 @@ The [Source Record](https://obsproject.com/forum/resources/source-record.1285/) 
 
 This creates a tiny "dummy" file (~45 MB/hour) while your Source Record filters capture full-quality video.
 
-## 3. Clock Overlay Fix (Linux)
+## 3. Digital Clock Overlay (DateTimeMultiple.lua)
 
-The default `clock-source.lua` script may not detect Linux text sources.
+This Ansible role automatically installs the `DateTimeMultiple.lua` script for displaying a digital clock overlay.
 
-**Fix**: Edit the script to include `text_ft2_source_v2`:
+### Setup in OBS:
+1. Create a **Text (FreeType 2)** source in your scene (leave text empty)
+2. Go to **Tools → Scripts**
+3. Click **+** and select `~/.config/obs-studio/scripts/DateTimeMultiple.lua`
+4. In the script settings:
+   - Select your text source
+   - Set format (e.g., `%H:%M:%S` for `HH:MM:SS`)
 
-```lua
--- Find this line (around line 36):
-if source_id == "text_gdiplus" or source_id == "text_ft2_source" then
+### Common Format Codes:
+| Code | Example | Description |
+|------|---------|-------------|
+| `%H:%M:%S` | `14:35:22` | 24-hour time |
+| `%I:%M:%S %p` | `02:35:22 PM` | 12-hour with AM/PM |
+| `%Y-%m-%d %H:%M:%S` | `2025-12-26 14:35:22` | Full datetime |
+| `%d.%m. %H:%M` | `26.12. 14:35` | European date + time |
 
--- Change it to:
-if source_id == "text_gdiplus" or source_id == "text_ft2_source" or source_id == "text_ft2_source_v2" then
-```
+## 4. One-Click Recording (Automated)
 
-Location: `/usr/share/obs/obs-plugins/frontend-tools/scripts/clock-source.lua`
-(Copy to `~/Documents/` if you don't have write access)
+This Ansible role creates:
+- **Script**: `~/bin/start_recording.sh` – launches OBS with recording active
+- **Desktop Shortcut**: "OBS Recording" in your app menu
 
-## 4. Automation Script
-
-For one-click recording startup:
-
+### Usage:
 ```bash
-#!/bin/bash
-# File: ~/start_recording.sh
-# Make executable: chmod +x ~/start_recording.sh
+# From terminal:
+start_recording.sh
 
-obs --startrecording --minimize-to-tray
+# Or click "OBS Recording" in your application menu
 ```
 
-This starts OBS in the background, immediately begins recording, and minimizes to system tray.
+OBS will start, immediately begin recording, and minimize to system tray.
 
 ## 5. Recommended Settings Summary
 

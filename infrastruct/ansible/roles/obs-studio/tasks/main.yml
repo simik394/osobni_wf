@@ -80,3 +80,63 @@
         path: "{{ plugin_temp_dir.path }}"
         state: absent
   when: not plugin_so.stat.exists
+
+# ============================================
+# DATETIME LUA SCRIPT FOR DIGITAL CLOCK OVERLAY
+# ============================================
+
+- name: Ensure user scripts directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/obs-studio/scripts"
+    state: directory
+    mode: "0755"
+
+- name: Download datetime Lua script for digital clock overlay
+  get_url:
+    url: "https://raw.githubusercontent.com/Kershoc/obs-script-datetime/refs/heads/master/DateTimeMultiple.lua"
+    dest: "{{ ansible_env.HOME }}/.config/obs-studio/scripts/DateTimeMultiple.lua"
+    mode: "0644"
+
+# ============================================
+# ONE-CLICK RECORDING AUTOMATION
+# ============================================
+
+- name: Create start_recording.sh script
+  copy:
+    dest: "{{ ansible_env.HOME }}/bin/start_recording.sh"
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # OBS Studio One-Click Recording Launcher
+      # Starts OBS with recording active and minimized to tray
+      
+      # Kill any existing OBS instance (optional - uncomment if needed)
+      # pkill -x obs || true
+      
+      # Start OBS with recording and minimize to tray
+      obs --startrecording --minimize-to-tray &
+      
+      echo "OBS recording started. Check system tray."
+
+- name: Ensure ~/bin is in PATH (add to .bashrc if not present)
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: 'export PATH="$HOME/bin:$PATH"'
+    state: present
+    create: yes
+
+- name: Create desktop shortcut for OBS Recording
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/obs-recording.desktop"
+    mode: "0644"
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=OBS Recording
+      Comment=Start OBS with recording active
+      Exec={{ ansible_env.HOME }}/bin/start_recording.sh
+      Icon=com.obsproject.Studio
+      Terminal=false
+      Categories=AudioVideo;Recorder;
+      StartupNotify=false

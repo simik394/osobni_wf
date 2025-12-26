@@ -4,8 +4,10 @@ This role handles the installation and configuration of OBS Studio on Linux (Ubu
 
 ## Features
 - **Official PPA**: Adds `ppa:obsproject/obs-studio` to ensure the latest version.
-- **Source Record Plugin**: Automatically installs the [Source Record](https://obsproject.com/forum/resources/source-record.1285/) plugin (v0.4.6).
-- **Optimization**: The plugin installation includes a check to skip download and extraction if the binary is already present, making the role highly efficient for repeat runs.
+- **Source Record Plugin**: Automatically installs the [Source Record](https://obsproject.com/forum/resources/source-record.1285/) plugin (v0.4.6) for per-source recording.
+- **Digital Clock Script**: Installs `DateTimeMultiple.lua` for digital time overlay.
+- **One-Click Recording**: Creates `~/bin/start_recording.sh` script and desktop shortcut.
+- **Idempotent**: Skips installations if already present, making repeat runs fast.
 
 ## Usage
 Run the role via your main playbook:
