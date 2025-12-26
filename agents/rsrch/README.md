@@ -69,6 +69,13 @@ rsrch gemini list-research-docs 5
 rsrch gemini list-research-docs <session-id>
 rsrch gemini export-to-docs <session-id>
 
+# OpenAI-Compatible API (use with any OpenAI client)
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'
+
+# Available models: gemini-rsrch, perplexity
+
 # Stop
 docker-compose down
 ```

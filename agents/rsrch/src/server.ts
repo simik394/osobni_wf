@@ -259,7 +259,183 @@ app.post('/notebook/dump', async (req, res) => {
     }
 });
 
-// Gemini Endpoints
+// ============================================================================
+// OpenAI-Compatible API Types
+// ============================================================================
+
+interface ChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
+
+interface ChatCompletionRequest {
+    model: string;
+    messages: ChatMessage[];
+    temperature?: number;
+    max_tokens?: number;
+    stream?: boolean;
+}
+
+interface ChatCompletionChoice {
+    index: number;
+    message: {
+        role: 'assistant';
+        content: string;
+    };
+    finish_reason: 'stop' | 'length' | 'error';
+}
+
+interface ChatCompletionResponse {
+    id: string;
+    object: 'chat.completion';
+    created: number;
+    model: string;
+    choices: ChatCompletionChoice[];
+    usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+}
+
+interface ModelInfo {
+    id: string;
+    object: 'model';
+    created: number;
+    owned_by: string;
+}
+
+function generateId(): string {
+    return 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
+}
+
+// ============================================================================
+// OpenAI-Compatible Endpoints
+// ============================================================================
+
+// List available models
+app.get('/v1/models', (req, res) => {
+    const models = {
+        object: 'list',
+        data: [
+            {
+                id: 'gemini-rsrch',
+                object: 'model' as const,
+                created: Math.floor(Date.now() / 1000),
+                owned_by: 'rsrch'
+            },
+            {
+                id: 'perplexity',
+                object: 'model' as const,
+                created: Math.floor(Date.now() / 1000),
+                owned_by: 'rsrch'
+            }
+        ]
+    };
+    res.json(models);
+});
+
+// Chat completions endpoint
+app.post('/v1/chat/completions', async (req, res) => {
+    try {
+        const request = req.body as ChatCompletionRequest;
+
+        // Validate request
+        if (!request.messages || !Array.isArray(request.messages)) {
+            return res.status(400).json({
+                error: {
+                    message: 'Missing or invalid "messages" field',
+                    type: 'invalid_request_error',
+                    code: 400
+                }
+            });
+        }
+
+        // Streaming not yet supported
+        if (request.stream) {
+            return res.status(501).json({
+                error: {
+                    message: 'Streaming is not supported yet for rsrch',
+                    type: 'not_implemented',
+                    code: 501
+                }
+            });
+        }
+
+        // Extract the last user message
+        const userMessages = request.messages.filter(m => m.role === 'user');
+        if (userMessages.length === 0) {
+            return res.status(400).json({
+                error: {
+                    message: 'No user message found in request',
+                    type: 'invalid_request_error',
+                    code: 400
+                }
+            });
+        }
+        const prompt = userMessages[userMessages.length - 1].content;
+
+        console.log(`[OpenAI API] Chat completion request: "${prompt.substring(0, 50)}..."`);
+
+        let responseText: string;
+        const model = request.model || 'gemini-rsrch';
+
+        // Route to appropriate backend based on model
+        if (model === 'perplexity' || model.includes('perplexity')) {
+            // Use Perplexity
+            console.log('[OpenAI API] Using Perplexity backend');
+            const result = await client.query(prompt, { deepResearch: false });
+            responseText = result?.answer || 'No response';
+        } else {
+            // Use Gemini (default)
+            console.log('[OpenAI API] Using Gemini backend');
+            if (!geminiClient) {
+                console.log('[OpenAI API] Creating Gemini client...');
+                geminiClient = await client.createGeminiClient();
+                await geminiClient.init();
+            }
+            responseText = await geminiClient.research(prompt);
+        }
+
+        // Build OpenAI-compatible response
+        const response: ChatCompletionResponse = {
+            id: generateId(),
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model,
+            choices: [{
+                index: 0,
+                message: {
+                    role: 'assistant',
+                    content: responseText
+                },
+                finish_reason: 'stop'
+            }],
+            usage: {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0
+            }
+        };
+
+        console.log(`[OpenAI API] Response ready (${responseText.length} chars)`);
+        res.json(response);
+
+    } catch (error: any) {
+        console.error('[OpenAI API] Chat completion failed:', error);
+        res.status(500).json({
+            error: {
+                message: error.message || 'Request failed',
+                type: 'api_error',
+                code: 500
+            }
+        });
+    }
+});
+
+// ============================================================================
+// Gemini Endpoints (Original)
+// ============================================================================
 let geminiClient: GeminiClient | null = null;
 
 app.post('/gemini/research', async (req, res) => {
@@ -532,12 +708,15 @@ export async function startServer() {
         app.listen(PORT, () => {
             console.log(`\n✓ Perplexity Researcher server running on http://localhost:${PORT}`);
             console.log(`\nEndpoints:`);
-            console.log(`  GET  /health - Health check`);
-            console.log(`  POST /query  - Submit a query`);
+            console.log(`  GET  /health             - Health check`);
+            console.log(`  POST /query              - Submit a query`);
+            console.log(`\nOpenAI-Compatible API:`);
+            console.log(`  GET  /v1/models          - List models (gemini-rsrch, perplexity)`);
+            console.log(`  POST /v1/chat/completions - Chat completions`);
             console.log(`\nExample usage:`);
-            console.log(`  curl -X POST http://localhost:${PORT}/query \\`);
+            console.log(`  curl -X POST http://localhost:${PORT}/v1/chat/completions \\`);
             console.log(`       -H "Content-Type: application/json" \\`);
-            console.log(`       -d '{"query":"What is the capital of France?"}'`);
+            console.log(`       -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'`);
             console.log();
         });
     } catch (error) {
