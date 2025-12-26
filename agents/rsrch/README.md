@@ -74,7 +74,12 @@ curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'
 
-# Available models: gemini-rsrch, perplexity
+# Streaming (SSE)
+curl -N -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
+
+# Available models: gemini-rsrch (streaming), perplexity (no streaming)
 
 # Stop
 docker-compose down

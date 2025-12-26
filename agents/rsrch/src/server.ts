@@ -305,6 +305,24 @@ interface ModelInfo {
     owned_by: string;
 }
 
+// SSE Streaming Types
+interface ChatCompletionChunkChoice {
+    index: number;
+    delta: {
+        role?: 'assistant';
+        content?: string;
+    };
+    finish_reason: 'stop' | 'length' | null;
+}
+
+interface ChatCompletionChunk {
+    id: string;
+    object: 'chat.completion.chunk';
+    created: number;
+    model: string;
+    choices: ChatCompletionChunkChoice[];
+}
+
 function generateId(): string {
     return 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
 }
@@ -351,15 +369,108 @@ app.post('/v1/chat/completions', async (req, res) => {
             });
         }
 
-        // Streaming not yet supported
+        // SSE Streaming
         if (request.stream) {
-            return res.status(501).json({
-                error: {
-                    message: 'Streaming is not supported yet for rsrch',
-                    type: 'not_implemented',
-                    code: 501
+            // Only Gemini supports streaming for now
+            const model = request.model || 'gemini-rsrch';
+            if (model === 'perplexity' || model.includes('perplexity')) {
+                return res.status(501).json({
+                    error: {
+                        message: 'Streaming is not supported for Perplexity model',
+                        type: 'not_implemented',
+                        code: 501
+                    }
+                });
+            }
+
+            // Set up SSE headers
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
+
+            const id = generateId();
+            const created = Math.floor(Date.now() / 1000);
+
+            const sendSSE = (data: ChatCompletionChunk | '[DONE]') => {
+                if (data === '[DONE]') {
+                    res.write('data: [DONE]\n\n');
+                } else {
+                    res.write(`data: ${JSON.stringify(data)}\n\n`);
                 }
-            });
+            };
+
+            try {
+                // Ensure Gemini client
+                if (!geminiClient) {
+                    console.log('[OpenAI API] Creating Gemini client for streaming...');
+                    geminiClient = await client.createGeminiClient();
+                    await geminiClient.init();
+                }
+
+                // Extract prompt
+                const userMessages = request.messages.filter(m => m.role === 'user');
+                const prompt = userMessages[userMessages.length - 1]?.content || '';
+
+                console.log(`[OpenAI API] Streaming: "${prompt.substring(0, 50)}..."`);
+
+                // Send initial role chunk
+                sendSSE({
+                    id,
+                    object: 'chat.completion.chunk',
+                    created,
+                    model,
+                    choices: [{
+                        index: 0,
+                        delta: { role: 'assistant' },
+                        finish_reason: null
+                    }]
+                });
+
+                // Stream using Gemini client
+                await geminiClient.researchWithStreaming(
+                    prompt,
+                    (chunk) => {
+                        if (chunk.content) {
+                            sendSSE({
+                                id,
+                                object: 'chat.completion.chunk',
+                                created,
+                                model,
+                                choices: [{
+                                    index: 0,
+                                    delta: { content: chunk.content },
+                                    finish_reason: chunk.isComplete ? 'stop' : null
+                                }]
+                            });
+                        }
+                        if (chunk.isComplete) {
+                            sendSSE('[DONE]');
+                        }
+                    }
+                );
+
+                res.end();
+                console.log('[OpenAI API] Streaming complete');
+
+            } catch (error: any) {
+                console.error('[OpenAI API] Streaming failed:', error);
+                sendSSE({
+                    id,
+                    object: 'chat.completion.chunk',
+                    created,
+                    model,
+                    choices: [{
+                        index: 0,
+                        delta: { content: `\n\n[ERROR: ${error.message}]` },
+                        finish_reason: 'stop'
+                    }]
+                });
+                sendSSE('[DONE]');
+                res.end();
+            }
+
+            return;
         }
 
         // Extract the last user message

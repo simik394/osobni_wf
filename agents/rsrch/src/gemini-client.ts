@@ -1017,6 +1017,91 @@ export class GeminiClient {
     }
 
     /**
+     * Streaming variant of research() that polls DOM and calls callback with deltas.
+     * @param query The research question
+     * @param onChunk Callback for each new chunk of text
+     * @param options Polling options
+     */
+    async researchWithStreaming(
+        query: string,
+        onChunk: (chunk: { content: string; isComplete: boolean }) => void,
+        options: { pollIntervalMs?: number; timeoutMs?: number } = {}
+    ): Promise<string> {
+        const { pollIntervalMs = 300, timeoutMs = 300000 } = options;
+
+        console.log(`[Gemini] Streaming research: "${query}"`);
+
+        try {
+            // Send the query
+            const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
+            const input = this.page.locator(inputSelector).first();
+            await input.waitFor({ state: 'visible', timeout: 20000 });
+
+            // Count responses before
+            const responseSelector = 'model-response, .message-content, .response-container-content';
+            const responsesBefore = await this.page.locator(responseSelector).count();
+
+            await input.fill(query);
+            await this.page.waitForTimeout(500);
+            await input.press('Enter');
+
+            console.log('[Gemini] Query sent, starting stream...');
+
+            // Polling loop
+            let previousContent = '';
+            const startTime = Date.now();
+            let stableCount = 0;
+
+            while (true) {
+                // Timeout check
+                if (Date.now() - startTime > timeoutMs) {
+                    onChunk({ content: '', isComplete: true });
+                    throw new Error('Streaming timeout');
+                }
+
+                // Get current response text
+                const responses = this.page.locator(responseSelector);
+                const count = await responses.count();
+
+                if (count > responsesBefore) {
+                    const lastResponse = responses.last();
+                    let currentContent = '';
+
+                    try {
+                        currentContent = await lastResponse.innerText();
+                    } catch (e) {
+                        // DOM might be updating
+                    }
+
+                    // Calculate delta
+                    const delta = currentContent.slice(previousContent.length);
+
+                    if (delta.length > 0) {
+                        onChunk({ content: delta, isComplete: false });
+                        previousContent = currentContent;
+                        stableCount = 0;
+                    } else if (currentContent.length > 50) {
+                        stableCount++;
+                        // Consider stable after 3 polls with no change (900ms)
+                        if (stableCount >= 3) {
+                            console.log('[Gemini] Response stabilized');
+                            onChunk({ content: '', isComplete: true });
+                            return currentContent;
+                        }
+                    }
+                }
+
+                await this.page.waitForTimeout(pollIntervalMs);
+            }
+
+        } catch (e) {
+            console.error('[Gemini] Streaming research failed:', e);
+            await this.dumpState('gemini_streaming_fail');
+            throw e;
+        }
+    }
+
+    /**
      * Start a full Deep Research workflow with artifact registry integration.
      * 
      * This method:
