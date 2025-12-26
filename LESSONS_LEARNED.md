@@ -21,3 +21,11 @@ This document serves as the centralized repository for all technical, process, a
 - **Ecosystem Maturity**: When reliability is key, the maturity and stability of a language's ecosystem (drivers, libraries) usually outweigh theoretical performance benefits.
 - **Struct Schema Matching**: Always validate configuration structure against schema; silent failures in decoders (like YAML/JSON) can lead to zero-valued fields that are hard to debug.
 - **Domain Separation**: Grouping configuration by domain (e.g., I/O vs. Processing logic) makes the system more maintainable and easier to extend without breaking core loops.
+
+## Logic Programming Tool Selection
+
+When choosing between SWI-Prolog and ELPI (λProlog):
+
+- **Use SWI-Prolog** for: flat database queries, HTTP/JSON integration, constraint logic programming, rapid REPL prototyping.
+- **Use ELPI** for: data with lambdas/binders (AST manipulation), local hypothetical reasoning without side-effects, meta-programming over rules.
+- **Decision heuristic**: If your data has "holes" (variables that can be bound) or you need `(assume X => prove Y)` style reasoning, consider ELPI. Otherwise, start with SWI-Prolog.
