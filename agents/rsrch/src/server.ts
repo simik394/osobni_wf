@@ -381,6 +381,29 @@ app.get('/v1/models', (req, res) => {
     res.json(models);
 });
 
+// Get specific model info
+app.get('/v1/models/:modelId', (req, res) => {
+    const { modelId } = req.params;
+    const supportedModels = ['gemini-rsrch', 'perplexity'];
+
+    if (supportedModels.includes(modelId)) {
+        res.json({
+            id: modelId,
+            object: 'model',
+            created: Math.floor(Date.now() / 1000),
+            owned_by: 'rsrch'
+        });
+    } else {
+        res.status(404).json({
+            error: {
+                message: `Model '${modelId}' not found`,
+                type: 'invalid_request_error',
+                code: 404
+            }
+        });
+    }
+});
+
 // Chat completions endpoint
 app.post('/v1/chat/completions', async (req, res) => {
     try {
