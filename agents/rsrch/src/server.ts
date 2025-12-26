@@ -7,6 +7,19 @@ import { GeminiClient } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
+import {
+    startChatCompletionTrace,
+    completeChatCompletionTrace,
+    failChatCompletionTrace,
+    trackStreamingChunk,
+    startGeminiResearchTrace,
+    startPerplexityQueryTrace,
+    flushObservability,
+    shutdownObservability,
+    isObservabilityEnabled,
+    estimateTokens,
+    TraceContext
+} from './observability';
 
 // Initialize graph store
 const graphStore = getGraphStore();
@@ -488,49 +501,60 @@ app.post('/v1/chat/completions', async (req, res) => {
 
         console.log(`[OpenAI API] Chat completion request: "${prompt.substring(0, 50)}..."`);
 
+        // Start observability trace
+        const traceCtx = startChatCompletionTrace(request);
+
         let responseText: string;
         const model = request.model || 'gemini-rsrch';
 
-        // Route to appropriate backend based on model
-        if (model === 'perplexity' || model.includes('perplexity')) {
-            // Use Perplexity
-            console.log('[OpenAI API] Using Perplexity backend');
-            const result = await client.query(prompt, { deepResearch: false });
-            responseText = result?.answer || 'No response';
-        } else {
-            // Use Gemini (default)
-            console.log('[OpenAI API] Using Gemini backend');
-            if (!geminiClient) {
-                console.log('[OpenAI API] Creating Gemini client...');
-                geminiClient = await client.createGeminiClient();
-                await geminiClient.init();
+        try {
+            // Route to appropriate backend based on model
+            if (model === 'perplexity' || model.includes('perplexity')) {
+                // Use Perplexity
+                console.log('[OpenAI API] Using Perplexity backend');
+                const result = await client.query(prompt, { deepResearch: false });
+                responseText = result?.answer || 'No response';
+            } else {
+                // Use Gemini (default)
+                console.log('[OpenAI API] Using Gemini backend');
+                if (!geminiClient) {
+                    console.log('[OpenAI API] Creating Gemini client...');
+                    geminiClient = await client.createGeminiClient();
+                    await geminiClient.init();
+                }
+                responseText = await geminiClient.research(prompt);
             }
-            responseText = await geminiClient.research(prompt);
+
+            // Complete observability trace
+            completeChatCompletionTrace(traceCtx, responseText);
+
+            // Build OpenAI-compatible response
+            const response: ChatCompletionResponse = {
+                id: generateId(),
+                object: 'chat.completion',
+                created: Math.floor(Date.now() / 1000),
+                model,
+                choices: [{
+                    index: 0,
+                    message: {
+                        role: 'assistant',
+                        content: responseText
+                    },
+                    finish_reason: 'stop'
+                }],
+                usage: {
+                    prompt_tokens: estimateTokens(prompt),
+                    completion_tokens: estimateTokens(responseText),
+                    total_tokens: estimateTokens(prompt) + estimateTokens(responseText)
+                }
+            };
+
+            console.log(`[OpenAI API] Response ready (${responseText.length} chars)`);
+            res.json(response);
+        } catch (innerError: any) {
+            failChatCompletionTrace(traceCtx, innerError);
+            throw innerError;
         }
-
-        // Build OpenAI-compatible response
-        const response: ChatCompletionResponse = {
-            id: generateId(),
-            object: 'chat.completion',
-            created: Math.floor(Date.now() / 1000),
-            model,
-            choices: [{
-                index: 0,
-                message: {
-                    role: 'assistant',
-                    content: responseText
-                },
-                finish_reason: 'stop'
-            }],
-            usage: {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0
-            }
-        };
-
-        console.log(`[OpenAI API] Response ready (${responseText.length} chars)`);
-        res.json(response);
 
     } catch (error: any) {
         console.error('[OpenAI API] Chat completion failed:', error);
@@ -783,12 +807,16 @@ Focus on depth, nuance, and covering aspects that might be missing above.
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing browser...');
+    await flushObservability();
+    await shutdownObservability();
     await client.close();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
     console.log('SIGINT received, closing browser...');
+    await flushObservability();
+    await shutdownObservability();
     await client.close();
     process.exit(0);
 });
