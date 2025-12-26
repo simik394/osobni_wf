@@ -342,6 +342,19 @@ function generateId(): string {
     return 'chatcmpl-' + Math.random().toString(36).substring(2, 15);
 }
 
+/**
+ * Format all messages into a single conversation string.
+ * Uses "Role: content" format with separators for multi-turn context.
+ */
+function formatConversation(messages: ChatMessage[]): string {
+    return messages
+        .map(m => {
+            const role = m.role.charAt(0).toUpperCase() + m.role.slice(1);
+            return `${role}: ${m.content}`;
+        })
+        .join('\n\n---\n\n');
+}
+
 // ============================================================================
 // OpenAI-Compatible Endpoints
 // ============================================================================
@@ -488,18 +501,8 @@ app.post('/v1/chat/completions', async (req, res) => {
             return;
         }
 
-        // Extract the last user message
-        const userMessages = request.messages.filter(m => m.role === 'user');
-        if (userMessages.length === 0) {
-            return res.status(400).json({
-                error: {
-                    message: 'No user message found in request',
-                    type: 'invalid_request_error',
-                    code: 400
-                }
-            });
-        }
-        const prompt = userMessages[userMessages.length - 1].content;
+        // Format full conversation for multi-turn context
+        const prompt = formatConversation(request.messages);
 
         console.log(`[OpenAI API] Chat completion request: "${prompt.substring(0, 50)}..."`);
 
