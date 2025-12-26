@@ -20,4 +20,5 @@ ansible-playbook -i inventory.yml setup_local.yml --tags obs-studio --ask-become
 > **Note**: The plugin is installed per-user, not system-wide. This avoids permission issues and works with both native and Flatpak OBS installations.
 
 ## Related Documentation
-- See the root [LESSONS_LEARNED.md](../../../LESSONS_LEARNED.md) for technical insights and agentic best practices gathered during the creation of this role.
+- **[[OBS_BEST_PRACTICES|OBS_BEST_PRACTICES.md]]** – Multi-monitor recording, Source Record setup, automation tips
+- [LESSONS_LEARNED.md](../../../LESSONS_LEARNED.md) – Cross-project technical insights
