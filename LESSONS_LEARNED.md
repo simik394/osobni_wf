@@ -14,6 +14,8 @@ This document serves as the centralized repository for all technical, process, a
 - **Interactive Prompts**: Background commands struggle with interactive prompts. Inform the user if they need to handle a sudo password or similar in their terminal.
 - **Plugin Management**: While manual installation to `~/.config` is faster for one-off tests, integrating into Ansible roles (using `get_url` and `unarchive`) ensures consistency across reinstalls.
 - **System Paths (OBS)**: For `apt`-installed OBS, plugins should be placed in `/usr/lib/x86_64-linux-gnu/obs-plugins/` for global availability.
+- **User-Directory Plugins**: For per-user installation (avoiding sudo), use `~/.config/obs-studio/plugins/<plugin-name>/bin/64bit/` and `.../data/`. This works with both native and Flatpak OBS.
+- **Nested Archives**: Some plugin releases contain a `.tar.gz` inside a `.zip`. Always inspect the archive structure before automating extraction. Use Ansible's `find` module to locate inner archives dynamically.
 
 ## Software Architecture & Performance
 - **Architecture > Language**: Design decisions (e.g., parallelization, connection pooling) often have a much larger impact on performance than the choice of programming language itself.
