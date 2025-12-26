@@ -1047,14 +1047,19 @@ export class GeminiClient {
 
             console.log('[Gemini] Query sent, starting stream...');
 
-            // Polling loop
+            // Polling loop with safety limits
             let previousContent = '';
             const startTime = Date.now();
             let stableCount = 0;
+            let iterations = 0;
+            const maxIterations = Math.ceil(timeoutMs / pollIntervalMs) + 10; // Safety margin
 
-            while (true) {
+            while (iterations < maxIterations) {
+                iterations++;
+
                 // Timeout check
                 if (Date.now() - startTime > timeoutMs) {
+                    console.warn(`[Gemini] Streaming timeout after ${iterations} iterations`);
                     onChunk({ content: '', isComplete: true });
                     throw new Error('Streaming timeout');
                 }
@@ -1084,7 +1089,7 @@ export class GeminiClient {
                         stableCount++;
                         // Consider stable after 3 polls with no change (900ms)
                         if (stableCount >= 3) {
-                            console.log('[Gemini] Response stabilized');
+                            console.log(`[Gemini] Response stabilized after ${iterations} iterations`);
                             onChunk({ content: '', isComplete: true });
                             return currentContent;
                         }
@@ -1093,6 +1098,11 @@ export class GeminiClient {
 
                 await this.page.waitForTimeout(pollIntervalMs);
             }
+
+            // Max iterations reached - this should never happen with proper timeout
+            console.error(`[Gemini] Max iterations (${maxIterations}) reached - forcing completion`);
+            onChunk({ content: '', isComplete: true });
+            throw new Error(`Max iterations reached (${maxIterations})`);
 
         } catch (e) {
             console.error('[Gemini] Streaming research failed:', e);
