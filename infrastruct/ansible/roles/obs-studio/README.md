@@ -14,8 +14,10 @@ ansible-playbook -i inventory.yml setup_local.yml --tags obs-studio --ask-become
 ```
 
 ## Plugin Details
-- **Binary**: `/usr/lib/x86_64-linux-gnu/obs-plugins/source-record.so`
-- **Data**: `/usr/share/obs/obs-plugins/source-record/`
+- **Binary**: `~/.config/obs-studio/plugins/source-record/bin/64bit/source-record.so`
+- **Data**: `~/.config/obs-studio/plugins/source-record/data/`
+
+> **Note**: The plugin is installed per-user, not system-wide. This avoids permission issues and works with both native and Flatpak OBS installations.
 
 ## Related Documentation
 - See the root [LESSONS_LEARNED.md](../../../LESSONS_LEARNED.md) for technical insights and agentic best practices gathered during the creation of this role.

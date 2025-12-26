@@ -12,9 +12,15 @@
     update_cache: yes
   become: true
 
+- name: Ensure user plugins directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/obs-studio/plugins"
+    state: directory
+    mode: "0755"
+
 - name: Check if Source Record plugin is already installed
   stat:
-    path: "/usr/lib/x86_64-linux-gnu/obs-plugins/source-record.so"
+    path: "{{ ansible_env.HOME }}/.config/obs-studio/plugins/source-record/bin/64bit/source-record.so"
   register: plugin_so
 
 - name: Install Source Record plugin
@@ -25,39 +31,49 @@
         suffix: obs_plugin
       register: plugin_temp_dir
 
-    - name: Download Source Record plugin
+    - name: Download Source Record plugin zip
       get_url:
         url: "https://github.com/Exeldro/obs-source-record/releases/download/0.4.6/obs-source-record-0.4.6-linux-x86_64.zip"
         dest: "{{ plugin_temp_dir.path }}/source-record.zip"
 
-    - name: Unarchive Source Record plugin
+    - name: Unarchive zip (contains tar.gz inside)
       unarchive:
         src: "{{ plugin_temp_dir.path }}/source-record.zip"
         dest: "{{ plugin_temp_dir.path }}"
         remote_src: yes
 
-    - name: Copy Source Record plugin binary
-      copy:
-        src: "{{ plugin_temp_dir.path }}/bin/64bit/source-record.so"
-        dest: "/usr/lib/x86_64-linux-gnu/obs-plugins/source-record.so"
-        mode: "0755"
-        remote_src: yes
-      become: true
+    - name: Find the tar.gz file inside the extracted zip
+      find:
+        paths: "{{ plugin_temp_dir.path }}"
+        patterns: "*.tar.gz"
+      register: found_tarball
 
-    - name: Create data directory for Source Record
+    - name: Extract the tar.gz archive
+      unarchive:
+        src: "{{ found_tarball.files[0].path }}"
+        dest: "{{ plugin_temp_dir.path }}"
+        remote_src: yes
+      when: found_tarball.files | length > 0
+
+    - name: Create plugin directory structure
       file:
-        path: "/usr/share/obs/obs-plugins/source-record"
+        path: "{{ ansible_env.HOME }}/.config/obs-studio/plugins/source-record"
         state: directory
         mode: "0755"
-      become: true
 
-    - name: Copy Source Record plugin data
+    - name: Copy plugin bin directory
       copy:
-        src: "{{ plugin_temp_dir.path }}/data/locale/"
-        dest: "/usr/share/obs/obs-plugins/source-record/locale/"
+        src: "{{ plugin_temp_dir.path }}/bin/"
+        dest: "{{ ansible_env.HOME }}/.config/obs-studio/plugins/source-record/bin/"
+        mode: "0755"
+        remote_src: yes
+
+    - name: Copy plugin data directory
+      copy:
+        src: "{{ plugin_temp_dir.path }}/data/"
+        dest: "{{ ansible_env.HOME }}/.config/obs-studio/plugins/source-record/data/"
         mode: "0644"
         remote_src: yes
-      become: true
 
     - name: Clean up temporary directory
       file:
