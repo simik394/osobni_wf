@@ -112,6 +112,7 @@ func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath st
 		sb.WriteString(fmt.Sprintf("@startuml Architecture_%s\n", funcPkg))
 		sb.WriteString(fmt.Sprintf("title Architecture: %s\n", funcPkg))
 		sb.WriteString("skinparam componentStyle rectangle\n")
+		sb.WriteString("top to bottom direction\n") // Vertical layout for readability
 
 		// Track which nodes are already defined in this diagram to avoid dupes
 		definedNodes := make(map[string]bool)
@@ -281,7 +282,7 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 	sb.WriteString("@startuml Packages\n")
 	sb.WriteString("title High-level Package Dependencies\n")
 	sb.WriteString("skinparam packageStyle rectangle\n")
-	sb.WriteString("left to right direction\n") // Transpose mostly helps here
+	sb.WriteString("top to bottom direction\n") // Vertical layout for readability
 
 	// Group Internal
 	sb.WriteString("package \"Internal\" {\n")
@@ -331,7 +332,7 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 	var sb strings.Builder
 	sb.WriteString("@startuml Dependencies\n")
 	sb.WriteString("title File Dependency Graph\n")
-	sb.WriteString("left to right direction\n") // Transpose to make it wider/readable
+	sb.WriteString("top to bottom direction\n") // Vertical layout for readability
 	sb.WriteString("skinparam nodesep 20\n")
 	sb.WriteString("skinparam ranksep 50\n")
 
