@@ -12,9 +12,11 @@ import (
 func ExportPlantUML(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (map[string]string, error) {
 	results := make(map[string]string)
 
-	// 1. Architecture / Component Diagram
-	if comp, err := exportComponentDiagram(ctx, client, scopePath, opts); err == nil && comp != "" {
-		results["architecture.puml"] = comp
+	// 1. Architecture / Component Diagram (Split by package)
+	if comps, err := exportComponentDiagram(ctx, client, scopePath, opts); err == nil {
+		for name, content := range comps {
+			results[name] = content
+		}
 	}
 
 	// 2. High-level Package Diagram
@@ -35,84 +37,161 @@ func ExportPlantUML(ctx context.Context, client *db.Client, scopePath string, op
 	return results, nil
 }
 
-func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
-	// ... (content same as before, simplified for this snippet if needed, but keeping existing logic here is fine)
-	// Actually, I'll keep the existing exportComponentDiagram logic but maybe rename title?
-	// For brevity in this replace block, I am keeping the logic roughly same but just ensuring it compiles.
-	// Since I am replacing the whole file, I need to include the full content of changed functions.
+func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (map[string]string, error) {
+	results := make(map[string]string)
 
-	// Re-implementing exportComponentDiagram to be safe since I'm overwriting the file structure
-	query := "MATCH (n)-[r]->(m) RETURN n.name, type(r), m.name, n.path"
+	// Query all relationships
+	query := "MATCH (n)-[r]->(m) RETURN n.name, type(r), m.name, n.path, m.path"
 	if scopePath != "" {
-		query = fmt.Sprintf("MATCH (n)-[r]->(m) WHERE n.path IS NOT NULL AND n.path CONTAINS '%s' RETURN n.name, type(r), m.name, n.path", scopePath)
+		query = fmt.Sprintf("MATCH (n)-[r]->(m) WHERE n.path IS NOT NULL AND n.path CONTAINS '%s' RETURN n.name, type(r), m.name, n.path, m.path", scopePath)
 	}
 
 	res, err := client.Query(ctx, query)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var sb strings.Builder
-	sb.WriteString("@startuml Architecture\n")
-	sb.WriteString("title Architecture (Components)\n")
-	sb.WriteString("skinparam componentStyle rectangle\n")
-
-	seenNodes := make(map[string]bool)
-	packages := make(map[string][]string)
+	// In-memory graph structure
+	type Edge struct {
+		Src, Dst, Rel string
+	}
+	edges := []Edge{}
+	// Map: Package -> []NodeName
+	pkgNodes := make(map[string]map[string]bool)
+	// Map: NodeName -> NodePath
+	nodePaths := make(map[string]string)
 
 	if arr, ok := res.([]any); ok && len(arr) > 1 {
 		if rows, ok := arr[1].([]any); ok {
 			for _, row := range rows {
-				if r, ok := row.([]any); ok && len(r) >= 3 {
+				if r, ok := row.([]any); ok && len(r) >= 5 {
 					src, _ := r[0].(string)
 					rel, _ := r[1].(string)
 					dst, _ := r[2].(string)
-					path, _ := r[3].(string)
+					srcPath, _ := r[3].(string)
+					dstPath, _ := r[4].(string)
 
 					if src == "" || dst == "" {
 						continue
 					}
-
-					if !opts.ShouldInclude(path) && path != "" {
+					if !opts.ShouldInclude(srcPath) && srcPath != "" {
 						continue
 					}
 
-					seenNodes[src] = true
-					seenNodes[dst] = true
+					edges = append(edges, Edge{src, dst, rel})
 
-					if strings.Contains(src, "/") {
-						pkg := toPackage(src)
-						if !hasNode(packages[pkg], src) {
-							packages[pkg] = append(packages[pkg], src)
+					// Assign src to its package
+					if srcPath != "" {
+						pkg := toPackage(srcPath)
+						if pkgNodes[pkg] == nil {
+							pkgNodes[pkg] = make(map[string]bool)
 						}
+						pkgNodes[pkg][src] = true
+						nodePaths[src] = srcPath
 					}
 
-					switch rel {
-					case "IMPORTS":
-						sb.WriteString(fmt.Sprintf("[%s] ..> [%s]\n", src, dst))
-					case "DEFINES":
-						sb.WriteString(fmt.Sprintf("[%s] +-- [%s]\n", src, dst))
-					default:
-						sb.WriteString(fmt.Sprintf("[%s] --> [%s] : %s\n", src, dst, rel))
+					// Track dst path if available
+					if dstPath != "" {
+						nodePaths[dst] = dstPath
+					} else {
+						// External/Module
+						nodePaths[dst] = "external"
 					}
 				}
 			}
 		}
 	}
 
-	for pkg, nodes := range packages {
-		if pkg == "" {
+	// For each package, generate a diagram
+	for funcPkg, nodes := range pkgNodes {
+		if len(nodes) == 0 {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("package \"%s\" {\n", pkg))
-		for _, node := range nodes {
+
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("@startuml Architecture_%s\n", funcPkg))
+		sb.WriteString(fmt.Sprintf("title Architecture: %s\n", funcPkg))
+		sb.WriteString("skinparam componentStyle rectangle\n")
+
+		// Track which nodes are already defined in this diagram to avoid dupes
+		definedNodes := make(map[string]bool)
+
+		// 1. Definition Phase: Core Nodes
+		sb.WriteString(fmt.Sprintf("package \"%s\" {\n", funcPkg))
+		for node := range nodes {
 			sb.WriteString(fmt.Sprintf("  component [%s]\n", node))
+			definedNodes[node] = true
 		}
 		sb.WriteString("}\n")
+
+		// 2. Identify Frontier Nodes (External nodes connected to/from this package)
+		frontierNodes := make(map[string]string) // Name -> Package
+		relevantEdges := []Edge{}
+
+		for _, e := range edges {
+			isSrcIn := nodes[e.Src]
+			isDstIn := nodes[e.Dst]
+
+			if isSrcIn && isDstIn {
+				// Internal edge
+				relevantEdges = append(relevantEdges, e)
+			} else if isSrcIn && !isDstIn {
+				// Outgoing to frontier
+				frontierNodes[e.Dst] = getPackageForNode(e.Dst, nodePaths)
+				relevantEdges = append(relevantEdges, e)
+			} else if !isSrcIn && isDstIn {
+				// Incoming from frontier
+				frontierNodes[e.Src] = getPackageForNode(e.Src, nodePaths)
+				relevantEdges = append(relevantEdges, e)
+			}
+		}
+
+		// 3. Definition Phase: Frontier Nodes (Grouped by their package)
+		// Group frontier nodes by their package for better visuals
+		frontierByPkg := make(map[string][]string)
+		for node, p := range frontierNodes {
+			frontierByPkg[p] = append(frontierByPkg[p], node)
+		}
+
+		for p, fNodes := range frontierByPkg {
+			sb.WriteString(fmt.Sprintf("package \"%s\" as ext_%s {\n", p, strings.ReplaceAll(p, "/", "_")))
+			for _, node := range fNodes {
+				if !definedNodes[node] {
+					sb.WriteString(fmt.Sprintf("  component [%s]\n", node))
+					definedNodes[node] = true
+				}
+			}
+			sb.WriteString("}\n")
+		}
+
+		// 4. Edges Phase
+		for _, e := range relevantEdges {
+			switch e.Rel {
+			case "IMPORTS":
+				sb.WriteString(fmt.Sprintf("[%s] ..> [%s]\n", e.Src, e.Dst))
+			case "DEFINES":
+				sb.WriteString(fmt.Sprintf("[%s] +-- [%s]\n", e.Src, e.Dst))
+			default:
+				sb.WriteString(fmt.Sprintf("[%s] --> [%s] : %s\n", e.Src, e.Dst, e.Rel))
+			}
+		}
+
+		sb.WriteString("@enduml\n")
+
+		safeName := strings.ReplaceAll(funcPkg, "/", "_")
+		safeName = strings.ReplaceAll(safeName, " ", "_")
+		results[fmt.Sprintf("architecture_%s.puml", safeName)] = sb.String()
 	}
 
-	sb.WriteString("@enduml\n")
-	return sb.String(), nil
+	return results, nil
+}
+
+// Wrapper for getPackage using correct signature helper
+func getPackageForNode(node string, paths map[string]string) string {
+	if p, ok := paths[node]; ok && p != "" && p != "external" {
+		return toPackage(p)
+	}
+	return "External"
 }
 
 func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {

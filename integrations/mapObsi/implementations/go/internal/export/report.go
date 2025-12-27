@@ -42,6 +42,19 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses,
 		encoded, _ := encodePlantUML(content)
 		browserLink := fmt.Sprintf("http://www.plantuml.com/plantuml/svg/%s", encoded)
 
+		// Check for URL length issues (browser/server limits)
+		// If too large, default to "Copy Source" only, do NOT try to embed image
+		var diagramHTML string
+		if len(encoded) > 4000 {
+			diagramHTML = fmt.Sprintf(`
+				<div class="warning-box" style="padding: 10px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; margin: 10px 0;">
+					<strong>Diagram too large for server-side rendering.</strong>
+					<p>Please use the <a href="http://www.plantuml.com/plantuml/uml/%s" target="_blank">PlantUML Editor</a> or "Copy Source" below.</p>
+				</div>`, encoded)
+		} else {
+			diagramHTML = fmt.Sprintf(`<img src="%s" alt="%s" style="max-width:100%%; height:auto;">`, browserLink, filename)
+		}
+
 		// Warning if content is too large
 		urlWarning := ""
 		if len(encoded) > 8000 {
@@ -57,8 +70,9 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses,
 				<span style="display:none;">%s</span> |
 				<a href="%s" target="_blank">Raw Source</a>
 			</div>
+			%s
 			<details><summary>Show PlantUML Source</summary><pre>%s</pre></details>
-		</div>`, filename, browserLink, urlWarning, content, filename, truncateForHTML(content, 1000000))
+		</div>`, filename, browserLink, urlWarning, content, filename, diagramHTML, truncateForHTML(content, 1000000))
 	}
 
 	// Mermaid JS is assumed to be present in the output directory (e.g. via wget or copy)
