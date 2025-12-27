@@ -117,16 +117,17 @@ func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath st
 
 func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
 	// Improved: Aggregate file-to-file imports by directory
+	// Relaxed query to match (Code)-[:IMPORTS]->(b) where b can be Code or Module
 	query := `
-		MATCH (a:Code)-[:IMPORTS]->(b:Code)
-		WHERE a.path IS NOT NULL AND b.path IS NOT NULL
-		RETURN a.path, b.path
+		MATCH (a:Code)-[:IMPORTS]->(b)
+		WHERE a.path IS NOT NULL
+		RETURN a.path, b.path, b.name
 	`
 	if scopePath != "" {
 		query = fmt.Sprintf(`
-			MATCH (a:Code)-[:IMPORTS]->(b:Code)
-			WHERE a.path CONTAINS '%s' AND b.path IS NOT NULL
-			RETURN a.path, b.path
+			MATCH (a:Code)-[:IMPORTS]->(b)
+			WHERE a.path CONTAINS '%s'
+			RETURN a.path, b.path, b.name
 		`, scopePath)
 	}
 
@@ -140,16 +141,33 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 	if arr, ok := res.([]any); ok && len(arr) > 1 {
 		if rows, ok := arr[1].([]any); ok {
 			for _, row := range rows {
-				if r, ok := row.([]any); ok && len(r) >= 2 {
+				if r, ok := row.([]any); ok && len(r) >= 3 {
 					srcPath, _ := r[0].(string)
 					dstPath, _ := r[1].(string)
+					dstName, _ := r[2].(string)
 
 					if !opts.ShouldInclude(srcPath) {
 						continue
 					}
 
 					srcPkg := toPackage(srcPath)
-					dstPkg := toPackage(dstPath)
+
+					var dstPkg string
+					if dstPath != "" {
+						dstPkg = toPackage(dstPath)
+					} else {
+						// Fallback: use name or "External" + name
+						if dstName != "" {
+							dstPkg = "External" // Simplification: Group all external? Or by name?
+							// If name is like "module/pkg", use that
+							parts := strings.Split(dstName, "/")
+							if len(parts) > 0 {
+								dstPkg = parts[0]
+							}
+						} else {
+							continue
+						}
+					}
 
 					if srcPkg == "" || dstPkg == "" || srcPkg == dstPkg {
 						continue

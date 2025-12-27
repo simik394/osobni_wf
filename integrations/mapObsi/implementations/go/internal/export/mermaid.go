@@ -202,3 +202,38 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 
 	return sb.String(), nil
 }
+
+// ExportMermaidClasses generates a Class Diagram in Mermaid format
+func ExportMermaidClasses(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
+	var sb strings.Builder
+	sb.WriteString("classDiagram\n")
+
+	query := `MATCH (c:Code)-[:DEFINES]->(cls:Class) RETURN c.name, cls.name`
+	if scopePath != "" {
+		query = fmt.Sprintf(`MATCH (c:Code)-[:DEFINES]->(cls:Class) WHERE c.path CONTAINS '%s' RETURN c.name, cls.name`, scopePath)
+	}
+
+	res, err := client.Query(ctx, query)
+	if err != nil {
+		return "", err
+	}
+
+	if arr, ok := res.([]any); ok && len(arr) > 1 {
+		if rows, ok := arr[1].([]any); ok {
+			for _, row := range rows {
+				if r, ok := row.([]any); ok && len(r) >= 2 {
+					// file, _ := r[0].(string)
+					clsName, _ := r[1].(string)
+					// Sanitize class name
+					clsName = strings.ReplaceAll(clsName, " ", "_")
+					clsName = strings.ReplaceAll(clsName, "-", "_")
+					sb.WriteString(fmt.Sprintf("    class %s\n", clsName))
+				}
+			}
+		}
+	}
+
+	// Add relationships if available in future
+
+	return sb.String(), nil
+}

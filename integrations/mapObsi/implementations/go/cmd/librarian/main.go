@@ -430,20 +430,26 @@ func runReport(cfg *config.Config, args []string) {
 		log.Printf("Warning: Failed to generate External Mermaid: %v", err)
 	}
 
-	// 3. Generate DOT
+	// 3. Generate Mermaid (Classes)
+	mermaidClasses, err := export.ExportMermaidClasses(ctx, dbClient, scopePath, opts)
+	if err != nil {
+		log.Printf("Warning: Failed to generate Mermaid Classes: %v", err)
+	}
+
+	// 4. Generate DOT
 	dotContent, err := export.ExportDOT(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate DOT: %v", err)
 	}
 
-	// 4. Generate PlantUML
+	// 5. Generate PlantUML
 	pumlContent, err := export.ExportPlantUML(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate PlantUML: %v", err)
 	}
 
-	// 5. Generate HTML Report
-	if err := export.GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pumlContent); err != nil {
+	// 6. Generate HTML Report
+	if err := export.GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, dotContent, pumlContent); err != nil {
 		log.Fatalf("Failed to generate report: %v", err)
 	}
 
