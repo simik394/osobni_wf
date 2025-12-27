@@ -210,6 +210,18 @@ This sends a JSON payload with the project name and path to your configured Wind
 
 ---
 
+## Visualization & Reporting
+
+Librarian includes a powerful reporting engine that generates HTML and Markdown dashboards summarizing your codebase architecture.
+
+- **Advanced Clustering**: Large diagrams are automatically split by directory to maintain readability.
+- **Frontier Detection**: Contextual view of internal/external dependencies (1-hop external connections).
+- **Multiple Formats**: HTML dashboard (with Mermaid.js), Markdown report, and raw PlantUML/DOT files.
+
+See [[DIAGRAMS|DIAGRAMS.md]] for a detailed technical breakdown of how these diagrams are generated and structured.
+
+---
+
 ## Troubleshooting
 
 ### Connection Refused to FalkorDB
