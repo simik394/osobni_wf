@@ -1,0 +1,52 @@
+---
+# Setup Windows workstations
+- name: Setup Windows Workstation
+  hosts: wtw.a
+  gather_facts: false
+
+  tasks:
+    - name: Check if Input Leap is installed
+      ansible.windows.win_stat:
+        path: 'C:\Program Files\InputLeap\input-leapc.exe'
+      register: input_leap_installed
+
+    - name: Create temp directory
+      ansible.windows.win_file:
+        path: 'C:\temp'
+        state: directory
+      when: not input_leap_installed.stat.exists
+
+    - name: Download Input Leap installer
+      ansible.windows.win_get_url:
+        url: https://github.com/input-leap/input-leap/releases/download/v3.0.3/InputLeap_3.0.3_windows_qt6.exe
+        dest: 'C:\temp\InputLeap_installer.exe'
+      when: not input_leap_installed.stat.exists
+
+    - name: Install Input Leap silently
+      ansible.windows.win_package:
+        path: 'C:\temp\InputLeap_installer.exe'
+        arguments: /S
+        state: present
+      when: not input_leap_installed.stat.exists
+
+    - name: Configure Input Leap client
+      ansible.windows.win_copy:
+        dest: 'C:\Users\{{ ansible_user }}\AppData\Local\InputLeap\InputLeap.conf'
+        content: |
+          section: screens
+              wtw.a:
+          end
+
+          section: options
+              serverAddress = 100.92.153.10
+          end
+
+    - name: Show completion message
+      ansible.builtin.debug:
+        msg: |
+          ✅ Input Leap installed on Windows!
+
+          Now open Input Leap from Start Menu and:
+          1. Select "Client"
+          2. Server address should be: 100.92.153.10
+          3. Click Start

@@ -19,5 +19,6 @@ workstations:
     wtw.a:
       ansible_host: 100.72.49.46
       ansible_user: simon
-      # Note: Windows host - limited Ansible functionality
-      # Use for documentation/inventory purposes
+      ansible_connection: ssh
+      ansible_shell_type: powershell
+      ansible_become: false
