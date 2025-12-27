@@ -38,9 +38,9 @@ obs_source_record:
 obs_recording_format: "mkv"
 
 # FPS (fractional: fps_num / fps_den)
-# 0.5 FPS = 1 frame every 2 seconds (saves massive disk space)
-obs_fps_num: 1
-obs_fps_den: 2
+# 5 FPS = good for screen recording, ~80% smaller than 30 FPS
+obs_fps_num: 5
+obs_fps_den: 1
 
 # UUIDs for OBS sources (generated once, reused)
 # These ensure consistent references across scene collection
