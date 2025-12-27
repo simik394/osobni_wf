@@ -17,6 +17,16 @@ func ExportPlantUML(ctx context.Context, client *db.Client, scopePath string, op
 		results["architecture.puml"] = comp
 	}
 
+	// 2. High-level Package Diagram
+	if pkg, err := exportPackageDiagram(ctx, client, scopePath, opts); err == nil && pkg != "" {
+		results["packages.puml"] = pkg
+	}
+
+	// 3. Class Relationship Diagram
+	if cls, err := exportClassDiagram(ctx, client, scopePath, opts); err == nil && cls != "" {
+		results["classes.puml"] = cls
+	}
+
 	// 4. File Dependency Graph (Replaces Mermaid for complexity)
 	if deps, err := exportDependencyDiagram(ctx, client, scopePath, opts); err == nil && deps != "" {
 		results["dependencies.puml"] = deps

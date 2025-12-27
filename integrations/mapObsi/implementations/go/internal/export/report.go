@@ -25,18 +25,28 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent stri
 	for filename, content := range pumlContent {
 		os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644)
 
-		formID := fmt.Sprintf("form_%s", strings.ReplaceAll(filename, ".", "_"))
+		encoded, _ := encodePlantUML(content)
+		browserLink := fmt.Sprintf("http://www.plantuml.com/plantuml/svg/%s", encoded)
+
+		// Warning if content is too large for URL (approx 2KB safe limit, but browsers support more, 8KB is risky)
+		urlWarning := ""
+		if len(encoded) > 8000 {
+			urlWarning = " (Note: Diagram may be too large for direct link, use Copy Source + Editor)"
+		}
+
 		pumlSections += fmt.Sprintf(`
 		<div class="diagram">
 			<h3>%s</h3>
-			<form id="%s" action="http://www.plantuml.com/plantuml/svg" method="POST" target="_blank" style="display:inline;">
-				<textarea name="text" style="display:none;">%s</textarea>
-				<button type="submit" style="background:none; border:none; color:#0066cc; cursor:pointer; text-decoration:underline; padding:0; font:inherit;">View in Browser (SVG)</button>
-			</form>
-			| 
-			<a href="%s" target="_blank">Raw Source</a>
+			<p>
+				<a href="%s" target="_blank">View in Browser (SVG)</a>%s | 
+				<button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>alert('Copied!'))" style="background:none; border:none; color:#0066cc; cursor:pointer; text-decoration:underline;">Copy Source</button>
+				<span style="display:none;">%s</span> |
+				<a href="%s" target="_blank">Raw Source</a>
+				<br/>
+				<small>If link fails, copy source and paste in <a href="http://www.plantuml.com/plantuml" target="_blank">PlantUML Editor</a></small>
+			</p>
 			<details><summary>Show Source</summary><pre>%s</pre></details>
-		</div>`, filename, formID, content, filename, truncateForHTML(content, 1000000))
+		</div>`, filename, browserLink, urlWarning, content, filename, truncateForHTML(content, 1000000))
 	}
 
 	// Try to render internal structure

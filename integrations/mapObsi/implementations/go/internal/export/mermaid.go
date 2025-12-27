@@ -20,6 +20,14 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 		return parts[len(parts)-1]
 	}
 
+	toDir := func(path string) string {
+		parts := strings.Split(path, "/")
+		if len(parts) > 1 {
+			return parts[len(parts)-2]
+		}
+		return "root"
+	}
+
 	// Helper to sanitize for Mermaid (alphanumeric only for IDs)
 	toID := func(name string) string {
 		s := strings.Map(func(r rune) rune {
@@ -38,8 +46,13 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 
 	// Track unique edges and nodes
 	edges := make(map[string]bool)
-	fileSymbols := make(map[string][]string)
-	externalDeps := make(map[string]map[string]bool) // file -> set of external deps
+	type FileInfo struct {
+		Name    string
+		Path    string
+		Symbols []string
+	}
+	files := make(map[string]*FileInfo)              // Path -> Info
+	externalDeps := make(map[string]map[string]bool) // FilePath -> set of external deps
 
 	// 1. Structural Relationships (DEFINES)
 	if opts.Filter == FilterAll || opts.Filter == FilterInternal {
@@ -62,10 +75,13 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 								continue
 							}
 
-							if fileName == "" {
-								fileName = toBase(filePath)
+							if files[filePath] == nil {
+								files[filePath] = &FileInfo{Name: fileName, Path: filePath}
+								if files[filePath].Name == "" {
+									files[filePath].Name = toBase(filePath)
+								}
 							}
-							fileSymbols[fileName] = append(fileSymbols[fileName], symbolName)
+							files[filePath].Symbols = append(files[filePath].Symbols, symbolName)
 						}
 					}
 				}
@@ -89,7 +105,6 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 							filePath, _ := r[0].(string)
 							fileName, _ := r[1].(string)
 
-							// Target can be string or node
 							var importTarget string
 							switch t := r[2].(type) {
 							case string:
@@ -104,20 +119,21 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 								continue
 							}
 
-							if fileName == "" {
-								fileName = toBase(filePath)
+							if files[filePath] == nil {
+								files[filePath] = &FileInfo{Name: fileName, Path: filePath}
+								if files[filePath].Name == "" {
+									files[filePath].Name = toBase(filePath)
+								}
 							}
 
 							if importTarget != "" && isExternal(importTarget) {
-								if externalDeps[fileName] == nil {
-									externalDeps[fileName] = make(map[string]bool)
+								if externalDeps[filePath] == nil {
+									externalDeps[filePath] = make(map[string]bool)
 								}
-								// Extract package name (first part of import path)
 								parts := strings.Split(importTarget, "/")
 								pkgName := parts[0]
-								// Skip relative-looking paths
 								if pkgName != "" && pkgName != "." && pkgName != ".." {
-									externalDeps[fileName][pkgName] = true
+									externalDeps[filePath][pkgName] = true
 								}
 							}
 						}
@@ -127,109 +143,62 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 		}
 	}
 
-	// 3. Generate Mermaid output based on detail level
-	switch opts.Detail {
-	case "high":
-		// Show all: files, symbols, and external deps
-		for fileName, symbols := range fileSymbols {
-			fileID := toID(fileName)
-			sb.WriteString(fmt.Sprintf("    subgraph %s[\"%s\"]\n", fileID, fileName))
-			for i, sym := range symbols {
-				if i >= 8 {
-					sb.WriteString(fmt.Sprintf("        %s_more[\"...+%d more\"]\n", fileID, len(symbols)-8))
-					break
-				}
-				symID := toID(sym)
-				sb.WriteString(fmt.Sprintf("        %s_%s[\"%s\"]\n", fileID, symID, sym))
-			}
-			sb.WriteString("    end\n")
+	// Group by Directory Structure
+	dirs := make(map[string][]*FileInfo)
+	for _, info := range files {
+		d := toDir(info.Path)
+		dirs[d] = append(dirs[d], info)
+	}
 
-			// External deps for this file
-			if deps, ok := externalDeps[fileName]; ok {
+	// Render
+	for dirName, fileList := range dirs {
+		sb.WriteString(fmt.Sprintf("    subgraph %s\n", toID("dir_"+dirName)))
+		// sb.WriteString(fmt.Sprintf("        direction TB\n"))
+		for _, info := range fileList {
+			fileID := toID(info.Path) // Unique ID based on path
+
+			// Show symbols if detail level is high/medium
+			if opts.Detail == "high" || (opts.Detail == "medium" && len(info.Symbols) > 0) {
+				sb.WriteString(fmt.Sprintf("        subgraph %s[\"%s\"]\n", fileID, info.Name))
+				for i, sym := range info.Symbols {
+					limit := 3
+					if opts.Detail == "high" {
+						limit = 8
+					}
+
+					if i >= limit {
+						sb.WriteString(fmt.Sprintf("            %s_more[\"...+%d more\"]\n", fileID, len(info.Symbols)-limit))
+						break
+					}
+					symID := toID(sym)
+					sb.WriteString(fmt.Sprintf("            %s_%s[\"%s\"]\n", fileID, symID, sym))
+				}
+				sb.WriteString("        end\n")
+			} else {
+				// Just file node
+				sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", fileID, info.Name))
+			}
+
+			// Render Edges to External Deps
+			if deps, ok := externalDeps[info.Path]; ok {
 				for dep := range deps {
-					depID := toID(dep)
+					depID := toID("EXT_" + dep)
+					// Note: External nodes are typically outside subgraphs or in their own
+					// We'll define them later, just link here
 					edge := fmt.Sprintf("%s->%s", fileID, depID)
 					if !edges[edge] {
 						edges[edge] = true
-						sb.WriteString(fmt.Sprintf("    %s -.->|uses| EXT_%s((\"%s\"))\n", fileID, depID, dep))
+						sb.WriteString(fmt.Sprintf("        %s -.-> %s((\"%s\"))\n", fileID, depID, dep))
 					}
 				}
 			}
 		}
-
-	case "low":
-		// Just files as nodes
-		for fileName := range fileSymbols {
-			fileID := toID(fileName)
-			if !edges[fileID] {
-				edges[fileID] = true
-				sb.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", fileID, fileName))
-			}
-		}
-
-	default: // medium - files with limited symbols + external deps grouped
-		// User code subgraphs
-		if len(fileSymbols) > 0 {
-			sb.WriteString("    subgraph UserCode[\"📁 Your Code\"]\n")
-			for fileName, symbols := range fileSymbols {
-				fileID := toID(fileName)
-				if len(symbols) > 0 {
-					sb.WriteString(fmt.Sprintf("        subgraph %s[\"%s\"]\n", fileID, fileName))
-					for i, sym := range symbols {
-						if i >= 3 {
-							sb.WriteString(fmt.Sprintf("            %s_more[\"...+%d more\"]\n", fileID, len(symbols)-3))
-							break
-						}
-						symID := toID(sym)
-						sb.WriteString(fmt.Sprintf("            %s_%s[\"%s\"]\n", fileID, symID, sym))
-					}
-					sb.WriteString("        end\n")
-				} else {
-					sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", fileID, fileName))
-				}
-			}
-			sb.WriteString("    end\n")
-		}
-
-		// External dependencies grouped
-		allExtDeps := make(map[string][]string) // dep -> files using it
-		for fileName, deps := range externalDeps {
-			for dep := range deps {
-				allExtDeps[dep] = append(allExtDeps[dep], fileName)
-			}
-		}
-
-		if len(allExtDeps) > 0 {
-			sb.WriteString("    subgraph ExtDeps[\"📦 External Dependencies\"]\n")
-			for dep := range allExtDeps {
-				depID := toID(dep)
-				sb.WriteString(fmt.Sprintf("        EXT_%s((\"%s\"))\n", depID, dep))
-			}
-			sb.WriteString("    end\n")
-
-			// Draw edges from files to external deps
-			for dep, files := range allExtDeps {
-				depID := toID(dep)
-				for _, fileName := range files {
-					fileID := toID(fileName)
-					edge := fmt.Sprintf("%s->%s", fileID, depID)
-					if !edges[edge] {
-						edges[edge] = true
-						sb.WriteString(fmt.Sprintf("    %s -.-> EXT_%s\n", fileID, depID))
-					}
-				}
-			}
-		}
+		sb.WriteString("    end\n")
 	}
 
-	// Style external deps differently
-	sb.WriteString("    classDef external fill:#e1f5fe,stroke:#0288d1,stroke-width:2px\n")
-	sb.WriteString("    class ExtDeps external\n")
-
-	// If empty, fallback
-	if sb.Len() <= 100 {
-		sb.WriteString("    Message[\"No content found for this view\"]\n")
-	}
+	// Style
+	sb.WriteString("    classDef external fill:#eee,stroke:#333,stroke-dasharray: 5 5\n")
+	// sb.WriteString("    classDef file fill:#fff,stroke:#333\n")
 
 	return sb.String(), nil
 }
