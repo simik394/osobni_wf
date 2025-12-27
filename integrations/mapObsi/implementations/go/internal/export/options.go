@@ -6,13 +6,22 @@ type ExportOptions struct {
 	Excludes []string
 	// Detail level: "high" (all), "medium" (user code), "low" (summary)
 	Detail string
+	// Filter: "all", "internal" (structural), "external" (dependencies)
+	Filter string
 }
+
+const (
+	FilterAll      = "all"
+	FilterInternal = "internal"
+	FilterExternal = "external"
+)
 
 // DefaultExportOptions returns sensible defaults
 func DefaultExportOptions() ExportOptions {
 	return ExportOptions{
 		Excludes: []string{"node_modules", "vendor", ".git"},
 		Detail:   "medium",
+		Filter:   FilterAll,
 	}
 }
 

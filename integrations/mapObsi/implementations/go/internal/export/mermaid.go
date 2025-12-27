@@ -41,83 +41,85 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 	fileSymbols := make(map[string][]string)
 	externalDeps := make(map[string]map[string]bool) // file -> set of external deps
 
-	// 1. Query DEFINES relationships for user code structure
-	queryDefines := "MATCH (c:Code)-[:DEFINES]->(s) WHERE c.path IS NOT NULL RETURN c.path, c.name, labels(s)[0], s.name"
-	if scopePath != "" {
-		queryDefines = fmt.Sprintf("MATCH (c:Code)-[:DEFINES]->(s) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, labels(s)[0], s.name", scopePath)
-	}
+	// 1. Structural Relationships (DEFINES)
+	if opts.Filter == FilterAll || opts.Filter == FilterInternal {
+		queryDefines := "MATCH (c:Code)-[:DEFINES]->(s) WHERE c.path IS NOT NULL RETURN c.path, c.name, labels(s)[0], s.name"
+		if scopePath != "" {
+			queryDefines = fmt.Sprintf("MATCH (c:Code)-[:DEFINES]->(s) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, labels(s)[0], s.name", scopePath)
+		}
 
-	resDefines, err := client.Query(ctx, queryDefines)
-	if err != nil {
-		return "", fmt.Errorf("failed to query definitions: %w", err)
-	}
+		resDefines, err := client.Query(ctx, queryDefines)
+		if err == nil {
+			if arr, ok := resDefines.([]any); ok && len(arr) > 1 {
+				if rows, ok := arr[1].([]any); ok {
+					for _, row := range rows {
+						if r, ok := row.([]any); ok && len(r) >= 4 {
+							filePath, _ := r[0].(string)
+							fileName, _ := r[1].(string)
+							symbolName, _ := r[3].(string)
 
-	if arr, ok := resDefines.([]any); ok && len(arr) > 1 {
-		if rows, ok := arr[1].([]any); ok {
-			for _, row := range rows {
-				if r, ok := row.([]any); ok && len(r) >= 4 {
-					filePath, _ := r[0].(string)
-					fileName, _ := r[1].(string)
-					symbolName, _ := r[3].(string)
+							if !opts.ShouldInclude(filePath) {
+								continue
+							}
 
-					if !opts.ShouldInclude(filePath) {
-						continue
+							if fileName == "" {
+								fileName = toBase(filePath)
+							}
+							fileSymbols[fileName] = append(fileSymbols[fileName], symbolName)
+						}
 					}
-
-					if fileName == "" {
-						fileName = toBase(filePath)
-					}
-
-					fileSymbols[fileName] = append(fileSymbols[fileName], symbolName)
 				}
 			}
 		}
 	}
 
-	// 2. Query IMPORTS relationships to find external dependencies
-	// Return target.name directly since Module nodes have a name property
-	queryImports := "MATCH (c:Code)-[r:IMPORTS]->(target:Module) WHERE c.path IS NOT NULL RETURN c.path, c.name, target.name"
-	if scopePath != "" {
-		queryImports = fmt.Sprintf("MATCH (c:Code)-[r:IMPORTS]->(target:Module) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, target.name", scopePath)
-	}
+	// 2. Dependency Relationships (IMPORTS)
+	if opts.Filter == FilterAll || opts.Filter == FilterExternal {
+		queryImports := "MATCH (c:Code)-[r:IMPORTS]->(target:Module) WHERE c.path IS NOT NULL RETURN c.path, c.name, target.name"
+		if scopePath != "" {
+			queryImports = fmt.Sprintf("MATCH (c:Code)-[r:IMPORTS]->(target:Module) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, target.name", scopePath)
+		}
 
-	resImports, _ := client.Query(ctx, queryImports)
-	if arr, ok := resImports.([]any); ok && len(arr) > 1 {
-		if rows, ok := arr[1].([]any); ok {
-			for _, row := range rows {
-				if r, ok := row.([]any); ok && len(r) >= 3 {
-					filePath, _ := r[0].(string)
-					fileName, _ := r[1].(string)
+		resImports, err := client.Query(ctx, queryImports)
+		if err == nil {
+			if arr, ok := resImports.([]any); ok && len(arr) > 1 {
+				if rows, ok := arr[1].([]any); ok {
+					for _, row := range rows {
+						if r, ok := row.([]any); ok && len(r) >= 3 {
+							filePath, _ := r[0].(string)
+							fileName, _ := r[1].(string)
 
-					// Target can be string or node
-					var importTarget string
-					switch t := r[2].(type) {
-					case string:
-						importTarget = t
-					case map[string]any:
-						if name, ok := t["name"].(string); ok {
-							importTarget = name
-						}
-					}
+							// Target can be string or node
+							var importTarget string
+							switch t := r[2].(type) {
+							case string:
+								importTarget = t
+							case map[string]any:
+								if name, ok := t["name"].(string); ok {
+									importTarget = name
+								}
+							}
 
-					if !opts.ShouldInclude(filePath) {
-						continue
-					}
+							if !opts.ShouldInclude(filePath) {
+								continue
+							}
 
-					if fileName == "" {
-						fileName = toBase(filePath)
-					}
+							if fileName == "" {
+								fileName = toBase(filePath)
+							}
 
-					if importTarget != "" && isExternal(importTarget) {
-						if externalDeps[fileName] == nil {
-							externalDeps[fileName] = make(map[string]bool)
-						}
-						// Extract package name (first part of import path)
-						parts := strings.Split(importTarget, "/")
-						pkgName := parts[0]
-						// Skip relative-looking paths
-						if pkgName != "" && pkgName != "." && pkgName != ".." {
-							externalDeps[fileName][pkgName] = true
+							if importTarget != "" && isExternal(importTarget) {
+								if externalDeps[fileName] == nil {
+									externalDeps[fileName] = make(map[string]bool)
+								}
+								// Extract package name (first part of import path)
+								parts := strings.Split(importTarget, "/")
+								pkgName := parts[0]
+								// Skip relative-looking paths
+								if pkgName != "" && pkgName != "." && pkgName != ".." {
+									externalDeps[fileName][pkgName] = true
+								}
+							}
 						}
 					}
 				}
@@ -167,21 +169,27 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 
 	default: // medium - files with limited symbols + external deps grouped
 		// User code subgraphs
-		sb.WriteString("    subgraph UserCode[\"📁 Your Code\"]\n")
-		for fileName, symbols := range fileSymbols {
-			fileID := toID(fileName)
-			sb.WriteString(fmt.Sprintf("        subgraph %s[\"%s\"]\n", fileID, fileName))
-			for i, sym := range symbols {
-				if i >= 3 {
-					sb.WriteString(fmt.Sprintf("            %s_more[\"...+%d more\"]\n", fileID, len(symbols)-3))
-					break
+		if len(fileSymbols) > 0 {
+			sb.WriteString("    subgraph UserCode[\"📁 Your Code\"]\n")
+			for fileName, symbols := range fileSymbols {
+				fileID := toID(fileName)
+				if len(symbols) > 0 {
+					sb.WriteString(fmt.Sprintf("        subgraph %s[\"%s\"]\n", fileID, fileName))
+					for i, sym := range symbols {
+						if i >= 3 {
+							sb.WriteString(fmt.Sprintf("            %s_more[\"...+%d more\"]\n", fileID, len(symbols)-3))
+							break
+						}
+						symID := toID(sym)
+						sb.WriteString(fmt.Sprintf("            %s_%s[\"%s\"]\n", fileID, symID, sym))
+					}
+					sb.WriteString("        end\n")
+				} else {
+					sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", fileID, fileName))
 				}
-				symID := toID(sym)
-				sb.WriteString(fmt.Sprintf("            %s_%s[\"%s\"]\n", fileID, symID, sym))
 			}
-			sb.WriteString("        end\n")
+			sb.WriteString("    end\n")
 		}
-		sb.WriteString("    end\n")
 
 		// External dependencies grouped
 		allExtDeps := make(map[string][]string) // dep -> files using it
@@ -220,7 +228,7 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 
 	// If empty, fallback
 	if sb.Len() <= 100 {
-		sb.WriteString("    Message[\"No code definitions found\"]\n")
+		sb.WriteString("    Message[\"No content found for this view\"]\n")
 	}
 
 	return sb.String(), nil

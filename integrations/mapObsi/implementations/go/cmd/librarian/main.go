@@ -401,26 +401,36 @@ func runReport(cfg *config.Config, args []string) {
 
 	ctx := context.Background()
 
-	// 1. Generate Mermaid
-	mermaidContent, err := export.ExportMermaid(ctx, dbClient, scopePath, opts)
+	// 1. Generate Mermaid (Internal Structure)
+	optsInternal := opts
+	optsInternal.Filter = export.FilterInternal
+	mermaidInternal, err := export.ExportMermaid(ctx, dbClient, scopePath, optsInternal)
 	if err != nil {
-		log.Printf("Warning: Failed to generate Mermaid: %v", err)
+		log.Printf("Warning: Failed to generate Internal Mermaid: %v", err)
 	}
 
-	// 2. Generate DOT
+	// 2. Generate Mermaid (External Dependencies)
+	optsExternal := opts
+	optsExternal.Filter = export.FilterExternal
+	mermaidExternal, err := export.ExportMermaid(ctx, dbClient, scopePath, optsExternal)
+	if err != nil {
+		log.Printf("Warning: Failed to generate External Mermaid: %v", err)
+	}
+
+	// 3. Generate DOT
 	dotContent, err := export.ExportDOT(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate DOT: %v", err)
 	}
 
-	// 3. Generate PlantUML
+	// 4. Generate PlantUML
 	pumlContent, err := export.ExportPlantUML(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate PlantUML: %v", err)
 	}
 
-	// 4. Generate HTML
-	if err := export.GenerateReport(outputDir, mermaidContent, dotContent, pumlContent); err != nil {
+	// 5. Generate HTML Report
+	if err := export.GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pumlContent); err != nil {
 		log.Fatalf("Failed to generate report: %v", err)
 	}
 

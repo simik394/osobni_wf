@@ -9,79 +9,82 @@ import (
 )
 
 // GenerateReport creates an index.html dashboard with rendered images
-func GenerateReport(outputDir, mermaidContent, dotContent, pumlContent string) error {
+func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pumlContent string) error {
 	// Ensure dir exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return err
 	}
 
-	// Write raw files first
-	mermaidPath := filepath.Join(outputDir, "classes.mermaid")
-	if err := os.WriteFile(mermaidPath, []byte(mermaidContent), 0644); err != nil {
-		return err
-	}
+	// Write raw files
+	os.WriteFile(filepath.Join(outputDir, "structure.mermaid"), []byte(mermaidInternal), 0644)
+	os.WriteFile(filepath.Join(outputDir, "dependencies.mermaid"), []byte(mermaidExternal), 0644)
+	os.WriteFile(filepath.Join(outputDir, "graph.dot"), []byte(dotContent), 0644)
+	os.WriteFile(filepath.Join(outputDir, "classes.puml"), []byte(pumlContent), 0644)
 
-	dotPath := filepath.Join(outputDir, "graph.dot")
-	if err := os.WriteFile(dotPath, []byte(dotContent), 0644); err != nil {
-		return err
-	}
-
-	pumlPath := filepath.Join(outputDir, "classes.puml")
-	if err := os.WriteFile(pumlPath, []byte(pumlContent), 0644); err != nil {
-		return err
-	}
-
-	// Try to render Mermaid to SVG and PNG
-	mermaidSVG := ""
-	mermaidSVGPath := filepath.Join(outputDir, "diagram.svg")
-	mermaidPNGPath := filepath.Join(outputDir, "diagram.png")
+	// Try to render internal structure
+	internalSVG := ""
+	internalPath := filepath.Join(outputDir, "structure.mermaid")
+	internalSVGPath := filepath.Join(outputDir, "structure.svg")
 	if mmdc, err := exec.LookPath("mmdc"); err == nil {
-		// Render SVG
-		cmd := exec.Command(mmdc, "-i", mermaidPath, "-o", mermaidSVGPath, "-b", "transparent")
+		cmd := exec.Command(mmdc, "-i", internalPath, "-o", internalSVGPath, "-b", "transparent")
 		if err := cmd.Run(); err == nil {
-			if svgBytes, err := os.ReadFile(mermaidSVGPath); err == nil {
-				mermaidSVG = string(svgBytes)
+			if b, err := os.ReadFile(internalSVGPath); err == nil {
+				internalSVG = string(b)
 			}
 		}
-		// Render PNG (higher resolution)
-		cmdPNG := exec.Command(mmdc, "-i", mermaidPath, "-o", mermaidPNGPath, "-b", "white", "-s", "2")
-		cmdPNG.Run() // Ignore errors, PNG is optional
 	}
 
-	// Try to render DOT to SVG
+	// Try to render dependencies
+	externalSVG := ""
+	externalPath := filepath.Join(outputDir, "dependencies.mermaid")
+	externalSVGPath := filepath.Join(outputDir, "dependencies.svg")
+	if mmdc, err := exec.LookPath("mmdc"); err == nil {
+		cmd := exec.Command(mmdc, "-i", externalPath, "-o", externalSVGPath, "-b", "transparent")
+		if err := cmd.Run(); err == nil {
+			if b, err := os.ReadFile(externalSVGPath); err == nil {
+				externalSVG = string(b)
+			}
+		}
+	}
+
+	// Try to render DOT
 	dotSVG := ""
+	dotPath := filepath.Join(outputDir, "graph.dot")
 	dotSVGPath := filepath.Join(outputDir, "graph.svg")
 	if dot, err := exec.LookPath("dot"); err == nil {
 		cmd := exec.Command(dot, "-Tsvg", "-o", dotSVGPath, dotPath)
 		if err := cmd.Run(); err == nil {
-			if svgBytes, err := os.ReadFile(dotSVGPath); err == nil {
-				dotSVG = string(svgBytes)
+			if b, err := os.ReadFile(dotSVGPath); err == nil {
+				dotSVG = string(b)
 			}
 		}
 	}
 
-	// Build HTML content
-	var mermaidSection string
-	if mermaidSVG != "" {
-		mermaidSection = fmt.Sprintf(`<div class="diagram">%s</div>`, mermaidSVG)
+	// Build Sections
+	var internalSection string
+	if internalSVG != "" {
+		internalSection = fmt.Sprintf(`<div class="diagram">%s</div>`, internalSVG)
 	} else {
-		// Fallback to JS rendering
-		mermaidSection = fmt.Sprintf(`<div class="diagram mermaid">%s</div>`, mermaidContent)
+		internalSection = fmt.Sprintf(`<div class="diagram mermaid">%s</div>`, mermaidInternal)
+	}
+
+	var externalSection string
+	if externalSVG != "" {
+		externalSection = fmt.Sprintf(`<div class="diagram">%s</div>`, externalSVG)
+	} else {
+		externalSection = fmt.Sprintf(`<div class="diagram mermaid">%s</div>`, mermaidExternal)
 	}
 
 	var dotSection string
 	if dotSVG != "" {
 		dotSection = fmt.Sprintf(`<div class="diagram">%s</div>`, dotSVG)
 	} else {
-		// Show install hint
-		dotSection = fmt.Sprintf(`<p>Install <code>graphviz</code> for rendered graph. Raw DOT: <a href="graph.dot" target="_blank">graph.dot</a></p>
-		<details><summary>Show DOT source</summary><pre>%s</pre></details>`, truncateForHTML(dotContent, 5000))
+		dotSection = fmt.Sprintf(`<p>Graphviz not found. <a href="graph.dot" target="_blank">Raw DOT</a></p>`)
 	}
 
 	pumlSection := fmt.Sprintf(`
-		<p>PlantUML version (best for large diagrams). Raw PUML: <a href="classes.puml" target="_blank">classes.puml</a></p>
-		<p><a href="http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/user/project/main/classes.puml" target="_blank">Render Online (Experimental)</a></p>
-		<details><summary>Show PUML source</summary><pre>%s</pre></details>`, truncateForHTML(pumlContent, 10000))
+		<p>PlantUML version (best for large scale). <a href="classes.puml" target="_blank">Raw PUML</a></p>
+		<details><summary>Show PUML source</summary><pre>%s</pre></details>`, truncateForHTML(pumlContent, 1000000)) // Limit to 1MB
 
 	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
@@ -90,16 +93,13 @@ func GenerateReport(outputDir, mermaidContent, dotContent, pumlContent string) e
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Codebase Map Report</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; line-height: 1.6; background: #fafafa; }
-        h1, h2 { color: #333; }
+        body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #fafafa; }
         .container { max-width: 1400px; margin: 0 auto; }
-        .diagram { border: 1px solid #ddd; padding: 10px; border-radius: 8px; overflow: auto; background: white; margin-bottom: 20px; }
+        .diagram { border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: white; margin-bottom: 20px; overflow: auto; }
         .diagram svg { max-width: 100%%; height: auto; }
-        .mermaid { background: #f9f9f9; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; font-size: 12px; }
-        details { margin-top: 10px; }
-        summary { cursor: pointer; color: #0066cc; }
-        a { color: #0066cc; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; font-size: 11px; overflow: auto; }
+        h1, h2 { color: #333; }
+        summary { cursor: pointer; color: #0066cc; margin-top: 10px; }
     </style>
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -109,19 +109,21 @@ func GenerateReport(outputDir, mermaidContent, dotContent, pumlContent string) e
 <body>
     <div class="container">
         <h1>📊 Codebase Map Report</h1>
-        <p>Generated by Vault Librarian</p>
-
-        <h2>Module Structure</h2>
+        
+        <h2>📁 Module Structure</h2>
         %s
 
-        <h2>Dependency Graph (DOT)</h2>
+        <h2>📦 Dependency Graph</h2>
         %s
 
-        <h2>Large Diagram (PlantUML)</h2>
+        <h2>🌳 Full Relationship Graph (DOT)</h2>
+        %s
+
+        <h2>🏗️ Architecture (PlantUML)</h2>
         %s
     </div>
 </body>
-</html>`, mermaidSection, dotSection, pumlSection)
+</html>`, internalSection, externalSection, dotSection, pumlSection)
 
 	reportPath := filepath.Join(outputDir, "index.html")
 	return os.WriteFile(reportPath, []byte(htmlContent), 0644)
@@ -132,10 +134,10 @@ func truncateForHTML(content string, maxLen int) string {
 	if len(content) <= maxLen {
 		return content
 	}
-	return content[:maxLen] + "\n... (truncated, see graph.dot for full content)"
+	return content[:maxLen] + "\n... (truncated, see original files for full content)"
 }
 
-// Helper to escape HTML
+// Helper to escape HTML (not used currently but kept for utility)
 func escapeHTML(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
