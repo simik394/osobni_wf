@@ -436,23 +436,35 @@ func runReport(cfg *config.Config, args []string) {
 		log.Printf("Warning: Failed to generate Mermaid Classes: %v", err)
 	}
 
-	// 4. Generate DOT
+	// 4. Generate Mermaid (Packages)
+	mermaidPackages, err := export.ExportMermaidPackages(ctx, dbClient, scopePath, opts)
+	if err != nil {
+		log.Printf("Warning: Failed to generate Mermaid Packages: %v", err)
+	}
+
+	// 5. Generate DOT
 	dotContent, err := export.ExportDOT(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate DOT: %v", err)
 	}
 
-	// 5. Generate PlantUML
+	// 6. Generate PlantUML
 	pumlContent, err := export.ExportPlantUML(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate PlantUML: %v", err)
 	}
 
-	// 6. Generate HTML Report
+	// 7. Generate HTML Report
 	if err := export.GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, dotContent, pumlContent); err != nil {
-		log.Fatalf("Failed to generate report: %v", err)
+		log.Fatalf("Failed to generate HTML report: %v", err)
+	}
+
+	// 8. Generate Markdown Report
+	if err := export.GenerateMarkdownReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, mermaidPackages); err != nil {
+		log.Printf("Warning: Failed to generate Markdown report: %v", err)
 	}
 
 	fmt.Printf("Report generated at: %s/index.html\n", outputDir)
+	fmt.Printf("Markdown report:     %s/report.md\n", outputDir)
 	fmt.Printf("Options used: detail=%s, excludes=%v\n", opts.Detail, opts.Excludes)
 }

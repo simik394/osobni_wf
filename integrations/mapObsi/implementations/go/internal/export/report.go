@@ -136,6 +136,54 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses,
 	return os.WriteFile(filepath.Join(outputDir, "index.html"), []byte(html), 0644)
 }
 
+// GenerateMarkdownReport creates a report.md with embedded Mermaid diagrams
+func GenerateMarkdownReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, mermaidPackages string) error {
+	// Create formatted markdown content
+	// Use explicit "mermaid" language blocks which are supported by Obsidian, GitHub, GitLab, etc.
+
+	md := fmt.Sprintf(`# Codebase Visualization Report
+Generated at %s
+
+## 1. High-Level Packages
+Directory-level dependency graph.
+
+`+"```mermaid"+`
+%s
+`+"```"+`
+
+## 2. Module Structure
+Internal file structure grouped by directory.
+
+`+"```mermaid"+`
+%s
+`+"```"+`
+
+## 3. Class Definitions
+Classes defined across the codebase.
+
+`+"```mermaid"+`
+%s
+`+"```"+`
+
+## 4. File Dependencies
+External library usage and inter-file dependencies.
+
+`+"```mermaid"+`
+%s
+`+"```"+`
+
+## 5. Other Visualizations
+### Graphviz (DOT)
+To render the `+"`graph.dot`"+` file manually:
+`+"```bash"+`
+dot -Tsvg graph.dot -o graph.svg
+`+"```"+`
+
+`, time.Now().Format(time.RFC1123), mermaidPackages, mermaidInternal, mermaidClasses, mermaidExternal)
+
+	return os.WriteFile(filepath.Join(outputDir, "report.md"), []byte(md), 0644)
+}
+
 // truncateForHTML limits content length for HTML embedding
 func truncateForHTML(content string, maxLen int) string {
 	if len(content) <= maxLen {

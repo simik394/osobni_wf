@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/simik394/vault-librarian/internal/db"
@@ -234,6 +235,133 @@ func ExportMermaidClasses(ctx context.Context, client *db.Client, scopePath stri
 	}
 
 	// Add relationships if available in future
+
+	return sb.String(), nil
+}
+
+// ExportMermaidPackages generates a high-level Package/Directory dependency graph
+func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
+	var sb strings.Builder
+	sb.WriteString("graph TD\n")
+	sb.WriteString("    %% Package/Directory Level Dependencies\n")
+
+	// Helper to extract directory relative to root (or scope)
+	toPackage := func(path string) string {
+		dir := filepath.Dir(path)
+		if strings.HasPrefix(dir, "/") {
+			// Try to simplify absolute paths if possible, but for now just use base
+			parts := strings.Split(dir, "/")
+			if len(parts) > 2 {
+				return parts[len(parts)-1]
+			}
+			return "root"
+		}
+		return dir
+	}
+
+	toID := func(name string) string {
+		s := strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+				return r
+			}
+			return '_'
+		}, name)
+		return "PKG_" + s
+	}
+
+	// 1. Query all file-to-file imports
+	query := `
+		MATCH (a:Code)-[:IMPORTS]->(b)
+		WHERE a.path IS NOT NULL
+		RETURN a.path, b.path, b.name
+	`
+	if scopePath != "" {
+		query = fmt.Sprintf(`
+			MATCH (a:Code)-[:IMPORTS]->(b)
+			WHERE a.path CONTAINS '%s'
+			RETURN a.path, b.path, b.name
+		`, scopePath)
+	}
+
+	res, err := client.Query(ctx, query)
+	if err != nil {
+		return "", err
+	}
+
+	// Aggregate dependencies: SourcePkg -> DestPkg
+	pkgDeps := make(map[string]map[string]bool)
+	packages := make(map[string]bool)
+
+	if arr, ok := res.([]any); ok && len(arr) > 1 {
+		if rows, ok := arr[1].([]any); ok {
+			for _, row := range rows {
+				if r, ok := row.([]any); ok && len(r) >= 3 {
+					srcPath, _ := r[0].(string)
+					dstPath, _ := r[1].(string)
+					dstName, _ := r[2].(string)
+
+					if !opts.ShouldInclude(srcPath) {
+						continue
+					}
+
+					srcPkg := toPackage(srcPath)
+					packages[srcPkg] = true
+
+					var dstPkg string
+					if dstPath != "" {
+						dstPkg = toPackage(dstPath)
+					} else {
+						// External module
+						if dstName != "" {
+							parts := strings.Split(dstName, "/")
+							if len(parts) > 0 {
+								dstPkg = "ext_" + parts[0]
+							} else {
+								dstPkg = "ext_lib"
+							}
+						} else {
+							continue
+						}
+					}
+
+					if srcPkg == dstPkg || srcPkg == "" || dstPkg == "" {
+						continue
+					}
+
+					// If dest is also project code, mark it
+					if dstPath != "" {
+						packages[dstPkg] = true
+					}
+
+					if pkgDeps[srcPkg] == nil {
+						pkgDeps[srcPkg] = make(map[string]bool)
+					}
+					pkgDeps[srcPkg][dstPkg] = true
+				}
+			}
+		}
+	}
+
+	// Render Nodes
+	for pkg := range packages {
+		sb.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", toID(pkg), pkg))
+	}
+
+	// Render Edges
+	for src, dests := range pkgDeps {
+		for dst := range dests {
+			if strings.HasPrefix(dst, "ext_") {
+				// Style external links differently
+				label := strings.TrimPrefix(dst, "ext_")
+				sb.WriteString(fmt.Sprintf("    %s -.-> %s((\"%s\"))\n", toID(src), toID(dst), label))
+			} else {
+				sb.WriteString(fmt.Sprintf("    %s --> %s\n", toID(src), toID(dst)))
+			}
+		}
+	}
+
+	// Style
+	sb.WriteString("    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;\n")
 
 	return sb.String(), nil
 }
