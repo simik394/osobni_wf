@@ -133,8 +133,10 @@
             "filename_formatting": "hdmi_%CCYY-%MM-%DD_%hh-%mm-%ss",
             "path": "{{ obs_recording_path }}",
             "bitrate": {{ obs_source_record.bitrate }},
-            "keyint_sec": 10,
-            "gpu": 0
+            "keyint_sec": 2,
+            "encoder_id": "obs_x264",
+            "preset": "veryfast",
+            "crf": 23
           },
           "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
           "enabled": true, "muted": false,
@@ -183,8 +185,10 @@
             "filename_formatting": "notebook_%CCYY-%MM-%DD_%hh-%mm-%ss",
             "path": "{{ obs_recording_path }}",
             "bitrate": {{ obs_source_record.bitrate }},
-            "keyint_sec": 10,
-            "gpu": 0
+            "keyint_sec": 2,
+            "encoder_id": "obs_x264",
+            "preset": "veryfast",
+            "crf": 23
           },
           "mixers": 0, "sync": 0, "flags": 0, "volume": 1.0, "balance": 0.5,
           "enabled": true, "muted": false,
