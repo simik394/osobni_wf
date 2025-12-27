@@ -234,3 +234,126 @@
     dest: "{{ ansible_env.HOME }}/.config/obs-studio/basic/scenes/{{ obs_scene_collection_name }}.json"
     mode: "0644"
     backup: yes
+
+# ============================================
+# SCREENSHOT RECORDING (LOW FPS ALTERNATIVE)
+# ============================================
+
+- name: Install scrot for screenshot recording
+  apt:
+    name:
+      - scrot
+      - ffmpeg
+    state: present
+  become: true
+
+- name: Create screenshot-record script
+  copy:
+    dest: "{{ ansible_env.HOME }}/bin/screenshot-record"
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # Screenshot-based recording (0.5 FPS / 1 frame per 2 seconds)
+      # Usage: screenshot-record start|stop|status
+
+      SCREENSHOT_DIR="{{ ansible_env.HOME }}/Videos/Screenshots"
+      INTERVAL=2  # seconds between screenshots
+      PIDFILE="/tmp/screenshot-record.pid"
+
+      case "$1" in
+        start)
+          if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
+            echo "Screenshot recording is already running (PID: $(cat $PIDFILE))"
+            exit 1
+          fi
+          
+          # Create session directory with timestamp
+          SESSION_DIR="$SCREENSHOT_DIR/$(date +%Y-%m-%d_%H-%M-%S)"
+          mkdir -p "$SESSION_DIR"
+          
+          echo "Starting screenshot recording..."
+          echo "  Interval: ${INTERVAL}s"
+          echo "  Output: $SESSION_DIR"
+          
+          # Start background screenshot loop
+          (
+            COUNT=0
+            while true; do
+              scrot -m "$SESSION_DIR/frame_%05d.png" -e 'echo $f' > /dev/null 2>&1
+              # Rename to proper sequence number
+              LATEST=$(ls -t "$SESSION_DIR"/*.png 2>/dev/null | head -1)
+              if [ -n "$LATEST" ]; then
+                mv "$LATEST" "$SESSION_DIR/$(printf 'frame_%05d.png' $COUNT)" 2>/dev/null
+              fi
+              COUNT=$((COUNT + 1))
+              sleep $INTERVAL
+            done
+          ) &
+          
+          echo $! > "$PIDFILE"
+          echo "$SESSION_DIR" > /tmp/screenshot-session.txt
+          echo "✓ Recording started (PID: $!)"
+          echo "  Use 'screenshot-record stop' to stop and convert to video."
+          ;;
+        
+        stop)
+          if [ ! -f "$PIDFILE" ]; then
+            echo "No screenshot recording is running."
+            exit 1
+          fi
+          
+          PID=$(cat "$PIDFILE")
+          SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+          
+          echo "Stopping screenshot recording..."
+          kill "$PID" 2>/dev/null
+          rm -f "$PIDFILE"
+          
+          if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then
+            COUNT=$(ls "$SESSION_DIR"/*.png 2>/dev/null | wc -l)
+            echo "  Captured $COUNT frames"
+            
+            if [ "$COUNT" -gt 0 ]; then
+              echo "  Converting to video..."
+              OUTPUT="{{ obs_recording_path }}/screenshots_$(basename $SESSION_DIR).mkv"
+              ffmpeg -y -framerate 0.5 -i "$SESSION_DIR/frame_%05d.png" \
+                -c:v libx264 -preset veryfast -crf 23 \
+                -pix_fmt yuv420p "$OUTPUT" 2>/dev/null
+              
+              if [ -f "$OUTPUT" ]; then
+                SIZE=$(du -h "$OUTPUT" | cut -f1)
+                echo "✓ Video saved: $OUTPUT ($SIZE)"
+                echo "  Cleaning up PNG files..."
+                rm -rf "$SESSION_DIR"
+              else
+                echo "✗ Video conversion failed. PNG files kept in: $SESSION_DIR"
+              fi
+            fi
+          fi
+          rm -f /tmp/screenshot-session.txt
+          ;;
+        
+        status)
+          if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
+            SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+            COUNT=$(ls "$SESSION_DIR"/*.png 2>/dev/null | wc -l)
+            echo "Screenshot recording is running (PID: $(cat $PIDFILE))"
+            echo "  Frames captured: $COUNT"
+            echo "  Output: $SESSION_DIR"
+          else
+            echo "Screenshot recording is not running."
+          fi
+          ;;
+        
+        *)
+          echo "Usage: screenshot-record {start|stop|status}"
+          echo ""
+          echo "Low-FPS screen recording using screenshots (0.5 FPS)"
+          echo ""
+          echo "Commands:"
+          echo "  start   - Start capturing screenshots every 2 seconds"
+          echo "  stop    - Stop and convert to MKV video"
+          echo "  status  - Check if recording is running"
+          exit 1
+          ;;
+      esac
