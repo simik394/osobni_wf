@@ -1,6 +1,6 @@
 ---
 # LM Studio installation role
-# Downloads the AppImage and creates desktop integration
+# Dynamically checks for latest version and installs it
 
 - name: Ensure LM Studio directory exists
   file:
@@ -8,16 +8,33 @@
     state: directory
     mode: "0755"
 
+- name: Detect latest LM Studio version
+  script: get_latest_version.py
+  args:
+    executable: python3
+  register: lmstudio_version_check
+  check_mode: false
+  changed_when: false
+  delegate_to: localhost
+
+- name: Set facts from version check
+  set_fact:
+    lmstudio_latest_data: "{{ lmstudio_version_check.stdout | from_json }}"
+
+- name: Display detected version
+  debug:
+    msg: "Latest version detected: {{ lmstudio_latest_data.version }}"
+
 - name: Download LM Studio AppImage
   get_url:
-    url: "{{ lmstudio_download_url }}"
-    dest: "{{ lmstudio_install_dir }}/{{ lmstudio_appimage_name }}"
+    url: "{{ lmstudio_latest_data.url }}"
+    dest: "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}"
     mode: "0755"
   register: lmstudio_download
 
 - name: Create symlink in ~/.local/bin
   file:
-    src: "{{ lmstudio_install_dir }}/{{ lmstudio_appimage_name }}"
+    src: "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}"
     dest: "{{ ansible_env.HOME }}/.local/bin/lmstudio"
     state: link
 
@@ -35,12 +52,13 @@
       [Desktop Entry]
       Name=LM Studio
       Comment=Discover, download, and run local LLMs
-      Exec={{ lmstudio_install_dir }}/{{ lmstudio_appimage_name }}
+      Exec={{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}
       Icon=lmstudio
       Terminal=false
       Type=Application
       Categories=Development;Science;
       Keywords=AI;LLM;Machine Learning;
+      X-AppImage-Version={{ lmstudio_latest_data.version }}
 
 - name: Update desktop database
   command: update-desktop-database "{{ ansible_env.HOME }}/.local/share/applications"

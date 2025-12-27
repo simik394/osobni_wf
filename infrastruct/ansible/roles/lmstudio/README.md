@@ -1,17 +1,18 @@
 # LM Studio Ansible Role
 
-Installs [LM Studio](https://lmstudio.ai/) - a desktop application for discovering, downloading, and running local LLMs.
+Installs **LM Studio** by automatically detecting and downloading the latest AppImage from `lmstudio.ai`.
 
 ## Features
 
-- Downloads LM Studio AppImage from official source
-- Creates executable symlink at `~/.local/bin/lmstudio`
-- Adds desktop entry for application launcher integration
+- **Dynamic Version detection**: Scrapes `lmstudio.ai/download` to find the latest version.
+- **AppImage Installation**: Downloads the correct AppImage for Linux x64.
+- **Desktop Integration**: Creates `~/.local/bin/lmstudio` symlink and a `.desktop` file.
 
 ## Requirements
 
 - Linux x86_64 system
-- `~/.local/bin` should be in your `$PATH`
+- Python 3 (on the controller machine) used to run the detection script.
+- `~/.local/bin` should be in your `$PATH`.
 
 ### Hardware Requirements (LM Studio)
 
@@ -25,23 +26,14 @@ Installs [LM Studio](https://lmstudio.ai/) - a desktop application for discoveri
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `lmstudio_version` | `0.3.23-3` | Version to install |
 | `lmstudio_install_dir` | `~/.local/share/lmstudio` | Installation directory |
 
 ## Usage
 
 ```yaml
-# In your playbook
 - hosts: local
   roles:
     - role: lmstudio
-
-# With custom version
-- hosts: local
-  roles:
-    - role: lmstudio
-      vars:
-        lmstudio_version: "0.3.35-1"
 ```
 
 ## Running
@@ -58,9 +50,9 @@ After installation:
 - **Terminal**: Run `lmstudio`
 - **Desktop**: Search "LM Studio" in your application launcher
 
-## Updating
+## Updates
 
-To update LM Studio, change `lmstudio_version` in `defaults/main.yml` or pass it as a variable, then re-run the playbook.
+To update to the latest version, simply re-run the playbook. The role will detect the new version online and download it if the version number has changed.
 
 ## License
 

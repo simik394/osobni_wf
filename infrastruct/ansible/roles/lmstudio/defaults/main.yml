@@ -1,14 +1,7 @@
 ---
 # LM Studio role defaults
 
-# Version to install
-lmstudio_version: "0.3.23-3"
-
 # Installation directory
 lmstudio_install_dir: "{{ ansible_env.HOME }}/.local/share/lmstudio"
-
-# AppImage filename
-lmstudio_appimage_name: "LM-Studio-{{ lmstudio_version }}-x64.AppImage"
-
-# Download URL
-lmstudio_download_url: "https://installers.lmstudio.ai/linux/x64/{{ lmstudio_version }}/{{ lmstudio_appimage_name }}"
+# Note: Version is now detected dynamically via get_latest_version.py script.
+# Hardcoded versions in this file are no longer used by default.
