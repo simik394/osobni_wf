@@ -1,0 +1,48 @@
+---
+# LM Studio installation role
+# Downloads the AppImage and creates desktop integration
+
+- name: Ensure LM Studio directory exists
+  file:
+    path: "{{ lmstudio_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Download LM Studio AppImage
+  get_url:
+    url: "{{ lmstudio_download_url }}"
+    dest: "{{ lmstudio_install_dir }}/{{ lmstudio_appimage_name }}"
+    mode: "0755"
+  register: lmstudio_download
+
+- name: Create symlink in ~/.local/bin
+  file:
+    src: "{{ lmstudio_install_dir }}/{{ lmstudio_appimage_name }}"
+    dest: "{{ ansible_env.HOME }}/.local/bin/lmstudio"
+    state: link
+
+- name: Ensure applications directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/applications"
+    state: directory
+    mode: "0755"
+
+- name: Create desktop entry for LM Studio
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/lmstudio.desktop"
+    mode: "0644"
+    content: |
+      [Desktop Entry]
+      Name=LM Studio
+      Comment=Discover, download, and run local LLMs
+      Exec={{ lmstudio_install_dir }}/{{ lmstudio_appimage_name }}
+      Icon=lmstudio
+      Terminal=false
+      Type=Application
+      Categories=Development;Science;
+      Keywords=AI;LLM;Machine Learning;
+
+- name: Update desktop database
+  command: update-desktop-database "{{ ansible_env.HOME }}/.local/share/applications"
+  changed_when: false
+  failed_when: false

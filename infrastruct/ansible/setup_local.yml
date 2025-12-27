@@ -8,3 +8,6 @@
     - role: obs-studio
       # vars:
       #   swiprolog_enabled: false  # Uncomment to skip SWI-Prolog installation
+    - role: lmstudio
+      # vars:
+      #   lmstudio_version: "0.3.23-3"  # Override version if needed
