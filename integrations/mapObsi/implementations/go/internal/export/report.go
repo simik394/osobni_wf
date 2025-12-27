@@ -9,7 +9,7 @@ import (
 )
 
 // GenerateReport creates an index.html dashboard with rendered images
-func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pumlContent string) error {
+func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent string, pumlContent map[string]string) error {
 	// Ensure dir exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return err
@@ -19,7 +19,25 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pum
 	os.WriteFile(filepath.Join(outputDir, "structure.mermaid"), []byte(mermaidInternal), 0644)
 	os.WriteFile(filepath.Join(outputDir, "dependencies.mermaid"), []byte(mermaidExternal), 0644)
 	os.WriteFile(filepath.Join(outputDir, "graph.dot"), []byte(dotContent), 0644)
-	os.WriteFile(filepath.Join(outputDir, "classes.puml"), []byte(pumlContent), 0644)
+
+	// Process PlantUML files
+	var pumlSections string
+	for filename, content := range pumlContent {
+		os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644)
+
+		encoded, _ := encodePlantUML(content)
+		browserLink := fmt.Sprintf("http://www.plantuml.com/plantuml/svg/%s", encoded)
+
+		pumlSections += fmt.Sprintf(`
+		<div class="diagram">
+			<h3>%s</h3>
+			<p>
+				<a href="%s" target="_blank">View in Browser (SVG)</a> | 
+				<a href="%s" target="_blank">Raw Source</a>
+			</p>
+			<details><summary>Show Source</summary><pre>%s</pre></details>
+		</div>`, filename, browserLink, filename, truncateForHTML(content, 1000000))
+	}
 
 	// Try to render internal structure
 	internalSVG := ""
@@ -82,10 +100,6 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pum
 		dotSection = fmt.Sprintf(`<p>Graphviz not found. <a href="graph.dot" target="_blank">Raw DOT</a></p>`)
 	}
 
-	pumlSection := fmt.Sprintf(`
-		<p>PlantUML version (best for large scale). <a href="classes.puml" target="_blank">Raw PUML</a></p>
-		<details><summary>Show PUML source</summary><pre>%s</pre></details>`, truncateForHTML(pumlContent, 1000000)) // Limit to 1MB
-
 	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -98,8 +112,10 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pum
         .diagram { border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: white; margin-bottom: 20px; overflow: auto; }
         .diagram svg { max-width: 100%%; height: auto; }
         pre { background: #f4f4f4; padding: 10px; border-radius: 5px; font-size: 11px; overflow: auto; }
-        h1, h2 { color: #333; }
+        h1, h2, h3 { color: #333; }
         summary { cursor: pointer; color: #0066cc; margin-top: 10px; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
     </style>
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -119,11 +135,11 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent, pum
         <h2>🌳 Full Relationship Graph (DOT)</h2>
         %s
 
-        <h2>🏗️ Architecture (PlantUML)</h2>
+        <h2>🏗️ Architecture Diagrams (PlantUML)</h2>
         %s
     </div>
 </body>
-</html>`, internalSection, externalSection, dotSection, pumlSection)
+</html>`, internalSection, externalSection, dotSection, pumlSections)
 
 	reportPath := filepath.Join(outputDir, "index.html")
 	return os.WriteFile(reportPath, []byte(htmlContent), 0644)

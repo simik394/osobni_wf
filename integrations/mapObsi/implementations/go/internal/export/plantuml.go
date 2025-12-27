@@ -8,32 +8,26 @@ import (
 	"github.com/simik394/vault-librarian/internal/db"
 )
 
-// ExportPlantUML generates a comprehensive PlantUML file with multiple diagram types
-func ExportPlantUML(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
-	var sb strings.Builder
+// ExportPlantUML generates multiple PlantUML diagrams
+func ExportPlantUML(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (map[string]string, error) {
+	results := make(map[string]string)
 
-	// 1. Architecture / Component Diagram (Current)
-	comp, err := exportComponentDiagram(ctx, client, scopePath, opts)
-	if err == nil {
-		sb.WriteString(comp)
-		sb.WriteString("\n\n")
+	// 1. Architecture / Component Diagram
+	if comp, err := exportComponentDiagram(ctx, client, scopePath, opts); err == nil && comp != "" {
+		results["architecture.puml"] = comp
 	}
 
 	// 2. High-level Package Diagram
-	pkg, err := exportPackageDiagram(ctx, client, scopePath, opts)
-	if err == nil {
-		sb.WriteString(pkg)
-		sb.WriteString("\n\n")
+	if pkg, err := exportPackageDiagram(ctx, client, scopePath, opts); err == nil && pkg != "" {
+		results["packages.puml"] = pkg
 	}
 
 	// 3. Class Relationship Diagram
-	cls, err := exportClassDiagram(ctx, client, scopePath, opts)
-	if err == nil {
-		sb.WriteString(cls)
-		sb.WriteString("\n\n")
+	if cls, err := exportClassDiagram(ctx, client, scopePath, opts); err == nil && cls != "" {
+		results["classes.puml"] = cls
 	}
 
-	return sb.String(), nil
+	return results, nil
 }
 
 func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {

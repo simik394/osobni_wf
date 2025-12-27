@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -342,7 +343,19 @@ func runExport(cfg *config.Config, args []string) {
 	case "dot":
 		output, err = export.ExportDOT(ctx, dbClient, scopePath, export.DefaultExportOptions())
 	case "plantuml":
-		output, err = export.ExportPlantUML(ctx, dbClient, scopePath, export.DefaultExportOptions())
+		pumlMap, err := export.ExportPlantUML(ctx, dbClient, scopePath, export.DefaultExportOptions())
+		if err == nil {
+			var sb strings.Builder
+			for filename, content := range pumlMap {
+				sb.WriteString(fmt.Sprintf("=== %s ===\n", filename))
+				sb.WriteString(content)
+				sb.WriteString("\n")
+			}
+			output = sb.String()
+		} else {
+			// Propagate error
+			output = ""
+		}
 	default:
 		log.Fatalf("Unknown export format: %s. Supported: mermaid, dot, plantuml", format)
 	}
