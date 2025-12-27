@@ -24,7 +24,7 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 	toDir := func(path string) string {
 		parts := strings.Split(path, "/")
 		if len(parts) > 1 {
-			return parts[len(parts)-2]
+			return strings.Join(parts[:len(parts)-1], "/")
 		}
 		return "root"
 	}
@@ -248,12 +248,9 @@ func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath str
 	// Helper to extract directory relative to root (or scope)
 	toPackage := func(path string) string {
 		dir := filepath.Dir(path)
-		if strings.HasPrefix(dir, "/") {
-			// Try to simplify absolute paths if possible, but for now just use base
-			parts := strings.Split(dir, "/")
-			if len(parts) > 2 {
-				return parts[len(parts)-1]
-			}
+		// For consistency with plantuml, let's use the same slash-based logic
+		// or just use filepath.Dir and handle root.
+		if dir == "." || dir == "" {
 			return "root"
 		}
 		return dir
@@ -371,26 +368,26 @@ func ExportAlgorithmDiagram() string {
 	return `graph TD
     %% Meta-Diagram: How Clustering Works
     
-    subgraph S1 [1. Input Graph]
-        N1[Node A (utils/a.go)] --> N2[Node B (utils/b.go)]
-        N2 --> N3[Node C (main/c.go)]
-        N4[Node D (main/d.go)] --> N1
+    subgraph S1 ["1. Input Graph"]
+        N1["Node A (utils/a.go)"] --> N2["Node B (utils/b.go)"]
+        N2 --> N3["Node C (main/c.go)"]
+        N4["Node D (main/d.go)"] --> N1
     end
 
-    subgraph S2 [2. Cluster Identification]
+    subgraph S2 ["2. Cluster Identification"]
         N1:::clsUtils
         N2:::clsUtils
         N3:::clsMain
         N4:::clsMain
     end
 
-    subgraph S3 [3. Frontier Detection]
+    subgraph S3 ["3. Frontier Detection"]
         direction TB
-        subgraph C_Utils [Cluster: utils]
-            U1[a.go] --> U2[b.go]
+        subgraph C_Utils ["Cluster: utils"]
+            U1["a.go"] --> U2["b.go"]
         end
-        F1[c.go (main)]:::frontier
-        F2[d.go (main)]:::frontier
+        F1["c.go (main)"]:::frontier
+        F2["d.go (main)"]:::frontier
         
         U2 -.-> F1
         F2 -.-> U1

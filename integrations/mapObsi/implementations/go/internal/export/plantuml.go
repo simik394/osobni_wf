@@ -82,7 +82,7 @@ func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath st
 
 					// Assign src to its package
 					if srcPath != "" {
-						pkg := toPackage(srcPath)
+						pkg := toPackage(srcPath, scopePath)
 						if pkgNodes[pkg] == nil {
 							pkgNodes[pkg] = make(map[string]bool)
 						}
@@ -137,11 +137,11 @@ func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath st
 				relevantEdges = append(relevantEdges, e)
 			} else if isSrcIn && !isDstIn {
 				// Outgoing to frontier
-				frontierNodes[e.Dst] = getPackageForNode(e.Dst, nodePaths)
+				frontierNodes[e.Dst] = getPackageForNode(e.Dst, nodePaths, scopePath)
 				relevantEdges = append(relevantEdges, e)
 			} else if !isSrcIn && isDstIn {
 				// Incoming from frontier
-				frontierNodes[e.Src] = getPackageForNode(e.Src, nodePaths)
+				frontierNodes[e.Src] = getPackageForNode(e.Src, nodePaths, scopePath)
 				relevantEdges = append(relevantEdges, e)
 			}
 		}
@@ -187,9 +187,9 @@ func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath st
 }
 
 // Wrapper for getPackage using correct signature helper
-func getPackageForNode(node string, paths map[string]string) string {
+func getPackageForNode(node string, paths map[string]string, scopePath string) string {
 	if p, ok := paths[node]; ok && p != "" && p != "external" {
-		return toPackage(p)
+		return toPackage(p, scopePath)
 	}
 	return "External"
 }
@@ -230,13 +230,13 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 						continue
 					}
 
-					srcPkg := toPackage(srcPath)
+					srcPkg := toPackage(srcPath, scopePath)
 
 					var dstPkg string
 					isExternal := false
 
 					if dstPath != "" {
-						dstPkg = toPackage(dstPath)
+						dstPkg = toPackage(dstPath, scopePath)
 						if strings.Contains(dstPath, "node_modules") {
 							isExternal = true
 						}
@@ -352,7 +352,7 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 					}
 
 					// Group by package
-					srcPkg := toPackage(srcPath)
+					srcPkg := toPackage(srcPath, scopePath)
 					srcPkg = strings.Trim(srcPkg, "\"")
 					if !hasNode(packages[srcPkg], srcName) {
 						packages[srcPkg] = append(packages[srcPkg], srcName)
@@ -360,7 +360,7 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 
 					var dstPkg string
 					if dstPath != "" {
-						dstPkg = toPackage(dstPath)
+						dstPkg = toPackage(dstPath, scopePath)
 						if strings.Contains(dstPath, "node_modules") {
 							dstPkg = "External_Libs"
 						}
@@ -434,11 +434,19 @@ func exportClassDiagram(ctx context.Context, client *db.Client, scopePath string
 	return sb.String(), nil
 }
 
-func toPackage(path string) string {
+func toPackage(path string, base string) string {
+	if base != "" && strings.HasPrefix(path, base) {
+		path = strings.TrimPrefix(path, base)
+		path = strings.TrimPrefix(path, "/")
+	}
+
 	parts := strings.Split(path, "/")
 	if len(parts) > 1 {
-		// Return direct parent folder
-		return parts[len(parts)-2]
+		// Return the directory path (all parts except the filename)
+		return strings.Join(parts[:len(parts)-1], "/")
+	}
+	if path != "" && !strings.Contains(path, "/") {
+		return "root"
 	}
 	return "root"
 }
