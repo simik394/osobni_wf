@@ -8,6 +8,7 @@ import { GeminiClient } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
+import { getFalkorClient } from '@agents/shared';
 import {
     startChatCompletionTrace,
     completeChatCompletionTrace,
@@ -580,13 +581,38 @@ app.post('/v1/chat/completions', async (req, res) => {
             return;
         }
 
+        // Non-streaming response (Perplexity or Gemini)
+        console.log(`[OpenAI API] Processing non-streaming chat completion with model: ${request.model}`);
+
+        // Get last user message for logging
+        const lastMessage = request.messages.filter(m => m.role === 'user').pop();
+
+        const falkor = getFalkorClient();
+        // Log query
+        if (request.session && lastMessage) {
+            console.log(`[FalkorDB] Logging query for session: ${request.session}`);
+            try {
+                // Resolve session name to ID if needed
+                const sessionNode = await falkor.findSession(request.session);
+
+                if (sessionNode) {
+                    await falkor.logInteraction(sessionNode.id, 'user', 'query', lastMessage.content);
+                    console.log(`[FalkorDB] Query logged successfully to session ${sessionNode.id}`);
+                } else {
+                    console.warn(`[FalkorDB] Session '${request.session}' not found, skipping log`);
+                }
+            } catch (e: any) {
+                console.error('[FalkorDB] Failed to log query:', e);
+            }
+        }
+
+        // Start observability trace
+        const traceCtx = startChatCompletionTrace(request);
+
         // Format full conversation for multi-turn context
         const prompt = formatConversation(request.messages);
 
         console.log(`[OpenAI API] Chat completion request: "${prompt.substring(0, 50)}..."`);
-
-        // Start observability trace
-        const traceCtx = startChatCompletionTrace(request);
 
         let responseText: string;
         const model = request.model || 'gemini-rsrch';
@@ -615,6 +641,12 @@ app.post('/v1/chat/completions', async (req, res) => {
 
             // Complete observability trace
             completeChatCompletionTrace(traceCtx, responseText);
+
+            // Log full response to FalkorDB
+            if (request.session) {
+                falkor.logInteraction(request.session, 'agent', 'response', responseText)
+                    .catch((e: any) => console.error('[FalkorDB] Failed to log response:', e));
+            }
 
             // Build OpenAI-compatible response
             const response: ChatCompletionResponse = {
