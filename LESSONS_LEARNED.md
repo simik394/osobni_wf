@@ -43,4 +43,5 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Human-like Behavior**: Paste whole prompts is fine (humans do this), but avoid superhuman interaction patterns like split-second multi-tab switches.
 - **Error via SSE**: When streaming fails, send error as final SSE chunk with `finish_reason: 'stop'` rather than throwing, to avoid unhandled rejections.
 - **Model Routing**: Use OpenAI `model` field to route requests to different backends (e.g., `gemini-rsrch` → Gemini, `perplexity` → Perplexity.ai).
+- **Session via Request Body**: Extend OpenAI API with `session` field in request body for conversation continuity. Echo session in response. Use `session: "new"` to start fresh conversation.
 

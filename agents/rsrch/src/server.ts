@@ -30,7 +30,7 @@ const PORT = config.port;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Initialize the client
 const client = new PerplexityClient();
@@ -289,6 +289,8 @@ interface ChatCompletionRequest {
     temperature?: number;
     max_tokens?: number;
     stream?: boolean;
+    session?: string;        // Session name for conversation continuity
+    session_id?: string;     // Specific session ID (alternative)
 }
 
 interface ChatCompletionChoice {
@@ -311,6 +313,7 @@ interface ChatCompletionResponse {
         completion_tokens: number;
         total_tokens: number;
     };
+    session?: string;  // Echo session for client tracking
 }
 
 interface ModelInfo {
@@ -593,7 +596,11 @@ app.post('/v1/chat/completions', async (req, res) => {
             if (model === 'perplexity' || model.includes('perplexity')) {
                 // Use Perplexity
                 console.log('[OpenAI API] Using Perplexity backend');
-                const result = await client.query(prompt, { deepResearch: false });
+                const result = await client.query(prompt, {
+                    sessionId: request.session_id,
+                    sessionName: request.session,
+                    deepResearch: false
+                });
                 responseText = result?.answer || 'No response';
             } else {
                 // Use Gemini (default)
@@ -627,7 +634,8 @@ app.post('/v1/chat/completions', async (req, res) => {
                     prompt_tokens: estimateTokens(prompt),
                     completion_tokens: estimateTokens(responseText),
                     total_tokens: estimateTokens(prompt) + estimateTokens(responseText)
-                }
+                },
+                session: request.session || request.session_id
             };
 
             console.log(`[OpenAI API] Response ready (${responseText.length} chars)`);
