@@ -1,20 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
-	"bytes"
-	"encoding/json"
-	"net/http"
 
 	"github.com/simik394/vault-librarian/internal/config"
 	"github.com/simik394/vault-librarian/internal/db"
+	"github.com/simik394/vault-librarian/internal/export"
+	"github.com/simik394/vault-librarian/internal/ingest"
 	"github.com/simik394/vault-librarian/internal/watcher"
 )
 
@@ -59,6 +61,20 @@ func main() {
 			os.Exit(1)
 		}
 		runAnalyze(cfg, os.Args[2])
+	case "ingest-scip":
+		runIngestSCIP(cfg, os.Args[2:])
+	case "export":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: librarian export <mermaid|dot> [path]")
+			os.Exit(1)
+		}
+		runExport(cfg, os.Args[2:])
+	case "report":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: librarian report <project-path> <output-dir>")
+			os.Exit(1)
+		}
+		runReport(cfg, os.Args[2:])
 	default:
 		printUsage()
 		os.Exit(1)
@@ -115,19 +131,19 @@ func runWatch(cfg *config.Config) {
 	if err := w.Start(); err != nil {
 		log.Fatalf("Failed to start watcher: %v", err)
 	}
-	
+
 	// Create channel to listen for signals
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
-	
+
 	log.Println("Stopping watcher...")
 }
 
 func runScan(cfg *config.Config, args []string) {
 	scanPath := ""
 	dumpMode := false
-	
+
 	for _, arg := range args {
 		if arg == "--dump" {
 			dumpMode = true
@@ -174,7 +190,7 @@ func runScan(cfg *config.Config, args []string) {
 	}
 
 	start := time.Now()
-	notes, code, assets, err := w.FullScan(scanPath) 
+	notes, code, assets, err := w.FullScan(scanPath)
 	if err != nil {
 		log.Fatalf("Scan failed: %v", err)
 	}
@@ -191,7 +207,7 @@ func runQuery(ctx context.Context, cfg *config.Config, args []string) {
 	}
 
 	cmd := args[0]
-	
+
 	switch cmd {
 	case "orphans":
 		results, err := dbClient.GetOrphans(ctx)
@@ -285,4 +301,129 @@ func runAnalyze(cfg *config.Config, projectName string) {
 	} else {
 		log.Fatalf("Failed to trigger analysis. Status: %s", resp.Status)
 	}
+}
+func runIngestSCIP(cfg *config.Config, args []string) {
+	if len(args) < 1 {
+		fmt.Println("Usage: librarian ingest-scip <path-to-index.scip>")
+		os.Exit(1)
+	}
+
+	indexPath := args[0]
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ctx := context.Background()
+	if err := ingest.IngestSCIP(ctx, indexPath, dbClient); err != nil {
+		log.Fatalf("Ingestion failed: %v", err)
+	}
+	fmt.Println("Ingestion complete.")
+}
+
+func runExport(cfg *config.Config, args []string) {
+	format := args[0]
+	scopePath := ""
+	if len(args) > 1 {
+		scopePath = args[1]
+	}
+
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ctx := context.Background()
+	var output string
+
+	switch format {
+	case "mermaid":
+		output, err = export.ExportMermaid(ctx, dbClient, scopePath, export.DefaultExportOptions())
+	case "dot":
+		output, err = export.ExportDOT(ctx, dbClient, scopePath, export.DefaultExportOptions())
+	case "plantuml":
+		output, err = export.ExportPlantUML(ctx, dbClient, scopePath, export.DefaultExportOptions())
+	default:
+		log.Fatalf("Unknown export format: %s. Supported: mermaid, dot, plantuml", format)
+	}
+
+	if err != nil {
+		log.Fatalf("Export failed: %v", err)
+	}
+
+	fmt.Println(output)
+}
+
+func runReport(cfg *config.Config, args []string) {
+	// Parse flags
+	var excludes []string
+	detail := "medium"
+	scopePath := ""
+	outputDir := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--exclude":
+			if i+1 < len(args) {
+				excludes = append(excludes, args[i+1])
+				i++
+			}
+		case "--detail":
+			if i+1 < len(args) {
+				detail = args[i+1]
+				i++
+			}
+		default:
+			if scopePath == "" {
+				scopePath = args[i]
+			} else if outputDir == "" {
+				outputDir = args[i]
+			}
+		}
+	}
+
+	if scopePath == "" || outputDir == "" {
+		fmt.Println("Usage: librarian report <project-path> <output-dir> [--exclude pattern] [--detail high|medium|low]")
+		os.Exit(1)
+	}
+
+	// Build options
+	opts := export.DefaultExportOptions()
+	opts.Detail = detail
+	if len(excludes) > 0 {
+		opts.Excludes = excludes
+	}
+
+	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Generate Mermaid
+	mermaidContent, err := export.ExportMermaid(ctx, dbClient, scopePath, opts)
+	if err != nil {
+		log.Printf("Warning: Failed to generate Mermaid: %v", err)
+	}
+
+	// 2. Generate DOT
+	dotContent, err := export.ExportDOT(ctx, dbClient, scopePath, opts)
+	if err != nil {
+		log.Printf("Warning: Failed to generate DOT: %v", err)
+	}
+
+	// 3. Generate PlantUML
+	pumlContent, err := export.ExportPlantUML(ctx, dbClient, scopePath, opts)
+	if err != nil {
+		log.Printf("Warning: Failed to generate PlantUML: %v", err)
+	}
+
+	// 4. Generate HTML
+	if err := export.GenerateReport(outputDir, mermaidContent, dotContent, pumlContent); err != nil {
+		log.Fatalf("Failed to generate report: %v", err)
+	}
+
+	fmt.Printf("Report generated at: %s/index.html\n", outputDir)
+	fmt.Printf("Options used: detail=%s, excludes=%v\n", opts.Detail, opts.Excludes)
 }

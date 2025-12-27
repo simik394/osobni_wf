@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,6 +28,15 @@ type NoteMetadata struct {
 	Embeds      []string       `json:"embeds"`
 	Headings    []Heading      `json:"headings"`
 	Frontmatter map[string]any `json:"frontmatter"`
+	Tasks       []Task         `json:"tasks"`
+}
+
+// Task represents a todo/fixme item
+type Task struct {
+	Text     string `json:"text"`
+	Line     int    `json:"line"`
+	Status   string `json:"status"` // TODO, FIXME
+	Priority string `json:"priority"`
 }
 
 func (n *NoteMetadata) GetPath() string { return n.Path }
@@ -49,6 +59,7 @@ type CodeMetadata struct {
 	Functions []Function `json:"functions"`
 	Classes   []Class    `json:"classes"`
 	Imports   []string   `json:"imports"`
+	Tasks     []Task     `json:"tasks"`
 }
 
 func (c *CodeMetadata) GetPath() string { return c.Path }
@@ -102,16 +113,26 @@ var (
 	goImportRe = regexp.MustCompile(`^\s*"([^"]+)"`)
 
 	// TypeScript/JavaScript
-	tsFuncRe    = regexp.MustCompile(`^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)`)
-	tsClassRe   = regexp.MustCompile(`^(?:export\s+)?class\s+(\w+)`)
-	tsArrowRe   = regexp.MustCompile(`^(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>`)
-	tsImportRe  = regexp.MustCompile(`^import\s+.+\s+from\s+['"]([^'"]+)['"]`)
+	tsFuncRe   = regexp.MustCompile(`^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)`)
+	tsClassRe  = regexp.MustCompile(`^(?:export\s+)?class\s+(\w+)`)
+	tsArrowRe  = regexp.MustCompile(`^(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>`)
+	tsImportRe = regexp.MustCompile(`^import\s+.+\s+from\s+['"]([^'"]+)['"]`)
 
 	// Rust
 	rsFuncRe   = regexp.MustCompile(`^(?:pub\s+)?fn\s+(\w+)\s*(?:<[^>]+>)?\s*\(([^)]*)\)`)
 	rsStructRe = regexp.MustCompile(`^(?:pub\s+)?struct\s+(\w+)`)
 	rsUseRe    = regexp.MustCompile(`^use\s+(.+);`)
+
+	// Task regex
+	taskRe = regexp.MustCompile(`(?i)(?:^|\s|//|#|<!--|/\*)\s*(TODO|FIXME|NOTE|XXX|HACK):?\s*(.+)$`)
 )
+
+// Global TreeSitter parser instance
+var tsParser *TreeSitterParser
+
+func init() {
+	tsParser = NewTreeSitterParser()
+}
 
 // ParseMarkdown parses a markdown file
 func ParseMarkdown(path string) (*NoteMetadata, error) {
@@ -185,6 +206,9 @@ func ParseMarkdown(path string) (*NoteMetadata, error) {
 		}
 	}
 
+	// Extract tasks
+	meta.Tasks, _ = parseTasks(text, "markdown")
+
 	return meta, nil
 }
 
@@ -213,6 +237,29 @@ func ParseCode(path string) (*CodeMetadata, error) {
 
 	lines := strings.Split(string(content), "\n")
 
+	// Try Tree-sitter first
+	if tsParser != nil {
+		if tsMeta, err := tsParser.Parse(content, lang); err == nil {
+			tsMeta.Path = path
+			tsMeta.Type = "code"
+			tsMeta.Name = filepath.Base(path)
+			tsMeta.Modified = info.ModTime()
+
+			// Augment with tasks (simple regex text search on the whole file)
+			tsMeta.Tasks, _ = parseTasks(string(content), lang)
+
+			// Debug: log import count
+			if len(tsMeta.Imports) > 0 {
+				log.Printf("[TreeSitter] %s: %d imports", filepath.Base(path), len(tsMeta.Imports))
+			}
+
+			return tsMeta, nil
+		} else {
+			log.Printf("[TreeSitter] Failed for %s: %v", filepath.Base(path), err)
+		}
+		// Fallback to regex if TS fails
+	}
+
 	switch lang {
 	case "python":
 		parsePython(lines, meta)
@@ -225,6 +272,9 @@ func ParseCode(path string) (*CodeMetadata, error) {
 	default:
 		// Generic parsing - just count lines
 	}
+
+	// Extract tasks
+	meta.Tasks, _ = parseTasks(string(content), lang)
 
 	return meta, nil
 }
@@ -378,4 +428,23 @@ func contains(slice []string, item string) bool {
 // ParseFile is the legacy function for backwards compatibility
 func ParseFile(path string) (*NoteMetadata, error) {
 	return ParseMarkdown(path)
+}
+
+func parseTasks(content string, fileType string) ([]Task, error) {
+	var tasks []Task
+	lines := strings.Split(content, "\n")
+
+	for i, line := range lines {
+		if match := taskRe.FindStringSubmatch(line); len(match) > 2 {
+			status := strings.ToUpper(match[1])
+			text := strings.TrimSpace(match[2])
+
+			tasks = append(tasks, Task{
+				Text:   text,
+				Line:   i + 1,
+				Status: status,
+			})
+		}
+	}
+	return tasks, nil
 }

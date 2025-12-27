@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/redis/go-redis/v9"
 	"io"
+
+	"github.com/redis/go-redis/v9"
 
 	"sync"
 
@@ -32,7 +33,7 @@ func NewClient(addr, graph string) (*Client, error) {
 	// We'll proceed.
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		// Log warning but allow proceeding? 
+		// Log warning but allow proceeding?
 		// For now fail, unless we want to allow offline dumping.
 		// User can set dummy addr.
 	}
@@ -45,7 +46,10 @@ func (c *Client) SetDumpWriter(w io.Writer) {
 	c.dumpWriter = w
 }
 
-
+// Query exposes the internal query method
+func (c *Client) Query(ctx context.Context, cypher string) (any, error) {
+	return c.query(ctx, cypher)
+}
 
 // query executes a Cypher query against FalkorDB or dumps it
 func (c *Client) query(ctx context.Context, cypher string) (any, error) {
@@ -64,14 +68,14 @@ func (c *Client) query(ctx context.Context, cypher string) (any, error) {
 		// If I generate text commands, I should use "cat dump.cypher | redis-cli".
 		// I'll stick to text format which is readable.
 		// "GRAPH.QUERY key "query""
-		
+
 		// Simple text format
 		// Escape double quotes
 		safeCypher := strings.ReplaceAll(cypher, "\"", "\\\"")
 		// Also newlines
 		safeCypher = strings.ReplaceAll(safeCypher, "\n", " ")
 		safeCypher = strings.TrimSpace(safeCypher)
-		
+
 		fmt.Fprintf(c.dumpWriter, "GRAPH.QUERY %s \"%s\"\n", c.graph, safeCypher)
 		return nil, nil
 	}
@@ -92,7 +96,10 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		"CREATE INDEX ON :Function(name)",
 		"CREATE INDEX ON :Function(name)",
 		"CREATE INDEX ON :Class(name)",
+		"CREATE INDEX ON :Class(name)",
 		"CREATE INDEX ON :Project(name)",
+		"CREATE INDEX ON :Task(status)",
+		"CREATE INDEX ON :Task(priority)",
 	}
 
 	for _, q := range queries {
@@ -171,6 +178,9 @@ func (c *Client) UpsertCode(ctx context.Context, meta *parser.CodeMetadata, proj
 		`, path, escapeCypher(imp))
 		c.query(ctx, impQuery)
 	}
+
+	// Create task nodes and relationships
+	c.upsertTasks(ctx, path, meta.Tasks, "code")
 
 	return nil
 }
@@ -251,6 +261,19 @@ func (c *Client) UpsertNote(ctx context.Context, meta *parser.NoteMetadata, proj
 		`, path, escapeCypher(embed))
 		c.query(ctx, embedQuery)
 	}
+
+	// Create embed relationships
+	for _, embed := range meta.Embeds {
+		embedQuery := fmt.Sprintf(`
+			MATCH (n:Note {path: '%s'})
+			MERGE (target:Note {name: '%s'})
+			MERGE (n)-[:EMBEDS]->(target)
+		`, path, escapeCypher(embed))
+		c.query(ctx, embedQuery)
+	}
+
+	// Create task nodes and relationships
+	c.upsertTasks(ctx, path, meta.Tasks, "note")
 
 	return nil
 }
@@ -407,7 +430,10 @@ func (c *Client) GetClasses(ctx context.Context, className string) ([]string, er
 	return results, nil
 }
 
-
+// ExtractStrings parses string results from query results
+func (c *Client) ExtractStrings(result any) []string {
+	return c.extractPaths(result)
+}
 
 // extractPaths parses path strings from query results
 func (c *Client) extractPaths(result any) []string {
@@ -451,5 +477,48 @@ func (c *Client) extractCount(result any) int {
 func escapeCypher(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "'", "\\'")
+	s = strings.ReplaceAll(s, "\"", "\\\"") // Escape double quotes too just in case
 	return s
+}
+
+// upsertTasks helper to save tasks for a file
+func (c *Client) upsertTasks(ctx context.Context, parentPath string, tasks []parser.Task, parentType string) {
+	// parentType: "code" or "note"
+	// To link, we match the parent node.
+	// We need to clear old tasks first? Or merge?
+	// Strategy: Delete all tasks linked to this file, then re-create.
+	// This is simpler than matching by line/text which might change.
+
+	// First, find and detach-delete tasks linked to this file
+	// Note: We assume tasks are unique to a file. A task node is just a data blob.
+	// We can model it as (File)-[:HAS_TASK]->(Task)
+
+	label := "Code"
+	if parentType == "note" {
+		label = "Note"
+	}
+
+	clearQuery := fmt.Sprintf(`
+		MATCH (p:%s {path: '%s'})-[r:HAS_TASK]->(t:Task)
+		DELETE r, t
+	`, label, escapeCypher(parentPath))
+	c.query(ctx, clearQuery)
+
+	for _, task := range tasks {
+		// Escape text
+		text := escapeCypher(task.Text)
+		status := escapeCypher(task.Status)
+
+		taskQuery := fmt.Sprintf(`
+			MATCH (p:%s {path: '%s'})
+			CREATE (t:Task {
+				text: '%s',
+				line: %d,
+				status: '%s',
+				priority: '%s'
+			})
+			CREATE (p)-[:HAS_TASK]->(t)
+		`, label, escapeCypher(parentPath), text, task.Line, status, "")
+		c.query(ctx, taskQuery)
+	}
 }
