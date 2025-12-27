@@ -12,7 +12,7 @@ import (
 )
 
 // GenerateReport creates an HTML report with embedded diagrams
-func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructure, mermaidClasses, mermaidPackages, algoMermaid string) error {
+func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructure, mermaidClasses string, mermaidPackages map[string]string, algoMermaid string) error {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return err
 	}
@@ -20,27 +20,21 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 
 	// 1. Process PlantUML Map
 	var pumlSections string
-	keys := make([]string, 0, len(pumlMap))
+	pumlKeys := make([]string, 0, len(pumlMap))
 	for k := range pumlMap {
-		keys = append(keys, k)
+		pumlKeys = append(pumlKeys, k)
 	}
-	sort.Strings(keys)
+	sort.Strings(pumlKeys)
 
-	for _, filename := range keys {
+	for _, filename := range pumlKeys {
 		content := pumlMap[filename]
 		// Write the actual file to disk for manual use
 		os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644)
-		// Limit for GET request is roughly 2KB, browser handles maybe 8KB.
-		// Public server often fails at 4KB-8KB. Let's be conservative.
 		isTooLarge := len(content) > 4000
 
 		var diagramHTML string
 		var urlWarning string
 
-		// Generate Link (GET) - Best effort
-		// Assuming deflateAndEncode is defined elsewhere or will be provided by the user.
-		// For this patch, we'll use a placeholder or assume it's available.
-		// If not, this line will cause a compile error.
 		encoded, _ := deflateAndEncode(content)
 		browserLink := "http://www.plantuml.com/plantuml/svg/" + encoded
 
@@ -68,7 +62,27 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 		</div>`, filename, browserLink, urlWarning, content, filename, diagramHTML, truncateForHTML(content, 1000000))
 	}
 
-	// 2. Prepare HTML
+	// 2. Process Mermaid Packages Map
+	var pkgSections string
+	pkgKeys := make([]string, 0, len(mermaidPackages))
+	for k := range mermaidPackages {
+		pkgKeys = append(pkgKeys, k)
+	}
+	sort.Strings(pkgKeys)
+
+	for _, name := range pkgKeys {
+		content := mermaidPackages[name]
+		pkgSections += fmt.Sprintf(`
+		<div class="card">
+			<h3>Package Dependencies: %s</h3>
+			<div class="mermaid">
+%s
+			</div>
+			<details><summary>Show Source</summary><pre>%s</pre></details>
+		</div>`, name, content, truncateForHTML(content, 5000))
+	}
+
+	// 3. Prepare HTML
 	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -93,11 +107,11 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 	<h1>Codebase Visualization Report</h1>
 	<p>Generated at %s</p>
 
-	<h2>Mermaid Diagrams (Client-Side Rendered)</h2>
+	<h2>Module Structure</h2>
 	
 	<div class="card">
-		<h3>Internal Module Structure</h3>
-		<p>Grouped by directory structure.</p>
+		<h3>Internal File Structure</h3>
+		<p>Defined classes and definitions.</p>
 		<div class="mermaid">
 %s
 		</div>
@@ -106,21 +120,14 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 
 	<div class="card">
 		<h3>Class Definitions</h3>
-		<p>Classes defined in the codebase.</p>
 		<div class="mermaid">
 %s
 		</div>
 		<details><summary>Show Source</summary><pre>%s</pre></details>
 	</div>
 	
-	<div class="card">
-		<h3>Package Dependencies</h3>
-		<p>High-level directory interactions.</p>
-		<div class="mermaid">
-%s
-		</div>
-		<details><summary>Show Source</summary><pre>%s</pre></details>
-	</div>
+	<h2>Package Dependencies</h2>
+	%s
 	
 	<div class="card">
 		<h3>Clustering Algorithm Logic (Meta)</h3>
@@ -130,21 +137,18 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 		</div>
 	</div>
 
-	<h2>PlantUML Diagrams</h2>
+	<h2>Architecture Diagrams (PlantUML)</h2>
 	<div class="card">
 		<p>Note: Graphviz (dot) layout engine is required for best results. If 'too large', use the local source.</p>
 	</div>
 	
 	%s
 
-	<script>
-		// Fallback for large diagrams or errors
-	</script>
 </body>
 </html>`, time.Now().Format(time.RFC1123),
 		mermaidStructure, truncateForHTML(mermaidStructure, 5000),
 		mermaidClasses, truncateForHTML(mermaidClasses, 1000),
-		mermaidPackages, truncateForHTML(mermaidPackages, 1000),
+		pkgSections,
 		algoMermaid,
 		pumlSections)
 
@@ -152,7 +156,7 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 }
 
 // GenerateMarkdownReport generates a markdown version of the report
-func GenerateMarkdownReport(outputPath string, pumlMap map[string]string, mermaidStructure, mermaidClasses, mermaidPackages, algoMermaid string) error {
+func GenerateMarkdownReport(outputPath string, pumlMap map[string]string, mermaidStructure, mermaidClasses string, mermaidPackages map[string]string, algoMermaid string) error {
 	var sb strings.Builder
 	sb.WriteString("# Codebase Visualization Report\n\n")
 	sb.WriteString("Generated at: " + time.Now().Format(time.RFC1123) + "\n\n")
@@ -163,8 +167,16 @@ func GenerateMarkdownReport(outputPath string, pumlMap map[string]string, mermai
 	sb.WriteString("## Class Definitions\n")
 	sb.WriteString("```mermaid\n" + mermaidClasses + "\n```\n\n")
 
-	sb.WriteString("## Package Dependencies\n")
-	sb.WriteString("```mermaid\n" + mermaidPackages + "\n```\n\n")
+	sb.WriteString("## Package Dependencies\n\n")
+	pkgKeys := make([]string, 0, len(mermaidPackages))
+	for k := range mermaidPackages {
+		pkgKeys = append(pkgKeys, k)
+	}
+	sort.Strings(pkgKeys)
+	for _, name := range pkgKeys {
+		sb.WriteString(fmt.Sprintf("### %s\n", name))
+		sb.WriteString("```mermaid\n" + mermaidPackages[name] + "\n```\n\n")
+	}
 
 	sb.WriteString("## Clustering Algorithm Logic\n")
 	sb.WriteString("```mermaid\n" + algoMermaid + "\n```\n\n")
@@ -173,24 +185,18 @@ func GenerateMarkdownReport(outputPath string, pumlMap map[string]string, mermai
 	sb.WriteString("> Note: To render these manually, use `plantuml <filename>` or an IDE plugin.\n\n")
 
 	// Sort keys for stable output
-	keys := make([]string, 0, len(pumlMap))
+	pumlKeys := make([]string, 0, len(pumlMap))
 	for k := range pumlMap {
-		keys = append(keys, k)
+		pumlKeys = append(pumlKeys, k)
 	}
-	sort.Strings(keys)
+	sort.Strings(pumlKeys)
 
-	for _, filename := range keys {
+	for _, filename := range pumlKeys {
 		sb.WriteString(fmt.Sprintf("### %s\n", filename))
 		sb.WriteString("```plantuml\n")
 		sb.WriteString(pumlMap[filename])
 		sb.WriteString("\n```\n\n")
 	}
-
-	sb.WriteString("## Graphviz Instructions\n\n")
-	sb.WriteString("To render the `.dot` graph manually:\n")
-	sb.WriteString("```bash\n")
-	sb.WriteString("dot -Tsvg graph.dot -o graph.svg\n")
-	sb.WriteString("```\n")
 
 	return os.WriteFile(outputPath, []byte(sb.String()), 0644)
 }

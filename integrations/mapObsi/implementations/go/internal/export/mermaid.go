@@ -3,7 +3,6 @@ package export
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/simik394/vault-librarian/internal/db"
@@ -239,32 +238,9 @@ func ExportMermaidClasses(ctx context.Context, client *db.Client, scopePath stri
 	return sb.String(), nil
 }
 
-// ExportMermaidPackages generates a high-level Package/Directory dependency graph
-func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
-	var sb strings.Builder
-	sb.WriteString("graph TD\n")
-	sb.WriteString("    %% Package/Directory Level Dependencies\n")
-
-	// Helper to extract directory relative to root (or scope)
-	toPackage := func(path string) string {
-		dir := filepath.Dir(path)
-		// For consistency with plantuml, let's use the same slash-based logic
-		// or just use filepath.Dir and handle root.
-		if dir == "." || dir == "" {
-			return "root"
-		}
-		return dir
-	}
-
-	toID := func(name string) string {
-		s := strings.Map(func(r rune) rune {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-				return r
-			}
-			return '_'
-		}, name)
-		return "PKG_" + s
-	}
+// ExportMermaidPackages generates high-level Package/Directory dependency graphs split by top-level modules
+func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (map[string]string, error) {
+	results := make(map[string]string)
 
 	// 1. Query all file-to-file imports
 	query := `
@@ -282,12 +258,26 @@ func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath str
 
 	res, err := client.Query(ctx, query)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// Aggregate dependencies: SourcePkg -> DestPkg
-	pkgDeps := make(map[string]map[string]bool)
+	// 2. Build full package dependency graph in memory
+	type Edge struct {
+		Src, Dst string
+		IsExt    bool
+	}
+	allEdges := []Edge{}
 	packages := make(map[string]bool)
+	pkgToModule := make(map[string]string)
+
+	// Helper to extract top-level module name for clustering
+	toTopModule := func(pkg string) string {
+		parts := strings.Split(pkg, "/")
+		if len(parts) > 0 && parts[0] != "" && parts[0] != "." && parts[0] != ".." {
+			return parts[0]
+		}
+		return "root"
+	}
 
 	if arr, ok := res.([]any); ok && len(arr) > 1 {
 		if rows, ok := arr[1].([]any); ok {
@@ -301,66 +291,155 @@ func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath str
 						continue
 					}
 
-					srcPkg := toPackage(srcPath)
+					srcPkg := toPackage(srcPath, scopePath)
 					packages[srcPkg] = true
+					pkgToModule[srcPkg] = toTopModule(srcPkg)
 
 					var dstPkg string
+					var isExt bool
 					if dstPath != "" {
-						dstPkg = toPackage(dstPath)
-					} else {
-						// External module
-						if dstName != "" {
-							parts := strings.Split(dstName, "/")
-							if len(parts) > 0 {
-								dstPkg = "ext_" + parts[0]
-							} else {
-								dstPkg = "ext_lib"
-							}
-						} else {
+						dstPkg = toPackage(dstPath, scopePath)
+						pkgToModule[dstPkg] = toTopModule(dstPkg)
+					} else if dstName != "" {
+						// Filter out noisy relative imports from external list (. or .. or starts with them)
+						if dstName == "." || dstName == ".." || strings.HasPrefix(dstName, "./") || strings.HasPrefix(dstName, "../") {
 							continue
 						}
+						// External module
+						isExt = true
+						parts := strings.Split(dstName, "/")
+						if len(parts) > 0 && parts[0] != "" && parts[0] != "." && parts[0] != ".." {
+							dstPkg = "ext_" + parts[0]
+						} else {
+							continue // Skip if it's still somehow an empty or dot name
+						}
+					} else {
+						continue
 					}
 
 					if srcPkg == dstPkg || srcPkg == "" || dstPkg == "" {
 						continue
 					}
 
-					// If dest is also project code, mark it
-					if dstPath != "" {
-						packages[dstPkg] = true
-					}
-
-					if pkgDeps[srcPkg] == nil {
-						pkgDeps[srcPkg] = make(map[string]bool)
-					}
-					pkgDeps[srcPkg][dstPkg] = true
+					allEdges = append(allEdges, Edge{srcPkg, dstPkg, isExt})
 				}
 			}
 		}
 	}
 
-	// Render Nodes
-	for pkg := range packages {
-		sb.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", toID(pkg), pkg))
+	// 3. Identification of Modules
+	modules := make(map[string]bool)
+	for _, mod := range pkgToModule {
+		modules[mod] = true
 	}
 
-	// Render Edges
-	for src, dests := range pkgDeps {
-		for dst := range dests {
-			if strings.HasPrefix(dst, "ext_") {
-				// Style external links differently
-				label := strings.TrimPrefix(dst, "ext_")
-				sb.WriteString(fmt.Sprintf("    %s -.-> %s((\"%s\"))\n", toID(src), toID(dst), label))
-			} else {
-				sb.WriteString(fmt.Sprintf("    %s --> %s\n", toID(src), toID(dst)))
+	// 4. Generate a diagram for each Module
+	toID := func(name string) string {
+		s := strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+				return r
+			}
+			return '_'
+		}, name)
+		return "PKG_" + s
+	}
+
+	for mod := range modules {
+		var sb strings.Builder
+		sb.WriteString("graph TD\n")
+		sb.WriteString(fmt.Sprintf("    %%%% Package Dependencies for Module: %s\n", mod))
+
+		relevantPkgs := make(map[string]bool)
+		frontierPkgs := make(map[string]bool)
+		relevantEdges := []Edge{}
+
+		// Pre-populate relevantPkgs with all packages belonging to this module
+		for p := range packages {
+			if pkgToModule[p] == mod {
+				relevantPkgs[p] = true
 			}
 		}
+
+		for _, e := range allEdges {
+			srcMod := pkgToModule[e.Src]
+			dstMod := pkgToModule[e.Dst]
+
+			if srcMod == mod && dstMod == mod {
+				// Pure internal
+				relevantPkgs[e.Src] = true
+				relevantPkgs[e.Dst] = true
+				relevantEdges = append(relevantEdges, e)
+			} else if srcMod == mod {
+				// Outgoing to frontier
+				relevantPkgs[e.Src] = true
+				frontierPkgs[e.Dst] = true
+				relevantEdges = append(relevantEdges, e)
+			} else if dstMod == mod {
+				// Incoming from frontier
+				relevantPkgs[e.Dst] = true
+				frontierPkgs[e.Src] = true
+				relevantEdges = append(relevantEdges, e)
+			}
+		}
+
+		// Skip empty modules
+		if len(relevantPkgs) == 0 && len(frontierPkgs) == 0 {
+			continue
+		}
+
+		// Render Nodes
+		sb.WriteString(fmt.Sprintf("    subgraph %s [\"Module: %s\"]\n", toID("sub_"+mod), mod))
+		for p := range relevantPkgs {
+			sb.WriteString(fmt.Sprintf("        %s[\"%s\"]\n", toID(p), p))
+		}
+		sb.WriteString("    end\n")
+
+		for p := range frontierPkgs {
+			if p == "." || p == ".." || p == "" {
+				continue
+			}
+			label := p
+			if strings.HasPrefix(p, "ext_") {
+				label = strings.TrimPrefix(p, "ext_")
+				label = strings.ReplaceAll(label, "\"", "'")
+				sb.WriteString(fmt.Sprintf("    %s((\"%s\")):::external\n", toID(p), label))
+			} else {
+				sb.WriteString(fmt.Sprintf("    %s[\"%s\"]:::frontier\n", toID(p), p))
+			}
+		}
+
+		// Render Edges
+		for _, e := range relevantEdges {
+			// Skip edges to filtered frontier nodes
+			if e.Dst == "." || e.Dst == ".." || e.Dst == "" || e.Src == "." || e.Src == ".." || e.Src == "" {
+				continue
+			}
+
+			if e.IsExt || strings.HasPrefix(e.Dst, "ext_") {
+				sb.WriteString(fmt.Sprintf("    %s -.-> %s\n", toID(e.Src), toID(e.Dst)))
+			} else {
+				sb.WriteString(fmt.Sprintf("    %s --> %s\n", toID(e.Src), toID(e.Dst)))
+			}
+		}
+
+		// Styles
+		sb.WriteString("    classDef external fill:#f5f5f5,stroke:#333,stroke-dasharray: 5 5;\n")
+		sb.WriteString("    classDef frontier fill:#fff,stroke:#666,stroke-dasharray: 2 2;\n")
+		sb.WriteString("    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;\n")
+
+		filename := fmt.Sprintf("packages_%s.mermaid", mod)
+		if mod == "root" {
+			filename = "packages_root.mermaid"
+		}
+		results[filename] = sb.String()
 	}
 
-	// Style
-	sb.WriteString("    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;\n")
+	// If no modules found, return empty or default
+	if len(results) == 0 {
+		return map[string]string{"packages.mermaid": "graph TD\n    No_Dependencies"}, nil
+	}
 
-	return sb.String(), nil
+	return results, nil
 }
 
 // ExportAlgorithmDiagram generates a meta-diagram explaining the clustering logic
