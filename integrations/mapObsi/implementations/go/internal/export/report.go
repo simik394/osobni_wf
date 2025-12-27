@@ -1,64 +1,55 @@
 package export
 
 import (
+	"bytes"
+	"compress/flate"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
-	// Added for time.Now()
 )
 
 // GenerateReport creates an HTML report with embedded diagrams
-func GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, dotContent string, pumlContent map[string]string) error {
+func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructure, mermaidClasses, mermaidPackages, algoMermaid string) error {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return err
 	}
+	indexFile := filepath.Join(outputDir, "index.html")
 
-	// Helper to write files
-	writeFile := func(name, content string) {
-		os.WriteFile(filepath.Join(outputDir, name), []byte(content), 0644)
-	}
-
-	writeFile("structure.mermaid", mermaidInternal)
-	writeFile("dependencies.mermaid", mermaidExternal)
-	writeFile("classes.mermaid", mermaidClasses)
-	writeFile("graph.dot", dotContent)
-
-	// SVG generation from DOT (optional, requires graphviz installed)
-	// We check for 'dot' availability before trying
-	if dot, err := exec.LookPath("dot"); err == nil {
-		dotPath := filepath.Join(outputDir, "graph.dot")
-		dotSVGPath := filepath.Join(outputDir, "graph.svg")
-		exec.Command(dot, "-Tsvg", dotPath, "-o", dotSVGPath).Run()
-	}
-
-	// Process PlantUML files
+	// 1. Process PlantUML Map
 	var pumlSections string
-	for filename, content := range pumlContent {
-		writeFile(filename, content)
+	keys := make([]string, 0, len(pumlMap))
+	for k := range pumlMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 
-		encoded, _ := encodePlantUML(content)
-		browserLink := fmt.Sprintf("http://www.plantuml.com/plantuml/svg/%s", encoded)
+	for _, filename := range keys {
+		content := pumlMap[filename]
+		// Limit for GET request is roughly 2KB, browser handles maybe 8KB.
+		// Public server often fails at 4KB-8KB. Let's be conservative.
+		isTooLarge := len(content) > 4000
 
-		// Check for URL length issues (browser/server limits)
-		// If too large, default to "Copy Source" only, do NOT try to embed image
 		var diagramHTML string
-		if len(encoded) > 4000 {
-			diagramHTML = fmt.Sprintf(`
-				<div class="warning-box" style="padding: 10px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; margin: 10px 0;">
-					<strong>Diagram too large for server-side rendering.</strong>
-					<p>Please use the <a href="http://www.plantuml.com/plantuml/uml/%s" target="_blank">PlantUML Editor</a> or "Copy Source" below.</p>
-				</div>`, encoded)
+		var urlWarning string
+
+		// Generate Link (GET) - Best effort
+		// Assuming deflateAndEncode is defined elsewhere or will be provided by the user.
+		// For this patch, we'll use a placeholder or assume it's available.
+		// If not, this line will cause a compile error.
+		encoded, _ := deflateAndEncode(content)
+		browserLink := "http://www.plantuml.com/plantuml/svg/" + encoded
+
+		if isTooLarge {
+			urlWarning = " <span style='color:orange; font-weight:bold;' title='Diagram too complex for public server rendering'>(Too Large)</span>"
+			diagramHTML = `<div style="padding:20px; border:1px dashed #ccc; background:#fff3e0; text-align:center;">
+				<strong>Diagram too large for public renderer</strong><br>
+				Please copy the source below or <a href="http://www.plantuml.com/plantuml/uml" target="_blank">use the online editor</a> manually.
+			</div>`
 		} else {
 			diagramHTML = fmt.Sprintf(`<img src="%s" alt="%s" style="max-width:100%%; height:auto;">`, browserLink, filename)
-		}
-
-		// Warning if content is too large
-		urlWarning := ""
-		if len(encoded) > 8000 {
-			urlWarning = " (Large diagram: Use Copy Source)"
 		}
 
 		pumlSections += fmt.Sprintf(`
@@ -75,10 +66,8 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses,
 		</div>`, filename, browserLink, urlWarning, content, filename, diagramHTML, truncateForHTML(content, 1000000))
 	}
 
-	// Mermaid JS is assumed to be present in the output directory (e.g. via wget or copy)
-	// <script src="mermaid.min.js"></script> in HTML handles loading.
-
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	// 2. Prepare HTML
+	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
 	<title>Codebase Visualization Report</title>
@@ -121,81 +110,87 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses,
 		</div>
 		<details><summary>Show Source</summary><pre>%s</pre></details>
 	</div>
-
+	
 	<div class="card">
-		<h3>External Dependencies</h3>
+		<h3>Package Dependencies</h3>
+		<p>High-level directory interactions.</p>
 		<div class="mermaid">
 %s
 		</div>
 		<details><summary>Show Source</summary><pre>%s</pre></details>
 	</div>
-
-	<h2>PlantUML Diagrams (Server-Side / External)</h2>
-	<p>Alternative visualizations. If images fail to load due to size, use "Copy Source" and paste into a local tool or PlantUML editor.</p>
-	%s
-
-	<h2>Graphviz (DOT)</h2>
+	
 	<div class="card">
-		<h3>Raw Graph Data</h3>
-		<p><a href="graph.dot" target="_blank">Download .dot file</a> (Render with 'dot -Tsvg graph.dot -o graph.svg')</p>
+		<h3>Clustering Algorithm Logic (Meta)</h3>
+		<p>How the PlantUML diagrams below were generated.</p>
+		<div class="mermaid">
+%s
+		</div>
 	</div>
 
+	<h2>PlantUML Diagrams</h2>
+	<div class="card">
+		<p>Note: Graphviz (dot) layout engine is required for best results. If 'too large', use the local source.</p>
+	</div>
+	
+	%s
+
+	<script>
+		// Fallback for large diagrams or errors
+	</script>
 </body>
 </html>`, time.Now().Format(time.RFC1123),
-		mermaidInternal, truncateForHTML(mermaidInternal, 500000),
-		mermaidClasses, truncateForHTML(mermaidClasses, 500000),
-		mermaidExternal, truncateForHTML(mermaidExternal, 500000),
+		mermaidStructure, truncateForHTML(mermaidStructure, 5000),
+		mermaidClasses, truncateForHTML(mermaidClasses, 1000),
+		mermaidPackages, truncateForHTML(mermaidPackages, 1000),
+		algoMermaid,
 		pumlSections)
 
-	return os.WriteFile(filepath.Join(outputDir, "index.html"), []byte(html), 0644)
+	return os.WriteFile(indexFile, []byte(htmlContent), 0644)
 }
 
-// GenerateMarkdownReport creates a report.md with embedded Mermaid diagrams
-func GenerateMarkdownReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, mermaidPackages string) error {
-	// Create formatted markdown content
-	// Use explicit "mermaid" language blocks which are supported by Obsidian, GitHub, GitLab, etc.
+// GenerateMarkdownReport generates a markdown version of the report
+func GenerateMarkdownReport(outputPath string, pumlMap map[string]string, mermaidStructure, mermaidClasses, mermaidPackages, algoMermaid string) error {
+	var sb strings.Builder
+	sb.WriteString("# Codebase Visualization Report\n\n")
+	sb.WriteString("Generated at: " + time.Now().Format(time.RFC1123) + "\n\n")
 
-	md := fmt.Sprintf(`# Codebase Visualization Report
-Generated at %s
+	sb.WriteString("## Internal Module Structure\n")
+	sb.WriteString("```mermaid\n" + mermaidStructure + "\n```\n\n")
 
-## 1. High-Level Packages
-Directory-level dependency graph.
+	sb.WriteString("## Class Definitions\n")
+	sb.WriteString("```mermaid\n" + mermaidClasses + "\n```\n\n")
 
-`+"```mermaid"+`
-%s
-`+"```"+`
+	sb.WriteString("## Package Dependencies\n")
+	sb.WriteString("```mermaid\n" + mermaidPackages + "\n```\n\n")
 
-## 2. Module Structure
-Internal file structure grouped by directory.
+	sb.WriteString("## Clustering Algorithm Logic\n")
+	sb.WriteString("```mermaid\n" + algoMermaid + "\n```\n\n")
 
-`+"```mermaid"+`
-%s
-`+"```"+`
+	sb.WriteString("## PlantUML Diagrams\n\n")
+	sb.WriteString("> Note: To render these manually, use `plantuml <filename>` or an IDE plugin.\n\n")
 
-## 3. Class Definitions
-Classes defined across the codebase.
+	// Sort keys for stable output
+	keys := make([]string, 0, len(pumlMap))
+	for k := range pumlMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 
-`+"```mermaid"+`
-%s
-`+"```"+`
+	for _, filename := range keys {
+		sb.WriteString(fmt.Sprintf("### %s\n", filename))
+		sb.WriteString("```plantuml\n")
+		sb.WriteString(pumlMap[filename])
+		sb.WriteString("\n```\n\n")
+	}
 
-## 4. File Dependencies
-External library usage and inter-file dependencies.
+	sb.WriteString("## Graphviz Instructions\n\n")
+	sb.WriteString("To render the `.dot` graph manually:\n")
+	sb.WriteString("```bash\n")
+	sb.WriteString("dot -Tsvg graph.dot -o graph.svg\n")
+	sb.WriteString("```\n")
 
-`+"```mermaid"+`
-%s
-`+"```"+`
-
-## 5. Other Visualizations
-### Graphviz (DOT)
-To render the `+"`graph.dot`"+` file manually:
-`+"```bash"+`
-dot -Tsvg graph.dot -o graph.svg
-`+"```"+`
-
-`, time.Now().Format(time.RFC1123), mermaidPackages, mermaidInternal, mermaidClasses, mermaidExternal)
-
-	return os.WriteFile(filepath.Join(outputDir, "report.md"), []byte(md), 0644)
+	return os.WriteFile(outputPath, []byte(sb.String()), 0644)
 }
 
 // truncateForHTML limits content length for HTML embedding
@@ -204,6 +199,21 @@ func truncateForHTML(content string, maxLen int) string {
 		return content
 	}
 	return content[:maxLen] + "\n... (truncated, see original files for full content)"
+}
+
+// deflateAndEncode compresses string using ZLIB and custom base64 for PlantUML
+func deflateAndEncode(input string) (string, error) {
+	// 1. Deflate (compress)
+	var b bytes.Buffer
+	w, err := flate.NewWriter(&b, flate.BestCompression)
+	if err != nil {
+		return "", err
+	}
+	w.Write([]byte(input))
+	w.Close()
+
+	// 2. Custom Base64 Encoding
+	return encode64(b.Bytes()), nil
 }
 
 // Helper to escape HTML (not used currently but kept for utility)

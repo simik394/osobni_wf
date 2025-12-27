@@ -422,14 +422,6 @@ func runReport(cfg *config.Config, args []string) {
 		log.Printf("Warning: Failed to generate Internal Mermaid: %v", err)
 	}
 
-	// 2. Generate Mermaid (External Dependencies)
-	optsExternal := opts
-	optsExternal.Filter = export.FilterExternal
-	mermaidExternal, err := export.ExportMermaid(ctx, dbClient, scopePath, optsExternal)
-	if err != nil {
-		log.Printf("Warning: Failed to generate External Mermaid: %v", err)
-	}
-
 	// 3. Generate Mermaid (Classes)
 	mermaidClasses, err := export.ExportMermaidClasses(ctx, dbClient, scopePath, opts)
 	if err != nil {
@@ -442,26 +434,25 @@ func runReport(cfg *config.Config, args []string) {
 		log.Printf("Warning: Failed to generate Mermaid Packages: %v", err)
 	}
 
-	// 5. Generate DOT
-	dotContent, err := export.ExportDOT(ctx, dbClient, scopePath, opts)
-	if err != nil {
-		log.Printf("Warning: Failed to generate DOT: %v", err)
-	}
-
-	// 6. Generate PlantUML
+	// 5. Generate PlantUML
 	pumlContent, err := export.ExportPlantUML(ctx, dbClient, scopePath, opts)
 	if err != nil {
 		log.Printf("Warning: Failed to generate PlantUML: %v", err)
 	}
 
-	// 7. Generate HTML Report
-	if err := export.GenerateReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, dotContent, pumlContent); err != nil {
-		log.Fatalf("Failed to generate HTML report: %v", err)
+	// 6. Algorithm Meta-Visualization
+	algoMermaid := export.ExportAlgorithmDiagram()
+
+	// 7. Generate Full Report
+	err = export.GenerateReport(outputDir, pumlContent, mermaidInternal, mermaidClasses, mermaidPackages, algoMermaid)
+	if err != nil {
+		fmt.Printf("Error generating HTML report: %v\n", err)
 	}
 
-	// 8. Generate Markdown Report
-	if err := export.GenerateMarkdownReport(outputDir, mermaidInternal, mermaidExternal, mermaidClasses, mermaidPackages); err != nil {
-		log.Printf("Warning: Failed to generate Markdown report: %v", err)
+	// 8. Generate Markdown Report (for Obsidian/IDE)
+	err = export.GenerateMarkdownReport(filepath.Join(outputDir, "report.md"), pumlContent, mermaidInternal, mermaidClasses, mermaidPackages, algoMermaid)
+	if err != nil {
+		fmt.Printf("Error generating Markdown report: %v\n", err)
 	}
 
 	fmt.Printf("Report generated at: %s/index.html\n", outputDir)

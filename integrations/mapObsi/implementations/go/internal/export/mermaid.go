@@ -365,3 +365,44 @@ func ExportMermaidPackages(ctx context.Context, client *db.Client, scopePath str
 
 	return sb.String(), nil
 }
+
+// ExportAlgorithmDiagram generates a meta-diagram explaining the clustering logic
+func ExportAlgorithmDiagram() string {
+	return `graph TD
+    %% Meta-Diagram: How Clustering Works
+    
+    subgraph S1 [1. Input Graph]
+        N1[Node A (utils/a.go)] --> N2[Node B (utils/b.go)]
+        N2 --> N3[Node C (main/c.go)]
+        N4[Node D (main/d.go)] --> N1
+    end
+
+    subgraph S2 [2. Cluster Identification]
+        N1:::clsUtils
+        N2:::clsUtils
+        N3:::clsMain
+        N4:::clsMain
+    end
+
+    subgraph S3 [3. Frontier Detection]
+        direction TB
+        subgraph C_Utils [Cluster: utils]
+            U1[a.go] --> U2[b.go]
+        end
+        F1[c.go (main)]:::frontier
+        F2[d.go (main)]:::frontier
+        
+        U2 -.-> F1
+        F2 -.-> U1
+    end
+
+    S1 ==> S2
+    S2 ==> S3
+    
+    classDef clsUtils fill:#e1f5fe,stroke:#01579b;
+    classDef clsMain fill:#fff3e0,stroke:#e65100;
+    classDef frontier fill:#eee,stroke:#333,stroke-dasharray: 5 5;
+    
+    style S3 fill:#f9f9f9,stroke:#333,stroke-width:2px;
+`
+}
