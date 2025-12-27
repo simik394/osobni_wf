@@ -268,7 +268,7 @@
       IDLE_THRESHOLD=30   # seconds of no activity before going idle
       CHUNK_DURATION=3600 # 1 hour in seconds
       PIDFILE="/tmp/screenshot-record.pid"
-      
+
       convert_session() {
           local S_DIR="$1"
           local OUTPUT_NAME="screenshots_$(basename $S_DIR).mkv"
@@ -422,4 +422,3 @@
            exit 1
            ;;
       esac
-```
