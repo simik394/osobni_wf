@@ -196,7 +196,6 @@ func getPackageForNode(node string, paths map[string]string) string {
 
 func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
 	// Improved: Aggregate file-to-file imports by directory
-	// Relaxed query to match (Code)-[:IMPORTS]->(b) where b can be Code or Module
 	query := `
 		MATCH (a:Code)-[:IMPORTS]->(b)
 		WHERE a.path IS NOT NULL
@@ -216,6 +215,8 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 	}
 
 	deps := make(map[string]map[string]bool)
+	internalPkgs := make(map[string]bool)
+	externalPkgs := make(map[string]bool)
 
 	if arr, ok := res.([]any); ok && len(arr) > 1 {
 		if rows, ok := arr[1].([]any); ok {
@@ -232,13 +233,17 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 					srcPkg := toPackage(srcPath)
 
 					var dstPkg string
+					isExternal := false
+
 					if dstPath != "" {
 						dstPkg = toPackage(dstPath)
+						if strings.Contains(dstPath, "node_modules") {
+							isExternal = true
+						}
 					} else {
 						// Fallback: use name or "External" + name
 						if dstName != "" {
-							dstPkg = "External" // Simplification: Group all external? Or by name?
-							// If name is like "module/pkg", use that
+							isExternal = true
 							parts := strings.Split(dstName, "/")
 							if len(parts) > 0 {
 								dstPkg = parts[0]
@@ -248,6 +253,10 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 						}
 					}
 
+					// Sanitize names
+					srcPkg = strings.Trim(srcPkg, "\"")
+					dstPkg = strings.Trim(dstPkg, "\"")
+
 					if srcPkg == "" || dstPkg == "" || srcPkg == dstPkg {
 						continue
 					}
@@ -256,6 +265,13 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 						deps[srcPkg] = make(map[string]bool)
 					}
 					deps[srcPkg][dstPkg] = true
+
+					internalPkgs[srcPkg] = true
+					if isExternal {
+						externalPkgs[dstPkg] = true
+					} else {
+						internalPkgs[dstPkg] = true
+					}
 				}
 			}
 		}
@@ -265,7 +281,23 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 	sb.WriteString("@startuml Packages\n")
 	sb.WriteString("title High-level Package Dependencies\n")
 	sb.WriteString("skinparam packageStyle rectangle\n")
-	sb.WriteString("skinparam linetype ortho\n")
+	sb.WriteString("left to right direction\n") // Transpose mostly helps here
+
+	// Group Internal
+	sb.WriteString("package \"Internal\" {\n")
+	for p := range internalPkgs {
+		if !externalPkgs[p] {
+			sb.WriteString(fmt.Sprintf("  package \"%s\"\n", p))
+		}
+	}
+	sb.WriteString("}\n")
+
+	// Group External
+	sb.WriteString("package \"External\" {\n")
+	for p := range externalPkgs {
+		sb.WriteString(fmt.Sprintf("  package \"%s\"\n", p))
+	}
+	sb.WriteString("}\n")
 
 	for src, targets := range deps {
 		for dst := range targets {
@@ -279,7 +311,6 @@ func exportPackageDiagram(ctx context.Context, client *db.Client, scopePath stri
 
 func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
 	// Detailed file-level dependency graph, grouped by package
-	// Relaxed query to capture all imports (Code->Code and Code->Module)
 	query := `
 		MATCH (a:Code)-[:IMPORTS]->(b)
 		RETURN a.name, b.name, a.path, b.path
@@ -300,8 +331,7 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 	var sb strings.Builder
 	sb.WriteString("@startuml Dependencies\n")
 	sb.WriteString("title File Dependency Graph\n")
-	// sb.WriteString("skinparam linetype polyline\n")
-	// ranksep can help spread things out
+	sb.WriteString("left to right direction\n") // Transpose to make it wider/readable
 	sb.WriteString("skinparam nodesep 20\n")
 	sb.WriteString("skinparam ranksep 50\n")
 
@@ -311,12 +341,11 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 	if arr, ok := res.([]any); ok && len(arr) > 1 {
 		if rows, ok := arr[1].([]any); ok {
 			for _, row := range rows {
-				// Note: b.path might be null if b is a Module
 				if r, ok := row.([]any); ok && len(r) >= 2 {
 					srcName, _ := r[0].(string)
 					dstName, _ := r[1].(string)
 					srcPath, _ := r[2].(string)
-					dstPath, _ := r[3].(string) // May be empty/nil
+					dstPath, _ := r[3].(string)
 
 					if !opts.ShouldInclude(srcPath) {
 						continue
@@ -324,6 +353,7 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 
 					// Group by package
 					srcPkg := toPackage(srcPath)
+					srcPkg = strings.Trim(srcPkg, "\"")
 					if !hasNode(packages[srcPkg], srcName) {
 						packages[srcPkg] = append(packages[srcPkg], srcName)
 					}
@@ -332,13 +362,16 @@ func exportDependencyDiagram(ctx context.Context, client *db.Client, scopePath s
 					if dstPath != "" {
 						dstPkg = toPackage(dstPath)
 						if strings.Contains(dstPath, "node_modules") {
-							dstPkg = "External"
+							dstPkg = "External_Libs"
 						}
 					} else {
-						// If no path, assume it's a Module/External
-						dstPkg = "External"
+						dstPkg = "External_Modules"
 					}
 
+					dstPkg = strings.Trim(dstPkg, "\"")
+
+					// Limit external noise: collapse heavily used externals?
+					// For now, simple grouping
 					if !hasNode(packages[dstPkg], dstName) {
 						packages[dstPkg] = append(packages[dstPkg], dstName)
 					}

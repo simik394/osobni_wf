@@ -28,6 +28,8 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 
 	for _, filename := range keys {
 		content := pumlMap[filename]
+		// Write the actual file to disk for manual use
+		os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644)
 		// Limit for GET request is roughly 2KB, browser handles maybe 8KB.
 		// Public server often fails at 4KB-8KB. Let's be conservative.
 		isTooLarge := len(content) > 4000
