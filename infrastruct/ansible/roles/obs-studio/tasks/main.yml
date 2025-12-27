@@ -370,7 +370,7 @@
               LAST_WINDOW="$CURRENT_WINDOW"
               
               # Capture
-              import -window root "$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT).png" 2>/dev/null
+              import -silent -window root "$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT).png" 2>/dev/null
               COUNT=$((COUNT + 1))
               
               sleep $INTERVAL
