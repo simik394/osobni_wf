@@ -1,12 +1,16 @@
 ---
 # LM Studio installation role
-# Dynamically checks for latest version and installs it
+# Dynamically checks for latest version, handles cleanup and icon activation
 
-- name: Ensure LM Studio directory exists
+- name: Ensure LM Studio directories exist
   file:
-    path: "{{ lmstudio_install_dir }}"
+    path: "{{ item }}"
     state: directory
     mode: "0755"
+  loop:
+    - "{{ lmstudio_install_dir }}"
+    - "{{ ansible_env.HOME }}/.local/share/icons"
+    - "{{ ansible_env.HOME }}/.local/share/applications"
 
 - name: Detect latest LM Studio version
   script: get_latest_version.py
@@ -32,17 +36,32 @@
     mode: "0755"
   register: lmstudio_download
 
+- name: Download LM Studio Icon
+  get_url:
+    url: "https://lmstudio.ai/assets/android-chrome-192x192.png"
+    dest: "{{ ansible_env.HOME }}/.local/share/icons/lmstudio.png"
+    mode: "0644"
+
+- name: Cleanup old versions
+  find:
+    paths: "{{ lmstudio_install_dir }}"
+    patterns: "LM-Studio-*-x64.AppImage"
+    excludes: "{{ lmstudio_latest_data.filename }}"
+  register: old_versions
+
+- name: Remove old version files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ old_versions.files }}"
+  when: old_versions.matched > 0
+
 - name: Create symlink in ~/.local/bin
   file:
     src: "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}"
     dest: "{{ ansible_env.HOME }}/.local/bin/lmstudio"
     state: link
-
-- name: Ensure applications directory exists
-  file:
-    path: "{{ ansible_env.HOME }}/.local/share/applications"
-    state: directory
-    mode: "0755"
+    force: yes
 
 - name: Create desktop entry for LM Studio
   copy:
@@ -53,7 +72,7 @@
       Name=LM Studio
       Comment=Discover, download, and run local LLMs
       Exec={{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}
-      Icon=lmstudio
+      Icon={{ ansible_env.HOME }}/.local/share/icons/lmstudio.png
       Terminal=false
       Type=Application
       Categories=Development;Science;
