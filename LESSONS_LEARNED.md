@@ -54,5 +54,5 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Diagram Splitting**: For high-density reports, splitting Mermaid into "Structure" (DEFINES) and "Dependencies" (IMPORTS) dramatically improves scannability and prevents rendering timeouts.
 - **Multi-Block PlantUML**: PlantUML supports multiple `@startuml ... @enduml` blocks in a single `.puml` file. This is an efficient way to provide Architecture, Package, and Class views without cluttering the filesystem.
 - **Truncation Limits**: HTML reports embedding raw graph source need large truncation limits (at least 1MB) for complex codebases to avoid silent data loss in the UI.
-- **Zero-Config Rendering**: For tools like PlantUML, implementing a local Deflate/Base64 encoder allows generating "View in Browser" links (via `plantuml.com/svg/~h...`) that work for local files without requiring a local rendering engine or public hosting.
+- **Zero-Config Rendering**: For local files, `http://www.plantuml.com/plantuml/svg/~h...` URLs are convenient but hit ~8KB limits (HTTP 400). A robust solution is generating a self-submitting POST form (`<form method="POST" ...>`) in the HTML, which bypasses URL limits and allows rendering megabyte-scale diagrams.
 
