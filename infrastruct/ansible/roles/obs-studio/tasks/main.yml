@@ -239,10 +239,11 @@
 # SCREENSHOT RECORDING (LOW FPS ALTERNATIVE)
 # ============================================
 
-- name: Install scrot for screenshot recording
+- name: Install imagemagick for screenshot recording
   apt:
     name:
-      - scrot
+      - imagemagick
+      - xdotool
       - ffmpeg
     state: present
   become: true
@@ -311,8 +312,8 @@
               LAST_MOUSE="$CURRENT_MOUSE"
               LAST_WINDOW="$CURRENT_WINDOW"
               
-              # Take screenshot
-              scrot -m "$SESSION_DIR/frame_${COUNT}.png" 2>/dev/null
+              # Take screenshot using ImageMagick 'import' (more robust)
+              import -window root "$SESSION_DIR/frame_${COUNT}.png" 2>/dev/null
               COUNT=$((COUNT + 1))
               
               sleep $INTERVAL
