@@ -25,18 +25,18 @@ func GenerateReport(outputDir, mermaidInternal, mermaidExternal, dotContent stri
 	for filename, content := range pumlContent {
 		os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644)
 
-		encoded, _ := encodePlantUML(content)
-		browserLink := fmt.Sprintf("http://www.plantuml.com/plantuml/svg/%s", encoded)
-
+		formID := fmt.Sprintf("form_%s", strings.ReplaceAll(filename, ".", "_"))
 		pumlSections += fmt.Sprintf(`
 		<div class="diagram">
 			<h3>%s</h3>
-			<p>
-				<a href="%s" target="_blank">View in Browser (SVG)</a> | 
-				<a href="%s" target="_blank">Raw Source</a>
-			</p>
+			<form id="%s" action="http://www.plantuml.com/plantuml/svg" method="POST" target="_blank" style="display:inline;">
+				<textarea name="text" style="display:none;">%s</textarea>
+				<button type="submit" style="background:none; border:none; color:#0066cc; cursor:pointer; text-decoration:underline; padding:0; font:inherit;">View in Browser (SVG)</button>
+			</form>
+			| 
+			<a href="%s" target="_blank">Raw Source</a>
 			<details><summary>Show Source</summary><pre>%s</pre></details>
-		</div>`, filename, browserLink, filename, truncateForHTML(content, 1000000))
+		</div>`, filename, formID, content, filename, truncateForHTML(content, 1000000))
 	}
 
 	// Try to render internal structure
