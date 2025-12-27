@@ -53,6 +53,6 @@ When wrapping browser automation as OpenAI-compatible API:
 ## Multi-Diagram Strategy (Phase 5 Refinements)
 - **Diagram Splitting**: For high-density reports, splitting Mermaid into "Structure" (DEFINES) and "Dependencies" (IMPORTS) dramatically improves scannability and prevents rendering timeouts.
 - **Multi-Block PlantUML**: PlantUML supports multiple `@startuml ... @enduml` blocks in a single `.puml` file. This is an efficient way to provide Architecture, Package, and Class views without cluttering the filesystem.
-- **Truncation Limits**: HTML reports embedding raw graph source need large truncation limits (at least 1MB) for complex codebases to avoid silent data loss in the UI.
-- **Robust Web Rendering**: POST-based rendering is unreliable due to server-side restrictions on some public PlantUML instances. A hybrid approach is best: encoded GET links for small diagrams (<8KB) and a "Copy Source" clipboard button + link to the Editor for simpler handling of massive diagrams.
+- **Client-Side Rendering**: For interactive reports without server dependencies, simple embedding of libraries like `mermaid.js` is superior to static generation or remote calls. It bypasses URL limits, rendering timeouts, and requires zero user configuration.
+- **Robust Web Rendering**: If server-side rendering is strictly needed (e.g. for PlantUML specific features), usage of encoded GET requests with a "Copy Source" fallback is more reliable than POST forms due to CORS/API limitations on public servers.
 
