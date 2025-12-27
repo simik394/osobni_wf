@@ -257,7 +257,7 @@
       # Usage: screenshot-record start|stop|status
 
       SCREENSHOT_DIR="{{ ansible_env.HOME }}/Videos/Screenshots"
-      INTERVAL=2  # seconds between screenshots
+      INTERVAL=5  # seconds between screenshots
       PIDFILE="/tmp/screenshot-record.pid"
 
       case "$1" in
