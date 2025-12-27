@@ -17,6 +17,9 @@ This document serves as the centralized repository for all technical, process, a
 - **User-Directory Plugins**: For per-user installation (avoiding sudo), use `~/.config/obs-studio/plugins/<plugin-name>/bin/64bit/` and `.../data/`. This works with both native and Flatpak OBS.
 - **Nested Archives**: Some plugin releases contain a `.tar.gz` inside a `.zip`. Always inspect the archive structure before automating extraction. Use Ansible's `find` module to locate inner archives dynamically.
 - **OBS Multi-Source Recording**: When using Source Record plugin, configure the main output as a "dummy" (16×16 resolution, 100kbps) to minimize disk usage while recording full-quality per-source videos. See [[OBS_BEST_PRACTICES]].
+- **AppImage Lifecycle Management**: When automating AppImage updates via Ansible, always implement an explicit cleanup task for old versions. Unlike package managers, AppImage downloads are just files; leaving old ones leads to disk bloat and potential user confusion where "cached" launchers or taskbar pins point to the old executable.
+- **Zombie Process Conflicts**: Applications like LM Studio use background workers (e.g., node, llmworker). Closing the main window may not kill these. When updating, use `pkill -f` to ensure the old version's mounts (`/tmp/.mount_LM-*`) are cleared, otherwise re-launching may reconnect to the old session.
+- **Dynamic Version Scrapping**: When official download URLs don't have a stable `/latest` redirect, a dedicated Python/Shell script is superior to complex regex inside Ansible tasks. It allows for robust error handling and complex parsing (like extracting build numbers from Next.js hydration data).
 
 ## Software Architecture & Performance
 - **Architecture > Language**: Design decisions (e.g., parallelization, connection pooling) often have a much larger impact on performance than the choice of programming language itself.
@@ -56,3 +59,23 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Client-Side Rendering**: For interactive reports without server dependencies, simple embedding of libraries like `mermaid.js` is superior to static generation or remote calls. It bypasses URL limits, rendering timeouts, and requires zero user configuration.
 - **Robust Web Rendering**: If server-side rendering is strictly needed (e.g. for PlantUML specific features), usage of encoded GET requests with a "Copy Source" fallback is more reliable than POST forms due to CORS/API limitations on public servers.
 
+
+## Agent State Management (FalkorDB Integration)
+- **Session Resolution Ambiguity**: Agents like `rsrch` may use human-readable session names, while `angrav` uses UUIDs.
+    - *Fix*: Implemented `findSession(nameOrId)` in the shared client. It attempts an exact UUID match first, then falls back to a fuzzy query for the most recent session with that Name.
+- **Deeply Nested Result Parsing**: FalkorDB's Redis response format often wraps results in multiple array layers (e.g., `[[[[key, val]]]]`) which standard parsers miss.
+    - *Fix*: Recursive `parseResult` helper is mandatory for robust data extraction.
+
+## Tool Tracking & Middleware
+- **The "Black Box" Problem**: We cannot wrap/middleware tools executed inside a closed-source or UI-driven application (like the Antigravity web UI) because we don't control the function calls.
+    - *Fix*: **UI Observer Pattern**. Instead of intercepting the cause (function call), we scrape the effect (UI message "Writing file...") from the DOM.
+- **The "White Box" Solution**: For agents we run locally (like `rsrch`), standard **Code Middleware** (wrapping the tool function) is superior as it captures intent with zero latency.
+
+## Infrastructure Redundancy
+- **Don't Reinvent Service Discovery**: Building a heartbeat system in FalkorDB was redundant when Nomad+Consul already exhaustively track service health.
+    - *Fix*: **Consul Sync Adapter**. Use Consul as the Source of Truth for *now*. Sync to FalkorDB only for *historical context/audit*.
+
+## Anti-Patterns & Points of Struggle
+- **Reinventing the Wheel (Context Blindness)**: I spent significant time designing a custom 'Service Registry' for FalkorDB, completely ignoring that the user's stack (Nomad/Consul) already solves this. *Lesson:* Always audit the existing infrastructure capabilities *before* proposing new state management components. 
+- **Code Debugging vs. Arch Defects**: I wasted cycles adding debug logs to `logInteraction` to fix a "missing session" bug. The code was fine; the architecture was flawed (One agent used Names, the other UUIDs). *Lesson:* When an integration fails silently, verify the *data contract* (ID format) before debugging the *code logic*.
+- **The "White Box" Fallacy**: I initially proposed "Tool Middleware" for Angrav, assuming we could wrap its function calls. I failed to realize Angrav is a "UI Driver" (Black Box) until late in the planning. *Lesson:* Explicitly categorize agents as "Code Executors" (Middleware possible) vs "UI Drivers" (Scrapers only) at the start of design.
