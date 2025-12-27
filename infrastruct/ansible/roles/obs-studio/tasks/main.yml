@@ -101,22 +101,76 @@
 # ONE-CLICK RECORDING AUTOMATION
 # ============================================
 
-- name: Create start_recording.sh script
+- name: Create obs-record script (start/stop with cleanup)
+  copy:
+    dest: "{{ ansible_env.HOME }}/bin/obs-record"
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # OBS Studio Recording Controller
+      # Usage: obs-record start|stop|status
+
+      OBS_OUTPUT_DIR="{{ obs_recording_path }}"
+
+      case "$1" in
+        start)
+          if pgrep -x obs > /dev/null; then
+            echo "OBS is already running. Use 'obs-record stop' first."
+            exit 1
+          fi
+          echo "Starting OBS recording..."
+          obs --startrecording --minimize-to-tray &
+          sleep 2
+          echo "✓ Recording started. OBS is in system tray."
+          echo "  Use 'obs-record stop' to stop recording."
+          ;;
+        
+        stop)
+          if ! pgrep -x obs > /dev/null; then
+            echo "OBS is not running."
+            exit 1
+          fi
+          echo "Stopping OBS..."
+          # Send quit signal to OBS (stops recording first)
+          pkill -SIGTERM obs
+          sleep 3
+          
+          # Cleanup: delete dummy main output files (tiny files < 5MB without hdmi_/notebook_ prefix)
+          echo "Cleaning up dummy files..."
+          find "$OBS_OUTPUT_DIR" -name "*.mkv" -size -5M ! -name "hdmi_*" ! -name "notebook_*" -mmin -60 -delete 2>/dev/null
+          
+          echo "✓ Recording stopped and cleaned up."
+          echo "  Files saved to: $OBS_OUTPUT_DIR"
+          ls -lh "$OBS_OUTPUT_DIR"/*.mkv 2>/dev/null | tail -5
+          ;;
+        
+        status)
+          if pgrep -x obs > /dev/null; then
+            echo "OBS is running (PID: $(pgrep -x obs))"
+          else
+            echo "OBS is not running."
+          fi
+          ;;
+        
+        *)
+          echo "Usage: obs-record {start|stop|status}"
+          echo ""
+          echo "Commands:"
+          echo "  start   - Launch OBS and start recording"
+          echo "  stop    - Stop recording, close OBS, cleanup dummy files"
+          echo "  status  - Check if OBS is running"
+          exit 1
+          ;;
+      esac
+
+- name: Create legacy start_recording.sh (backward compatibility)
   copy:
     dest: "{{ ansible_env.HOME }}/bin/start_recording.sh"
     mode: "0755"
     content: |
       #!/bin/bash
-      # OBS Studio One-Click Recording Launcher
-      # Starts OBS with recording active and minimized to tray
-
-      # Kill any existing OBS instance (optional - uncomment if needed)
-      # pkill -x obs || true
-
-      # Start OBS with recording and minimize to tray
-      obs --startrecording --minimize-to-tray &
-
-      echo "OBS recording started. Check system tray."
+      # Legacy wrapper - use 'obs-record start' instead
+      exec obs-record start
 
 - name: Ensure ~/bin is in PATH (add to .bashrc if not present)
   lineinfile:

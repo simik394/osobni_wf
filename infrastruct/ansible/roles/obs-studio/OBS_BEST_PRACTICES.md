@@ -53,34 +53,64 @@ This Ansible role automatically installs the `DateTimeMultiple.lua` script for d
 | `%Y-%m-%d %H:%M:%S` | `2025-12-26 14:35:22` | Full datetime |
 | `%d.%m. %H:%M` | `26.12. 14:35` | European date + time |
 
-## 4. One-Click Recording (Automated)
+## 4. Recording Scripts
 
-This Ansible role creates:
-- **Script**: `~/bin/start_recording.sh` – launches OBS with recording active
-- **Desktop Shortcut**: "OBS Recording" in your app menu
+This Ansible role installs `obs-record` – a command-line tool to control OBS recording.
 
-### Usage:
+### Commands:
+
+| Command | Description |
+|---------|-------------|
+| `obs-record start` | Launch OBS, start recording, minimize to tray |
+| `obs-record stop` | Stop recording, close OBS, **delete dummy files** |
+| `obs-record status` | Check if OBS is running |
+
+### Typical Workflow:
+
 ```bash
-# From terminal:
-start_recording.sh
+# Start recording session
+obs-record start
 
-# Or click "OBS Recording" in your application menu
+# ... work on your tasks ...
+
+# Stop when done (auto-cleans dummy files)
+obs-record stop
 ```
 
-OBS will start, immediately begin recording, and minimize to system tray.
+### What Gets Recorded:
 
-## 5. Recommended Settings Summary
+| File Pattern | Source | Content |
+|-------------|--------|---------|
+| `hdmi_*.mkv` | Source Record | HDMI monitor (full quality) |
+| `notebook_*.mkv` | Source Record | Notebook screen (full quality) |
+| ~~`2025-*.mkv`~~ | Main output | **Auto-deleted** (64×64 dummy) |
+
+### Desktop Shortcut:
+Click **"OBS Recording"** in your app menu to start (equivalent to `obs-record start`).
+
+> **Note**: To stop recording from GUI, right-click OBS in system tray → Quit. Then run `obs-record stop` to cleanup dummy files.
+
+## 5. Clock Overlay Setup (Manual)
+
+The `DateTimeMultiple.lua` script is installed automatically, but must be configured manually in OBS:
+
+1. **Tools → Scripts**
+2. Select `DateTimeMultiple.lua` in the list
+3. Set **Source 1** to "Clock"
+4. Set **Format 1** to `%H:%M:%S` (or your preferred format)
+
+## 6. Recommended Settings Summary
 
 | Setting | Value | Reason |
 |---------|-------|--------|
 | Capture Method | XSHM | Fastest on X11 |
-| Main Output Resolution | 16×16 | Dummy stream |
-| Main Output Bitrate | 100 kbps | Minimal disk usage |
-| Source Record Quality | Match source resolution | Full quality per-monitor |
+| Main Output | 64×64 (dummy) | Ignored, auto-deleted |
+| Source Record Encoder | x264 (veryfast) | Reliable, good for text |
+| Source Record Resolution | 1280×720 | Good quality/size balance |
 | Recording Format | MKV | Crash-safe, remux to MP4 later |
 
 ---
 
 ## Related Documentation
 - [[Prods/01-pwf/infrastruct/ansible/roles/obs-studio/README|Role README]] – Installation instructions
-- [Project LESSONS_LEARNED](../../../LESSONS_LEARNED.md) – Cross-project insights
+- [LESSONS_LEARNED.md](../../../LESSONS_LEARNED.md) – Cross-project insights
