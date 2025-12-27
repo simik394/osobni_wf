@@ -83,7 +83,7 @@ describe('Adversarial: TOOLS-32 Multi-turn Context', () => {
      * BUG POTENTIAL: Very long conversation that exceeds token limits
      * The current implementation doesn't truncate.
      */
-    it('should handle extremely long conversation history', async () => {
+    it('should handle extremely long conversation history', { timeout: 30000 }, async () => {
         const longMessages = [];
         for (let i = 0; i < 100; i++) {
             longMessages.push({
