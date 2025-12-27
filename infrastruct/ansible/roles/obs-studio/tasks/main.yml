@@ -254,49 +254,106 @@
     mode: "0755"
     content: |
       #!/bin/bash
-      # Adaptive screenshot recording with activity detection
+      # Adaptive screenshot recording with activity detection and auto-splitting
       # Usage: screenshot-record start|stop|status
       # 
       # Active (mouse/window change): 2s interval
       # Idle (no activity): 10s interval
+      # Auto-split: Every 1 hour (creates separate MKV files)
 
       SCREENSHOT_DIR="{{ ansible_env.HOME }}/Videos/Screenshots"
+      RECORDING_DIR="{{ obs_recording_path }}"
       INTERVAL_ACTIVE=2   # seconds when active
       INTERVAL_IDLE=10    # seconds when idle
       IDLE_THRESHOLD=30   # seconds of no activity before going idle
+      CHUNK_DURATION=3600 # 1 hour in seconds
       PIDFILE="/tmp/screenshot-record.pid"
+      
+      convert_session() {
+          local S_DIR="$1"
+          local OUTPUT_NAME="screenshots_$(basename $S_DIR).mkv"
+          local OUTPUT_PATH="$RECORDING_DIR/$OUTPUT_NAME"
+          
+          if [ -d "$S_DIR" ]; then
+              # Rename files to sequential order for ffmpeg
+              cd "$S_DIR"
+              local i=0
+              # Use sort version sort (-V) or time sort if needed, simplified here
+              # Assuming standard frames are sortable by name if zero padded, but we use ls -t logic
+              for f in $(ls -tr frame_*.png 2>/dev/null); do
+                  mv "$f" "seq_$(printf '%05d' $i).png" 2>/dev/null
+                  i=$((i + 1))
+              done
+              cd - > /dev/null
+              
+              local COUNT=$(ls "$S_DIR"/seq_*.png 2>/dev/null | wc -l)
+              
+              if [ "$COUNT" -gt 0 ]; then
+                  ffmpeg -y -framerate 1 -pattern_type glob -i "$S_DIR/seq_*.png" \
+                    -c:v libx264 -preset veryfast -crf 23 \
+                    -pix_fmt yuv420p -vf "fps=1" "$OUTPUT_PATH" > /dev/null 2>&1
+                  
+                  if [ -f "$OUTPUT_PATH" ]; then
+                      rm -rf "$S_DIR"
+                  fi
+              fi
+          fi
+      }
+      export -f convert_session
+      export RECORDING_DIR
 
       case "$1" in
         start)
           if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
-            echo "Screenshot recording is already running (PID: $(cat $PIDFILE))"
-            exit 1
+             echo "Screenshot recording is already running."
+             exit 1
           fi
           
-          # Create session directory with timestamp
-          SESSION_DIR="$SCREENSHOT_DIR/$(date +%Y-%m-%d_%H-%M-%S)"
+          # Initialize session
+          START_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+          SESSION_DIR="$SCREENSHOT_DIR/$START_TIMESTAMP"
           mkdir -p "$SESSION_DIR"
           
           echo "Starting adaptive screenshot recording..."
-          echo "  Active interval: ${INTERVAL_ACTIVE}s"
-          echo "  Idle interval: ${INTERVAL_IDLE}s"
-          echo "  Idle threshold: ${IDLE_THRESHOLD}s"
+          echo "  Auto-split: Every $(($CHUNK_DURATION / 60)) minutes"
           echo "  Output: $SESSION_DIR"
           
-          # Start background screenshot loop with activity detection
           (
             COUNT=0
             LAST_MOUSE=""
             LAST_WINDOW=""
             LAST_ACTIVITY=$(date +%s)
+            CHUNK_START=$(date +%s)
+            
+            CURRENT_SESSION_DIR="$SESSION_DIR"
             
             while true; do
-              # Get current state
+              # Check for chunk rotation
+              NOW=$(date +%s)
+              ELAPSED=$((NOW - CHUNK_START))
+              
+              if [ $ELAPSED -ge $CHUNK_DURATION ]; then
+                  # Rotate chunk
+                  OLD_SESSION_DIR="$CURRENT_SESSION_DIR"
+                  NEW_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+                  CURRENT_SESSION_DIR="$SCREENSHOT_DIR/$NEW_TIMESTAMP"
+                  mkdir -p "$CURRENT_SESSION_DIR"
+                  
+                  # Reset counters for new chunk
+                  COUNT=0
+                  CHUNK_START=$NOW
+                  
+                  # Process old chunk in background
+                  ( convert_session "$OLD_SESSION_DIR" ) &
+                  
+                  # Update session tracker
+                  echo "$CURRENT_SESSION_DIR" > /tmp/screenshot-session.txt
+              fi
+
+              # Activity Detection
               CURRENT_MOUSE=$(xdotool getmouselocation 2>/dev/null | cut -d' ' -f1-2)
               CURRENT_WINDOW=$(xdotool getactivewindow 2>/dev/null)
-              NOW=$(date +%s)
               
-              # Check for activity
               if [ "$CURRENT_MOUSE" != "$LAST_MOUSE" ] || [ "$CURRENT_WINDOW" != "$LAST_WINDOW" ]; then
                 LAST_ACTIVITY=$NOW
                 INTERVAL=$INTERVAL_ACTIVE
@@ -312,18 +369,18 @@
               LAST_MOUSE="$CURRENT_MOUSE"
               LAST_WINDOW="$CURRENT_WINDOW"
               
-              # Take screenshot using ImageMagick 'import' (more robust)
-              import -window root "$SESSION_DIR/frame_${COUNT}.png" 2>/dev/null
+              # Capture
+              import -window root "$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT).png" 2>/dev/null
               COUNT=$((COUNT + 1))
               
               sleep $INTERVAL
             done
           ) &
           
-          echo $! > "$PIDFILE"
+          PID=$!
+          echo $PID > "$PIDFILE"
           echo "$SESSION_DIR" > /tmp/screenshot-session.txt
-          echo "✓ Recording started (PID: $!)"
-          echo "  Use 'screenshot-record stop' to stop and convert to video."
+          echo "✓ Recording started (PID: $PID)"
           ;;
         
         stop)
@@ -333,77 +390,36 @@
           fi
           
           PID=$(cat "$PIDFILE")
+          # Get current session dir before killing
           SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
           
           echo "Stopping screenshot recording..."
           kill "$PID" 2>/dev/null
-          # Kill child processes too
-          pkill -P "$PID" 2>/dev/null
           rm -f "$PIDFILE"
           
+          # Wait for any background conversions
+          wait
+          
+          # Convert the final unfinished chunk
           if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then
-            # Rename files to sequential order for ffmpeg
-            echo "  Renaming files..."
-            cd "$SESSION_DIR"
-            i=0
-            for f in $(ls -t frame_*.png 2>/dev/null | tac); do
-              mv "$f" "seq_$(printf '%05d' $i).png" 2>/dev/null
-              i=$((i + 1))
-            done
-            cd - > /dev/null
-            
-            COUNT=$(ls "$SESSION_DIR"/seq_*.png 2>/dev/null | wc -l)
-            echo "  Captured $COUNT frames"
-            
-            if [ "$COUNT" -gt 0 ]; then
-              echo "  Converting to video (this may take a moment)..."
-              OUTPUT="{{ obs_recording_path }}/screenshots_$(basename $SESSION_DIR).mkv"
-              
-              # Use variable framerate - calculate average FPS from session
-              START_TIME=$(basename "$SESSION_DIR" | sed 's/_/ /g' | head -c19)
-              
-              ffmpeg -y -framerate 1 -pattern_type glob -i "$SESSION_DIR/seq_*.png" \
-                -c:v libx264 -preset veryfast -crf 23 \
-                -pix_fmt yuv420p -vf "fps=1" "$OUTPUT" 2>/dev/null
-              
-              if [ -f "$OUTPUT" ]; then
-                SIZE=$(du -h "$OUTPUT" | cut -f1)
-                echo "✓ Video saved: $OUTPUT ($SIZE)"
-                echo "  Cleaning up PNG files..."
-                rm -rf "$SESSION_DIR"
-              else
-                echo "✗ Video conversion failed. PNG files kept in: $SESSION_DIR"
-              fi
-            fi
+              echo "  Converting final session..."
+              convert_session "$SESSION_DIR"
+              echo "✓ Done."
           fi
           rm -f /tmp/screenshot-session.txt
           ;;
-        
+          
         status)
-          if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
-            SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
-            COUNT=$(ls "$SESSION_DIR"/frame_*.png 2>/dev/null | wc -l)
-            echo "Screenshot recording is running (PID: $(cat $PIDFILE))"
-            echo "  Frames captured: $COUNT"
-            echo "  Output: $SESSION_DIR"
-          else
-            echo "Screenshot recording is not running."
-          fi
-          ;;
-        
+           if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
+             echo "Running (PID: $(cat $PIDFILE))"
+           else
+             echo "Not running."
+           fi
+           ;;
+           
         *)
-          echo "Usage: screenshot-record {start|stop|status}"
-          echo ""
-          echo "Adaptive screenshot recording with activity detection"
-          echo ""
-          echo "Intervals:"
-          echo "  Active (mouse/window change): 2 seconds"
-          echo "  Idle (no activity for 30s):   10 seconds"
-          echo ""
-          echo "Commands:"
-          echo "  start   - Start adaptive screenshot recording"
-          echo "  stop    - Stop and convert to MKV video"
-          echo "  status  - Check recording status and frame count"
-          exit 1
-          ;;
+           echo "Usage: screenshot-record {start|stop|status}"
+           exit 1
+           ;;
       esac
+```
