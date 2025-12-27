@@ -12,3 +12,5 @@
       tags: lmstudio
       # vars:
       #   lmstudio_version: "0.3.23-3"  # Override version if needed
+    - role: input-leap
+      tags: input-leap

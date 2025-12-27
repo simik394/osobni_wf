@@ -10,3 +10,14 @@ local:
   hosts:
     localhost:
       ansible_connection: local
+
+# Local workstations (ntb + desktop)
+workstations:
+  hosts:
+    ntb:
+      ansible_connection: local
+    wtw.a:
+      ansible_host: 100.72.49.46
+      ansible_user: simon
+      # Note: Windows host - limited Ansible functionality
+      # Use for documentation/inventory purposes

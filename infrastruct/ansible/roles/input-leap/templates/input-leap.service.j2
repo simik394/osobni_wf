@@ -1,0 +1,12 @@
+[Unit]
+Description=Input Leap KVM Server
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/input-leaps --no-daemon --config %h/.local/share/InputLeap/InputLeap.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

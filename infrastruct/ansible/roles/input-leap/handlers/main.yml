@@ -1,0 +1,10 @@
+---
+# Input Leap handlers
+
+- name: restart input-leap
+  ansible.builtin.systemd:
+    name: input-leap
+    scope: user
+    state: restarted
+    daemon_reload: true
+  when: input_leap_enable_service

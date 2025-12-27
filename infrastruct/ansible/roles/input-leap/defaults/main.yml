@@ -1,0 +1,22 @@
+---
+# Input Leap role defaults
+
+# Role of this machine: 'server' or 'client'
+input_leap_role: server
+
+# Server configuration (only used when input_leap_role == 'server')
+input_leap_server_name: "{{ ansible_hostname }}"
+
+# List of client screen names
+input_leap_clients:
+  - name: "wtw.a"
+    position: left # Position relative to server: left, right, up, down
+
+# Port for Input Leap
+input_leap_port: 24800
+
+# Enable systemd user service
+input_leap_enable_service: true
+
+# SSL/TLS configuration
+input_leap_generate_ssl: true

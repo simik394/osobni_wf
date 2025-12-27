@@ -1,0 +1,79 @@
+---
+# Input Leap installation and configuration tasks (Flatpak method)
+
+- name: Install Flatpak
+  become: true
+  ansible.builtin.apt:
+    name: flatpak
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Add Flathub repository
+  become: true
+  community.general.flatpak_remote:
+    name: flathub
+    flatpakrepo_url: https://flathub.org/repo/flathub.flatpakrepo
+    state: present
+
+- name: Install Input Leap via Flatpak
+  community.general.flatpak:
+    name: io.github.input_leap.input-leap
+    state: present
+
+- name: Create Input Leap config directory
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.var/app/io.github.input_leap.input-leap/data/InputLeap"
+    state: directory
+    mode: "0755"
+
+- name: Generate server configuration
+  ansible.builtin.template:
+    src: InputLeap.conf.j2
+    dest: "{{ ansible_env.HOME }}/.var/app/io.github.input_leap.input-leap/data/InputLeap/InputLeap.conf"
+    mode: "0644"
+  when: input_leap_role == 'server'
+
+- name: Open firewall port for Input Leap
+  become: true
+  community.general.ufw:
+    rule: allow
+    port: "{{ input_leap_port }}"
+    proto: tcp
+    comment: "Input Leap KVM sharing"
+  when: input_leap_role == 'server'
+  ignore_errors: true # UFW might not be installed
+
+- name: Create desktop autostart directory
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.config/autostart"
+    state: directory
+    mode: "0755"
+
+- name: Create autostart entry for Input Leap
+  ansible.builtin.copy:
+    dest: "{{ ansible_env.HOME }}/.config/autostart/input-leap.desktop"
+    content: |
+      [Desktop Entry]
+      Type=Application
+      Name=Input Leap
+      Exec=flatpak run io.github.input_leap.input-leap --server
+      Hidden=false
+      NoDisplay=false
+      X-GNOME-Autostart-enabled=true
+    mode: "0644"
+  when: input_leap_role == 'server'
+
+- name: Show post-install message
+  ansible.builtin.debug:
+    msg: |
+      ✅ Input Leap installed via Flatpak!
+
+      To start the server now, run:
+        flatpak run io.github.input_leap.input-leap
+
+      The server will auto-start on login.
+
+      Windows client setup:
+        1. Download from https://github.com/input-leap/input-leap/releases
+        2. Configure as Client, server: {{ ansible_default_ipv4.address | default('your-ip') }}
+        3. Screen name: wtw.a
