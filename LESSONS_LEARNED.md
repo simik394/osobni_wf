@@ -20,6 +20,7 @@ This document serves as the centralized repository for all technical, process, a
 - **AppImage Lifecycle Management**: When automating AppImage updates via Ansible, always implement an explicit cleanup task for old versions. Unlike package managers, AppImage downloads are just files; leaving old ones leads to disk bloat and potential user confusion where "cached" launchers or taskbar pins point to the old executable.
 - **Zombie Process Conflicts**: Applications like LM Studio use background workers (e.g., node, llmworker). Closing the main window may not kill these. When updating, use `pkill -f` to ensure the old version's mounts (`/tmp/.mount_LM-*`) are cleared, otherwise re-launching may reconnect to the old session.
 - **Dynamic Version Scrapping**: When official download URLs don't have a stable `/latest` redirect, a dedicated Python/Shell script is superior to complex regex inside Ansible tasks. It allows for robust error handling and complex parsing (like extracting build numbers from Next.js hydration data).
+- **Input Leap Cross-Platform KVM**: When sharing mouse/keyboard between Linux and Windows via Input Leap, set `relativeMouseMoves = true` in the server config. Without this, the cursor may be invisible on Windows. Also note: the client's screen name must match its actual hostname (e.g., `win22h2-simik` not an alias like `wtw.a`).
 
 ## Software Architecture & Performance
 - **Architecture > Language**: Design decisions (e.g., parallelization, connection pooling) often have a much larger impact on performance than the choice of programming language itself.
@@ -58,6 +59,12 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Multi-Block PlantUML**: PlantUML supports multiple `@startuml ... @enduml` blocks in a single `.puml` file. This is an efficient way to provide Architecture, Package, and Class views without cluttering the filesystem.
 - **Client-Side Rendering**: For interactive reports without server dependencies, simple embedding of libraries like `mermaid.js` is superior to static generation or remote calls. It bypasses URL limits, rendering timeouts, and requires zero user configuration.
 - **Robust Web Rendering**: If server-side rendering is strictly needed (e.g. for PlantUML specific features), usage of encoded GET requests with a "Copy Source" fallback is more reliable than POST forms due to CORS/API limitations on public servers.
+
+## Cluster-Based Diagramming (Architecture Mapping)
+- **Relative Path Disambiguation**: When clustering by directory, avoid using just the `basename` (e.g., `browser`). Using the relative path from the scan scope (e.g., `rsrch/browser`) prevents name collisions and diagram merging in multi-module projects.
+- **Frontier Node Inclusion**: A diagram for a single cluster is too isolated if it doesn't show external dependencies. Including "Frontier Nodes" (1-hop external connections) provides crucial architecture context without the noise of the full graph.
+- **Semantic Path Filtering**: Architecture diagrams should be restricted to high-value nodes (e.g., `:Code` vs `:Note` or metadata). This keeps technical views focused on structural intent rather than general knowledge-graph noise.
+- **Client-Side Scalability**: Prioritize client-side rendering (Mermaid.js via CDN) for HTML reports. It removes dependencies on local Java installations or remote rendering APIs, simplifies report distribution, and avoids URL length limits for complex graphs.
 
 
 ## Agent State Management (FalkorDB Integration)
