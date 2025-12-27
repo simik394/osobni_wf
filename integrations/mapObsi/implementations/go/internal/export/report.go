@@ -86,7 +86,7 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 		.controls { margin-bottom: 10px; font-size: 0.9em; }
 		button { cursor: pointer; color: #0366d6; background: none; border: none; text-decoration: underline; padding: 0; font: inherit; }
 	</style>
-	<script src="mermaid.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 	<script>mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'default' });</script>
 </head>
 <body>

@@ -41,9 +41,9 @@ func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath st
 	results := make(map[string]string)
 
 	// Query all relationships
-	query := "MATCH (n)-[r]->(m) RETURN n.name, type(r), m.name, n.path, m.path"
+	query := "MATCH (n:Code)-[r]->(m) RETURN n.name, type(r), m.name, n.path, m.path"
 	if scopePath != "" {
-		query = fmt.Sprintf("MATCH (n)-[r]->(m) WHERE n.path IS NOT NULL AND n.path CONTAINS '%s' RETURN n.name, type(r), m.name, n.path, m.path", scopePath)
+		query = fmt.Sprintf("MATCH (n:Code)-[r]->(m) WHERE n.path IS NOT NULL AND n.path CONTAINS '%s' RETURN n.name, type(r), m.name, n.path, m.path", scopePath)
 	}
 
 	res, err := client.Query(ctx, query)

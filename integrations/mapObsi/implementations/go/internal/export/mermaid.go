@@ -369,35 +369,34 @@ func ExportAlgorithmDiagram() string {
     %% Meta-Diagram: How Clustering Works
     
     subgraph S1 ["1. Input Graph"]
-        N1["Node A (utils/a.go)"] --> N2["Node B (utils/b.go)"]
-        N2 --> N3["Node C (main/c.go)"]
-        N4["Node D (main/d.go)"] --> N1
+        N1["auth.go (api/auth.go)"] --> N2["db.go (db/db.go)"]
+        N2 --> N3["logger.go (utils/logger.go)"]
+        N4["router.go (api/router.go)"] --> N1
     end
 
     subgraph S2 ["2. Cluster Identification"]
-        N1:::clsUtils
-        N2:::clsUtils
-        N3:::clsMain
-        N4:::clsMain
+        N1:::clsAPI
+        N4:::clsAPI
+        N2:::clsDB
+        N3:::clsUtils
     end
 
     subgraph S3 ["3. Frontier Detection"]
         direction TB
-        subgraph C_Utils ["Cluster: utils"]
-            U1["a.go"] --> U2["b.go"]
+        subgraph C_API ["Cluster: api"]
+            U1["router.go"] --> U2["auth.go"]
         end
-        F1["c.go (main)"]:::frontier
-        F2["d.go (main)"]:::frontier
+        F1["db.go (db)"]:::frontier
         
         U2 -.-> F1
-        F2 -.-> U1
     end
 
     S1 ==> S2
     S2 ==> S3
     
-    classDef clsUtils fill:#e1f5fe,stroke:#01579b;
-    classDef clsMain fill:#fff3e0,stroke:#e65100;
+    classDef clsAPI fill:#e1f5fe,stroke:#01579b;
+    classDef clsDB fill:#fff3e0,stroke:#e65100;
+    classDef clsUtils fill:#f1f8e9,stroke:#33691e;
     classDef frontier fill:#eee,stroke:#333,stroke-dasharray: 5 5;
     
     style S3 fill:#f9f9f9,stroke:#333,stroke-width:2px;
