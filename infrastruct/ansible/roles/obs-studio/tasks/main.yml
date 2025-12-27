@@ -269,6 +269,9 @@
       CHUNK_DURATION=3600 # 1 hour in seconds
       PIDFILE="/tmp/screenshot-record.pid"
 
+      # Configuration
+      ENABLE_SOUND="false"  # Set to "true" to enable shutter sound
+
       convert_session() {
           local S_DIR="$1"
           local OUTPUT_NAME="screenshots_$(basename $S_DIR).mkv"
@@ -278,8 +281,6 @@
               # Rename files to sequential order for ffmpeg
               cd "$S_DIR"
               local i=0
-              # Use sort version sort (-V) or time sort if needed, simplified here
-              # Assuming standard frames are sortable by name if zero padded, but we use ls -t logic
               for f in $(ls -tr frame_*.png 2>/dev/null); do
                   mv "$f" "seq_$(printf '%05d' $i).png" 2>/dev/null
                   i=$((i + 1))
@@ -289,9 +290,10 @@
               local COUNT=$(ls "$S_DIR"/seq_*.png 2>/dev/null | wc -l)
               
               if [ "$COUNT" -gt 0 ]; then
-                  ffmpeg -y -framerate 1 -pattern_type glob -i "$S_DIR/seq_*.png" \
+                  # Framerate 0.5 means 1 frame lasts 2 seconds
+                  ffmpeg -y -framerate 0.5 -i "$S_DIR/seq_%05d.png" \
                     -c:v libx264 -preset veryfast -crf 23 \
-                    -pix_fmt yuv420p -vf "fps=1" "$OUTPUT_PATH" > /dev/null 2>&1
+                    -pix_fmt yuv420p "$OUTPUT_PATH" > /dev/null 2>&1
                   
                   if [ -f "$OUTPUT_PATH" ]; then
                       rm -rf "$S_DIR"
@@ -314,8 +316,15 @@
           SESSION_DIR="$SCREENSHOT_DIR/$START_TIMESTAMP"
           mkdir -p "$SESSION_DIR"
           
+          # Configure sound
+          SILENT_FLAG="-silent"
+          if [ "$ENABLE_SOUND" = "true" ]; then
+              SILENT_FLAG=""
+          fi
+          
           echo "Starting adaptive screenshot recording..."
           echo "  Auto-split: Every $(($CHUNK_DURATION / 60)) minutes"
+          echo "  Sound: $ENABLE_SOUND"
           echo "  Output: $SESSION_DIR"
           
           (
@@ -369,8 +378,19 @@
               LAST_MOUSE="$CURRENT_MOUSE"
               LAST_WINDOW="$CURRENT_WINDOW"
               
-              # Capture
-              import -silent -window root "$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT).png" 2>/dev/null
+              # Capture logic: Pipe import -> convert
+              TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+              OUTPUT_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT).png"
+              
+              # import to STDOUT (png:-), convert adds text, writes to file
+              import $SILENT_FLAG -window root png:- 2>/dev/null | \
+              convert png:- \
+                -pointsize 40 \
+                -fill white -stroke black -strokewidth 2 \
+                -draw "gravity NorthWest text 50,1030 '$TIMESTAMP'" \
+                -draw "gravity NorthWest text 1950,750 '$TIMESTAMP'" \
+                "$OUTPUT_FILE"
+                
               COUNT=$((COUNT + 1))
               
               sleep $INTERVAL
@@ -398,6 +418,7 @@
           rm -f "$PIDFILE"
           
           # Wait for any background conversions
+
           wait
           
           # Convert the final unfinished chunk
