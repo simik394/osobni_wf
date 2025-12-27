@@ -45,3 +45,14 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Model Routing**: Use OpenAI `model` field to route requests to different backends (e.g., `gemini-rsrch` → Gemini, `perplexity` → Perplexity.ai).
 - **Session via Request Body**: Extend OpenAI API with `session` field in request body for conversation continuity. Echo session in response. Use `session: "new"` to start fresh conversation.
 
+## Visualization & Rendering (Phase 4 Refinements)
+- **Rendering at Scale**: For large codebases, Mermaid's auto-rendering can lead to unreadable PNGs or high node density. Providing PlantUML as a fallback solves this, as it handles complex layouts more gracefully.
+- **Experimental Online Rendering**: When local installations (Java/PlantUML) are unavailable due to environment restrictions (e.g., sudo required), providing a direct PUML source and an online renderer link is a robust interoperability strategy.
+- **Syntax Sensitivity**: Mermaid syntax is brittle; triple braces `{{{ }}}` are invalid for hexagons. Prefer `(( ))` for circular nodes or explicit `{{ }}` for hexagons when conflicts with template engines aren't an issue.
+
+## Multi-Diagram Strategy (Phase 5 Refinements)
+- **Diagram Splitting**: For high-density reports, splitting Mermaid into "Structure" (DEFINES) and "Dependencies" (IMPORTS) dramatically improves scannability and prevents rendering timeouts.
+- **Multi-Block PlantUML**: PlantUML supports multiple `@startuml ... @enduml` blocks in a single `.puml` file. This is an efficient way to provide Architecture, Package, and Class views without cluttering the filesystem.
+- **Truncation Limits**: HTML reports embedding raw graph source need large truncation limits (at least 1MB) for complex codebases to avoid silent data loss in the UI.
+- **Zero-Config Rendering**: For tools like PlantUML, implementing a local Deflate/Base64 encoder allows generating "View in Browser" links (via `plantuml.com/svg/~h...`) that work for local files without requiring a local rendering engine or public hosting.
+
