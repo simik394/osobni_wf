@@ -24,5 +24,6 @@ Thumbs.db
 vault_keys.json
 cached-sources/
 **/__pycache__/
-*.pycagents/_report_archive/
+*.pyc
+agents/_report_archive/
 lmstudio_dump.html
