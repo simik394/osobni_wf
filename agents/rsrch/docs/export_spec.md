@@ -169,11 +169,11 @@ On sync:
 
 # WBS
 
-## Phase 1: Core Export
-- [ ] Create `src/exporter.ts` module
-- [ ] Implement `exportToMarkdown(conversation)`
-- [ ] Implement `exportToJson(conversation)`
-- [ ] Add CLI command `rsrch graph export`
+## Phase 1: Core Export ✅
+- [x] Create `src/exporter.ts` module
+- [x] Implement `exportToMarkdown(conversation)`
+- [x] Implement `exportToJson(conversation)`
+- [x] Add CLI command `rsrch graph export`
 
 ## Phase 2: Delta Tracking
 - [ ] Add `contentHash` field to Conversation node in graph-store
