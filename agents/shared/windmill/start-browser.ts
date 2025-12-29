@@ -9,7 +9,8 @@ import { ensureBrowserRunning, getJobStatus, AgentType } from '../../shared/noma
 
 export async function main(
     agent: 'rsrch' | 'angrav',
-    timeout_seconds: number = 90
+    timeout_seconds: number = 90,
+    profile_name: string = 'default'
 ): Promise<{
     success: boolean;
     address: string;
@@ -20,7 +21,8 @@ export async function main(
     try {
         const result = await ensureBrowserRunning(
             agent as AgentType,
-            timeout_seconds * 1000
+            timeout_seconds * 1000,
+            profile_name
         );
 
         const status = await getJobStatus(agent as AgentType);

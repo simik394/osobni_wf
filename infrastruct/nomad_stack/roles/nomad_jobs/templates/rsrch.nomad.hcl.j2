@@ -1,5 +1,5 @@
 job "rsrch" {
-  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
+  datacenters = ["oci-eu"]
   type        = "service"
 
   group "server" {

@@ -5,6 +5,8 @@
  * Allows starting/stopping browser containers on-demand.
  */
 
+declare const process: any;
+
 // Default Nomad configuration
 const NOMAD_ADDR = process.env.NOMAD_ADDR || 'http://nomad.service.consul:4646';
 const NOMAD_TOKEN = process.env.NOMAD_TOKEN || '';
@@ -23,10 +25,7 @@ interface JobStatus {
     healthy: boolean;
 }
 
-interface NomadHeaders {
-    'Content-Type': string;
-    'X-Nomad-Token'?: string;
-}
+type NomadHeaders = Record<string, string>;
 
 function getHeaders(): NomadHeaders {
     const headers: NomadHeaders = { 'Content-Type': 'application/json' };
@@ -55,14 +54,14 @@ export async function getJobStatus(agent: AgentType): Promise<JobStatus> {
             throw new Error(`Nomad API error: ${response.status}`);
         }
 
-        const job = await response.json();
+        const job = await response.json() as any;
 
         // Get allocations to check health
         const allocResponse = await fetch(`${NOMAD_ADDR}/v1/job/${jobName}/allocations`, {
             headers: getHeaders()
         });
 
-        const allocations = await allocResponse.json();
+        const allocations = await allocResponse.json() as any;
         const runningAllocs = allocations.filter((a: any) => a.ClientStatus === 'running');
         const healthyAllocs = runningAllocs.filter((a: any) =>
             a.DeploymentStatus?.Healthy === true
@@ -84,14 +83,40 @@ export async function getJobStatus(agent: AgentType): Promise<JobStatus> {
 /**
  * Start a Nomad job (if not already running)
  */
-export async function startJob(agent: AgentType): Promise<{ success: boolean; message: string }> {
+export async function startJob(agent: AgentType, profile?: string): Promise<{ success: boolean; message: string }> {
     const jobName = JOBS[agent];
 
-    // Check current status
-    const status = await getJobStatus(agent);
+    // Check availability only if using default profile, otherwise proceed to patch/restart
+    if (!profile || profile === 'default') {
+        const status = await getJobStatus(agent);
+        if (status.status === 'running' && status.healthy) {
+            // We can't easily check *which* profile is running without inspecting, so assume default if running.
+            // A more robust check would inspect the running job to see if the volume matches.
+            // For now, if user requests a specific profile, we might want to force restart if it's not the current one.
+            // BUT, to keep it simple: if running and healthy, we assume it's OK unless we explicitly want to force a switch.
+            // Let's rely on the user stopping it if they want to switch, OR we inspect.
 
-    if (status.status === 'running' && status.healthy) {
-        return { success: true, message: `Job ${jobName} is already running` };
+            // Let's inspector check:
+            try {
+                const jobResponse = await fetch(`${NOMAD_ADDR}/v1/job/${jobName}`, { headers: getHeaders() });
+                const job = await jobResponse.json() as any;
+                const volumes = job.TaskGroups?.[0]?.Tasks?.[0]?.Config?.volumes || [];
+                const currentProfile = volumes[0]?.split(':')[0]?.split('/').pop();
+
+                if (currentProfile === 'default') {
+                    return { success: true, message: `Job ${jobName} is already running with default profile` };
+                }
+            } catch (e) {
+                // ignore inspect error, proceed to restart logic
+            }
+        }
+    }
+
+    if (profile) {
+        // Validate profile name strictly
+        if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+            return { success: false, message: `Invalid profile name: ${profile}. Must be alphanumeric.` };
+        }
     }
 
     try {
@@ -107,9 +132,26 @@ export async function startJob(agent: AgentType): Promise<{ success: boolean; me
             };
         }
 
-        const job = await jobResponse.json();
+        const job = await jobResponse.json() as any;
 
-        // Re-run the job (this scales it back up if stopped)
+        // Patch the volume if profile is requested
+        if (profile) {
+            // Locate the task config
+            const taskGroup = job.TaskGroups?.[0];
+            const task = taskGroup?.Tasks?.find((t: any) => t.Name === 'chromium');
+
+            if (task && task.Config && Array.isArray(task.Config.volumes)) {
+                // We expect volume format "/opt/rsrch/profiles/XXX:/app/user-data"
+                // Pass only the profile name, construct absolute path
+                const newVolume = `/opt/rsrch/profiles/${profile}:/app/user-data`;
+                task.Config.volumes = [newVolume];
+                console.log(`🔧 Patching job ${jobName} to use profile: ${profile}`);
+            } else {
+                console.warn(`⚠️ Could not find task 'chromium' or volumes config in job ${jobName}. Profile patching may fail.`);
+            }
+        }
+
+        // Re-run the job (this scales it back up if stopped, and updates definition if patched)
         const runResponse = await fetch(`${NOMAD_ADDR}/v1/job/${jobName}`, {
             method: 'POST',
             headers: getHeaders(),
@@ -121,7 +163,7 @@ export async function startJob(agent: AgentType): Promise<{ success: boolean; me
             throw new Error(`Failed to start job: ${error}`);
         }
 
-        console.log(`✅ Started job ${jobName}`);
+        console.log(`✅ Started job ${jobName} (Profile: ${profile || 'default'})`);
         return { success: true, message: `Job ${jobName} started` };
 
     } catch (error: any) {
@@ -201,7 +243,7 @@ export async function getServiceAddress(agent: AgentType): Promise<string | null
         const consulResponse = await fetch(`${consulAddr}/v1/health/service/${jobName}?passing=true`);
 
         if (consulResponse.ok) {
-            const services = await consulResponse.json();
+            const services = await consulResponse.json() as any;
             if (services.length > 0) {
                 const svc = services[0].Service;
                 return `${svc.Address}:${svc.Port}`;
@@ -217,7 +259,7 @@ export async function getServiceAddress(agent: AgentType): Promise<string | null
             return null;
         }
 
-        const allocations = await allocResponse.json();
+        const allocations = await allocResponse.json() as any;
         const runningAlloc = allocations.find((a: any) => a.ClientStatus === 'running');
 
         if (!runningAlloc) {
@@ -233,7 +275,7 @@ export async function getServiceAddress(agent: AgentType): Promise<string | null
             return null;
         }
 
-        const detail = await detailResponse.json();
+        const detail = await detailResponse.json() as any;
         const network = detail.AllocatedResources?.Shared?.Networks?.[0];
 
         if (network) {
@@ -258,16 +300,30 @@ export async function getServiceAddress(agent: AgentType): Promise<string | null
  */
 export async function ensureBrowserRunning(
     agent: AgentType,
-    startTimeoutMs: number = 90000
+    startTimeoutMs: number = 90000,
+    profile?: string
 ): Promise<{ address: string; wasStarted: boolean }> {
 
-    // Check if already running
-    let status = await getJobStatus(agent);
+    // Check if already running (and potentially correct profile check logic here if we wanted strictly enforced profiles)
+    // For now, startJob handles the profile switch logic (it will restart/update if needed) mechanism
+
+    // We force a "start" call if a profile is requested, to ensure the job definition is updated
+    // Simple check: if no profile requested, check health first. 
+    // If profile requested, we can't trust simple health check without inspecting (which startJob does now).
+
+    let shouldStart = true;
+    if (!profile) {
+        const status = await getJobStatus(agent);
+        if (status.healthy) {
+            shouldStart = false;
+        }
+    }
+
     let wasStarted = false;
 
-    if (!status.healthy) {
-        console.log(`🚀 Browser for ${agent} not running, starting...`);
-        const result = await startJob(agent);
+    if (shouldStart) {
+        console.log(`🚀 Ensuring browser for ${agent} is running (Profile: ${profile || 'default'})...`);
+        const result = await startJob(agent, profile);
 
         if (!result.success) {
             throw new Error(`Failed to start browser: ${result.message}`);

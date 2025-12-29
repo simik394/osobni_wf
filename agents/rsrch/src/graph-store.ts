@@ -634,7 +634,7 @@ export class GraphStore {
             OPTIONAL MATCH (c)-[:HAS_TURN]->(t:Turn)
             RETURN c, count(t) as turnCount
             ORDER BY c.capturedAt DESC
-            LIMIT ${limit}
+            LIMIT ${Number(limit) || 50}
         `);
 
         return (result.data || []).map((row: any) => {
@@ -736,20 +736,23 @@ export class GraphStore {
     // ====================
 
     /**
-     * Sync a scraped notebook from NotebookLM
+     * Sync a scraped notebook from NotebookLM.
+     * Uses MERGE for idempotent upsert - repeated executions update existing nodes.
      */
     async syncNotebook(data: {
         platformId: string;
         title: string;
         sources: Array<{ type: string; title: string; url?: string }>;
-        audioOverviews: Array<{ title: string; hasTranscript: boolean }>;
-    }): Promise<{ id: string; isNew: boolean }> {
+        artifacts?: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'other'; title: string }>;
+        audioOverviews?: Array<{ title: string; hasTranscript: boolean }>; // Deprecated, kept for compatibility
+        messages?: Array<{ role: 'user' | 'ai'; contentPreview: string }>;
+    }): Promise<{ id: string; isNew: boolean; sourcesCount: number; artifactsCount: number; messagesCount: number }> {
         if (!this.graph) throw new Error('Not connected');
 
         const capturedAt = Date.now();
         const id = `nb_${data.platformId}`;
 
-        // Check if notebook exists
+        // MERGE notebook (creates if not exists, updates if exists)
         const existing = await this.graph.query<any[]>(`
             MATCH (n:Notebook {platformId: '${escapeString(data.platformId)}'})
             RETURN n.id as id
@@ -757,61 +760,103 @@ export class GraphStore {
 
         const isNew = !existing.data || existing.data.length === 0;
 
-        if (isNew) {
-            // Create notebook
-            await this.graph.query(`
-                MERGE (a:Agent {id: 'notebooklm'})
-                CREATE (n:Notebook {
-                    id: '${id}',
-                    platformId: '${escapeString(data.platformId)}',
-                    title: '${escapeString(data.title)}',
-                    sourceCount: ${data.sources.length},
-                    audioCount: ${data.audioOverviews.length},
-                    capturedAt: ${capturedAt}
-                })
-                CREATE (a)-[:OWNS]->(n)
-            `);
+        // Create or update notebook
+        await this.graph.query(`
+            MERGE (a:Agent {id: 'notebooklm'})
+            MERGE (n:Notebook {platformId: '${escapeString(data.platformId)}'})
+            ON CREATE SET 
+                n.id = '${id}',
+                n.title = '${escapeString(data.title)}',
+                n.createdAt = ${capturedAt}
+            ON MATCH SET 
+                n.title = '${escapeString(data.title)}'
+            SET n.capturedAt = ${capturedAt},
+                n.sourceCount = ${data.sources.length},
+                n.artifactCount = ${data.artifacts?.length || 0}
+            MERGE (a)-[:OWNS]->(n)
+        `);
 
-            // Add sources
-            for (const source of data.sources) {
-                const srcId = `src_${id}_${Math.random().toString(36).substring(2, 8)}`;
-                await this.graph.query(`
-                    MATCH (n:Notebook {id: '${id}'})
-                    CREATE (s:Source {
-                        id: '${srcId}',
-                        type: '${source.type}',
-                        title: '${escapeString(source.title)}',
-                        url: '${escapeString(source.url || '')}'
-                    })
-                    CREATE (n)-[:HAS_SOURCE]->(s)
-                `);
-            }
-
-            // Add audio overviews
-            for (const audio of data.audioOverviews) {
-                const audioId = `audio_${id}_${Math.random().toString(36).substring(2, 8)}`;
-                await this.graph.query(`
-                    MATCH (n:Notebook {id: '${id}'})
-                    CREATE (ao:AudioOverview {
-                        id: '${audioId}',
-                        title: '${escapeString(audio.title)}',
-                        hasTranscript: ${audio.hasTranscript}
-                    })
-                    CREATE (n)-[:HAS_AUDIO]->(ao)
-                `);
-            }
-
-            console.log(`[GraphStore] Synced new notebook: ${id} (${data.sources.length} sources, ${data.audioOverviews.length} audio)`);
-        } else {
-            // Update capturedAt
+        // MERGE sources (by title within notebook scope)
+        let sourcesCount = 0;
+        for (const source of data.sources) {
             await this.graph.query(`
                 MATCH (n:Notebook {id: '${id}'})
-                SET n.capturedAt = ${capturedAt}, n.sourceCount = ${data.sources.length}, n.audioCount = ${data.audioOverviews.length}
+                MERGE (s:Source {notebookId: '${id}', title: '${escapeString(source.title)}'})
+                ON CREATE SET 
+                    s.id = 'src_${id}_${Math.random().toString(36).substring(2, 8)}',
+                    s.createdAt = ${capturedAt}
+                SET s.type = '${source.type}',
+                    s.url = '${escapeString(source.url || '')}',
+                    s.updatedAt = ${capturedAt}
+                MERGE (n)-[:HAS_SOURCE]->(s)
             `);
-            console.log(`[GraphStore] Touched notebook: ${id}`);
+            sourcesCount++;
         }
 
-        return { id, isNew };
+        // MERGE artifacts (by title and type within notebook scope)
+        let artifactsCount = 0;
+        if (data.artifacts) {
+            for (const artifact of data.artifacts) {
+                await this.graph.query(`
+                    MATCH (n:Notebook {id: '${id}'})
+                    MERGE (art:Artifact {notebookId: '${id}', title: '${escapeString(artifact.title)}'})
+                    ON CREATE SET 
+                        art.id = 'art_${id}_${Math.random().toString(36).substring(2, 8)}',
+                        art.createdAt = ${capturedAt}
+                    SET art.type = '${artifact.type}',
+                        art.updatedAt = ${capturedAt}
+                    MERGE (n)-[:HAS_ARTIFACT]->(art)
+                `);
+                artifactsCount++;
+            }
+        }
+
+        // MERGE messages (deduplicate by content and notebookId)
+        let messagesCount = 0;
+        if (data.messages) {
+            for (const msg of data.messages) {
+                // Create a simple hash/id for the message based on content
+                const contentHash = Buffer.from(msg.contentPreview).toString('base64').substring(0, 32);
+
+                await this.graph.query(`
+                    MATCH (n:Notebook {id: '${id}'})
+                    MERGE (m:Message {notebookId: '${id}', contentHash: '${contentHash}'})
+                    ON CREATE SET 
+                        m.id = 'msg_${id}_${Math.random().toString(36).substring(2, 8)}',
+                        m.createdAt = ${capturedAt},
+                        m.role = '${msg.role}',
+                        m.content = '${escapeString(msg.contentPreview)}'
+                    SET m.updatedAt = ${capturedAt}
+                    MERGE (n)-[:HAS_MESSAGE]->(m)
+                `);
+                messagesCount++;
+            }
+        }
+
+        console.log(`[GraphStore] ${isNew ? 'Created' : 'Updated'} notebook: ${id} (${sourcesCount} sources, ${artifactsCount} artifacts, ${messagesCount} messages)`);
+        return { id, isNew, sourcesCount, artifactsCount, messagesCount };
+    }
+
+    /**
+     * Link an audio overview to the sources used to generate it
+     */
+    async linkAudioToSources(notebookPlatformId: string, audioTitle: string, sourceTitles: string[]): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        // This assumes the AudioOverview and Sources already exist (e.g. via syncNotebook or added previously)
+        // We match by title within the scope of the notebook
+
+        console.log(`[GraphStore] Linking audio "${audioTitle}" to ${sourceTitles.length} sources in notebook "${notebookPlatformId}"`);
+
+        // Create relationship to each source
+        for (const sourceTitle of sourceTitles) {
+            await this.graph.query(`
+                MATCH (n:Notebook {platformId: '${escapeString(notebookPlatformId)}'})-[:HAS_AUDIO]->(ao:AudioOverview {title: '${escapeString(audioTitle)}'})
+                MATCH (n)-[:HAS_SOURCE]->(s:Source {title: '${escapeString(sourceTitle)}'})
+                MERGE (ao)-[r:GENERATED_FROM]->(s)
+                SET r.createdAt = ${Date.now()}
+            `);
+        }
     }
 
     /**

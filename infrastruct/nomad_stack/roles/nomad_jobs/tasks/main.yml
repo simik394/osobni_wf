@@ -97,7 +97,23 @@
     group: 1000
     mode: "0750"
 
-- name: Copy Nomad job files
+- name: Create rsrch secrets directory
+  ansible.builtin.file:
+    path: /opt/rsrch/secrets
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0700"
+
+- name: Copy rsrch auth.json
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../agents/rsrch/auth.json"
+    dest: /opt/rsrch/secrets/auth.json
+    owner: 1000
+    group: 1000
+    mode: "0600"
+
+- name: Copy Nomad job templates
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/opt/nomad/jobs/{{ item | basename | regex_replace('\\.j2$', '') }}"
@@ -138,6 +154,12 @@
 
 - name: Run n8n
   ansible.builtin.command: nomad job run /opt/nomad/jobs/n8n.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run Rsrch Server
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/rsrch.nomad.hcl
   environment:
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false

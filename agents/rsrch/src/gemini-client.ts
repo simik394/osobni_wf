@@ -146,10 +146,45 @@ export class GeminiClient {
                 // Assuming visible for now
             }
 
+            // Wait for history loading spinner
+            try {
+                await this.page.waitForSelector('.chat-history-list', { timeout: 5000 }).catch(() => { });
+                const spinner = this.page.locator('.loading-history-spinner-container');
+                if (await spinner.count() > 0) {
+                    console.log('[Gemini] Waiting for history spinner to disappear...');
+                    await spinner.last().waitFor({ state: 'hidden', timeout: 15000 }).catch(() => console.log('[Gemini] Spinner wait timed out'));
+                }
+            } catch (e) {
+                // Ignore
+            }
+
             const targetCount = offset + limit;
             console.log(`[Gemini] listing sessions (limit: ${limit}, offset: ${offset}, target: ${targetCount})...`);
 
             let sessionItems = this.page.locator('div.conversation[role="button"]');
+
+            // Fallback selectors if primary fails
+            if (await sessionItems.count() === 0) {
+                // Try anchor tags with session links
+                sessionItems = this.page.locator('a[href*="/app/"]');
+            }
+            if (await sessionItems.count() === 0) {
+                // Try generic list items in navigation
+                sessionItems = this.page.locator('nav [role="listitem"]');
+            }
+            if (await sessionItems.count() > 0) {
+                console.log(`[Gemini] Found sessions using selector: ${await sessionItems.first().evaluate(el => el.tagName.toLowerCase() + (el.className ? '.' + el.className.split(' ').join('.') : ''))} `);
+            } else {
+                console.log('[Gemini] DEBUG: DOM Dump for Sidebar:');
+                // Try to locate the sidebar container and dump its HTML
+                const sidebar = this.page.locator('nav, [role="navigation"]').first();
+                if (await sidebar.isVisible()) {
+                    console.log(await sidebar.innerHTML().catch(() => 'Sidebar found but could not read HTML'));
+                } else {
+                    console.log('No navigation/sidebar found visible.');
+                }
+            }
+
             let count = await sessionItems.count();
 
             // Scroll to load more if needed
@@ -170,7 +205,13 @@ export class GeminiClient {
                     await this.page.waitForTimeout(1000);
                 }
 
-                sessionItems = this.page.locator('div.conversation[role="button"]');
+                // Refresh selector count
+                if (await this.page.locator('div.conversation[role="button"]').count() > 0) {
+                    sessionItems = this.page.locator('div.conversation[role="button"]');
+                } else if (await this.page.locator('a[href*="/app/"]').count() > 0) {
+                    sessionItems = this.page.locator('a[href*="/app/"]');
+                }
+
                 count = await sessionItems.count();
                 console.log(`[Gemini] Loaded ${count} sessions (Goal: ${targetCount})...`);
 

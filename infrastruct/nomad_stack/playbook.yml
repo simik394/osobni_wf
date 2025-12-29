@@ -27,3 +27,4 @@
     ansible_python_interpreter: /usr/bin/python3
   roles:
     - role: nomad_jobs
+      tags: [nomad_jobs]

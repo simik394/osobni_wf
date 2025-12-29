@@ -2,13 +2,13 @@ import { chromium } from 'playwright-extra';
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'playwright';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+// import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Add stealth plugin
-chromium.use(StealthPlugin());
+// chromium.use(StealthPlugin());
 
 interface Session {
     id: string;

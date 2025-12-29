@@ -175,7 +175,7 @@ async function main() {
                 await sendServerRequest('/notebook/add-drive-source', { docNames, notebookTitle });
             }
 
-        } else if (subArg1 === 'audio') {
+        } else if (subArg1 === 'generate-audio' || subArg1 === 'audio') {
             let notebookTitle = undefined;
             let sources: string[] = [];
             let customPrompt: string | undefined = undefined;
@@ -213,8 +213,53 @@ async function main() {
             }
 
             if (isLocalExecution()) {
+                // Import graph store for syncing
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
                 await runLocalNotebookAction({}, async (client, notebook) => {
-                    await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
+                    // 1. Generate Audio
+                    const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
+
+                    if (dryRun) return;
+
+                    if (result.success && result.artifactTitle) {
+                        console.log(`\n[Audio] Generation successful. New artifact: "${result.artifactTitle}"`);
+
+                        // 2. Scrape & Sync to persist new audio node
+                        // We need the platformId (notebook ID) to link
+                        // If notebookTitle was passed, we might need to find the ID. 
+                        // Scrape returns platformId.
+                        try {
+                            if (notebookTitle) {
+                                await store.connect(graphHost, 6379);
+                                console.log('[Audio] Syncing notebook state to graph...');
+                                const data = await notebook.scrapeNotebook(notebookTitle, false);
+                                const syncResult = await store.syncNotebook(data);
+
+                                // 3. Link Sources
+                                if (sources.length > 0) {
+                                    console.log('[Audio] Linking audio to sources in graph...');
+                                    await store.linkAudioToSources(syncResult.id.replace('nb_', ''), result.artifactTitle, sources);
+                                    console.log('[Audio] Lineage recorded.');
+                                }
+                            } else {
+                                console.warn('[Audio] No notebook title provided, skipping graph sync/link. (Cannot reliably determine notebook context without title)');
+                            }
+                        } catch (e: any) {
+                            console.error('[Audio] Failed to sync graph:', e.message);
+                        } finally {
+                            await store.disconnect();
+                        }
+
+                    } else if (result.success) {
+                        console.log('\n[Audio] Generation successful (or existing), but no new unique artifact identified (or no wait).');
+                        // We could still sync here just in case
+                    } else {
+                        console.error('\n[Audio] Generation failed.');
+                        process.exit(1);
+                    }
                 });
             } else {
                 await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt, dryRun });
@@ -368,6 +413,143 @@ async function main() {
                 console.log('Server mode for notebook sync not yet implemented. Use --local.');
             }
 
+        } else if (subArg1 === 'list') {
+            // rsrch notebook list [--local]
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    const notebooks = await notebook.listNotebooks();
+                    console.log(JSON.stringify(notebooks, null, 2));
+                });
+            } else {
+                await sendServerRequest('/notebook/list');
+            }
+
+        } else if (subArg1 === 'stats') {
+            // rsrch notebook stats "Title" [--local]
+            const title = subArg2;
+            if (!title) {
+                console.error('Usage: rsrch notebook stats "Notebook Title" [--local]');
+                process.exit(1);
+            }
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    const stats = await notebook.getNotebookStats(title);
+                    console.log(JSON.stringify(stats, null, 2));
+                });
+            } else {
+                await sendServerRequest('/notebook/stats', { title });
+            }
+
+        } else if (subArg1 === 'sources') {
+            // rsrch notebook sources "Title" [--local]
+            const title = subArg2;
+            if (!title) {
+                console.error('Usage: rsrch notebook sources "Notebook Title" [--local]');
+                process.exit(1);
+            }
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.openNotebook(title);
+                    const sources = await notebook.getSources();
+                    console.log(JSON.stringify(sources, null, 2));
+                });
+            } else {
+                await sendServerRequest('/notebook/sources', { title });
+            }
+
+        } else if (subArg1 === 'messages') {
+            // rsrch notebook messages "Title" [--local]
+            const title = subArg2;
+            if (!title) {
+                console.error('Usage: rsrch notebook messages "Notebook Title" [--local]');
+                process.exit(1);
+            }
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.openNotebook(title);
+                    const messages = await notebook.getChatMessages();
+                    console.log(JSON.stringify(messages, null, 2));
+                });
+            } else {
+                await sendServerRequest('/notebook/messages', { title });
+            }
+
+        } else if (subArg1 === 'download-audio') {
+            // rsrch notebook download-audio --titles "A,B,C" --output "/path/to/dir" [--local]
+            const parseArgs = require('util').parseArgs;
+            const options = {
+                titles: { type: 'string' },
+                output: { type: 'string' },
+                local: { type: 'boolean' }
+            };
+            const { values } = parseArgs({ args, options, allowPositionals: true });
+
+            const titlesArg = values.titles;
+            const outputDir = values.output;
+
+            if (!titlesArg || !outputDir) {
+                console.error('Usage: rsrch notebook download-audio --titles "Notebook1,Notebook2" --output "/path/to/dir" [--local]');
+                console.error('       Use --titles "all" to download from all notebooks');
+                process.exit(1);
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    let notebooksToProcess: string[] = [];
+
+                    if (titlesArg === 'all' || titlesArg === '*') {
+                        console.log('[Batch] Fetching all notebooks...');
+                        const allNotebooks = await notebook.listNotebooks();
+                        notebooksToProcess = allNotebooks.map((n: { title: string }) => n.title);
+                        console.log(`[Batch] Found ${notebooksToProcess.length} notebooks.`);
+                    } else {
+                        notebooksToProcess = (titlesArg as string).split(',').map((t: string) => t.trim());
+                    }
+
+                    for (const title of notebooksToProcess) {
+                        console.log(`[Batch] Processing "${title}"...`);
+                        try {
+                            // Scrape and download with custom output directory
+                            const result = await notebook.scrapeNotebook(title, true, {
+                                outputDir: outputDir as string,
+                                // Sanitize filename: Title_Timestamp.mp3
+                                filename: `${title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}_${Date.now()}.mp3`
+                            });
+
+                            const audioCount = result.audioOverviews.length;
+                            if (audioCount > 0) {
+                                console.log(`[Batch] ✅ Downloaded audio for "${title}"`);
+                            } else {
+                                console.log(`[Batch] ⚠️ No audio found for "${title}"`);
+                            }
+                        } catch (e: any) {
+                            console.error(`[Batch] ❌ Error processing "${title}": `, e.message);
+                        }
+                    }
+                });
+            } else {
+                // Server-side implementation would go here (omitted for now as requested user only asked for CLI)
+                console.error('Batch download currently only supported in --local mode.');
+                process.exit(1);
+            }
+
+        } else if (subArg1 === 'artifacts') {
+            // rsrch notebook artifacts "Title" [--local]
+            const title = subArg2;
+            if (!title) {
+                console.error('Usage: rsrch notebook artifacts "Notebook Title" [--local]');
+                process.exit(1);
+            }
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.openNotebook(title);
+                    const artifacts = await notebook.getStudioArtifacts();
+                    console.log(JSON.stringify(artifacts, null, 2));
+                });
+            } else {
+                await sendServerRequest('/notebook/artifacts', { title });
+            }
+
         } else {
             console.log('NotebookLM commands:');
             console.log('  rsrch notebook create "Title" [--local]');
@@ -376,7 +558,12 @@ async function main() {
             console.log('  rsrch notebook generate-audio --notebook "Title" [--sources "A,B"] [--prompt "Prompt"] [--wet] [--local]');
             console.log('  rsrch notebook download-audio [path] --notebook "Title" [--latest] [--pattern "regex"] [--local]');
             console.log('  rsrch notebook download-all-audio [dir] --notebook "Title" [--local]');
-            console.log('  rsrch notebook sync [--title "Title"] [-a] [--local] # Sync metadata or full content');
+            console.log('  rsrch notebook sync [--title "Title"] [-a] [--local]');
+            console.log('  rsrch notebook list [--local]');
+            console.log('  rsrch notebook stats "Title" [--local]');
+            console.log('  rsrch notebook sources "Title" [--local]');
+            console.log('  rsrch notebook messages "Title" [--local]');
+            console.log('  rsrch notebook artifacts "Title" [--local]');
         }
 
     } else if (command === 'graph') {
@@ -395,7 +582,7 @@ async function main() {
                 await store.connect(graphHost, 6379);
                 const notebooks = await store.getNotebooks(limit);
 
-                console.log(`\n=== Synced Notebooks (${notebooks.length}) ===\n`);
+                console.log(`\n === Synced Notebooks(${notebooks.length}) ===\n`);
                 if (notebooks.length === 0) {
                     console.log('No notebooks found. Run "rsrch notebook sync" first.\n');
                 } else {
@@ -430,7 +617,7 @@ async function main() {
 
                     const conversations = await store.getConversationsByPlatform('gemini', limit);
 
-                    console.log(`\n=== Synced Conversations (${conversations.length}) ===\n`);
+                    console.log(`\n === Synced Conversations(${conversations.length}) ===\n`);
                     console.table(conversations.map((c: any) => ({
                         ID: c.id,
                         Title: c.title,
@@ -474,11 +661,11 @@ async function main() {
                 }
             }
 
-            console.log(`\n[Export] Platform: ${platform}, Format: ${format}, Output: ${outputDir}`);
+            console.log(`\n[Export] Platform: ${platform}, Format: ${format}, Output: ${outputDir} `);
             if (since) {
-                console.log(`[Export] Since: ${new Date(since).toISOString()}`);
+                console.log(`[Export] Since: ${new Date(since).toISOString()} `);
             }
-            console.log(`[Export] Limit: ${limit}\n`);
+            console.log(`[Export] Limit: ${limit} \n`);
 
             const { exportBulk } = await import('./exporter');
 
@@ -492,14 +679,14 @@ async function main() {
                     includeThinking: true
                 });
 
-                console.log(`\n=== Export Complete ===`);
+                console.log(`\n === Export Complete === `);
                 console.log(`Exported ${results.length} conversations`);
                 results.forEach(r => {
-                    console.log(`  ✓ ${r.path}`);
+                    console.log(`  ✓ ${r.path} `);
                 });
                 console.log('');
             } catch (error: any) {
-                console.error(`Export failed: ${error.message}`);
+                console.error(`Export failed: ${error.message} `);
                 process.exit(1);
             }
         } else {
@@ -578,13 +765,13 @@ async function main() {
                     const result = await gemini.startDeepResearch(query);
 
                     console.log('\n--- Deep Research Result ---');
-                    console.log(`Status: ${result.status}`);
+                    console.log(`Status: ${result.status} `);
                     if (result.googleDocId) {
-                        console.log(`Google Doc ID: ${result.googleDocId}`);
-                        console.log(`Google Doc URL: ${result.googleDocUrl}`);
+                        console.log(`Google Doc ID: ${result.googleDocId} `);
+                        console.log(`Google Doc URL: ${result.googleDocUrl} `);
                     }
                     if (result.error) {
-                        console.log(`Error: ${result.error}`);
+                        console.log(`Error: ${result.error} `);
                     }
                     console.log('----------------------------\n');
                 });
@@ -611,7 +798,7 @@ async function main() {
                     const success = await gemini.openSession(identifier);
                     if (success) {
                         const sessionId = gemini.getCurrentSessionId();
-                        console.log(`\nSession opened: ${sessionId}`);
+                        console.log(`\nSession opened: ${sessionId} `);
                         console.log(`URL: https://gemini.google.com/app/${sessionId}\n`);
                     } else {
                         console.error(`Failed to open session: ${identifier}`);

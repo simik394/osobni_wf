@@ -54,8 +54,17 @@ Scrape notebook content, sources, and audio artifacts from NotebookLM and store 
 | `duration` | Length in seconds | P1 |
 | `createdAt` | Generation timestamp | P1 |
 | `customPrompt` | Prompt used (if available) | P2 |
+| `sourceRefs` | List of sources used for generation | P1 |
 | `transcript` | Full transcript (if extractable) | P1 |
 | `downloadUrl` | Direct download link | P0 |
+
+### 4.4 Research & Sources (New)
+| Data Point | Description | Priority |
+|------------|-------------|----------|
+| `searchMode` | "Fast" or "Deep" (Rychlý/Hloubkový) | P1 |
+| `searchQuery` | Web search query used | P1 |
+| `sourceType` | Web, Drive, PDF, Copied Text | P0 |
+| `contentHash` | For deduplication | P1 |
 
 ### 4.4 Chat History (per notebook)
 | Data Point | Description | Priority |
@@ -83,8 +92,9 @@ Scrape notebook content, sources, and audio artifacts from NotebookLM and store 
     createdAt,
     capturedAt
   })
-    -[:HAS_SOURCE]-> (Source {id, type, title, url, contentPreview})
+    -[:HAS_SOURCE]-> (Source {id, type, title, url, contentPreview, contentHash})
     -[:HAS_AUDIO]-> (AudioOverview {id, title, duration, transcript, localPath})
+        -[:GENERATED_FROM]-> (Source)
     -[:HAS_CHAT]-> (ChatTurn {role, content, timestamp})
     -[:HAS_NOTE]-> (Note {content, sourceRef})
     

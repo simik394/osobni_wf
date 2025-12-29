@@ -34,7 +34,7 @@ job "rsrch-browser" {
         
         # Docker bind mount for persistent Chrome profile
         volumes = [
-          "/opt/rsrch/chrome-profile:/app/user-data"
+          "/opt/rsrch/profiles/default:/app/user-data"
         ]
       }
 

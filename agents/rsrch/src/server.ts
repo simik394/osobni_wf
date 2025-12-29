@@ -886,9 +886,12 @@ Focus on depth, nuance, and covering aspects that might be missing above.
 
                 // 5. Generate Audio Overview
                 console.log(`[Job ${job.id}] Step 5: Audio Generation`);
+                // 5. Generate Audio Overview
+                console.log(`[Job ${job.id}] Step 5: Audio Generation`);
                 const audioPrompt = customPrompt || "Create a deep, engaging conversation about this research. Focus on the most surprising findings and the implications.";
 
-                await notebookClient.generateAudioOverview(safeTitle, undefined, audioPrompt, true, dryRun);
+                const genResult = await notebookClient.generateAudioOverview(safeTitle, undefined, audioPrompt, true, dryRun);
+                const generatedTitle = genResult.artifactTitle || 'Audio Overview'; // Fallback if no new artifact detected (shouldn't happen in clean run)
 
                 // 6. Download Audio
                 if (!dryRun) {
@@ -898,13 +901,20 @@ Focus on depth, nuance, and covering aspects that might be missing above.
                     const audioId = registry.registerAudio(docId, safeTitle, 'Audio Overview');
                     const cleanFilename = `${audioId}.mp3`;
 
-                    await notebookClient.downloadAudio(safeTitle, cleanFilename);
+                    // Download the specific artifact we just generated
+                    // If generatedTitle is different from "Audio Overview", downloadAudio needs to find it.
+                    // downloadAudio currently takes title pattern or latest. 
+                    // If we pass the exact title as pattern, it should work.
+                    await notebookClient.downloadAudio(safeTitle, cleanFilename, { audioTitlePattern: generatedTitle });
+
                     registry.updateLocalPath(audioId, cleanFilename);
                     console.log(`[Job ${job.id}] Audio saved to: ${cleanFilename}`);
 
-                    // Rename audio artifact in NotebookLM
+                    // Rename audio artifact in NotebookLM to match registry ID
                     const newAudioTitle = `${audioId} Audio Overview`;
-                    await notebookClient.renameArtifact('Audio Overview', newAudioTitle);
+                    if (generatedTitle !== newAudioTitle) {
+                        await notebookClient.renameArtifact(generatedTitle, newAudioTitle);
+                    }
                 } else {
                     console.log(`[Job ${job.id}] Step 6: Skipped Download (Dry Run)`);
                 }
