@@ -108,6 +108,22 @@
     group: 999
     mode: "0750"
 
+- name: Create Goose config directory
+  ansible.builtin.file:
+    path: /opt/goose/config
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Goose state directory
+  ansible.builtin.file:
+    path: /opt/goose/state
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Create rsrch secrets directory
   ansible.builtin.file:
     path: /opt/rsrch/secrets
@@ -139,6 +155,7 @@
     - angrav-browser.nomad.hcl.j2
     - rsrch.nomad.hcl.j2
     - memgraph.nomad.hcl.j2
+    - goose.nomad.hcl.j2
 
 - name: Run Traefik
   ansible.builtin.command: nomad job run /opt/nomad/jobs/traefik.nomad.hcl
@@ -178,6 +195,12 @@
 
 - name: Run Memgraph
   ansible.builtin.command: nomad job run /opt/nomad/jobs/memgraph.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run Goose
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/goose.nomad.hcl
   environment:
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false

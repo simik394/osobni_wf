@@ -1,0 +1,77 @@
+job "goose" {
+  datacenters = ["oci-eu"]
+  type        = "service"
+
+  group "goose" {
+    count = 1
+
+    network {
+      mode = "host"
+    }
+
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
+    }
+
+    task "goose" {
+      driver = "docker"
+
+      config {
+        image        = "ghcr.io/block/goose:latest"
+        network_mode = "host"
+        interactive  = true
+        tty          = true
+        
+        # Mount config and state directories for persistence
+        mounts = [
+          {
+            type     = "bind"
+            target   = "/root/.config/goose"
+            source   = "/opt/goose/config"
+            readonly = false
+          },
+          {
+            type     = "bind"
+            target   = "/root/.local/state/goose"
+            source   = "/opt/goose/state"
+            readonly = false
+          }
+        ]
+
+        # Keep container running
+        entrypoint = ["/bin/sh", "-c"]
+        args       = ["while true; do sleep 3600; done"]
+      }
+
+      env {
+        # OpenAI-compatible API configuration for Angrav
+        GOOSE_PROVIDER__TYPE = "openai"
+        OPENAI_API_KEY       = "not-needed-for-local"
+        OPENAI_BASE_URL      = "http://localhost:8099/v1"
+        GOOSE_MODEL          = "gemini-antigravity"
+        
+        HOME = "/root"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
+
+      service {
+        name = "goose"
+        
+        # TCP check on a known open port to verify container is running
+        check {
+          name     = "goose-alive"
+          type     = "script"
+          command  = "/bin/sh"
+          args     = ["-c", "true"]
+          interval = "30s"
+          timeout  = "5s"
+        }
+      }
+    }
+  }
+}
