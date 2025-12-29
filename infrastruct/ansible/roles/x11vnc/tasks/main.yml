@@ -27,10 +27,19 @@
   when: not vnc_passwd_file.stat.exists
   no_log: true
 
-- name: Get User UID
-  command: id -u "{{ ansible_user_id }}"
-  register: user_uid
-  changed_when: false
+- name: Allow VNC through firewall (UFW)
+  ufw:
+    rule: allow
+    port: "{{ vnc_port }}"
+    proto: tcp
+    comment: "Allow x11vnc"
+  become: true
+
+- name: Allow VNC specifically from Tailscale interface
+  shell: |
+    ufw allow in on tailscale0 to any port {{ vnc_port }}
+  become: true
+  ignore_errors: true
 
 - name: Create x11vnc systemd service
   copy:
@@ -43,11 +52,12 @@
 
       [Service]
       Type=simple
-      # Explicitly pointing to GDM Xauthority for the user
-      ExecStart=/usr/bin/x11vnc -display :0 -auth /run/user/{{ user_uid.stdout }}/gdm/Xauthority -forever -loop -noxdamage -repeat -rfbauth {{ ansible_env.HOME }}/.vnc/passwd -rfbport {{ vnc_port }} -shared
+      # -findauth is smarter than hardcoded paths or simple "guess"
+      # -display :0 is usually correct for the main session
+      ExecStart=/usr/bin/x11vnc -display :0 -findauth -forever -loop -noxdamage -repeat -rfbauth {{ ansible_env.HOME }}/.vnc/passwd -rfbport {{ vnc_port }} -shared
       ExecStop=/usr/bin/killall x11vnc
       Restart=on-failure
-      RestartSec=3
+      RestartSec=5
 
       [Install]
       WantedBy=multi-user.target
@@ -65,9 +75,11 @@
 - name: Display connection info
   debug:
     msg: |
-      VNC server configured!
-      Connect from Android using any VNC client (e.g., bVNC, RealVNC Viewer)
-      Address: {{ ansible_default_ipv4.address | default('YOUR_IP') }}:{{ vnc_port }}
+      VNC server configured using -findauth!
+
+      Connect via Tailscale (Secure):
+      Address: 100.92.153.10:{{ vnc_port }}
       Password: (the one you configured)
 
-      NOTE: Ensure you are logged in to the graphical session for VNC to work.
+      Connect via Local Network:
+      Address: {{ ansible_default_ipv4.address }}:{{ vnc_port }}
