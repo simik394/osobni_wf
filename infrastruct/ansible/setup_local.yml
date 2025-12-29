@@ -14,3 +14,7 @@
       #   lmstudio_version: "0.3.23-3"  # Override version if needed
     - role: input-leap
       tags: input-leap
+    - role: x11vnc
+      tags: x11vnc
+      # vars:
+      #   vnc_password: "your-secure-password"  # Pass via -e instead

@@ -1,0 +1,8 @@
+---
+# x11vnc role defaults
+
+# VNC port (default 5900)
+vnc_port: 5900
+
+# VNC password - CHANGE THIS or pass via --extra-vars
+vnc_password: "changeme"
