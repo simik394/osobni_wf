@@ -90,3 +90,10 @@ When wrapping browser automation as OpenAI-compatible API:
 ## Playwright & Browser Automation
 - **Stealth Plugin Dependencies**: `puppeteer-extra-plugin-stealth` can fail with "dependency not found (stealth/evasions/chrome.app)" in some persistent environments or when bundled. If this blocks execution, disabling the plugin is a valid temporary workaround for local tools, provided you don't aggressively scrape.
 - **Binary vs Source Execution**: When debugging CLI tools (like `rsrch`), always verify if the global command is an alias to a stale binary (`pkg` snapshot) or the actual local code. Prefer running `node dist/index.js` or `ts-node src/index.ts` directly during development to ensure you are testing the latest changes.
+
+## Infrastructure & Remote Browsers
+- **Host Networking & Zombies**: Running Docker containers with `network_mode: "host"` binds process ports directly to the host interface. If the container or entrypoint crashes (e.g. `socat`), the process may become a zombie or stay detached, holding the port and preventing restart. ALWAYS automate cleanup (e.g., `killall socat`, `docker rm -f`) in restart scripts or playbooks.
+- **Port Conflict Management**: When running multiple browser instances (e.g. `rsrch` + `angrav`), strictly assign distinct ports for VNC and CDP. Relying on "random selection" or defaults (5900, 9222) guarantees collisions.
+- **Sidecar Availability**: `socat` sidecars for port forwarding are brittle if the target (Chrome) isn't ready. Use a wait loop (poll port) or a dedicated startup script that sequences the browser launch before the proxy.
+- **ARM64 Compatibility**: Standard Selenium images often lack ARM64 support or are unoptimized. Use `seleniarm/standalone-chromium` for reliability on `aarch64` servers (like OCI Ampere A1).
+- **Docker Build Context**: When building images on a remote server, simple `scp` of the source directory is often faster and more reliable than configuring remote Docker contexts, especially for ad-hoc builds.

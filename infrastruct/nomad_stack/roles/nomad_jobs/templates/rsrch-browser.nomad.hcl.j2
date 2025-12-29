@@ -2,74 +2,94 @@ job "rsrch-browser" {
   datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
   type        = "service"
 
-  # This job can be stopped when not needed
-  # Use: nomad job stop rsrch-browser
-  # Start: nomad job run rsrch-browser.nomad.hcl
+  # Browser container with VNC + CDP access for Playwright automation
+  # VNC: 5900, CDP: 9223 (forwarded via sidecar)
+  # Note: User needs to manually launch Chrome with CDP inside VNC once,
+  # or use SSH to exec into container and start Chrome with debugging
 
   group "browser" {
     count = 1
 
     network {
       mode = "host"
-      port "cdp" {
-        static = 9223
-      }
     }
-
 
     constraint {
       attribute = "${node.class}"
       value     = "cloud"
     }
 
+    # Main browser task - Selenium standalone with VNC
     task "chromium" {
       driver = "docker"
 
       config {
-        # Use browserless/chrome which has proper VNC and CDP support
-        image = "browserless/chrome:latest"
-        
-        # Use host networking for direct port access
+        image        = "seleniarm/standalone-chromium:latest"
         network_mode = "host"
         
-        # Docker bind mount for persistent Chrome profile
         volumes = [
-          "/opt/rsrch/profiles/default:/app/user-data"
+          "/opt/rsrch/profiles/default:/home/seluser/chrome-profile",
+          "/opt/rsrch/entrypoint.sh:/entrypoint.sh:ro"
         ]
+        
+        # Use our custom entrypoint that starts both Selenium and Chrome with CDP
+        entrypoint = ["/entrypoint.sh"]
       }
 
       env {
-        # Port for browserless to listen on
-        PORT = "9223"
-        # Enable CDP
-        CONNECTION_TIMEOUT = "600000"
-        MAX_CONCURRENT_SESSIONS = "5"
-        ENABLE_DEBUGGER = "true"
-        # User data directory for persistence
-        CHROME_REFRESH_TIME = "0"
-        DEFAULT_USER_DATA_DIR = "/app/user-data"
+        SE_NODE_MAX_SESSIONS = "5"
+        VNC_NO_PASSWORD      = "1"
+        START_XVFB           = "true"
       }
 
       resources {
-        cpu    = 1000
-        memory = 2048
+        cpu    = 500
+        memory = 4096
       }
 
       service {
-        name = "rsrch-browser"
-        port = "cdp"
-        
-        tags = [
-          "browser",
-          "rsrch"
-        ]
+        name         = "rsrch-browser-vnc"
+        port         = 5900
+        address_mode = "driver"
+        tags         = ["browser", "vnc"]
+      }
+    }
+
+    # Sidecar: socat forwards 0.0.0.0:9223 -> localhost:9222
+    # This waits for Chrome CDP to be available before forwarding
+    task "cdp-proxy" {
+      driver = "docker"
+      
+      lifecycle {
+        hook    = "poststart"
+        sidecar = true
+      }
+
+      config {
+        image        = "alpine:latest"
+        network_mode = "host"
+        volumes      = ["/opt/rsrch/cdp_proxy.sh:/proxy.sh:ro"]
+        entrypoint   = ["/bin/sh", "/proxy.sh"]
+      }
+
+      resources {
+        cpu    = 50
+        memory = 128
+      }
+
+      service {
+        name         = "rsrch-browser-cdp"
+        port         = 9223
+        address_mode = "driver"
+        tags         = ["browser", "cdp", "rsrch"]
         
         check {
-          name     = "cdp-health"
-          type     = "http"
-          path     = "/json/version"
-          interval = "10s"
-          timeout  = "5s"
+          name         = "cdp-health"
+          type         = "http"
+          path         = "/json/version"
+          address_mode = "driver"
+          interval     = "30s"
+          timeout      = "10s"
         }
       }
     }

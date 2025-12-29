@@ -2,26 +2,17 @@ job "angrav-browser" {
   datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
   type        = "service"
 
-  # This job can be stopped when not needed
-  # Use: nomad job stop angrav-browser
-  # Start: nomad job run angrav-browser.nomad.hcl
+  # Antigravity (Windsurf IDE) Browser Container
+  # VNC: 5901, CDP Proxy: 9224
+  # Note: 5900/9223 used by rsrch-browser
 
   group "browser" {
     count = 1
 
     network {
-      mode = "bridge"
-      port "cdp" {
-        static = 9224
-        to      = 9223
-      }
-      port "vnc" {
-        static = 5901
-        to     = 5900
-      }
+      mode = "host"
     }
 
-    # Run on cloud nodes by default
     constraint {
       attribute = "${node.class}"
       value     = "cloud"
@@ -31,76 +22,42 @@ job "angrav-browser" {
       driver = "docker"
 
       config {
-        image = "mcr.microsoft.com/playwright:v1.40.0-focal"
-        ports = ["cdp", "vnc"]
+        image = "angrav-browser:v1"
+        network_mode = "host"
         
-        # Docker bind mount for persistent data
         volumes = [
-          "/opt/angrav/data:/app/user-data"
-        ]
-        
-        # Entrypoint that starts Xvfb, VNC, and Chrome with debugging port
-        entrypoint = ["/bin/bash", "-c"]
-        args = [<<EOF
-set -e
-# Start virtual framebuffer
-Xvfb :99 -screen 0 1920x1080x24 &
-export DISPLAY=:99
-sleep 1
-
-# Start VNC server
-x11vnc -display :99 -forever -shared -rfbport 5900 -bg -nopw || true
-
-# Start Chromium with debugging
-# Note: Install Angrav extension manually via VNC on first run
-chromium-browser \
-  --no-sandbox \
-  --disable-setuid-sandbox \
-  --disable-dev-shm-usage \
-  --disable-gpu \
-  --remote-debugging-address=0.0.0.0 \
-  --remote-debugging-port=9223 \
-  --user-data-dir=/app/user-data \
-  --disable-blink-features=AutomationControlled \
-  --window-size=1920,1080 \
-  about:blank
-
-wait
-EOF
+          "/opt/angrav/profiles/default:/home/angrav/.config/Antigravity",
+          "/opt/angrav/workspace:/workspace"
         ]
       }
 
       resources {
         cpu    = 1000
-        memory = 2048
-      }
-
-      service {
-        name = "angrav-browser"
-        port = "cdp"
-        
-        tags = [
-          "browser",
-          "angrav"
-        ]
-        
-        check {
-          name     = "cdp-health"
-          type     = "http"
-          path     = "/json/version"
-          interval = "10s"
-          timeout  = "5s"
-        }
+        memory = 4096
       }
 
       service {
         name = "angrav-browser-vnc"
-        port = "vnc"
+        port = 5901
+        address_mode = "driver"
+        tags = ["browser", "vnc", "angrav"]
+      }
+
+      service {
+        name = "angrav-browser-cdp"
+        port = 9224
+        address_mode = "driver"
+        tags = ["browser", "cdp", "angrav"]
         
-        tags = [
-          "vnc",
-          "debug"
-        ]
+        check {
+          name         = "cdp-health"
+          type         = "http"
+          path         = "/json/version"
+          port         = 9224
+          address_mode = "driver"
+          interval     = "10s"
+          timeout      = "5s"
+        }
       }
     }
   }
