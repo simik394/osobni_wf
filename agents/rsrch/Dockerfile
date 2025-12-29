@@ -2,22 +2,26 @@ FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
+# Copy package files first for layer caching
+COPY rsrch/package.json rsrch/package-lock.json* ./
+COPY shared ./shared/
+
+# Update package.json to point to the correct shared module path
+RUN sed -i 's|file:../shared|file:./shared|g' package.json
 
 # Install dependencies (browsers are already in the image)
 RUN npm install
 
-# Copy source files
-COPY . .
+# Copy rsrch source files
+COPY rsrch/src ./src/
+COPY rsrch/tsconfig.json ./
+COPY rsrch/*.sh ./
 
 # Build TypeScript
-RUN ls -la
 RUN npm run build
 
 # Expose HTTP server port
 EXPOSE 3000
 
 # Default: Run the HTTP server
-CMD ["npm", "run", "serve"]
-
+CMD ["node", "dist/index.js", "serve"]
