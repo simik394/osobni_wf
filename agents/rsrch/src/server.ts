@@ -210,6 +210,28 @@ app.post('/notebook/add-drive-source', async (req, res) => {
     }
 });
 
+app.post('/notebook/add-text', async (req, res) => {
+    try {
+        const { notebookTitle, text, sourceTitle } = req.body;
+
+        if (!text || typeof text !== 'string') {
+            return res.status(400).json({ success: false, error: 'text (string) is required' });
+        }
+
+        if (!notebookClient) {
+            notebookClient = await client.createNotebookClient();
+        }
+
+        console.log(`[Server] Adding text source (${text.length} chars) to notebook: ${notebookTitle || 'current'}`);
+        await notebookClient.addSourceText(text, sourceTitle, notebookTitle);
+
+        res.json({ success: true, message: 'Text source added' });
+    } catch (e: any) {
+        console.error('[Server] Add text source failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/notebook/generate-audio', async (req, res) => {
     try {
         const { notebookTitle, sources, customPrompt, dryRun } = req.body;
@@ -776,6 +798,38 @@ app.get('/gemini/list-research-docs', async (req, res) => {
     }
 });
 
+// Existing export-to-docs endpoint
+app.post('/gemini/export-to-docs', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!geminiClient) {
+            console.log('[Server] Creating Gemini client...');
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            console.log(`[Server] Navigating to session ${sessionId} for export...`);
+            await geminiClient.openSession(sessionId);
+        }
+
+        console.log('[Server] Exporting current session to Google Docs...');
+        const result = await geminiClient.exportCurrentToGoogleDocs();
+
+        if (result.docId) {
+            console.log(`[Server] Export success: ${result.docTitle} (${result.docId})`);
+            res.json({ success: true, data: result });
+        } else {
+            res.status(500).json({ success: false, error: 'Export failed - no document ID returned' });
+        }
+
+    } catch (e: any) {
+        console.error('[Server] Gemini export failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/gemini/get-research-info', async (req, res) => {
     try {
         const { sessionId } = req.body;
@@ -967,13 +1021,21 @@ process.on('SIGINT', async () => {
 // Start server
 export async function startServer() {
     try {
-        console.log('Initializing Perplexity client...');
-        await client.init();
+        // Try to connect browser, but don't fail startup if unavailable
+        console.log('Initializing Perplexity client (browser connection)...');
+        try {
+            await client.init();
+            console.log('[Server] Browser connected successfully.');
+        } catch (browserError: any) {
+            console.warn(`[Server] Browser not available at startup: ${browserError.message}`);
+            console.warn('[Server] Browser will connect lazily on first request.');
+        }
 
         // Connect to graph store
         console.log('[Server] Connecting to FalkorDB...');
         const graphHost = process.env.FALKORDB_HOST || 'localhost';
-        await graphStore.connect(graphHost, 6379);
+        const graphPort = parseInt(process.env.FALKORDB_PORT || '6379');
+        await graphStore.connect(graphHost, graphPort);
 
         // Check for interrupted jobs
         const runningJobs = await graphStore.listJobs('running');

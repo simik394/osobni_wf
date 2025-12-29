@@ -8,7 +8,7 @@ job "rsrch" {
     network {
       mode = "host"
       port "http" {
-        static = 3000
+        static = 3030
       }
     }
 
@@ -34,17 +34,19 @@ job "rsrch" {
       }
 
       env {
-        PORT = "3000"
-        BROWSER_CDP_ENDPOINT = "http://rsrch-browser.service.consul:9223"
+        PORT = "3030"
+        BROWSER_CDP_ENDPOINT = "http://localhost:9223"
         AUTH_FILE = "/secrets/auth.json"
         HEADLESS = "true" 
         DEBUG = "rsrch:*"
+        FALKORDB_HOST = "localhost"
+        FALKORDB_PORT = "7687"
       }
 
 
       # Resources
       resources {
-        cpu    = 500
+        cpu    = 200
         memory = 1024
       }
 

@@ -244,13 +244,16 @@ export async function exportBulk(
 
     try {
         // Get conversations from graph store
-        const conversations = await graphStore.getConversationsByPlatform(platform, options.limit || 50);
+        // If since is provided, utilize the optimized delta query
+        const conversations = options.since
+            ? await graphStore.getChangedConversations(options.since)
+            : await graphStore.getConversationsByPlatform(platform, options.limit || 50);
 
         const results: ExportResult[] = [];
 
         for (const conv of conversations) {
             // Skip if older than since parameter
-            if (options.since && conv.capturedAt < options.since) {
+            if (options.since && (conv.capturedAt || 0) < options.since) {
                 continue;
             }
 
@@ -264,9 +267,9 @@ export async function exportBulk(
             // Build export object
             const exportConv: ExportConversation = {
                 platform,
-                platformId: conv.platformId,
-                title: full.conversation.title || conv.title,
-                type: (full.conversation.type || conv.type) as 'regular' | 'deep-research',
+                platformId: conv.platformId || conv.id,
+                title: full.conversation.title || conv.title || 'Untitled',
+                type: (full.conversation.type || conv.type || 'regular') as 'regular' | 'deep-research',
                 turns: full.turns.map(t => ({
                     role: t.role as 'user' | 'assistant',
                     content: t.content,
@@ -278,12 +281,16 @@ export async function exportBulk(
                     sources: d.sources || [],
                     reasoningSteps: d.reasoningSteps || []
                 })),
-                capturedAt: conv.capturedAt,
+                capturedAt: conv.capturedAt || 0,
                 createdAt: conv.createdAt
             };
 
             // Export to file
             const result = await exportToFile(exportConv, options);
+
+            // Update graph with last exported timestamp
+            await graphStore.updateLastExportedAt(conv.id, result.exportedAt);
+
             results.push(result);
         }
 

@@ -3,6 +3,7 @@ servers:
   hosts:
     halvarm:
       ansible_user: ubuntu
+      public_ip: 100.73.45.27
       # ansible_host is inherited from ~/.ssh/config alias 'halvarm'
 
 # For running ansible from 'halvarm' itself

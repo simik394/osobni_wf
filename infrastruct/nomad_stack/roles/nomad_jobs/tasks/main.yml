@@ -80,32 +80,32 @@
   ansible.builtin.file:
     path: /opt/rsrch/chrome-profile
     state: directory
-    owner: 1000
-    group: 1000
+    owner: 999
+    group: 999
     mode: "0750"
 
 - name: Create rsrch browser profiles directory
   ansible.builtin.file:
     path: /opt/rsrch/profiles
     state: directory
-    owner: 1000
-    group: 1000
+    owner: 999
+    group: 999
     mode: "0750"
 
 - name: Create rsrch browser default profile
   ansible.builtin.file:
     path: /opt/rsrch/profiles/default
     state: directory
-    owner: 1000
-    group: 1000
+    owner: 999
+    group: 999
     mode: "0750"
 
 - name: Create angrav browser data directory
   ansible.builtin.file:
     path: /opt/angrav/data
     state: directory
-    owner: 1000
-    group: 1000
+    owner: 999
+    group: 999
     mode: "0750"
 
 - name: Create rsrch secrets directory

@@ -5,8 +5,17 @@ import { config } from './config';
 
 export class NotebookLMClient {
     public isBusy: boolean = false;
+    private verbose: boolean = false;
 
-    constructor(private page: Page) { }
+    constructor(private page: Page, options: { verbose?: boolean } = {}) {
+        this.verbose = options.verbose || false;
+    }
+
+    private log(message: string) {
+        if (this.verbose) {
+            console.log(`[NotebookLM] ${message}`);
+        }
+    }
 
     /**
      * Humanized delay with randomization for anti-detection.
@@ -195,6 +204,107 @@ export class NotebookLMClient {
 
         } catch (e) {
             console.error('Failed to fill URL source dialog', e);
+            throw e;
+        }
+    }
+
+    /**
+     * Add a source by pasting text directly (for scraped markdown content).
+     * This bypasses Google Docs and directly imports content into NotebookLM.
+     * 
+     * @param text The text/markdown content to paste as a source
+     * @param title Optional title for the pasted text source
+     * @param notebookTitle Optional notebook to open first
+     */
+    async addSourceText(text: string, title?: string, notebookTitle?: string) {
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[NotebookLM] Adding pasted text source (${text.length} chars)...`);
+
+        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Sources tab...');
+                await sourcesTab.click();
+                await this.humanDelay(1000);
+            }
+        }
+
+        // Click "Add sources" button
+        const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
+        if (await addSourceBtn.count() === 0) {
+            throw new Error('"Add sources" button not found');
+        }
+        await addSourceBtn.click();
+        await this.humanDelay(1000);
+
+        // Click "Pasted text" / "Vložený text" / "Copied text" button
+        const pasteBtn = this.page.locator('button.drop-zone-icon-button').filter({
+            hasText: /Pasted text|Vložený text|Copied text|Zkopírovaný text|Text/i
+        }).first();
+
+        if (await pasteBtn.count() === 0) {
+            // Fallback: try to find by icon or other text
+            const altPasteBtn = this.page.locator('button.drop-zone-icon-button').filter({
+                hasText: /content_paste|paste/i
+            }).first();
+
+            if (await altPasteBtn.count() > 0) {
+                await altPasteBtn.click();
+            } else {
+                // Debug: log available buttons
+                const allBtns = this.page.locator('button.drop-zone-icon-button');
+                const count = await allBtns.count();
+                console.log(`[DEBUG] Available source buttons (${count}):`);
+                for (let i = 0; i < count; i++) {
+                    const btnText = await allBtns.nth(i).innerText();
+                    console.log(`  - ${btnText}`);
+                }
+                throw new Error('"Pasted text" source button not found');
+            }
+        } else {
+            await pasteBtn.click();
+        }
+
+        await this.humanDelay(1000);
+
+        // Fill the title input if present
+        if (title) {
+            const titleInput = this.page.locator('mat-dialog-container input[type="text"], mat-dialog-container input.title-input').first();
+            if (await titleInput.count() > 0 && await titleInput.isVisible()) {
+                await titleInput.fill(title);
+                console.log(`[DEBUG] Set source title: ${title}`);
+            }
+        }
+
+        // Fill the text content textarea
+        const textareaSelector = 'mat-dialog-container textarea';
+        try {
+            await this.page.waitForSelector(textareaSelector, { timeout: 5000 });
+            await this.page.fill(textareaSelector, text);
+            console.log(`[DEBUG] Filled text content (${text.length} chars)`);
+
+            // Wait for the submit button to become enabled
+            const submitSelector = 'mat-dialog-container button.mat-primary';
+            await this.page.waitForFunction((sel: string) => {
+                const btn = document.querySelector(sel);
+                return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
+            }, submitSelector, { timeout: 5000 });
+
+            await this.page.click(submitSelector);
+            console.log('[DEBUG] Submitted pasted text source');
+
+            // Wait for dialog to close
+            await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 10000 });
+            console.log('[NotebookLM] Pasted text source added successfully');
+
+        } catch (e) {
+            console.error('[NotebookLM] Failed to add pasted text source:', e);
+            await this.dumpState('paste_text_error');
             throw e;
         }
     }

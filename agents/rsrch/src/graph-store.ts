@@ -64,7 +64,13 @@ export interface Audio {
 export interface Conversation {
     id: string;
     agentId: string;
+    platform?: 'gemini' | 'perplexity' | 'notebooklm';
+    platformId?: string;
+    title?: string;
+    type?: 'regular' | 'deep-research';
+    capturedAt?: number;
     createdAt: number;
+    turnCount?: number;
 }
 
 export interface Turn {
@@ -600,15 +606,14 @@ export class GraphStore {
                 const urls = turn.content.match(urlRegex) || [];
                 const uniqueUrls = [...new Set(urls)];
 
-                for (const url of uniqueUrls.slice(0, 50)) { // Cap at 50 per turn
-                    // Skip internal/system URLs
-                    if (url.includes('google.com/search') || url.includes('gemini.google.com')) continue;
+                // Filter and batch process citations (was O(N*2), now O(2))
+                const filteredUrls = uniqueUrls
+                    .slice(0, 50) // Cap at 50 per turn
+                    .filter(u => !u.includes('google.com/search') && !u.includes('gemini.google.com'));
 
-                    await this.mergeCitation(url, '', '');
-                    await this.graph!.query(`
-                        MATCH (t:Turn {id: '${turnId}'}), (cit:Citation {url: '${escapeString(url)}'})
-                        MERGE (t)-[:MENTIONS]->(cit)
-                    `);
+                if (filteredUrls.length > 0) {
+                    await this.mergeCitationsBatch(filteredUrls.map(url => ({ url, text: '', domain: '' })));
+                    await this.linkCitationsToTurn(turnId, filteredUrls);
                 }
             }
         }
@@ -642,16 +647,15 @@ export class GraphStore {
                 CREATE (c)-[:HAS_RESEARCH_DOC]->(d)
             `);
 
-            // Create Citation nodes and CITES relationships
-            if (doc.sources && doc.sources.length > 0) {
-                for (const source of doc.sources) {
-                    if (!source.url) continue;
-                    await this.mergeCitation(source.url, source.text || '', source.domain || '');
-                    await this.graph!.query(`
-                        MATCH (d:ResearchDoc {id: '${docId}'}), (cit:Citation {url: '${escapeString(source.url)}'})
-                        MERGE (d)-[:CITES]->(cit)
-                    `);
-                }
+            // Create Citation nodes and CITES relationships (batch - was O(N*2), now O(2))
+            const validSources = (doc.sources || []).filter(s => s.url);
+            if (validSources.length > 0) {
+                await this.mergeCitationsBatch(validSources.map(s => ({
+                    url: s.url,
+                    text: s.text || '',
+                    domain: s.domain || ''
+                })));
+                await this.linkCitationsToDoc(docId, validSources.map(s => s.url));
             }
         }
     }
@@ -678,6 +682,69 @@ export class GraphStore {
             ON CREATE SET c.id = '${citationId}', c.domain = '${escapeString(domainValue)}', c.text = '${escapeString(text.substring(0, 500))}', c.firstSeenAt = ${now}
         `);
         return citationId;
+    }
+
+    /**
+     * Batch merge multiple Citation nodes (single query using UNWIND)
+     * Reduces O(N) database calls to O(1)
+     */
+    private async mergeCitationsBatch(
+        citations: Array<{ url: string; text: string; domain: string }>
+    ): Promise<Map<string, string>> {
+        if (!this.graph || citations.length === 0) return new Map();
+        const now = Date.now();
+
+        // Prepare citation data with computed IDs and domains
+        const citationData = citations.map(c => {
+            const id = `cite_${createHash('md5').update(c.url).digest('hex').substring(0, 12)}`;
+            let domain = c.domain;
+            if (!domain) {
+                try { domain = new URL(c.url).hostname; } catch { domain = 'unknown'; }
+            }
+            return {
+                url: escapeString(c.url),
+                id,
+                domain: escapeString(domain),
+                text: escapeString((c.text || '').substring(0, 500))
+            };
+        });
+
+        // Build UNWIND query with JSON array literal (FalkorDB compatible)
+        const citationsJson = JSON.stringify(citationData);
+        await this.graph.query(`
+            UNWIND ${citationsJson} AS cit
+            MERGE (c:Citation {url: cit.url})
+            ON CREATE SET c.id = cit.id, c.domain = cit.domain, c.text = cit.text, c.firstSeenAt = ${now}
+        `);
+
+        // Return url -> id mapping
+        return new Map(citationData.map(c => [c.url, c.id]));
+    }
+
+    /**
+     * Batch create CITES relationships from ResearchDoc to Citations
+     */
+    private async linkCitationsToDoc(docId: string, urls: string[]): Promise<void> {
+        if (!this.graph || urls.length === 0) return;
+        const urlsJson = JSON.stringify(urls.map(u => escapeString(u)));
+        await this.graph.query(`
+            UNWIND ${urlsJson} AS url
+            MATCH (d:ResearchDoc {id: '${docId}'}), (c:Citation {url: url})
+            MERGE (d)-[:CITES]->(c)
+        `);
+    }
+
+    /**
+     * Batch create MENTIONS relationships from Turn to Citations
+     */
+    private async linkCitationsToTurn(turnId: string, urls: string[]): Promise<void> {
+        if (!this.graph || urls.length === 0) return;
+        const urlsJson = JSON.stringify(urls.map(u => escapeString(u)));
+        await this.graph.query(`
+            UNWIND ${urlsJson} AS url
+            MATCH (t:Turn {id: '${turnId}'}), (c:Citation {url: url})
+            MERGE (t)-[:MENTIONS]->(c)
+        `);
     }
 
     /**
@@ -720,6 +787,53 @@ export class GraphStore {
     }
 
     /**
+     * Get conversations changed since a timestamp
+     */
+    async getChangedConversations(sinceFn: number): Promise<Array<Conversation>> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (c:Conversation)
+            WHERE c.capturedAt > ${sinceFn}
+            RETURN 
+                c.id as id, 
+                c.platformId as platformId, 
+                c.platform as platform,
+                c.agentId as agentId,
+                c.title as title, 
+                c.type as type,
+                c.capturedAt as capturedAt, 
+                c.createdAt as createdAt,
+                c.turnCount as turnCount
+            ORDER BY c.capturedAt DESC
+        `);
+
+        return (result.data || []).map((row: any) => ({
+            id: row.id,
+            platformId: row.platformId,
+            platform: row.platform,
+            agentId: row.agentId,
+            title: row.title,
+            type: row.type as 'regular' | 'deep-research',
+            capturedAt: row.capturedAt,
+            createdAt: row.createdAt,
+            turnCount: row.turnCount || 0
+        }));
+    }
+
+    /**
+     * Update the last exported timestamp for a conversation
+     */
+    async updateLastExportedAt(conversationId: string, timestamp: number): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        await this.graph.query(`
+            MATCH (c:Conversation {id: '${escapeString(conversationId)}'})
+            SET c.lastExportedAt = ${timestamp}
+        `);
+    }
+
+    /**
      * Migrate existing ResearchDoc sources to Citation nodes
      * Parses JSON sources and creates Citation nodes + CITES relationships
      */
@@ -746,24 +860,16 @@ export class GraphStore {
                 continue;
             }
 
-            for (const source of sources) {
-                if (!source.url) continue;
-
-                await this.mergeCitation(source.url, source.text || '', source.domain || '');
-
-                // Check if relationship already exists
-                const existing = await this.graph!.query<any[]>(`
-                    MATCH (d:ResearchDoc {id: '${docId}'})-[:CITES]->(cit:Citation {url: '${escapeString(source.url)}'})
-                    RETURN count(cit) as cnt
-                `);
-
-                if (!existing.data || existing.data.length === 0 || (existing.data[0] as any).cnt === 0) {
-                    await this.graph!.query(`
-                        MATCH (d:ResearchDoc {id: '${docId}'}), (cit:Citation {url: '${escapeString(source.url)}'})
-                        MERGE (d)-[:CITES]->(cit)
-                    `);
-                    citationsCreated++;
-                }
+            // Batch process all sources for this doc (was O(N*3), now O(2))
+            const validSources = sources.filter(s => s.url);
+            if (validSources.length > 0) {
+                await this.mergeCitationsBatch(validSources.map(s => ({
+                    url: s.url,
+                    text: s.text || '',
+                    domain: s.domain || ''
+                })));
+                await this.linkCitationsToDoc(docId, validSources.map(s => s.url));
+                citationsCreated += validSources.length;
             }
             processed++;
         }

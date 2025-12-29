@@ -233,7 +233,7 @@ async function main() {
                         // Scrape returns platformId.
                         try {
                             if (notebookTitle) {
-                                await store.connect(graphHost, 6379);
+                                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                                 console.log('[Audio] Syncing notebook state to graph...');
                                 const data = await notebook.scrapeNotebook(notebookTitle, false);
                                 const syncResult = await store.syncNotebook(data);
@@ -373,7 +373,7 @@ async function main() {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
                 const graphHost = process.env.FALKORDB_HOST || 'localhost';
-                await store.connect(graphHost, 6379);
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
 
                 try {
                     await runLocalNotebookAction({}, async (client, notebook) => {
@@ -472,6 +472,68 @@ async function main() {
                 });
             } else {
                 await sendServerRequest('/notebook/messages', { title });
+            }
+
+        } else if (subArg1 === 'add-text') {
+            // rsrch notebook add-text "Notebook Title" "Text content or @file.md" [--source-title "Custom Source Title"] [--local]
+            const notebookTitle = subArg2;
+            let textContent = args[3];
+            let sourceTitle: string | undefined;
+
+            // Parse optional --source-title
+            for (let i = 3; i < args.length; i++) {
+                if (args[i] === '--source-title' && args[i + 1]) {
+                    sourceTitle = args[i + 1];
+                    i++;
+                } else if (!args[i].startsWith('--') && !textContent) {
+                    textContent = args[i];
+                }
+            }
+
+            if (!notebookTitle || !textContent) {
+                console.error('Usage: rsrch notebook add-text "Notebook Title" "Text content" [--source-title "Title"] [--local]');
+                console.error('       rsrch notebook add-text "Notebook Title" @file.md [--source-title "Title"] [--local]');
+                console.error('       You can also pipe content: cat file.md | rsrch notebook add-text "Notebook Title" - [--local]');
+                process.exit(1);
+            }
+
+            // Handle file input (@file.md) or stdin (-)
+            if (textContent.startsWith('@')) {
+                const filePath = textContent.slice(1);
+                const fs = await import('fs');
+                if (!fs.existsSync(filePath)) {
+                    console.error(`File not found: ${filePath}`);
+                    process.exit(1);
+                }
+                textContent = fs.readFileSync(filePath, 'utf-8');
+                console.log(`[CLI] Loaded ${textContent.length} chars from ${filePath}`);
+            } else if (textContent === '-') {
+                // Read from stdin
+                const readline = await import('readline');
+                const rl = readline.createInterface({ input: process.stdin });
+                const lines: string[] = [];
+                for await (const line of rl) {
+                    lines.push(line);
+                }
+                textContent = lines.join('\n');
+                console.log(`[CLI] Read ${textContent.length} chars from stdin`);
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.addSourceText(textContent, sourceTitle, notebookTitle);
+                    console.log(`\n✓ Added text source to notebook "${notebookTitle}"`);
+                    if (sourceTitle) {
+                        console.log(`  Source title: ${sourceTitle}`);
+                    }
+                    console.log(`  Content length: ${textContent.length} chars\n`);
+                });
+            } else {
+                await sendServerRequest('/notebook/add-text', {
+                    notebookTitle,
+                    text: textContent,
+                    sourceTitle
+                });
             }
 
         } else if (subArg1 === 'download-audio') {
@@ -579,7 +641,7 @@ async function main() {
             const graphHost = process.env.FALKORDB_HOST || 'localhost';
 
             try {
-                await store.connect(graphHost, 6379);
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 const notebooks = await store.getNotebooks(limit);
 
                 console.log(`\n === Synced Notebooks(${notebooks.length}) ===\n`);
@@ -608,7 +670,7 @@ async function main() {
                 const graphHost = process.env.FALKORDB_HOST || 'localhost';
 
                 try {
-                    await store.connect(graphHost, 6379);
+                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                     // We need to implement getConversations in graph-store first or use getConversationsByPlatform
                     // For now, let's just list Gemini conversations as default orall
 
@@ -707,7 +769,7 @@ async function main() {
             const graphHost = process.env.FALKORDB_HOST || 'localhost';
 
             try {
-                await store.connect(graphHost, 6379);
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 const citations = await store.getCitations({ domain, limit });
                 console.log(`\n=== Citations (${citations.length}) ===\n`);
                 console.table(citations.map(c => ({
@@ -732,7 +794,7 @@ async function main() {
             const graphHost = process.env.FALKORDB_HOST || 'localhost';
 
             try {
-                await store.connect(graphHost, 6379);
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 const usage = await store.getCitationUsage(url);
                 if (usage.length === 0) {
                     console.log(`No usage found for: ${url}`);
@@ -756,7 +818,7 @@ async function main() {
             const graphHost = process.env.FALKORDB_HOST || 'localhost';
 
             try {
-                await store.connect(graphHost, 6379);
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
                 const result = await store.migrateCitations();
                 console.log(`\n=== Migration Complete ===`);
@@ -1165,7 +1227,7 @@ async function main() {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
                 const graphHost = process.env.FALKORDB_HOST || 'localhost';
-                await store.connect(graphHost, 6379);
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
 
                 try {
                     await runLocalGeminiAction(async (client, gemini) => {
@@ -1341,7 +1403,7 @@ async function main() {
 
         try {
             const graphHost = process.env.FALKORDB_HOST || 'localhost';
-            await store.connect(graphHost, 6379);
+            await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
 
             if (graphArg1 === 'status') {
                 console.log('✅ FalkorDB connection: OK');
