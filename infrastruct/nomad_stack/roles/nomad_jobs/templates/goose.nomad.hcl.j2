@@ -45,11 +45,11 @@ job "goose" {
       }
 
       env {
-        # OpenAI-compatible API configuration for Angrav
+        # OpenAI-compatible API configuration for rsrch server (Gemini)
         GOOSE_PROVIDER__TYPE = "openai"
         OPENAI_API_KEY       = "not-needed-for-local"
-        OPENAI_BASE_URL      = "http://localhost:8099/v1"
-        GOOSE_MODEL          = "gemini-antigravity"
+        OPENAI_BASE_URL      = "http://localhost:3030/v1"
+        GOOSE_MODEL          = "gemini-rsrch"
         
         HOME = "/root"
       }
@@ -62,7 +62,7 @@ job "goose" {
       service {
         name = "goose"
         
-        # TCP check on a known open port to verify container is running
+        # Script check to verify container is running
         check {
           name     = "goose-alive"
           type     = "script"
