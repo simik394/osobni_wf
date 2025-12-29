@@ -73,6 +73,22 @@
     group: 1000
     mode: "0750"
 
+- name: Create rsrch browser profiles directory
+  ansible.builtin.file:
+    path: /opt/rsrch/profiles
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+
+- name: Create rsrch browser default profile
+  ansible.builtin.file:
+    path: /opt/rsrch/profiles/default
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+
 - name: Create angrav browser data directory
   ansible.builtin.file:
     path: /opt/angrav/data
@@ -94,6 +110,7 @@
     - windmill.nomad.hcl.j2
     - rsrch-browser.nomad.hcl.j2
     - angrav-browser.nomad.hcl.j2
+    - rsrch.nomad.hcl.j2
 
 - name: Run Traefik
   ansible.builtin.command: nomad job run /opt/nomad/jobs/traefik.nomad.hcl

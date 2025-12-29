@@ -1,0 +1,75 @@
+job "rsrch" {
+  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
+  type        = "service"
+
+  group "server" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "http" {
+        to = 3000
+      }
+    }
+
+    task "rsrch-server" {
+      driver = "docker"
+
+      config {
+        image = "ghcr.io/{{ github_repository | default('simik394/osobni_wf') }}/rsrch:latest"
+        ports = ["http"]
+      }
+
+      env {
+        PORT = "3000"
+        # Connect to the browser agent via Consul DNS
+        # Assuming rsrch-browser registers a service named 'rsrch-browser' with tag 'browser'
+        # or checks 'rsrch-browser.service.consul'
+        BROWSER_CDP_ENDPOINT = "http://rsrch-browser.service.consul:9223"
+        AUTH_FILE = "/secrets/auth.json"
+        
+        # Disable local browser launch
+        HEADLESS = "true" 
+        
+        # Logging
+        DEBUG = "rsrch:*"
+      }
+
+      # Template to inject auth.json from Nomad variable
+      template {
+        data = <<EOF
+{{ env "NOMAD_VAR_rsrch_auth_json" }}
+EOF
+        destination = "/secrets/auth.json"
+        env         = false
+        change_mode = "restart"
+      }
+
+      # Resources
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
+
+      service {
+        name = "rsrch-server"
+        port = "http"
+        
+        tags = [
+          "rsrch",
+          "api",
+          "traefik.enable=true",
+          "traefik.http.routers.rsrch.rule=Host(`rsrch.service.consul`)",
+        ]
+        
+        check {
+          name     = "http-health"
+          type     = "http"
+          path     = "/health" # verify if rsrch has a health endpoint, usually / or /json/version if generic? Assume / for now or check code.
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}
