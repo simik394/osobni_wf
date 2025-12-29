@@ -82,11 +82,17 @@ export interface ScrapedConversation {
 }
 
 export class GeminiClient {
-    private page: Page;
+    private verbose: boolean = false;
     private deepResearchEnabled = false;
 
-    constructor(page: Page) {
-        this.page = page;
+    constructor(private page: Page, options: { verbose?: boolean } = {}) {
+        this.verbose = options.verbose || false;
+    }
+
+    private log(message: string) {
+        if (this.verbose) {
+            console.log(`[Gemini] ${message}`);
+        }
     }
 
     async init(sessionId?: string) {
@@ -924,6 +930,26 @@ export class GeminiClient {
             }
 
             await this.page.waitForTimeout(1000);
+
+            // NEW: Check for "Open" button (Deep Research specific)
+            // Sometimes the document is collapsed/previewed and needs to be opened to see the export menu.
+            const openButtonSelectors = [
+                'button:has-text("Open")',
+                'button:has-text("Otevřít")',
+                'button[aria-label="Open"]',
+                'button[aria-label="Otevřít"]'
+            ];
+
+            for (const selector of openButtonSelectors) {
+                const openBtn = this.page.locator(selector).first();
+                if (await openBtn.count() > 0 && await openBtn.isVisible()) {
+                    // Check if it's relevant (inside research panel or nearby)
+                    console.log(`[Gemini] Found 'Open' button: ${selector}. Clicking...`);
+                    await openBtn.click();
+                    await this.page.waitForTimeout(1500); // Wait for open animation
+                    break;
+                }
+            }
 
             // Find export button
             const exportButtonSelectors = [
