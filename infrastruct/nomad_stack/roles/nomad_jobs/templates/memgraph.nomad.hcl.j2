@@ -37,22 +37,9 @@ job "memgraph" {
 
       env {
         MEMGRAPH_BOLT_PORT = "7687"
-      }
-
-      resources {
-        cpu    = 1000
-        memory = 2048
-      }
-
-      service {
-        name = "memgraph"
-        port = "bolt"
-        check {
-          name     = "bolt-alive"
-          type     = "tcp"
-          interval = "10s"
-          timeout  = "2s"
-        }
+        # Enable authentication by setting user/pass
+        MEMGRAPH_USER      = "memgraph"
+        MEMGRAPH_PASSWORD  = "memgraph" 
       }
     }
 
@@ -72,8 +59,10 @@ job "memgraph" {
 
       env {
         # Connect to the Memgraph instance in the same group
-        QUICK_CONNECT_MG_HOST = "localhost"
-        QUICK_CONNECT_MG_PORT = "7687"
+        QUICK_CONNECT_MG_HOST     = "localhost"
+        QUICK_CONNECT_MG_PORT     = "7687"
+        QUICK_CONNECT_MG_USER     = "memgraph"
+        QUICK_CONNECT_MG_PASSWORD = "memgraph"
       }
 
       resources {
