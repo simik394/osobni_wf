@@ -34,52 +34,81 @@
     proto: tcp
     comment: "Allow x11vnc"
   become: true
+  ignore_errors: true
 
 - name: Allow VNC specifically from Tailscale interface
   shell: |
-    ufw allow in on tailscale0 to any port {{ vnc_port }}
+    ufw allow in on tailscale0 to any port {{ vnc_port }} || true
   become: true
   ignore_errors: true
 
-- name: Create x11vnc systemd service
+- name: Create user-level x11vnc systemd service directory
+  file:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: Create user-level x11vnc service (runs as logged-in user)
   copy:
-    dest: /etc/systemd/system/x11vnc.service
+    dest: "{{ ansible_env.HOME }}/.config/systemd/user/x11vnc.service"
     mode: "0644"
     content: |
       [Unit]
-      Description=x11vnc VNC Server
-      After=display-manager.service network.target
+      Description=x11vnc VNC Server (User Session)
+      After=graphical-session.target
 
       [Service]
       Type=simple
-      # -findauth is smarter than hardcoded paths or simple "guess"
-      # -display :0 is usually correct for the main session
-      ExecStart=/usr/bin/x11vnc -display :0 -findauth -forever -loop -noxdamage -repeat -rfbauth {{ ansible_env.HOME }}/.vnc/passwd -rfbport {{ vnc_port }} -shared
+      Environment=DISPLAY=:0
+      Environment=XAUTHORITY=/run/user/{{ ansible_user_uid }}/gdm/Xauthority
+      ExecStart=/usr/bin/x11vnc -display :0 -auth /run/user/{{ ansible_user_uid }}/gdm/Xauthority -forever -noxdamage -repeat -rfbauth {{ ansible_env.HOME }}/.vnc/passwd -rfbport {{ vnc_port }} -shared
       ExecStop=/usr/bin/killall x11vnc
       Restart=on-failure
       RestartSec=5
 
       [Install]
-      WantedBy=multi-user.target
-  become: true
-  notify: restart x11vnc
+      WantedBy=default.target
 
-- name: Enable and start x11vnc service
+- name: Stop system-level x11vnc if exists
+  systemd:
+    name: x11vnc
+    state: stopped
+    enabled: false
+  become: true
+  ignore_errors: true
+
+- name: Remove old system-level service
+  file:
+    path: /etc/systemd/system/x11vnc.service
+    state: absent
+  become: true
+
+- name: Enable user service linger (to start at boot)
+  command: loginctl enable-linger {{ ansible_user_id }}
+  become: true
+  changed_when: false
+
+- name: Reload user systemd daemon
+  systemd:
+    daemon_reload: true
+    scope: user
+
+- name: Enable and start user-level x11vnc service
   systemd:
     name: x11vnc
     enabled: true
     state: started
-    daemon_reload: true
-  become: true
+    scope: user
 
 - name: Display connection info
   debug:
     msg: |
-      VNC server configured using -findauth!
+      VNC server configured as USER SERVICE!
 
       Connect via Tailscale (Secure):
       Address: 100.92.153.10:{{ vnc_port }}
-      Password: (the one you configured)
 
       Connect via Local Network:
-      Address: {{ ansible_default_ipv4.address }}:{{ vnc_port }}
+      Address: {{ ansible_default_ipv4.address | default('YOUR_IP') }}:{{ vnc_port }}
+
+      Password: (the one you configured)
