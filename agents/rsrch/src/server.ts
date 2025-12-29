@@ -8,7 +8,19 @@ import { GeminiClient } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
-import { getFalkorClient } from '@agents/shared';
+
+// Optional FalkorDB import (may not be available in Docker)
+let getFalkorClient: any = null;
+try {
+    const shared = require('@agents/shared');
+    getFalkorClient = shared.getFalkorClient;
+} catch (e) {
+    console.log('[Server] @agents/shared not available, FalkorDB logging disabled');
+    getFalkorClient = () => ({
+        findSession: async () => null,
+        logInteraction: async () => { }
+    });
+}
 import {
     startChatCompletionTrace,
     completeChatCompletionTrace,
