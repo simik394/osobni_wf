@@ -106,6 +106,16 @@ export class GeminiClient {
 
         await this.page.waitForTimeout(1500);
 
+        // Handle Google cookie consent dialog ("Before you continue to Google")
+        const acceptAllButtons = this.page.locator(
+            'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
+        );
+        if (await acceptAllButtons.count() > 0) {
+            console.log('[Gemini] Cookie consent detected, clicking Accept all...');
+            await acceptAllButtons.first().click().catch(() => { });
+            await this.page.waitForTimeout(2000);
+        }
+
         const signInButton = this.page.locator('button:has-text("Sign in"), a:has-text("Sign in")');
         if (await signInButton.count() > 0) {
             console.warn('[Gemini] Sign in required.');
