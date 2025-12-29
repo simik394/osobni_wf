@@ -181,39 +181,38 @@ export class PerplexityClient {
             }
 
         } else if (process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT) {
-            // CDP connection - either to Docker container or local browser
-            let cdpEndpoint = process.env.BROWSER_CDP_ENDPOINT ||
+            // CDP/WebSocket connection to remote browser
+            let endpoint = process.env.BROWSER_CDP_ENDPOINT ||
                 `http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`;
-            console.log(`Connecting to browser via CDP at ${cdpEndpoint}...`);
+            console.log(`Connecting to browser at ${endpoint}...`);
 
-            // Chrome rejects non-localhost/non-IP Host headers, so we need to fetch
-            // the WebSocket URL first using a plain HTTP request with a specific Host header
-            try {
-                const url = new URL(cdpEndpoint);
-                const dns = await import('dns');
-                const { promisify } = await import('util');
-                const lookup = promisify(dns.lookup);
-
-                // Resolve hostname to IP if it's not already localhost or an IP
-                let host = url.hostname;
-                if (host !== 'localhost' && host !== '127.0.0.1' && !host.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-                    try {
-                        const result = await lookup(host);
-                        console.log(`Resolved ${host} to ${result.address}`);
-                        host = result.address;
-                    } catch (e) {
-                        console.log(`Could not resolve ${host}, using as-is`);
-                    }
-                }
-
-                // Use IP-based URL for CDP connection
-                cdpEndpoint = `http://${host}:${url.port}`;
-                console.log(`Using IP-based CDP endpoint: ${cdpEndpoint}`);
-            } catch (e) {
-                console.log('Hostname resolution skipped, using original endpoint');
+            // Normalize endpoint
+            if (!endpoint.startsWith('http') && !endpoint.startsWith('ws')) {
+                endpoint = `http://${endpoint}`;
             }
 
-            this.browser = await chromium.connectOverCDP(cdpEndpoint);
+            try {
+                // Method 1: Try connecting via standard CDP (http endpoint)
+                console.log(`Attempting connectOverCDP to ${endpoint}...`);
+                this.browser = await chromium.connectOverCDP(endpoint);
+                console.log('Connected via connectOverCDP');
+            } catch (e: any) {
+                console.log(`connectOverCDP failed: ${e.message}`);
+                console.log('Attempting fallback to chromium.connect (browserless/websocket)...');
+
+                // Method 2: Try connecting via WebSocket (browserless style)
+                // Convert http/https to ws/wss
+                const wsEndpoint = endpoint.replace(/^http/, 'ws');
+                try {
+                    this.browser = await chromium.connect(wsEndpoint);
+                    console.log('Connected via chromium.connect (WebSocket)');
+                } catch (wsError: any) {
+                    throw new Error(`Failed to connect to browser via CDP or WebSocket. 
+                        CDP Error: ${e.message}
+                        WS Error: ${wsError.message}`);
+                }
+            }
+
             const contexts = this.browser.contexts();
             if (contexts.length > 0) {
                 this.context = contexts[0];
@@ -225,7 +224,7 @@ export class PerplexityClient {
                     this.context = page.context();
                     console.log('Acquired context via new page creation.');
                 } catch (e: any) {
-                    throw new Error(`Could not acquire context from CDP browser: ${e.message}`);
+                    throw new Error(`Could not acquire context from remote browser: ${e.message}`);
                 }
             }
 
