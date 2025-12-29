@@ -32,24 +32,49 @@ export interface QueryResponse {
     url: string;
 }
 
-export class PerplexityClient {
-    private browser: any = null;
-    private page: Page | null = null;
-    private context: BrowserContext | null = null;
+export interface ClientOptions {
+    headless?: boolean;
+    userDataDir?: string;
+    keepAlive?: boolean;
+    verbose?: boolean;
+}
+
+export abstract class BaseClient {
+    protected browser: Browser | null = null;
+    protected context: BrowserContext | null = null;
+    protected page: Page | null = null;
+    protected options: ClientOptions;
+    protected isInitialized = false;
+
+    constructor(options: ClientOptions = {}) {
+        this.options = { headless: true, ...options };
+    }
+
+    protected log(message: string) {
+        if (this.options.verbose) {
+            console.log(`[DEBUG] ${message}`);
+        }
+    }
+}
+
+export class PerplexityClient extends BaseClient {
     private sessions: Session[] = [];
-    private isInitialized = false;
-    private keepAlive = false;
+    private keepAlive = false; // This will be set based on options.keepAlive
+
+    constructor(options: ClientOptions = {}) {
+        super(options);
+    }
 
     async init(options: { keepAlive?: boolean } = {}) {
         if (this.isInitialized) {
-            console.log('Client already initialized');
+            this.log('Client already initialized');
             return;
         }
-        this.keepAlive = options.keepAlive || false;
+        this.keepAlive = options.keepAlive || this.options.keepAlive || false;
 
         if (process.env.BROWSER_WS_ENDPOINT) {
             console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
-            this.browser = await chromium.connect(config.browserWsEndpoint);
+            this.browser = await (chromium.connect(config.browserWsEndpoint) as unknown as Browser);
 
             // Load storage state if exists
             let storageState = undefined;
@@ -64,6 +89,7 @@ export class PerplexityClient {
                 }
             }
 
+            if (!this.browser) throw new Error('Browser not initialized');
             this.context = await this.browser.newContext({
                 storageState: storageState,
                 viewport: { width: 1280, height: 1024 } // specific viewport for VNC
@@ -181,53 +207,49 @@ export class PerplexityClient {
             }
 
         } else if (process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT) {
-            // CDP/WebSocket connection to remote browser
-            let endpoint = process.env.BROWSER_CDP_ENDPOINT ||
-                `http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`;
-            console.log(`Connecting to browser at ${endpoint}...`);
-
-            // Normalize endpoint
-            if (!endpoint.startsWith('http') && !endpoint.startsWith('ws')) {
-                endpoint = `http://${endpoint}`;
-            }
-
             try {
-                // Method 1: Try connecting via standard CDP (http endpoint)
-                console.log(`Attempting connectOverCDP to ${endpoint}...`);
-                this.browser = await chromium.connectOverCDP(endpoint);
-                console.log('Connected via connectOverCDP');
-            } catch (e: any) {
-                console.log(`connectOverCDP failed: ${e.message}`);
-                console.log('Attempting fallback to chromium.connect (browserless/websocket)...');
+                // CDP/WebSocket connection to remote browser
+                let endpoint = process.env.BROWSER_CDP_ENDPOINT ||
+                    `http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`;
+                console.log(`Connecting to browser at ${endpoint}...`);
 
-                // Method 2: Try connecting via WebSocket (browserless style)
-                // Convert http/https to ws/wss
-                const wsEndpoint = endpoint.replace(/^http/, 'ws');
+                // Normalize endpoint
+                if (!endpoint.startsWith('http') && !endpoint.startsWith('ws')) {
+                    endpoint = `http://${endpoint}`;
+                }
+
                 try {
-                    this.browser = await chromium.connect(wsEndpoint);
-                    console.log('Connected via chromium.connect (WebSocket)');
-                } catch (wsError: any) {
-                    throw new Error(`Failed to connect to browser via CDP or WebSocket. 
+                    // Method 1: Try connecting via standard CDP (http endpoint)
+                    console.log(`Attempting connectOverCDP to ${endpoint}...`);
+                    this.browser = await (chromium.connectOverCDP(endpoint) as unknown as Browser);
+                    console.log('Connected via connectOverCDP');
+                } catch (e: any) {
+                    console.log(`connectOverCDP failed: ${e.message}`);
+                    console.log('Attempting fallback to chromium.connect (browserless/websocket)...');
+
+                    // Method 2: Try connecting via WebSocket (browserless style)
+                    // Convert http/https to ws/wss
+                    const wsEndpoint = endpoint.replace(/^http/, 'ws');
+                    try {
+                        this.browser = await (chromium.connect(wsEndpoint) as unknown as Browser);
+                        console.log('Connected via chromium.connect (WebSocket)');
+                    } catch (wsError: any) {
+                        throw new Error(`Failed to connect to browser via CDP or WebSocket. 
                         CDP Error: ${e.message}
                         WS Error: ${wsError.message}`);
+                    }
                 }
-            }
 
-            const contexts = this.browser.contexts();
-            if (contexts.length > 0) {
-                this.context = contexts[0];
-                console.log(`Attached to existing context with ${contexts.length} contexts.`);
-            } else {
-                console.log('No direct contexts found. Creating new page to get context...');
-                try {
-                    const page = await this.browser.newPage();
-                    this.context = page.context();
+                if (!this.browser) throw new Error('Browser failed to initialize');
+                const contexts = this.browser.contexts();
+                if (contexts.length > 0) {
+                    this.context = contexts[0];
+                } else {
                     console.log('Acquired context via new page creation.');
-                } catch (e: any) {
-                    throw new Error(`Could not acquire context from remote browser: ${e.message}`);
                 }
+            } catch (e: any) {
+                throw new Error(`Could not acquire context from remote browser: ${e.message}`);
             }
-
         } else {
             // Local mode
             console.log('Launching browser (Persistent Local Mode)...');
@@ -244,30 +266,35 @@ export class PerplexityClient {
             const headless = headlessEnv === 'false' ? false : (hasHeadedFlag ? false : true);
             console.log(`Headless: ${headless}${hasHeadedFlag ? ' (--headed flag detected)' : ''}`);
 
-            this.context = await chromium.launchPersistentContext(config.auth.userDataDir, {
-                headless: headless, // Playwright uses 'new' headless by default in recent versions
-                channel: 'chromium',
-                slowMo: 75, // Humanize actions - per user rules for Google services
-                args: [
-                    '--disable-blink-features=AutomationControlled',
-                    '--start-maximized',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-infobars',
-                    '--window-size=1920,1080',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process'
-                ],
-                ignoreDefaultArgs: ['--enable-automation'],
-                viewport: { width: 1920, height: 1080 },
-                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
-            });
-            this.browser = this.context;
+            if (config.auth.userDataDir) {
+                console.log(`Launching persistent context from: ${config.auth.userDataDir}`);
+                // Cast chromium to any to avoid type mismatch between playwright-extra and downgraded playwright
+                this.context = await (chromium as any).launchPersistentContext(config.auth.userDataDir, {
+                    headless: headless,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-accelerated-2d-canvas',
+                        '--no-first-run',
+                        '--no-zygote',
+                        '--disable-gpu'
+                    ],
+                    viewport: { width: 1280, height: 800 }
+                });
+            } else {
+                console.log('Launching ephemeral context (no profile)');
+                this.browser = await (chromium as any).launch({
+                    headless: headless
+                });
+                this.context = await this.browser!.newContext();
+            }
+
+            // Get or create page
+            if (!this.context) throw new Error('Failed to create browser context');
             this.page = this.context.pages()[0] || await this.context.newPage();
         }
 
-        // Note: connecting to existing context vs creating new one
         console.log('Browser ready');
         this.isInitialized = true;
     }
