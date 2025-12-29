@@ -120,11 +120,21 @@ export class GeminiClient {
         }
 
         try {
-            await this.page.waitForSelector('chat-app, .input-area, textarea, div[contenteditable="true"]', { timeout: 10000 });
+            // Broader selector to handle Gemini UI variations
+            await this.page.waitForSelector(
+                'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]',
+                { timeout: 15000 }
+            );
         } catch (e) {
-            console.warn('[Gemini] Timeout waiting for chat interface.');
-            await this.dumpState('gemini_init_fail');
-            throw e;
+            // Check if we're on a valid Gemini page anyway (sidebar visible)
+            const sidebarVisible = await this.page.locator('.conversations-list, [aria-label*="conversation" i], [data-sidebar]').count() > 0;
+            if (sidebarVisible) {
+                console.log('[Gemini] Sidebar visible, proceeding despite input element not found.');
+            } else {
+                console.warn('[Gemini] Timeout waiting for chat interface.');
+                await this.dumpState('gemini_init_fail');
+                throw e;
+            }
         }
 
         console.log('[Gemini] Ready.');
