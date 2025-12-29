@@ -41,6 +41,22 @@ job "memgraph" {
         MEMGRAPH_USER      = "memgraph"
         MEMGRAPH_PASSWORD  = "memgraph" 
       }
+
+      resources {
+        cpu    = 800
+        memory = 2048
+      }
+
+      service {
+        name = "memgraph"
+        port = "bolt"
+        check {
+          name     = "bolt-alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
     }
 
     # Memgraph Lab (Web UI for visualization and queries)

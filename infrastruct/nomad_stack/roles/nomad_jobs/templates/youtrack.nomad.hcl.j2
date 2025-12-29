@@ -37,8 +37,8 @@ job "youtrack" {
       }
 
       resources {
-        cpu    = 2000 # YouTrack is heavy
-        memory = 4096 # Needs decent RAM. OCI ARM has 24GB, so this is fine.
+        cpu    = 1000 # Reduced to 1000 (1 core) to fit
+        memory = 4096 # Keep RAM high as we have space
       }
 
       service {
