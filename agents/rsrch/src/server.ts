@@ -1031,22 +1031,28 @@ export async function startServer() {
             console.warn('[Server] Browser will connect lazily on first request.');
         }
 
-        // Connect to graph store
+        // Connect to graph store (optional - can run without it)
         console.log('[Server] Connecting to FalkorDB...');
         const graphHost = process.env.FALKORDB_HOST || 'localhost';
         const graphPort = parseInt(process.env.FALKORDB_PORT || '6379');
-        await graphStore.connect(graphHost, graphPort);
+        try {
+            await graphStore.connect(graphHost, graphPort);
+            console.log('[Server] FalkorDB connected successfully.');
 
-        // Check for interrupted jobs
-        const runningJobs = await graphStore.listJobs('running');
-        if (runningJobs.length > 0) {
-            console.warn(`[Server] Found ${runningJobs.length} interrupted jobs from previous session.`);
-            for (const job of runningJobs) {
-                const msg = 'Interrupted by server restart/crash.';
-                await graphStore.updateJobStatus(job.id, 'failed', { error: msg });
-                console.log(`[Server] Marked job ${job.id} as failed.`);
-                notifyJobCompleted(job.id, `${job.type} (Interrupted)`, job.query, false, msg);
+            // Check for interrupted jobs
+            const runningJobs = await graphStore.listJobs('running');
+            if (runningJobs.length > 0) {
+                console.warn(`[Server] Found ${runningJobs.length} interrupted jobs from previous session.`);
+                for (const job of runningJobs) {
+                    const msg = 'Interrupted by server restart/crash.';
+                    await graphStore.updateJobStatus(job.id, 'failed', { error: msg });
+                    console.log(`[Server] Marked job ${job.id} as failed.`);
+                    notifyJobCompleted(job.id, `${job.type} (Interrupted)`, job.query, false, msg);
+                }
             }
+        } catch (graphError: any) {
+            console.warn(`[Server] FalkorDB not available: ${graphError.message}`);
+            console.warn('[Server] Job queue and graph features will be disabled.');
         }
 
         app.listen(PORT, () => {
