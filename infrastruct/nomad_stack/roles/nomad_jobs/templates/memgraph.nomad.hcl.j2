@@ -1,0 +1,102 @@
+job "memgraph" {
+  datacenters = ["{{ nomad_datacenter | default("oci-eu") }}"]
+  type        = "service"
+
+  group "memgraph" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "bolt" {
+        to = 7687
+      }
+      port "lab" {
+        to = 3000
+      }
+    }
+
+    # Memgraph with MAGE (graph algorithms library)
+    task "memgraph-mage" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "memgraph/memgraph-mage:latest"
+        ports = ["bolt"]
+        volumes = [
+          "/opt/memgraph/data:/var/lib/memgraph",
+          "/opt/memgraph/log:/var/log/memgraph"
+        ]
+        # Memgraph needs extra capabilities for memory management
+        cap_add = ["SYS_NICE"]
+      }
+
+      env {
+        MEMGRAPH_BOLT_PORT = "7687"
+      }
+
+      resources {
+        cpu    = 1000
+        memory = 2048
+      }
+
+      service {
+        name = "memgraph"
+        port = "bolt"
+        check {
+          name     = "bolt-alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+
+    # Memgraph Lab (Web UI for visualization and queries)
+    task "lab" {
+      driver = "docker"
+
+      constraint {
+        attribute = "${node.class}"
+        value     = "cloud"
+      }
+
+      config {
+        image = "memgraph/lab:latest"
+        ports = ["lab"]
+      }
+
+      env {
+        # Connect to the Memgraph instance in the same group
+        QUICK_CONNECT_MG_HOST = "localhost"
+        QUICK_CONNECT_MG_PORT = "7687"
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+
+      service {
+        name = "memgraph-lab"
+        port = "lab"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.memgraph-lab.rule=Host(`memgraph.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
+          "traefik.http.routers.memgraph-lab.entrypoints=web"
+        ]
+        check {
+          name     = "lab-alive"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}
