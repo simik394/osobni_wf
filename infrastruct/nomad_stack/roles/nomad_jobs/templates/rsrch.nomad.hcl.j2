@@ -6,10 +6,15 @@ job "rsrch" {
     count = 1
 
     network {
-      mode = "bridge"
+      mode = "host"
       port "http" {
-        to = 3000
+        static = 3000
       }
+    }
+
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
     }
 
     task "rsrch-server" {
@@ -17,7 +22,7 @@ job "rsrch" {
 
       config {
         image = "ghcr.io/{{ github_repository | default('simik394/osobni_wf') }}/rsrch:latest"
-        ports = ["http"]
+        network_mode = "host"
         mounts = [
           {
             type     = "bind"

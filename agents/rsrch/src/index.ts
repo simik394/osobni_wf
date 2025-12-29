@@ -689,11 +689,90 @@ async function main() {
                 console.error(`Export failed: ${error.message} `);
                 process.exit(1);
             }
+        } else if (subArg === 'citations') {
+            // rsrch graph citations [--domain=example.com] [--limit=N]
+            let domain: string | undefined;
+            let limit = 50;
+
+            for (const arg of args) {
+                if (arg.startsWith('--domain=')) {
+                    domain = arg.split('=')[1];
+                } else if (arg.startsWith('--limit=')) {
+                    limit = parseInt(arg.split('=')[1]) || 50;
+                }
+            }
+
+            const { getGraphStore } = await import('./graph-store');
+            const store = getGraphStore();
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+            try {
+                await store.connect(graphHost, 6379);
+                const citations = await store.getCitations({ domain, limit });
+                console.log(`\n=== Citations (${citations.length}) ===\n`);
+                console.table(citations.map(c => ({
+                    ID: c.id,
+                    Domain: c.domain,
+                    URL: c.url.length > 60 ? c.url.substring(0, 57) + '...' : c.url,
+                    FirstSeen: new Date(c.firstSeenAt).toLocaleDateString()
+                })));
+            } finally {
+                await store.disconnect();
+            }
+        } else if (subArg === 'citation-usage') {
+            // rsrch graph citation-usage <url>
+            const url = args[2];
+            if (!url) {
+                console.error('Usage: rsrch graph citation-usage <url>');
+                process.exit(1);
+            }
+
+            const { getGraphStore } = await import('./graph-store');
+            const store = getGraphStore();
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+            try {
+                await store.connect(graphHost, 6379);
+                const usage = await store.getCitationUsage(url);
+                if (usage.length === 0) {
+                    console.log(`No usage found for: ${url}`);
+                } else {
+                    console.log(`\n=== Citation Usage (${usage.length}) ===\n`);
+                    for (const item of usage) {
+                        if (item.type === 'ResearchDoc') {
+                            console.log(`  📄 ResearchDoc: ${item.id} - "${item.title || 'Untitled'}"`);
+                        } else {
+                            console.log(`  💬 Turn: ${item.id}`);
+                        }
+                    }
+                }
+            } finally {
+                await store.disconnect();
+            }
+        } else if (subArg === 'migrate-citations') {
+            // rsrch graph migrate-citations
+            const { getGraphStore } = await import('./graph-store');
+            const store = getGraphStore();
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+            try {
+                await store.connect(graphHost, 6379);
+                console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
+                const result = await store.migrateCitations();
+                console.log(`\n=== Migration Complete ===`);
+                console.log(`  Processed: ${result.processed} documents`);
+                console.log(`  Created:   ${result.citations} new citation links\n`);
+            } finally {
+                await store.disconnect();
+            }
         } else {
             console.log('Graph commands:');
             console.log('  rsrch graph notebooks [--limit=N]');
             console.log('  rsrch graph conversations [--limit=N] [--local]');
             console.log('  rsrch graph export [--platform=gemini|perplexity] [--format=md|json] [--output=path] [--since=date] [--limit=N]');
+            console.log('  rsrch graph citations [--domain=example.com] [--limit=N]');
+            console.log('  rsrch graph citation-usage <url>');
+            console.log('  rsrch graph migrate-citations');
         }
 
     } else if (command === 'gemini') {
@@ -1359,6 +1438,54 @@ async function main() {
                         }
                     }
                 }
+            } else if (graphArg1 === 'citations') {
+                // graph citations [--domain=example.com] [--limit=N]
+                let domain: string | undefined;
+                let limit = 50;
+
+                for (const arg of args) {
+                    if (arg.startsWith('--domain=')) {
+                        domain = arg.split('=')[1];
+                    } else if (arg.startsWith('--limit=')) {
+                        limit = parseInt(arg.split('=')[1]) || 50;
+                    }
+                }
+
+                const citations = await store.getCitations({ domain, limit });
+                console.log(`\n=== Citations (${citations.length}) ===\n`);
+                console.table(citations.map(c => ({
+                    ID: c.id,
+                    Domain: c.domain,
+                    URL: c.url.length > 60 ? c.url.substring(0, 57) + '...' : c.url,
+                    FirstSeen: new Date(c.firstSeenAt).toLocaleDateString()
+                })));
+            } else if (graphArg1 === 'citation-usage') {
+                // graph citation-usage <url>
+                if (!graphArg2) {
+                    console.error('Usage: rsrch graph citation-usage <url>');
+                    process.exit(1);
+                }
+
+                const usage = await store.getCitationUsage(graphArg2);
+                if (usage.length === 0) {
+                    console.log(`No usage found for: ${graphArg2}`);
+                } else {
+                    console.log(`\n=== Citation Usage (${usage.length}) ===\n`);
+                    for (const item of usage) {
+                        if (item.type === 'ResearchDoc') {
+                            console.log(`  📄 ResearchDoc: ${item.id} - "${item.title || 'Untitled'}"`);
+                        } else {
+                            console.log(`  💬 Turn: ${item.id}`);
+                        }
+                    }
+                }
+            } else if (graphArg1 === 'migrate-citations') {
+                // graph migrate-citations
+                console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
+                const result = await store.migrateCitations();
+                console.log(`\n=== Migration Complete ===`);
+                console.log(`  Processed: ${result.processed} documents`);
+                console.log(`  Created:   ${result.citations} new citation links\n`);
             } else {
                 console.log('Graph Database Commands:');
                 console.log('  rsrch graph status                - Show connection status and job counts');
@@ -1366,6 +1493,9 @@ async function main() {
                 console.log('  rsrch graph lineage <id>          - Show lineage chain for artifact');
                 console.log('  rsrch graph conversations         - List synced conversations [--platform=gemini] [--limit=N]');
                 console.log('  rsrch graph conversation <id>     - View conversation [--questions-only] [--answers-only] [--research-docs]');
+                console.log('  rsrch graph citations             - List citations [--domain=example.com] [--limit=N]');
+                console.log('  rsrch graph citation-usage <url>  - Show where a URL is cited');
+                console.log('  rsrch graph migrate-citations     - Migrate existing ResearchDoc sources to Citation nodes');
             }
         } catch (e: any) {
             console.error('FalkorDB connection failed:', e.message);

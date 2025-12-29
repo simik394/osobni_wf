@@ -9,6 +9,7 @@
 
 import { FalkorDB } from 'falkordb';
 import type Graph from 'falkordb/dist/src/graph';
+import { createHash } from 'crypto';
 
 export interface GraphJob {
     id: string;
@@ -70,6 +71,14 @@ export interface Turn {
     role: 'user' | 'assistant' | 'system';
     content: string;
     timestamp: number;
+}
+
+export interface Citation {
+    id: string;
+    url: string;
+    domain: string;
+    text: string;
+    firstSeenAt: number;
 }
 
 // Helper to escape strings for Cypher queries
@@ -559,19 +568,25 @@ export class GraphStore {
     }
 
     /**
-     * Helper to insert turns for a conversation
+     * Helper to insert turns for a conversation, with inline URL citation linking
      */
     private async insertTurns(
         conversationId: string,
         turns: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>,
         baseTimestamp: number
     ): Promise<void> {
+        // URL extraction regex
+        const urlRegex = /https?:\/\/[^\s<>"\[\]()]+/g;
+
         for (let i = 0; i < turns.length; i++) {
             const turn = turns[i];
             const ts = turn.timestamp || baseTimestamp + i;
+            const turnId = `turn_${conversationId}_${i}`;
+
             await this.graph!.query(`
                 MATCH (c:Conversation {id: '${conversationId}'})
                 CREATE (t:Turn {
+                    id: '${turnId}',
                     role: '${turn.role}',
                     content: '${escapeString(turn.content)}',
                     timestamp: ${ts},
@@ -579,11 +594,28 @@ export class GraphStore {
                 })
                 CREATE (c)-[:HAS_TURN]->(t)
             `);
+
+            // Extract URLs from assistant responses and link to Citation nodes
+            if (turn.role === 'assistant') {
+                const urls = turn.content.match(urlRegex) || [];
+                const uniqueUrls = [...new Set(urls)];
+
+                for (const url of uniqueUrls.slice(0, 50)) { // Cap at 50 per turn
+                    // Skip internal/system URLs
+                    if (url.includes('google.com/search') || url.includes('gemini.google.com')) continue;
+
+                    await this.mergeCitation(url, '', '');
+                    await this.graph!.query(`
+                        MATCH (t:Turn {id: '${turnId}'}), (cit:Citation {url: '${escapeString(url)}'})
+                        MERGE (t)-[:MENTIONS]->(cit)
+                    `);
+                }
+            }
         }
     }
 
     /**
-     * Helper to insert research docs for a conversation
+     * Helper to insert research docs for a conversation, with Citation node linking
      */
     private async insertResearchDocs(
         conversationId: string,
@@ -609,7 +641,43 @@ export class GraphStore {
                 })
                 CREATE (c)-[:HAS_RESEARCH_DOC]->(d)
             `);
+
+            // Create Citation nodes and CITES relationships
+            if (doc.sources && doc.sources.length > 0) {
+                for (const source of doc.sources) {
+                    if (!source.url) continue;
+                    await this.mergeCitation(source.url, source.text || '', source.domain || '');
+                    await this.graph!.query(`
+                        MATCH (d:ResearchDoc {id: '${docId}'}), (cit:Citation {url: '${escapeString(source.url)}'})
+                        MERGE (d)-[:CITES]->(cit)
+                    `);
+                }
+            }
         }
+    }
+
+    /**
+     * Merge a Citation node (upsert by URL)
+     */
+    private async mergeCitation(url: string, text: string, domain: string): Promise<string> {
+        const citationId = `cite_${createHash('md5').update(url).digest('hex').substring(0, 12)}`;
+        const now = Date.now();
+
+        // Extract domain from URL if not provided
+        let domainValue = domain;
+        if (!domainValue) {
+            try {
+                domainValue = new URL(url).hostname;
+            } catch {
+                domainValue = 'unknown';
+            }
+        }
+
+        await this.graph!.query(`
+            MERGE (c:Citation {url: '${escapeString(url)}'})
+            ON CREATE SET c.id = '${citationId}', c.domain = '${escapeString(domainValue)}', c.text = '${escapeString(text.substring(0, 500))}', c.firstSeenAt = ${now}
+        `);
+        return citationId;
     }
 
     /**
@@ -649,6 +717,116 @@ export class GraphStore {
                 turnCount: row.turnCount || 0
             };
         });
+    }
+
+    /**
+     * Migrate existing ResearchDoc sources to Citation nodes
+     * Parses JSON sources and creates Citation nodes + CITES relationships
+     */
+    async migrateCitations(): Promise<{ processed: number; citations: number }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        // Find all ResearchDocs that have sources
+        const result = await this.graph.query<any[]>(`
+            MATCH (d:ResearchDoc)
+            WHERE d.sources IS NOT NULL AND d.sources <> '[]'
+            RETURN d.id as id, d.sources as sources
+        `);
+
+        let processed = 0;
+        let citationsCreated = 0;
+
+        for (const row of (result.data || []) as any[]) {
+            const docId = row.id;
+            let sources: Array<{ id: number; text: string; url: string; domain: string }> = [];
+
+            try {
+                sources = JSON.parse(row.sources);
+            } catch {
+                continue;
+            }
+
+            for (const source of sources) {
+                if (!source.url) continue;
+
+                await this.mergeCitation(source.url, source.text || '', source.domain || '');
+
+                // Check if relationship already exists
+                const existing = await this.graph!.query<any[]>(`
+                    MATCH (d:ResearchDoc {id: '${docId}'})-[:CITES]->(cit:Citation {url: '${escapeString(source.url)}'})
+                    RETURN count(cit) as cnt
+                `);
+
+                if (!existing.data || existing.data.length === 0 || (existing.data[0] as any).cnt === 0) {
+                    await this.graph!.query(`
+                        MATCH (d:ResearchDoc {id: '${docId}'}), (cit:Citation {url: '${escapeString(source.url)}'})
+                        MERGE (d)-[:CITES]->(cit)
+                    `);
+                    citationsCreated++;
+                }
+            }
+            processed++;
+        }
+
+        console.log(`[GraphStore] Migration complete: ${processed} docs, ${citationsCreated} new citations`);
+        return { processed, citations: citationsCreated };
+    }
+
+    /**
+     * Get all citations, optionally filtered by domain
+     */
+    async getCitations(options?: { domain?: string; limit?: number }): Promise<Citation[]> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const limit = Number(options?.limit) || 50;
+        let query = 'MATCH (c:Citation)';
+        if (options?.domain) {
+            query += ` WHERE c.domain = '${escapeString(options.domain)}'`;
+        }
+        query += ` RETURN c ORDER BY c.firstSeenAt DESC LIMIT ${limit}`;
+
+        const result = await this.graph.query<any[]>(query);
+        return (result.data || []).map((row: any) => {
+            const props = row.c.properties || row.c;
+            return {
+                id: props.id,
+                url: props.url,
+                domain: props.domain,
+                text: props.text,
+                firstSeenAt: props.firstSeenAt
+            };
+        });
+    }
+
+    /**
+     * Get conversations/research docs that cite a specific URL
+     */
+    async getCitationUsage(url: string): Promise<Array<{ type: 'ResearchDoc' | 'Turn'; id: string; title?: string }>> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const results: Array<{ type: 'ResearchDoc' | 'Turn'; id: string; title?: string }> = [];
+
+        // Find ResearchDocs that cite this URL
+        const docResult = await this.graph.query<any[]>(`
+            MATCH (d:ResearchDoc)-[:CITES]->(c:Citation {url: '${escapeString(url)}'})
+            RETURN d.id as id, d.title as title
+        `);
+
+        for (const row of (docResult.data || []) as any[]) {
+            results.push({ type: 'ResearchDoc', id: row.id, title: row.title });
+        }
+
+        // Find Turns that mention this URL
+        const turnResult = await this.graph.query<any[]>(`
+            MATCH (t:Turn)-[:MENTIONS]->(c:Citation {url: '${escapeString(url)}'})
+            RETURN t.id as id
+        `);
+
+        for (const row of (turnResult.data || []) as any[]) {
+            results.push({ type: 'Turn', id: row.id });
+        }
+
+        return results;
     }
 
     /**
