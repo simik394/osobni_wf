@@ -444,10 +444,69 @@ async function main() {
             } else {
                 console.log('Server mode for graph conversations not implemented');
             }
+        } else if (subArg === 'export') {
+            // rsrch graph export [--platform=gemini|perplexity] [--format=md|json] [--output=path] [--since=timestamp] [--limit=N]
+            let platform: 'gemini' | 'perplexity' = 'gemini';
+            let format: 'md' | 'json' = 'md';
+            let outputDir = './exports';
+            let since: number | undefined = undefined;
+            let limit = 50;
+
+            for (let i = 2; i < args.length; i++) {
+                const arg = args[i];
+                if (arg.startsWith('--platform=')) {
+                    platform = arg.split('=')[1] as 'gemini' | 'perplexity';
+                } else if (arg.startsWith('--format=')) {
+                    format = arg.split('=')[1] as 'md' | 'json';
+                } else if (arg.startsWith('--output=')) {
+                    outputDir = arg.split('=')[1];
+                } else if (arg.startsWith('--since=')) {
+                    const sinceArg = arg.split('=')[1];
+                    // Parse as ISO date or timestamp
+                    const parsed = Date.parse(sinceArg);
+                    if (!isNaN(parsed)) {
+                        since = parsed;
+                    } else {
+                        since = parseInt(sinceArg);
+                    }
+                } else if (arg.startsWith('--limit=')) {
+                    limit = parseInt(arg.split('=')[1]) || 50;
+                }
+            }
+
+            console.log(`\n[Export] Platform: ${platform}, Format: ${format}, Output: ${outputDir}`);
+            if (since) {
+                console.log(`[Export] Since: ${new Date(since).toISOString()}`);
+            }
+            console.log(`[Export] Limit: ${limit}\n`);
+
+            const { exportBulk } = await import('./exporter');
+
+            try {
+                const results = await exportBulk(platform, {
+                    format,
+                    outputDir,
+                    since,
+                    limit,
+                    includeResearchDocs: true,
+                    includeThinking: true
+                });
+
+                console.log(`\n=== Export Complete ===`);
+                console.log(`Exported ${results.length} conversations`);
+                results.forEach(r => {
+                    console.log(`  ✓ ${r.path}`);
+                });
+                console.log('');
+            } catch (error: any) {
+                console.error(`Export failed: ${error.message}`);
+                process.exit(1);
+            }
         } else {
             console.log('Graph commands:');
             console.log('  rsrch graph notebooks [--limit=N]');
             console.log('  rsrch graph conversations [--limit=N] [--local]');
+            console.log('  rsrch graph export [--platform=gemini|perplexity] [--format=md|json] [--output=path] [--since=date] [--limit=N]');
         }
 
     } else if (command === 'gemini') {
