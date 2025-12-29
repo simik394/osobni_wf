@@ -170,27 +170,27 @@ rsrch graph search "keyword" [--platform=gemini]
 
 # Work Breakdown Structure
 
-## Phase 1: Gemini Conversation Scraper
-- [ ] Add `scrapeConversations(limit, offset)` to `gemini-client.ts`
-  - [ ] Paginate sessions from sidebar
-  - [ ] Detect regular vs deep-research sessions
-  - [ ] Extract turns (role, content, timestamp if available)
-  - [ ] Handle deep research doc expansion
-- [ ] Return structured data with `capturedAt`
+## Phase 1: Gemini Conversation Scraper ✅
+- [x] Add `scrapeConversations(limit, offset)` to `gemini-client.ts`
+  - [x] Paginate sessions from sidebar
+  - [x] Detect regular vs deep-research sessions
+  - [x] Extract turns (role, content, timestamp if available)
+  - [x] Handle deep research doc expansion
+- [x] Return structured data with `capturedAt`
 
-## Phase 2: Graph Storage
-- [ ] Add `syncConversation()` to `graph-store.ts`
-  - [ ] Upsert by platformId
-  - [ ] Store conversation with capturedAt
-  - [ ] Insert turns with relationships
-  - [ ] Handle ResearchDoc for deep research
-- [ ] Add `getConversationsByPlatform(platform, limit)`
-- [ ] Add `getConversationWithFilters(id, filters)`
+## Phase 2: Graph Storage ✅
+- [x] Add `syncConversation()` to `graph-store.ts`
+  - [x] Upsert by platformId
+  - [x] Store conversation with capturedAt
+  - [x] Insert turns with relationships
+  - [x] Handle ResearchDoc for deep research
+- [x] Add `getConversationsByPlatform(platform, limit)`
+- [x] Add `getConversationWithFilters(id, filters)`
 
-## Phase 3: CLI Integration
-- [ ] `rsrch gemini sync-conversations --limit --offset`
-- [ ] `rsrch graph conversations --platform`
-- [ ] `rsrch graph conversation <id> --questions-only --answers-only`
+## Phase 3: CLI Integration ✅
+- [x] `rsrch gemini sync-conversations --limit --offset`
+- [x] `rsrch graph conversations --platform`
+- [x] `rsrch graph conversation <id> --questions-only --answers-only`
 
 ## Phase 4: Testing
 - [x] Run sync on Gemini account
@@ -198,29 +198,37 @@ rsrch graph search "keyword" [--platform=gemini]
 - [ ] Test deep research extraction
 
 ## Phase 5: Content Quality Improvements
-- [ ] **Code Block Preservation**
-  - [ ] Use `innerHTML()` instead of `innerText()` for extraction
-  - [ ] Convert HTML `<pre><code>` to markdown fenced blocks
-  - [ ] Preserve language hints from `class="language-*"`
-  - [ ] Maintain proper newlines inside code blocks
+- [x] **Code Block Preservation**
+  - [x] Use `innerHTML()` instead of `innerText()` for extraction
+  - [x] Convert HTML `<pre><code>` to markdown fenced blocks
+  - [x] Preserve language hints from `class="language-*"`
+  - [x] Maintain proper newlines inside code blocks
   
-- [ ] **Reasoning/Thinking Extraction**
-  - [ ] Expand collapsed "Show reasoning" sections before extraction
-  - [ ] Language-agnostic detection: match `Zobrazit uvažování` (CZ), `Show reasoning` (EN), or similar patterns
+- [x] **Reasoning/Thinking Extraction**
+  - [x] Expand collapsed "Show reasoning" sections before extraction
+  - [x] Language-agnostic detection: match `Zobrazit uvažování` (CZ), `Show reasoning` (EN), or similar patterns
   - [ ] Store reasoning as separate field or inline with marker
-  - [ ] Click to expand toggle elements before reading content
+  - [x] Click to expand toggle elements before reading content
   
-- [ ] **Content Formatting**
-  - [ ] Preserve markdown formatting (bold, italic, lists)
+- [x] **Content Formatting**
+  - [x] Preserve markdown formatting (bold, italic, lists)
   - [ ] Handle tables properly
-  - [ ] Maintain heading hierarchy
+  - [x] Maintain heading hierarchy
   - [ ] Handle LaTeX/math expressions if present
 
 - [ ] **Robustness**
   - [ ] Retry on transient scraping failures
   - [ ] Handle session timeout/re-auth
-  - [ ] Graceful degradation if element not found
-  - [ ] Log extraction warnings without failing entire sync
+  - [x] Graceful degradation if element not found
+  - [x] Log extraction warnings without failing entire sync
+
+## Phase 6: Export to Files
+> See [export_spec.md](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/export_spec.md)
+- [ ] Implement markdown export
+- [ ] Implement JSON export  
+- [ ] Add delta/change tracking
+- [ ] CLI commands for export
+
 
 ---
 
@@ -240,9 +248,12 @@ rsrch graph search "keyword" [--platform=gemini]
 
 ## Known Issues (from Testing)
 
-| Issue | Description | Priority |
-|-------|-------------|----------|
-| Code blocks truncated | `innerText()` flattens HTML structure, loses formatting | P1 |
-| Reasoning not expanded | "Zobrazit uvažování" / "Show reasoning" shows instead of actual thoughts | P1 |
-| Content truncation | Long messages may be cut off in CLI display (display issue, not storage) | P2 |
-| Re-sync doesn't update turns | Upsert only touches `capturedAt`, not conversation content | P2 |
+| Issue | Description | Priority | Status |
+|-------|-------------|----------|--------|
+| Code blocks truncated | `innerText()` flattens HTML structure, loses formatting | P1 | ✅ Fixed (`htmlToMarkdownSimple`) |
+| Reasoning not expanded | "Zobrazit uvažování" / "Show reasoning" shows instead of actual thoughts | P1 | ✅ Fixed (`expandReasoningSections`) |
+| Content truncation | Long messages may be cut off in CLI display (display issue, not storage) | P2 | Open |
+| Re-sync doesn't update turns | Upsert only touches `capturedAt`, not conversation content | P2 | Open |
+| No export to files | Cannot export conversations to markdown/JSON | P1 | In Design |
+| No delta sync | Cannot track what changed since last sync | P2 | In Design |
+

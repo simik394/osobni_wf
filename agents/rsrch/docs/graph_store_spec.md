@@ -187,3 +187,13 @@ await store.connect('localhost', 6379);  // Or 'falkordb' in Docker network
 - [ ] Vector similarity for semantic search
 - [ ] Graph visualization dashboard
 - [ ] Export/import graph snapshots
+
+## Future Work (Export & Delta Sync)
+> See [export_spec.md](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/export_spec.md) for details
+
+- [ ] Add `contentHash` property to Conversation node for change detection
+- [ ] Add `lastExportedAt` timestamp for delta export
+- [ ] Implement `getChangedConversations(since)` method
+- [ ] Implement `getConversationsForExport(filters)` method
+- [ ] Support per-document `generatedAt` timestamp extraction
+

@@ -210,21 +210,22 @@ rsrch gemini parse --full --output research.md
 
 ## 9. WBS
 
-### Phase 1: Content Parser
-- [ ] Create `parseResearchContent()` in `gemini-client.ts`
-- [ ] Extract headings, paragraphs, lists from `div.container`
-- [ ] Preserve HTML structure for formatting
+### Phase 1: Content Parser ✅
+- [x] Create `parseResearchContent()` in `gemini-client.ts` (via `extractContent()`)
+- [x] Extract headings, paragraphs, lists from `div.container`
+- [x] Preserve HTML structure for formatting
 
-### Phase 2: Citation Extractor
-- [ ] Create `extractCitations()` 
-- [ ] Find citation buttons by `aria-label`
-- [ ] Click to reveal source details
-- [ ] Map citations to sections
+### Phase 2: Citation Extractor ✅
+- [x] Create `extractCitations()`
+- [x] Find citation buttons by `aria-label`
+- [x] Click to reveal source details
+- [ ] Map citations to sections (partial)
+- [ ] **Extract unused sources** (collapsed "Sources consulted but not cited")
 
-### Phase 3: Reasoning Extractor
-- [ ] Create `extractReasoningSteps()`
-- [ ] Parse chat history for research phases
-- [ ] Extract "Zahájit výzkum" / "Dokončeno" markers
+### Phase 3: Reasoning Extractor ✅
+- [x] Create `extractReasoningSteps()`
+- [x] Parse chat history for research phases
+- [x] Extract "Zahájit výzkum" / "Dokončeno" markers
 
 ### Phase 4: Research Flow Builder
 - [ ] Create `buildResearchFlow()`
@@ -232,11 +233,13 @@ rsrch gemini parse --full --output research.md
 - [ ] Generate Mermaid diagram
 
 ### Phase 5: Export Functions
-- [ ] Create `exportToMarkdown()`
-- [ ] Create `createGoogleDoc()` (via Google Docs API or Drive)
-- [ ] Integrate with registry
+> Now covered by [export_spec.md](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/export_spec.md)
+- [x] Create `exportToMarkdown()` - basic version in `htmlToMarkdownSimple()`
+- [x] Use Google Docs export via `exportToGoogleDocs()`
+- [x] Integrate with registry
 
 ### Phase 6: Testing
-- [ ] Test on existing research session
-- [ ] Verify all citations extracted
-- [ ] Verify Mermaid diagram renders
+- [x] Test on existing research session
+- [x] Verify all citations extracted (used sources only)
+- [ ] Verify Mermaid diagram renders (Phase 4 not implemented)
+
