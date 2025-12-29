@@ -108,17 +108,9 @@
     group: 999
     mode: "0750"
 
-- name: Create Goose config directory
+- name: Create Goose home directory
   ansible.builtin.file:
-    path: /opt/goose/config
-    state: directory
-    owner: 1000
-    group: 1000
-    mode: "0755"
-
-- name: Create Goose state directory
-  ansible.builtin.file:
-    path: /opt/goose/state
+    path: /opt/goose/home
     state: directory
     owner: 1000
     group: 1000

@@ -8,7 +8,7 @@ job "goose" {
     network {
       mode = "host"
       port "http" {
-        static = 3001
+        static = 3099
       }
     }
 
@@ -26,25 +26,19 @@ job "goose" {
         interactive  = true
         tty          = true
         
-        # Mount config and state directories to the correct user home (uid 1000)
+        # Mount the entire home directory to ensure permissions are consistent
         mounts = [
           {
             type     = "bind"
-            target   = "/home/goose/.config/goose"
-            source   = "/opt/goose/config"
-            readonly = false
-          },
-          {
-            type     = "bind"
-            target   = "/home/goose/.local/state/goose"
-            source   = "/opt/goose/state"
+            target   = "/home/goose"
+            source   = "/opt/goose/home"
             readonly = false
           }
         ]
 
         # Run goose web interface
         entrypoint = ["goose"]
-        args       = ["web", "--host", "0.0.0.0", "--port", "3001"]
+        args       = ["web", "--host", "0.0.0.0", "--port", "3099"]
       }
 
       env {
@@ -76,6 +70,7 @@ job "goose" {
           "traefik.enable=true",
           "traefik.http.routers.goose.rule=Host(`goose.{{ traefik_domain | default('100.73.45.27.nip.io') }}`)",
           "traefik.http.routers.goose.entrypoints=web",
+          "traefik.http.services.goose.loadbalancer.server.port=3099"
         ]
         
         check {
