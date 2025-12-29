@@ -27,6 +27,11 @@
   when: not vnc_passwd_file.stat.exists
   no_log: true
 
+- name: Get User UID
+  command: id -u "{{ ansible_user_id }}"
+  register: user_uid
+  changed_when: false
+
 - name: Create x11vnc systemd service
   copy:
     dest: /etc/systemd/system/x11vnc.service
@@ -38,7 +43,8 @@
 
       [Service]
       Type=simple
-      ExecStart=/usr/bin/x11vnc -display :0 -auth guess -forever -loop -noxdamage -repeat -rfbauth {{ ansible_env.HOME }}/.vnc/passwd -rfbport {{ vnc_port }} -shared
+      # Explicitly pointing to GDM Xauthority for the user
+      ExecStart=/usr/bin/x11vnc -display :0 -auth /run/user/{{ user_uid.stdout }}/gdm/Xauthority -forever -loop -noxdamage -repeat -rfbauth {{ ansible_env.HOME }}/.vnc/passwd -rfbport {{ vnc_port }} -shared
       ExecStop=/usr/bin/killall x11vnc
       Restart=on-failure
       RestartSec=3
@@ -63,3 +69,5 @@
       Connect from Android using any VNC client (e.g., bVNC, RealVNC Viewer)
       Address: {{ ansible_default_ipv4.address | default('YOUR_IP') }}:{{ vnc_port }}
       Password: (the one you configured)
+
+      NOTE: Ensure you are logged in to the graphical session for VNC to work.
