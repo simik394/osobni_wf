@@ -7,6 +7,9 @@ job "goose" {
 
     network {
       mode = "host"
+      port "http" {
+        static = 3001
+      }
     }
 
     constraint {
@@ -23,35 +26,39 @@ job "goose" {
         interactive  = true
         tty          = true
         
-        # Mount config and state directories for persistence
+        # Mount config and state directories to the correct user home (uid 1000)
         mounts = [
           {
             type     = "bind"
-            target   = "/root/.config/goose"
+            target   = "/home/goose/.config/goose"
             source   = "/opt/goose/config"
             readonly = false
           },
           {
             type     = "bind"
-            target   = "/root/.local/state/goose"
+            target   = "/home/goose/.local/state/goose"
             source   = "/opt/goose/state"
             readonly = false
           }
         ]
 
-        # Keep container running
-        entrypoint = ["/bin/sh", "-c"]
-        args       = ["while true; do sleep 3600; done"]
+        # Run goose web interface
+        entrypoint = ["goose"]
+        args       = ["web", "--host", "0.0.0.0", "--port", "3001"]
       }
 
       env {
-        # OpenAI-compatible API configuration for rsrch server (Gemini)
-        GOOSE_PROVIDER__TYPE = "openai"
-        OPENAI_API_KEY       = "not-needed-for-local"
-        OPENAI_BASE_URL      = "http://localhost:3030/v1"
-        GOOSE_MODEL          = "gemini-rsrch"
+        # Provider configuration
+        GOOSE_PROVIDER       = "openai"
+        GOOSE_PROVIDER_TYPE  = "openai"
         
-        HOME = "/root"
+        # OpenAI settings
+        OPENAI_API_KEY       = "dummy"
+        OPENAI_BASE_URL      = "http://localhost:3030/v1"
+        OPENAI_HOST          = "http://localhost:3030"
+        
+        # Model
+        GOOSE_MODEL          = "gemini-rsrch"
       }
 
       resources {
@@ -61,13 +68,20 @@ job "goose" {
 
       service {
         name = "goose"
+        port = "http"
         
-        # Script check to verify container is running
+        tags = [
+          "goose",
+          "ai-agent",
+          "traefik.enable=true",
+          "traefik.http.routers.goose.rule=Host(`goose.{{ traefik_domain | default('100.73.45.27.nip.io') }}`)",
+          "traefik.http.routers.goose.entrypoints=web",
+        ]
+        
         check {
-          name     = "goose-alive"
-          type     = "script"
-          command  = "/bin/sh"
-          args     = ["-c", "true"]
+          name     = "goose-web-health"
+          type     = "http"
+          path     = "/"
           interval = "30s"
           timeout  = "5s"
         }

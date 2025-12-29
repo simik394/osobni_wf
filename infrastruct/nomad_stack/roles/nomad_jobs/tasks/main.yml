@@ -112,16 +112,16 @@
   ansible.builtin.file:
     path: /opt/goose/config
     state: directory
-    owner: root
-    group: root
+    owner: 1000
+    group: 1000
     mode: "0755"
 
 - name: Create Goose state directory
   ansible.builtin.file:
     path: /opt/goose/state
     state: directory
-    owner: root
-    group: root
+    owner: 1000
+    group: 1000
     mode: "0755"
 
 - name: Create rsrch secrets directory
