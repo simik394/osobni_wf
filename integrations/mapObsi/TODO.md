@@ -42,10 +42,11 @@ This file tracks all planned work for the Vault Librarian project.
   - [x] Test UpsertNote/UpsertCode query generation
   - [x] Test special character handling
 
-- [ ] **Integration Tests**
-  - [ ] Full scan → query → verify results
-  - [ ] Watch mode with test file changes
-  - [ ] Dump mode → import → verify graph
+- [x] **Integration Tests** (`test/integration/`) - 4 tests
+  - [x] Full scan → query → verify results
+  - [x] Dump mode generation and verification
+  - [x] Delete operations
+  - [x] Config integration with live DB
 
 ---
 
