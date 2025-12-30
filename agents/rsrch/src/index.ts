@@ -839,13 +839,14 @@ async function main() {
 
     } else if (command === 'gemini') {
         const subArg1 = args[1]; // e.g. research
-        const isLocalExecution = args.includes('--local');
+        const hasLocalFlag = args.includes('--local');
+        const isLocalExecution = hasLocalFlag || !!process.env.BROWSER_CDP_ENDPOINT || !!process.env.BROWSER_WS_ENDPOINT;
 
         // Helper for local execution
         const runLocalGeminiAction = async (action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string) => {
-            console.log('Running Gemini in LOCAL mode...');
+            console.log(`Running Gemini in ${hasLocalFlag ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
             const client = new PerplexityClient();
-            await client.init();
+            await client.init({ local: hasLocalFlag });
             const gemini = await client.createGeminiClient();
             await gemini.init(sessionId); // Pass sessionId to navigate directly
             try {
