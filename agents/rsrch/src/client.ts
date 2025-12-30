@@ -65,14 +65,15 @@ export class PerplexityClient extends BaseClient {
         super(options);
     }
 
-    async init(options: { keepAlive?: boolean } = {}) {
+    async init(options: { keepAlive?: boolean, local?: boolean } = {}) {
         if (this.isInitialized) {
             this.log('Client already initialized');
             return;
         }
         this.keepAlive = options.keepAlive || this.options.keepAlive || false;
 
-        if (process.env.BROWSER_WS_ENDPOINT) {
+        // Force local mode if requested, bypassing env vars
+        if (!options.local && process.env.BROWSER_WS_ENDPOINT) {
             console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
             this.browser = await (chromium.connect(config.browserWsEndpoint) as unknown as Browser);
 
@@ -206,7 +207,7 @@ export class PerplexityClient extends BaseClient {
                 });
             }
 
-        } else if (process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT) {
+        } else if (!options.local && (process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT)) {
             try {
                 // CDP/WebSocket connection to remote browser
                 let endpoint = process.env.BROWSER_CDP_ENDPOINT ||
