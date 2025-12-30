@@ -52,10 +52,10 @@ This file tracks all planned work for the Vault Librarian project.
 
 ## Priority 3: Features
 
-### Phase 3: Query Layer (Partially Complete)
+### Phase 3: Query Layer (Complete)
 - [x] CLI tool for queries
 - [x] Orphan/backlink commands
-- [ ] Agent integration API (rsrch, angrav can query directly)
+- [x] Agent integration API (Windmill MCP scripts in `f/vault/`)
 
 ### Phase 4: Advanced Features
 - [ ] **PDF text extraction** (Zotero integration)
