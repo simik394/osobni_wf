@@ -1,57 +1,89 @@
-# Vault Librarian: Implementations
+# mapObsi — Vault Librarian
 
-This directory contains three different implementations of the "Vault Librarian" system, designed to parse and index the Obsidian vault into FalkorDB.
+> **Scan your Obsidian vault. Query it like a knowledge graph. Get precise project state.**
 
-**[[BENCHMARKS|See Full Benchmark Report]]**
+Vault Librarian indexes your Obsidian vault (and code directories) into [FalkorDB](https://www.falkordb.com/), enabling graph-based queries, architecture visualization, and AI-powered analysis.
 
-## Directory Structure
+## ✨ Features
 
-*   **`implementations/go/`**: The primary, production-grade daemon.
-    *   **Features**: `fsnotify` file watching, robust configuration, standardized CLI.
-    *   **Status**: **RECOMMENDED**. Production Ready.
-    *   **Performance**:
-        *   **Dump Mode**: ~4,000 files in **0.42s** (Parallel).
-        *   **Direct Sync**: ~3.0s (Parallel with Connection Pool).
+| Feature | Description |
+|---------|-------------|
+| **📊 Graph Queries** | Find orphan notes, backlinks, tag relationships |
+| **🔍 Code Analysis** | Index functions, classes, imports from code files |
+| **📈 Architecture Reports** | Generate Mermaid/PlantUML diagrams |
+| **👁️ Live Watching** | Keep graph in sync as you edit |
+| **🤖 AI Analysis** | Trigger Windmill workflows for insights |
+| **⚡ Fast** | ~4,000 files indexed in 0.4 seconds |
 
-*   **`implementations/julia/`**: A high-performance experimental implementation.
-    *   **Features**: Parallel regex parsing, raw TCP/RESP DB sync.
-    *   **Status**: Benchmark / Analysis Tool.
-    *   **Performance**:
-        *   **Dump Mode**: ~4,000 files in **0.35s** (Parallel).
-        *   **Direct Sync**: ~14s (Sequential Socket).
-    *   *Note*: An attempt to use `Redis.jl` for parallel sync failed due to driver issues (see `librarian_lib.jl`).
+## 🚀 Quick Start
 
-*   **`implementations/python/`**: The original prototype scripts.
-    *   **Features**: Tree-sitter parsing (more accurate but slower).
-    *   **Status**: Legacy / Reference.
-
-## Usage
-
-### Recommended: Bulk Load (Go)
-This is the fastest way to index the vault (sub-second).
 ```bash
+# Build
 cd implementations/go
 go build -o librarian ./cmd/librarian
+
+# Index your vault (fastest method)
 ./librarian scan --dump
 cat dump.cypher | redis-cli --pipe
+
+# Query
+./librarian query orphans          # Find orphan notes
+./librarian query backlinks README # Find what links to a note
+./librarian stats                  # Graph statistics
 ```
 
-### Go Daemon (Live Watch)
-```bash
-./librarian watch
+**📖 [Full Getting Started Guide →](docs/GETTING_STARTED.md)**
+
+## 📁 Project Structure
+
+```
+mapObsi/
+├── docs/                      # Documentation
+│   ├── GETTING_STARTED.md     # ← Start here
+│   ├── BENCHMARKS.md          # Performance comparison
+│   └── vault_validation_spec.md
+├── implementations/
+│   ├── go/                    # ✅ RECOMMENDED - Production daemon
+│   ├── julia/                 # Benchmark/analysis tool
+│   └── python/                # Legacy prototype
+├── TODO.md                    # Project roadmap
+└── README.md                  # This file
 ```
 
-### AI Analysis (Windmill)
-Trigger an AI analysis workflow for a specific project.
-```bash
-./librarian analyze <project_name>
-# Example: ./librarian analyze 01-pwf
-```
-Requires `windmill.webhook_url` in `config.yaml`.
+## 🏗️ Implementations
 
-### Julia (Benchmark)
+| Implementation | Status | Performance | Use Case |
+|----------------|--------|-------------|----------|
+| **[Go](implementations/go/)** | ✅ Production | 0.42s dump, 3s sync | Daily use, watching |
+| **[Julia](implementations/julia/)** | ⚠️ Benchmark | 0.35s dump, 14s sync | Analysis, prototyping |
+| **[Python](implementations/python/)** | 🗄️ Legacy | Slower | Reference only |
+
+**[See Full Benchmark Report →](docs/BENCHMARKS.md)**
+
+## 📚 Documentation
+
+- **[Getting Started](docs/GETTING_STARTED.md)** — Setup, configuration, CLI reference
+- **[Go Implementation](implementations/go/README.md)** — Detailed daemon documentation
+- **[Diagram Generation](implementations/go/DIAGRAMS.md)** — Clustering & visualization logic
+- **[Benchmarks](docs/BENCHMARKS.md)** — Performance comparison (Go vs Julia)
+- **[Validation Spec](docs/vault_validation_spec.md)** — Future: Prolog-based rule validation
+- **[Project Proposal](VAULT_LIBRARIAN_PROPOSAL.md)** — Original design document
+
+## 🗺️ Roadmap
+
+See [TODO.md](TODO.md) for detailed tracking. Priorities:
+
+1. **Documentation** — Schema docs, extensibility guide
+2. **Testing** — Unit tests for Go implementation
+3. **Features** — PDF extraction, semantic search, Obsidian plugin
+
+## 🔧 Requirements
+
+- **Go 1.21+** for building
+- **FalkorDB** running on port 6379
+- **redis-cli** for bulk import
+
 ```bash
-cd implementations/julia
-export JULIA_NUM_THREADS=8
-julia --project=. librarian.jl dump
+# Start FalkorDB
+docker run -d --name falkordb -p 6379:6379 falkordb/falkordb
 ```
