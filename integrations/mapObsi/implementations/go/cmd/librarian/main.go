@@ -199,6 +199,37 @@ func runScan(cfg *config.Config, args []string) {
 	duration := time.Since(start)
 	log.Printf("Scan completed in %v", duration)
 	log.Printf("Processed: %d notes, %d code files, %d assets", notes, code, assets)
+
+	// Persist scan configuration to graph (skip in dump mode)
+	if !dumpMode {
+		scanCfg := &db.ScanConfig{
+			StartTime:        start.Unix(),
+			EndTime:          time.Now().Unix(),
+			DurationMs:       duration.Milliseconds(),
+			FilesScanned:     notes + code + assets,
+			NotesIndexed:     notes,
+			CodeFilesIndexed: code,
+			Version:          "1.0.0",
+		}
+
+		// Collect source paths
+		for _, src := range cfg.Sources {
+			if src.Enabled {
+				scanCfg.Sources = append(scanCfg.Sources, src.Name+":"+src.Path)
+			}
+		}
+
+		// Collect patterns
+		scanCfg.IncludePatterns = cfg.Processing.Code.Include
+		scanCfg.ExcludePatterns = cfg.Processing.Code.Exclude
+		scanCfg.GlobalIgnores = cfg.GlobalIgnore.Patterns
+
+		if err := dbClient.UpsertScanConfig(ctx, scanCfg); err != nil {
+			log.Printf("Warning: Failed to save scan config: %v", err)
+		} else {
+			log.Println("Scan configuration persisted to graph")
+		}
+	}
 }
 
 func runQuery(ctx context.Context, cfg *config.Config, args []string) {

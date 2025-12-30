@@ -522,3 +522,101 @@ func (c *Client) upsertTasks(ctx context.Context, parentPath string, tasks []par
 		c.query(ctx, taskQuery)
 	}
 }
+
+// ScanConfig holds metadata about a scan operation
+type ScanConfig struct {
+	StartTime        int64    // Unix timestamp when scan started
+	EndTime          int64    // Unix timestamp when scan ended
+	DurationMs       int64    // Scan duration in milliseconds
+	FilesScanned     int      // Total files processed
+	NotesIndexed     int      // Markdown files indexed
+	CodeFilesIndexed int      // Code files indexed
+	Sources          []string // Source paths that were scanned
+	IncludePatterns  []string // Include patterns used
+	ExcludePatterns  []string // Exclude patterns used
+	GlobalIgnores    []string // Global ignore patterns
+	Version          string   // Librarian version
+}
+
+// UpsertScanConfig creates or updates the scan configuration node
+func (c *Client) UpsertScanConfig(ctx context.Context, cfg *ScanConfig) error {
+	// Convert slices to comma-separated strings for storage
+	sources := strings.Join(cfg.Sources, ",")
+	includes := strings.Join(cfg.IncludePatterns, ",")
+	excludes := strings.Join(cfg.ExcludePatterns, ",")
+	ignores := strings.Join(cfg.GlobalIgnores, ",")
+
+	// Delete existing ScanConfig and create new one (MERGE on singleton)
+	query := fmt.Sprintf(`
+		MERGE (s:ScanConfig {id: 'singleton'})
+		SET s.startTime = %d,
+		    s.endTime = %d,
+		    s.durationMs = %d,
+		    s.filesScanned = %d,
+		    s.notesIndexed = %d,
+		    s.codeFilesIndexed = %d,
+		    s.sources = '%s',
+		    s.includePatterns = '%s',
+		    s.excludePatterns = '%s',
+		    s.globalIgnores = '%s',
+		    s.version = '%s'
+		RETURN s
+	`, cfg.StartTime, cfg.EndTime, cfg.DurationMs,
+		cfg.FilesScanned, cfg.NotesIndexed, cfg.CodeFilesIndexed,
+		escapeCypher(sources), escapeCypher(includes),
+		escapeCypher(excludes), escapeCypher(ignores),
+		escapeCypher(cfg.Version))
+
+	_, err := c.query(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to upsert scan config: %w", err)
+	}
+
+	return nil
+}
+
+// GetScanConfig retrieves the current scan configuration
+func (c *Client) GetScanConfig(ctx context.Context) (*ScanConfig, error) {
+	query := `MATCH (s:ScanConfig {id: 'singleton'}) RETURN s.startTime, s.endTime, s.durationMs, s.filesScanned, s.notesIndexed, s.codeFilesIndexed, s.sources, s.version`
+
+	result, err := c.query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse result (simplified - returns nil if not found)
+	if arr, ok := result.([]any); ok && len(arr) > 1 {
+		if rows, ok := arr[1].([]any); ok && len(rows) > 0 {
+			if row, ok := rows[0].([]any); ok && len(row) >= 8 {
+				cfg := &ScanConfig{}
+				if v, ok := row[0].(int64); ok {
+					cfg.StartTime = v
+				}
+				if v, ok := row[1].(int64); ok {
+					cfg.EndTime = v
+				}
+				if v, ok := row[2].(int64); ok {
+					cfg.DurationMs = v
+				}
+				if v, ok := row[3].(int64); ok {
+					cfg.FilesScanned = int(v)
+				}
+				if v, ok := row[4].(int64); ok {
+					cfg.NotesIndexed = int(v)
+				}
+				if v, ok := row[5].(int64); ok {
+					cfg.CodeFilesIndexed = int(v)
+				}
+				if v, ok := row[6].(string); ok && v != "" {
+					cfg.Sources = strings.Split(v, ",")
+				}
+				if v, ok := row[7].(string); ok {
+					cfg.Version = v
+				}
+				return cfg, nil
+			}
+		}
+	}
+
+	return nil, nil // Not found
+}

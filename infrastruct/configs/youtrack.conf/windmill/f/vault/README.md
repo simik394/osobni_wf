@@ -18,6 +18,7 @@ Windmill scripts for querying the Vault Librarian FalkorDB knowledge graph.
 | `get_backlinks.ts` | Find notes linking to a target | `f/vault/get_backlinks` |
 | `get_notes_by_tag.ts` | Find notes with a specific tag | `f/vault/get_notes_by_tag` |
 | `get_stats.ts` | Get vault statistics | `f/vault/get_stats` |
+| `get_scan_status.ts` | Check when vault was last indexed | `f/vault/get_scan_status` |
 | `find_function.ts` | Find function definitions | `f/vault/find_function` |
 | `find_related.ts` | Find related notes (links + shared tags) | `f/vault/find_related` |
 | `get_project_context.ts` | Get full project context for AI | `f/vault/get_project_context` |
