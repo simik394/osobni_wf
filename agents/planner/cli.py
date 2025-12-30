@@ -66,6 +66,32 @@ def cmd_batch(args):
         print(json.dumps({'batch': result.immediate_batch}, indent=2))
 
 
+def cmd_value(args):
+    """Show tasks ranked by value impact (which block the most downstream work)"""
+    data = json.loads(Path(args.input).read_text())
+    
+    request = load_from_json(data)
+    solver = TaskPlannerSolver(request)
+    
+    top_tasks = solver.get_highest_value_tasks(limit=args.limit)
+    
+    print("## Value-Blocking Analysis")
+    print()
+    print("Tasks ranked by how much downstream value they unlock:")
+    print()
+    
+    for i, impact in enumerate(top_tasks, 1):
+        print(f"### {i}. {impact['task_id']}: {impact['summary']}")
+        print(f"   - Value Score: **{impact['value_score']}/100**")
+        print(f"   - Blocks {impact['transitive_blockers']} tasks ({impact['blocked_hours']}h of work)")
+        if impact['blocked_goals']:
+            print(f"   - Required for goals: {', '.join(impact['blocked_goals'])}")
+        print()
+    
+    if args.json:
+        print(json.dumps(top_tasks, indent=2))
+
+
 def cmd_demo(args):
     """Run with demo data"""
     demo_data = {
@@ -110,6 +136,13 @@ def main():
     batch_parser.add_argument('--max-parallel', '-p', type=int, default=15, help='Max parallel tasks')
     batch_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
     batch_parser.set_defaults(func=cmd_batch)
+    
+    # value command
+    value_parser = subparsers.add_parser('value', help='Show tasks ranked by value impact')
+    value_parser.add_argument('--input', '-i', required=True, help='Input JSON file')
+    value_parser.add_argument('--limit', '-l', type=int, default=10, help='Number of tasks to show')
+    value_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
+    value_parser.set_defaults(func=cmd_value)
     
     # demo command
     demo_parser = subparsers.add_parser('demo', help='Run with demo data')

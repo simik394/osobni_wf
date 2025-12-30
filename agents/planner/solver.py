@@ -80,6 +80,96 @@ class TaskPlannerSolver:
         
         return conflicts
     
+    def calculate_value_impact(self) -> dict[str, dict]:
+        """
+        Calculate the value each task blocks.
+        
+        Value Impact = How much downstream work is unlocked by completing this task
+        
+        Components:
+        - direct_blockers: Tasks directly blocked by this one
+        - transitive_blockers: All tasks transitively blocked
+        - blocked_hours: Total hours of work blocked
+        - blocked_goals: Goals that can't complete without this task
+        - value_score: Composite score (0-100)
+        """
+        # Build reverse dependency graph (who I block)
+        blocks: dict[str, set[str]] = {t.id: set() for t in self.request.tasks}
+        for task in self.request.tasks:
+            for dep_id in task.depends_on:
+                if dep_id in blocks:
+                    blocks[dep_id].add(task.id)
+        
+        results = {}
+        
+        for task in self.request.tasks:
+            # Direct blockers
+            direct = blocks[task.id]
+            
+            # Transitive blockers (DFS)
+            transitive = set()
+            stack = list(direct)
+            while stack:
+                blocked_id = stack.pop()
+                if blocked_id not in transitive:
+                    transitive.add(blocked_id)
+                    stack.extend(blocks.get(blocked_id, []))
+            
+            # Blocked hours
+            blocked_hours = sum(
+                self.tasks[t].estimate_hours 
+                for t in transitive if t in self.tasks
+            )
+            
+            # Blocked goals
+            blocked_goals = set()
+            for goal in self.request.goals:
+                goal_tasks = set(goal.tasks)
+                # If this task is required for the goal AND blocks other goal tasks
+                if task.id in goal_tasks and (transitive & goal_tasks):
+                    blocked_goals.add(goal.id)
+                # Or if this task is a prerequisite for goal tasks
+                if transitive & goal_tasks:
+                    blocked_goals.add(goal.id)
+            
+            # Value score (composite)
+            # Weight: transitive count + hours blocked + goals blocked
+            max_tasks = len(self.request.tasks)
+            max_hours = sum(t.estimate_hours for t in self.request.tasks)
+            max_goals = len(self.request.goals)
+            
+            score = 0.0
+            if max_tasks > 0:
+                score += 40 * (len(transitive) / max_tasks)  # 40% for task count
+            if max_hours > 0:
+                score += 40 * (blocked_hours / max_hours)    # 40% for hours
+            if max_goals > 0:
+                score += 20 * (len(blocked_goals) / max_goals)  # 20% for goals
+            
+            results[task.id] = {
+                'task_id': task.id,
+                'summary': task.summary,
+                'direct_blockers': len(direct),
+                'transitive_blockers': len(transitive),
+                'blocked_tasks': list(transitive),
+                'blocked_hours': blocked_hours,
+                'blocked_goals': list(blocked_goals),
+                'value_score': round(score, 1),
+                'priority': task.priority.name,
+            }
+        
+        return results
+    
+    def get_highest_value_tasks(self, limit: int = 10) -> list[dict]:
+        """Get tasks sorted by value impact (most valuable first)"""
+        impacts = self.calculate_value_impact()
+        sorted_impacts = sorted(
+            impacts.values(), 
+            key=lambda x: x['value_score'], 
+            reverse=True
+        )
+        return sorted_impacts[:limit]
+    
     def select_parallel_batch(self, ordered_tasks: list[str], max_size: int) -> list[str]:
         """Select non-conflicting tasks for parallel execution"""
         conflicts = self.detect_file_conflicts()
