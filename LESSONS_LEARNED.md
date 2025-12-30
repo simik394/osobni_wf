@@ -97,3 +97,9 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Sidecar Availability**: `socat` sidecars for port forwarding are brittle if the target (Chrome) isn't ready. Use a wait loop (poll port) or a dedicated startup script that sequences the browser launch before the proxy.
 - **ARM64 Compatibility**: Standard Selenium images often lack ARM64 support or are unoptimized. Use `seleniarm/standalone-chromium` for reliability on `aarch64` servers (like OCI Ampere A1).
 - **Docker Build Context**: When building images on a remote server, simple `scp` of the source directory is often faster and more reliable than configuring remote Docker contexts, especially for ad-hoc builds.
+
+## Documentation & Project Hygiene
+- **Consolidated Entry Points**: Avoid scattering documentation across multiple READMEs without a clear entry point. Create a single "Getting Started" guide that links to detailed docs.
+- **TODO.md for Roadmaps**: Maintaining a `TODO.md` at project root (separate from implementation code) provides a clear, living roadmap that helps agents and developers track progress.
+- **Test-First Priority**: For production-ready code with zero tests, prioritize test creation immediately. Start with the core parsing/config modules as they validate the fundamental correctness.
+- **Go Testing Helpers**: Use `t.TempDir()` for automatic cleanup of temp files in Go tests. It's cleaner than manual `defer os.Remove()` patterns.
