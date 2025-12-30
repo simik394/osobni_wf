@@ -116,6 +116,23 @@ export class GeminiClient {
             await this.page.waitForTimeout(2000);
         }
 
+        // Handle "Stay in the loop" / "Try Gemini Advanced" / "Ne, díky" popups
+        const dismissButtons = this.page.locator(
+            'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Not now"), button:has-text("Close"), button:has-text("Zavřít"), button:has-text("Později")'
+        );
+        if (await dismissButtons.count() > 0) {
+            console.log('[Gemini] Advertising/promo popup detected, clicking dismiss...');
+            // Iterate and click visible ones
+            const count = await dismissButtons.count();
+            for (let i = 0; i < count; i++) {
+                if (await dismissButtons.nth(i).isVisible()) {
+                    await dismissButtons.nth(i).click().catch(() => { });
+                    await this.page.waitForTimeout(500);
+                }
+            }
+            await this.page.waitForTimeout(1000);
+        }
+
         const signInButton = this.page.locator('button:has-text("Sign in"), a:has-text("Sign in")');
         if (await signInButton.count() > 0) {
             console.warn('[Gemini] Sign in required.');
@@ -200,16 +217,31 @@ export class GeminiClient {
             }
             if (await sessionItems.count() > 0) {
                 console.log(`[Gemini] Found sessions using selector: ${await sessionItems.first().evaluate(el => el.tagName.toLowerCase() + (el.className ? '.' + el.className.split(' ').join('.') : ''))} `);
+                await this.dumpState('debug_session_list');
+            }
+
+            // DEBUG: Dump sidebar HTML to debug missing sessions
+            const sidebarContainer = this.page.locator('.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]').first();
+            if (await sidebarContainer.isVisible()) {
+                console.log('[Gemini] DEBUG: Sidebar Container HTML:');
+                console.log(await sidebarContainer.innerHTML().catch(() => 'Could not read sidebar HTML'));
             } else {
-                console.log('[Gemini] DEBUG: DOM Dump for Sidebar:');
-                // Try to locate the sidebar container and dump its HTML
-                const sidebar = this.page.locator('nav, [role="navigation"]').first();
-                if (await sidebar.isVisible()) {
-                    console.log(await sidebar.innerHTML().catch(() => 'Sidebar found but could not read HTML'));
-                } else {
-                    console.log('No navigation/sidebar found visible.');
+                console.log('[Gemini] DEBUG: Sidebar container not found using .chat-history-list or nav label.');
+                const nav = this.page.locator('nav').first();
+                if (await nav.isVisible()) {
+                    console.log('[Gemini] DEBUG: Generic nav HTML:');
+                    console.log(await nav.innerHTML().catch(() => 'Could not read nav HTML'));
                 }
             }
+            console.log('[Gemini] DEBUG: DOM Dump for Sidebar:');
+            // Try to locate the sidebar container and dump its HTML
+            const sidebar = this.page.locator('nav, [role="navigation"]').first();
+            if (await sidebar.isVisible()) {
+                console.log(await sidebar.innerHTML().catch(() => 'Sidebar found but could not read HTML'));
+            } else {
+                console.log('No navigation/sidebar found visible.');
+            }
+
 
             let count = await sessionItems.count();
 
@@ -247,6 +279,8 @@ export class GeminiClient {
                     retries = 0;
                 }
             }
+
+            await this.dumpState('debug_session_list_final');
 
             // Define range to extract
             const start = Math.min(offset, count);
@@ -297,7 +331,7 @@ export class GeminiClient {
             console.warn('[Gemini] Error listing sessions:', e);
         }
 
-        console.log(`[Gemini] Found ${sessions.length} sessions (Request: ${offset}-${offset + limit})`);
+        console.log(`[Gemini] Found ${sessions.length} sessions(Request: ${offset} - ${offset + limit})`);
         return sessions;
     }
 
