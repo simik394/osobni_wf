@@ -11,9 +11,9 @@ This file tracks all planned work for the Vault Librarian project.
 
 - [x] Create consolidated Getting Started guide (`docs/GETTING_STARTED.md`)
 - [x] Update main README with clearer project overview
-- [ ] Document FalkorDB schema (node types, relationships, example queries)
-- [ ] Add Extensibility Guide for non-Obsidian locations
-- [ ] Add CHANGELOG.md for release tracking
+- [x] Document FalkorDB schema (`docs/SCHEMA.md`)
+- [x] Add Extensibility Guide for non-Obsidian locations (`docs/EXTENSIBILITY.md`)
+- [x] Add CHANGELOG.md for release tracking
 
 ---
 
@@ -35,10 +35,12 @@ This file tracks all planned work for the Vault Librarian project.
   - [x] Test file type detection (ShouldProcess)
   - [x] Test glob pattern matching
 
-- [ ] **DB Client Tests** (`internal/db/client_test.go`)
-  - [ ] Test Cypher query generation
-  - [ ] Test upsert operations (mock or integration)
-  - [ ] Test connection error handling
+- [x] **DB Client Tests** (`internal/db/client_test.go`) - 17 tests
+  - [x] Test Cypher string escaping
+  - [x] Test dump mode output
+  - [x] Test result parsing (paths, counts)
+  - [x] Test UpsertNote/UpsertCode query generation
+  - [x] Test special character handling
 
 - [ ] **Integration Tests**
   - [ ] Full scan → query → verify results
