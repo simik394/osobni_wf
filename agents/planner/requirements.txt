@@ -1,0 +1,4 @@
+# Task Planner
+# Multi-objective task planning using OR-Tools CP-SAT solver
+
+ortools>=9.8
