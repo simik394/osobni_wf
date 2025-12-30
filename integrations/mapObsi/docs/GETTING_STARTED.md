@@ -276,6 +276,8 @@ This is ~10x faster than direct sync.
 
 ## Next Steps
 
-- Read the [Architecture docs](file:///home/sim/Obsi/Prods/01-pwf/integrations/mapObsi/implementations/go/README.md#architecture)
-- Explore [Diagram generation](file:///home/sim/Obsi/Prods/01-pwf/integrations/mapObsi/implementations/go/DIAGRAMS.md)
-- Check [Benchmarks](file:///home/sim/Obsi/Prods/01-pwf/integrations/mapObsi/docs/BENCHMARKS.md) for performance details
+- **[[SCHEMA|Schema Documentation]]** — Full graph schema, node types, and 15+ example queries
+- **[[EXTENSIBILITY|Extensibility Guide]]** — Scan non-Obsidian directories
+- **[Architecture docs](file:///home/sim/Obsi/Prods/01-pwf/integrations/mapObsi/implementations/go/README.md#architecture)** — Internal code structure
+- **[Diagram generation](file:///home/sim/Obsi/Prods/01-pwf/integrations/mapObsi/implementations/go/DIAGRAMS.md)** — Report generation details
+- **[[BENCHMARKS]]** — Go vs Julia performance comparison
