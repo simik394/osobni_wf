@@ -103,3 +103,11 @@ When wrapping browser automation as OpenAI-compatible API:
 - **TODO.md for Roadmaps**: Maintaining a `TODO.md` at project root (separate from implementation code) provides a clear, living roadmap that helps agents and developers track progress.
 - **Test-First Priority**: For production-ready code with zero tests, prioritize test creation immediately. Start with the core parsing/config modules as they validate the fundamental correctness.
 - **Go Testing Helpers**: Use `t.TempDir()` for automatic cleanup of temp files in Go tests. It's cleaner than manual `defer os.Remove()` patterns.
+
+## Electron & CDP Debugging
+- **Window Visibility**: Electron apps expose multiple renderer processes, but only windows created *before* `--remote-debugging-port` is registered appear on CDP. If you open a new window after launch, it won't be visible on port 9222. *Fix*: Restart the app so your main window is the first one created.
+- **Zombie Renderers**: CDP may report a page target that's actually a crashed/frozen renderer (empty DOM, blank HTML). Always verify with a screenshot or DOM dump before assuming the window is functional.
+- **DOM Structure Changes**: UI frameworks frequently change their DOM structure between versions. Hard-coded selectors like `span[data-lexical-text="true"]` will break. *Fix*: Use broader selectors (`#cascade`, `.prose`) and heuristic classification rather than brittle attribute selectors.
+- **iframes and Webviews**: In Electron apps, the main content often lives in an iframe (like `cascade-panel.html`). Use `page.frames().find(f => f.url().includes('target.html'))` to locate it, not `page.mainFrame()`.
+- **Popover Confusion**: CSS class selectors like `div.bg-ide-chat-background` may match hidden popovers/dialogs rather than the actual content. Always filter by `role !== 'dialog'` or verify visibility.
+
