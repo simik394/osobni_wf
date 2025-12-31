@@ -1,0 +1,74 @@
+🤔 [THOUGHT]
+Thought for 5s
+The user is showing me an image of the Antigravity UI showing tool calls. They're saying the file only contains thoughts without interruption, but the UI clearly shows tool calls between thoughts. Let me check the file they have open and investigate why tool calls aren't being captured properly.
+Looking at the image, I can see:
+
+🛠️ [TOOL CALL] Retrieved Browser Pages
+🛠️ [TOOL CALL] Opened URL in Browser
+🛠️ [TOOL CALL] Extracted DOM elements
+🛠️ [TOOL CALL] Find iframes
+🛠️ [TOOL CALL] Find Tool Elements
+🛠️ [TOOL CALL] Find Specific Tool Elements
+🛠️ [TOOL CALL] Find Tool Blocks
+
+So in the actual UI, there ARE tool calls. But in the extracted file, they're missing or not being captured correctly. Let me check the file and also clean up old failed scrapes.
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+I see the issue! The UI clearly shows tool calls between thoughts, but the extraction isn't capturing them in the correct order. Let me check the file and investigate:
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+I see the problem! The file does have tool calls, but they're all grouped after the thoughts instead of being interleaved in the correct order. This is because the extraction does 4 separate passes:
+
+Extract ALL thoughts
+Extract ALL tool calls
+Extract ALL prose
+Extract ALL user messages
+
+So they're not in chronological order. Let me fix this and clean up old files:
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+Now let me fix the extraction to maintain chronological order. The issue is we extract by type, not by DOM position:
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+Fixed syntax errors in session.ts. Rewrote extraction to use single DOM traversal with order tracking. Now testing.
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+Rewriting getStructuredHistory to maintain DOM order
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+Testing chronological extraction
+
+────────────────────────────────────────
+
+🤖 [AGENT]
+Fixed chronological extraction order ✅
+What was wrong: Extraction was doing 4 separate passes (thoughts → tools → prose → user), which grouped items by type rather than by position in the conversation.
+The fix: Now does a single DOM traversal with order tracking, so items appear in the same sequence as in the UI.
+Current session note: The visible messages right now are mostly prose (my debugging work) with tool calls further down. The extraction is working correctly - it just reflects what's actually in the visible part of the session.
+Output location: history_dump/*.txt
+Commits:
+
+07f61e1 - fix: extract messages in chronological DOM order
+
+To see interleaved tool calls, you'd need to scroll back to where actual tool calls occurred in the session, or switch to a different session that has recent tool usage.
+
+────────────────────────────────────────
+
+🤔 [THOUGHT]
+Thought for 2s
+The user wants me to extract this current chat session. Let me run the scraper on the active session.
+
+────────────────────────────────────────
+
