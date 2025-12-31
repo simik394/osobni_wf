@@ -222,7 +222,7 @@ export class PerplexityClient extends BaseClient {
                 try {
                     // Method 1: Try connecting via standard CDP (http endpoint)
                     console.log(`Attempting connectOverCDP to ${endpoint}...`);
-                    this.browser = await (chromium.connectOverCDP(endpoint) as unknown as Browser);
+                    this.browser = await (chromium.connectOverCDP(endpoint, { timeout: 5000 }) as unknown as Browser);
                     console.log('Connected via connectOverCDP');
                 } catch (e: any) {
                     console.log(`connectOverCDP failed: ${e.message}`);

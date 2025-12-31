@@ -1036,8 +1036,8 @@ export async function startServer() {
         const graphHost = process.env.FALKORDB_HOST || 'localhost';
         const graphPort = parseInt(process.env.FALKORDB_PORT || '6379');
         try {
-            await graphStore.connect(graphHost, graphPort);
-            console.log('[Server] FalkorDB connected successfully.');
+            // await graphStore.connect(graphHost, graphPort);
+            console.warn('[Server] FalkorDB connection disabled temporarily (protocol mismatch with Memgraph).');
 
             // Check for interrupted jobs
             const runningJobs = await graphStore.listJobs('running');
