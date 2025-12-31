@@ -115,22 +115,27 @@ def check_availability(solver_name: str) -> bool:
     """
     Check if solver is currently available.
     
-    Current status:
-    - perplexity: UNAVAILABLE (no subscription)
-    - others: available
-    
-    TODO: Integrate with Redis rate limit storage
+    Uses Redis rate limit storage from angrav.
+    Falls back to static config if Redis unavailable.
     """
-    # Solvers currently unavailable
-    UNAVAILABLE = {
+    # Static unavailable list
+    STATIC_UNAVAILABLE = {
         'perplexity',  # No subscription
     }
     
-    if solver_name in UNAVAILABLE:
+    if solver_name in STATIC_UNAVAILABLE:
         return False
     
-    # In production: also check Redis for rate limits
-    return True
+    # Try Redis check
+    try:
+        from availability_checker import check_solver_availability
+        
+        avail = check_solver_availability(solver_name)
+        return avail.available
+        
+    except Exception:
+        # Redis unavailable, assume available
+        return True
 
 
 def get_historical_success(solver_name: str, task: Task) -> float:

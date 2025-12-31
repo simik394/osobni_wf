@@ -314,6 +314,13 @@ def main():
     calibrate_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
     calibrate_parser.set_defaults(func=cmd_calibrate)
     
+    # availability command (Rate Limit Check)
+    from availability_checker import cmd_availability
+    avail_parser = subparsers.add_parser('availability', help='Check solver availability')
+    avail_parser.add_argument('--account', '-a', default='default', help='Account for rate limits')
+    avail_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
+    avail_parser.set_defaults(func=cmd_availability)
+    
     args = parser.parse_args()
     
     if args.command is None:
