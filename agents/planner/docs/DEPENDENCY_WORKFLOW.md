@@ -60,3 +60,42 @@ python cli.py validate --project SAM
 # ⚠️ SAM-6: No dependencies defined
 # ✅ SAM-4: depends on SAM-3
 ```
+
+---
+
+## Step-Level Time Tracking
+
+For tracking how long each step takes:
+
+### Simple Subtasks → Checklist in Description
+
+If a subtask has **no dependencies**, add it as a checkbox in the issue description:
+
+```markdown
+## Subtasks
+- [ ] Research existing solutions
+- [ ] Implement core logic
+- [ ] Add tests
+- [ ] Update documentation
+```
+
+**YouTrack automatically tracks when each checkbox is toggled.** Time per step can be inferred from the activity log.
+
+### Subtasks with Dependencies → Separate Issues
+
+If a subtask has dependencies (blocks other work), create a separate YouTrack issue:
+
+```
+SAM-10: Implement feature A
+    ↓ is required for
+SAM-11: Implement feature B (depends on A)
+```
+
+### Historical Logging
+
+When completing work, log with step breakdown:
+
+```bash
+python cli.py log --task SAM-1 --actual 6h --solver jules \
+  --notes "Research: 1h, Implementation: 4h, Tests: 1h"
+```
