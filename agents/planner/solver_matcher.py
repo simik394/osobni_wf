@@ -115,10 +115,21 @@ def check_availability(solver_name: str) -> bool:
     """
     Check if solver is currently available.
     
+    Current status:
+    - perplexity: UNAVAILABLE (no subscription)
+    - others: available
+    
     TODO: Integrate with Redis rate limit storage
     """
-    # For now, assume all available
-    # In production: check Redis for rate limits
+    # Solvers currently unavailable
+    UNAVAILABLE = {
+        'perplexity',  # No subscription
+    }
+    
+    if solver_name in UNAVAILABLE:
+        return False
+    
+    # In production: also check Redis for rate limits
     return True
 
 
