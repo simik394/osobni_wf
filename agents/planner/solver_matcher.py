@@ -137,13 +137,37 @@ def get_historical_success(solver_name: str, task: Task) -> float:
     """
     Get historical success rate for this solver on similar tasks.
     
-    Returns: 0-1 success rate (1 = always succeeds)
+    Returns: 0-1 score (higher = better performance)
     
-    TODO: Integrate with historical tracking
+    Uses actual completion history for calibration.
     """
-    # For now, return default confidence
-    # In production: query historical completions DB
-    return 0.7
+    try:
+        from history_tracker import load_history, calculate_calibration
+        
+        completions = load_history()
+        if len(completions) < 3:
+            return 0.7  # Default when insufficient data
+        
+        stats = calculate_calibration(completions)
+        
+        # Get solver-specific ratio
+        if solver_name in stats.by_solver:
+            ratio = stats.by_solver[solver_name]
+            
+            # Convert ratio to score (closer to 1.0 = better)
+            # ratio < 1: faster than expected = good
+            # ratio > 1: slower than expected = less good
+            if ratio <= 1.0:
+                score = 0.8 + (1.0 - ratio) * 0.2  # 0.8-1.0
+            else:
+                score = max(0.3, 0.8 - (ratio - 1.0) * 0.3)  # 0.3-0.8
+            
+            return score
+        
+        return 0.7  # Default for unknown solver
+        
+    except Exception:
+        return 0.7  # Default on any error
 
 
 def extract_tags(issue: dict) -> list[str]:
