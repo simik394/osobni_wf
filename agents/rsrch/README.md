@@ -87,5 +87,9 @@ docker-compose down
 
 ## Complete Documentation
 
-- **[API.md](file:///home/sim/Obsi/Prods/01-pwf/agents/perplexity-researcher/API.md)** - Full API reference, Docker guide, examples, troubleshooting
-- **[walkthrough.md](file:///home/sim/.gemini/antigravity/brain/9d2ab7d5-cb3e-4a79-9ec5-140398ded8e2/walkthrough.md)** - Implementation overview and architecture
+| Document | Description |
+|----------|-------------|
+| [CLI.md](./CLI.md) | Complete CLI command reference |
+| [API.md](./API.md) | HTTP API reference for server endpoints |
+| [USER_GUIDE.md](./USER_GUIDE.md) | User workflows and examples |
+| [AGENTS.md](./AGENTS.md) | AI agent integration guide |
