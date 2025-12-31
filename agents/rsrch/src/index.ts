@@ -1261,6 +1261,90 @@ async function main() {
             } else {
                 console.log('Server mode for sync-conversations not yet implemented. Use --local.');
             }
+        } else if (subArg1 === 'upload-file') {
+            // gemini upload-file [SessionID] "/path/to/file" [--local]
+            let sessionId = '';
+            let filePath = '';
+            const nonFlagArgs: string[] = [];
+
+            for (let i = 2; i < args.length; i++) {
+                if (!args[i].startsWith('--')) {
+                    nonFlagArgs.push(args[i]);
+                }
+            }
+
+            if (nonFlagArgs.length >= 2) {
+                sessionId = nonFlagArgs[0];
+                filePath = nonFlagArgs[1];
+            } else if (nonFlagArgs.length === 1) {
+                filePath = nonFlagArgs[0]; // No session ID, use current/new session
+            }
+
+            if (!filePath) {
+                console.error('Usage: rsrch gemini upload-file [SessionID] "/path/to/file" [--local] [--headed]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const success = await gemini.uploadFile(filePath);
+
+                    if (success) {
+                        console.log(`\n✅ File uploaded: ${filePath}`);
+                    } else {
+                        console.log(`\n❌ File upload failed: ${filePath}`);
+                    }
+
+                    const currentId = gemini.getCurrentSessionId();
+                    if (currentId) {
+                        console.log(`Session: ${currentId}`);
+                    }
+                }, sessionId || undefined);
+            } else {
+                console.log('Server mode for upload-file not yet implemented. Use --local.');
+            }
+        } else if (subArg1 === 'upload-files') {
+            // gemini upload-files [SessionID] "/path/to/file1" "/path/to/file2" ... [--local]
+            let sessionId = '';
+            const filePaths: string[] = [];
+            const nonFlagArgs: string[] = [];
+
+            for (let i = 2; i < args.length; i++) {
+                if (!args[i].startsWith('--')) {
+                    nonFlagArgs.push(args[i]);
+                }
+            }
+
+            // First arg might be session ID if it doesn't look like a path
+            if (nonFlagArgs.length > 0) {
+                const first = nonFlagArgs[0];
+                if (!first.includes('/') && !first.includes('\\') && !first.includes('.')) {
+                    sessionId = first;
+                    filePaths.push(...nonFlagArgs.slice(1));
+                } else {
+                    filePaths.push(...nonFlagArgs);
+                }
+            }
+
+            if (filePaths.length === 0) {
+                console.error('Usage: rsrch gemini upload-files [SessionID] "/path/to/file1" "/path/to/file2" ... [--local]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const count = await gemini.uploadFiles(filePaths);
+
+                    console.log(`\n✅ Uploaded ${count}/${filePaths.length} files`);
+
+                    const currentId = gemini.getCurrentSessionId();
+                    if (currentId) {
+                        console.log(`Session: ${currentId}`);
+                    }
+                }, sessionId || undefined);
+            } else {
+                console.log('Server mode for upload-files not yet implemented. Use --local.');
+            }
         } else {
             console.log('Gemini commands:');
             console.log('  rsrch gemini research "Query" [--local]');
@@ -1274,6 +1358,8 @@ async function main() {
             console.log('  rsrch gemini export-to-docs [SessionID] [--local] [--headed]');
             console.log('  rsrch gemini list-sessions [Limit] [Offset] [--local]');
             console.log('  rsrch gemini sync-conversations [--limit=N] [--offset=M] [--local]  # Sync conversations to graph');
+            console.log('  rsrch gemini upload-file [SessionID] "/path/to/file" [--local]  # Upload PDF, image, etc.');
+            console.log('  rsrch gemini upload-files [SessionID] "file1" "file2" ... [--local]  # Upload multiple files');
             console.log('');
             console.log('Flags:');
             console.log('  --local    Use local browser (required for Google services)');

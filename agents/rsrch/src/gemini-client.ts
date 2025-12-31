@@ -849,6 +849,147 @@ export class GeminiClient {
         return docs;
     }
 
+    /**
+     * Upload a file to the current Gemini chat session.
+     * 
+     * Supports: PDFs, images, text files, and other document types.
+     * Uses the attachment button (+ icon) near the input area.
+     * 
+     * @param filePath - Absolute path to the file to upload
+     * @returns true if upload succeeded, false otherwise
+     */
+    async uploadFile(filePath: string): Promise<boolean> {
+        console.log(`[Gemini] Uploading file: ${filePath}`);
+
+        try {
+            // Verify file exists
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found: ${filePath}`);
+            }
+
+            // Find the attachment button (+ icon near input)
+            // Gemini uses various selectors for the add attachment button
+            const attachButtonSelectors = [
+                'button[aria-label*="Add" i]',
+                'button[aria-label*="Attach" i]',
+                'button[aria-label*="Upload" i]',
+                'button[aria-label*="Přidat" i]',  // Czech
+                'button[aria-label*="Nahrát" i]',  // Czech
+                'button:has(mat-icon:has-text("add"))',
+                'button:has(mat-icon:has-text("attach_file"))',
+                '.add-attachment-button',
+                '[data-add-attachment]',
+            ];
+
+            let attachButton = null;
+            for (const selector of attachButtonSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.count() > 0 && await btn.isVisible()) {
+                    attachButton = btn;
+                    console.log(`[Gemini] Found attach button with: ${selector}`);
+                    break;
+                }
+            }
+
+            if (!attachButton) {
+                // Try finding by icon content
+                const buttons = this.page.locator('button');
+                const count = await buttons.count();
+                for (let i = 0; i < count; i++) {
+                    const btn = buttons.nth(i);
+                    const text = await btn.innerText().catch(() => '');
+                    const ariaLabel = await btn.getAttribute('aria-label') || '';
+                    if (text.includes('+') || ariaLabel.toLowerCase().includes('add') || ariaLabel.toLowerCase().includes('attach')) {
+                        if (await btn.isVisible()) {
+                            attachButton = btn;
+                            console.log(`[Gemini] Found attach button by content scan`);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!attachButton) {
+                console.warn('[Gemini] Attachment button not found. Trying file input directly...');
+                // Some versions have a hidden file input
+                const fileInput = this.page.locator('input[type="file"]');
+                if (await fileInput.count() > 0) {
+                    await fileInput.setInputFiles(filePath);
+                    console.log(`[Gemini] File uploaded via hidden input: ${filePath}`);
+                    await this.page.waitForTimeout(2000);
+                    return true;
+                }
+
+                await this.dumpState('upload_button_not_found');
+                throw new Error('Could not find attachment button or file input');
+            }
+
+            // Click the attachment button
+            await attachButton.click();
+            await this.page.waitForTimeout(1000);
+
+            // Look for file input that appears after clicking
+            const fileInput = this.page.locator('input[type="file"]');
+            if (await fileInput.count() === 0) {
+                // May need to select "Upload file" from a menu
+                const uploadOption = this.page.locator('button:has-text("Upload"), [role="menuitem"]:has-text("Upload"), button:has-text("Nahrát soubor")');
+                if (await uploadOption.count() > 0) {
+                    await uploadOption.first().click();
+                    await this.page.waitForTimeout(500);
+                }
+            }
+
+            // Set the file
+            const finalInput = this.page.locator('input[type="file"]');
+            if (await finalInput.count() === 0) {
+                await this.dumpState('file_input_not_found');
+                throw new Error('File input not found after clicking attachment button');
+            }
+
+            await finalInput.setInputFiles(filePath);
+            console.log(`[Gemini] File selected: ${path.basename(filePath)}`);
+
+            // Wait for upload to complete (look for thumbnail or filename in UI)
+            await this.page.waitForTimeout(3000);
+
+            // Verify upload (look for filename in attachments area)
+            const filename = path.basename(filePath);
+            const attachmentVisible = await this.page.locator(`text="${filename}"`).count() > 0 ||
+                await this.page.locator('[class*="attachment"]').count() > 0 ||
+                await this.page.locator('[class*="upload"]').count() > 0;
+
+            if (attachmentVisible) {
+                console.log(`[Gemini] ✅ File uploaded successfully: ${filename}`);
+            } else {
+                console.log(`[Gemini] ⚠️ File may have uploaded but verification unclear`);
+            }
+
+            return true;
+
+        } catch (e: any) {
+            console.error(`[Gemini] Failed to upload file: ${e.message}`);
+            await this.dumpState('upload_fail');
+            return false;
+        }
+    }
+
+    /**
+     * Upload multiple files to the current Gemini chat session.
+     * 
+     * @param filePaths - Array of absolute paths to files
+     * @returns Number of successfully uploaded files
+     */
+    async uploadFiles(filePaths: string[]): Promise<number> {
+        let successCount = 0;
+        for (const filePath of filePaths) {
+            const success = await this.uploadFile(filePath);
+            if (success) successCount++;
+            await this.page.waitForTimeout(1000); // Rate limit between uploads
+        }
+        console.log(`[Gemini] Uploaded ${successCount}/${filePaths.length} files`);
+        return successCount;
+    }
+
     async sendMessage(message: string, waitForResponse: boolean = true): Promise<string | null> {
         console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
 
