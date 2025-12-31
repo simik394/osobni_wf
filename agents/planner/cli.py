@@ -281,6 +281,14 @@ def main():
     sync_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose error output')
     sync_parser.set_defaults(func=cmd_sync)
     
+    # match command (Solver Matcher)
+    from solver_matcher import cmd_match
+    match_parser = subparsers.add_parser('match', help='Match tasks to solvers')
+    match_parser.add_argument('--project', '-p', required=True, help='YouTrack project key')
+    match_parser.add_argument('--issues-file', '-f', required=True, help='JSON file with issues')
+    match_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
+    match_parser.set_defaults(func=cmd_match)
+    
     args = parser.parse_args()
     
     if args.command is None:
