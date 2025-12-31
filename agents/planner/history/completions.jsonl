@@ -1,0 +1,3 @@
+{"task_id": "SAM-TEST", "estimated_hours": 4.0, "actual_hours": 6.0, "solver": "jules", "completed_at": "2025-12-31T15:03:44.400941", "success": true, "notes": null}
+{"task_id": "SAM-TEST2", "estimated_hours": 4.0, "actual_hours": 3.0, "solver": "angrav", "completed_at": "2025-12-31T15:03:44.677115", "success": true, "notes": null}
+{"task_id": "SAM-TEST3", "estimated_hours": 4.0, "actual_hours": 8.0, "solver": "jules", "completed_at": "2025-12-31T15:03:44.930424", "success": true, "notes": null}

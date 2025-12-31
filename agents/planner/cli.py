@@ -297,6 +297,23 @@ def main():
     apply_parser.add_argument('--execute', '-x', action='store_true', help='Generate MCP commands')
     apply_parser.set_defaults(func=cmd_apply)
     
+    # log command (Historical Tracking)
+    from history_tracker import cmd_log
+    log_parser = subparsers.add_parser('log', help='Log a task completion')
+    log_parser.add_argument('--task', '-t', required=True, help='Task ID (e.g., SAM-1)')
+    log_parser.add_argument('--actual', '-a', required=True, help='Actual hours (e.g., 6h)')
+    log_parser.add_argument('--estimated', '-e', default='4', help='Estimated hours (default: 4)')
+    log_parser.add_argument('--solver', '-s', help='Solver used (jules, angrav, etc.)')
+    log_parser.add_argument('--failed', '-f', action='store_true', help='Mark as failed')
+    log_parser.add_argument('--notes', '-n', help='Optional notes')
+    log_parser.set_defaults(func=cmd_log)
+    
+    # calibrate command (Historical Tracking)
+    from history_tracker import cmd_calibrate
+    calibrate_parser = subparsers.add_parser('calibrate', help='Show estimation calibration')
+    calibrate_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
+    calibrate_parser.set_defaults(func=cmd_calibrate)
+    
     args = parser.parse_args()
     
     if args.command is None:
