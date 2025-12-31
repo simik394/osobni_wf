@@ -450,6 +450,12 @@ app.get('/v1/models', (req, res) => {
                 owned_by: 'rsrch'
             },
             {
+                id: 'gemini-deep-research',
+                object: 'model' as const,
+                created: Math.floor(Date.now() / 1000),
+                owned_by: 'rsrch'
+            },
+            {
                 id: 'perplexity',
                 object: 'model' as const,
                 created: Math.floor(Date.now() / 1000),
@@ -652,25 +658,117 @@ app.post('/v1/chat/completions', async (req, res) => {
         const model = request.model || 'gemini-rsrch';
 
         try {
+            // Determine options
+            const useDeepResearch = model === 'gemini-deep-research';
+
+            const sessionId = request.session; // Support non-standard 'session'
+
             // Route to appropriate backend based on model
             if (model === 'perplexity' || model.includes('perplexity')) {
                 // Use Perplexity
                 console.log('[OpenAI API] Using Perplexity backend');
                 const result = await client.query(prompt, {
                     sessionId: request.session_id,
-                    sessionName: request.session,
-                    deepResearch: false
+                    sessionName: sessionId, // reuse parsed session
+                    deepResearch: useDeepResearch
                 });
                 responseText = result?.answer || 'No response';
             } else {
                 // Use Gemini (default)
-                console.log('[OpenAI API] Using Gemini backend');
+                console.log(`[OpenAI API] Using Gemini backend (Model: ${model}, Deep: ${useDeepResearch}, Session: ${sessionId || 'current'})`);
+
+                // Ensure client is initialized
                 if (!geminiClient) {
                     console.log('[OpenAI API] Creating Gemini client...');
                     geminiClient = await client.createGeminiClient();
-                    await geminiClient.init();
+                    try {
+                        await geminiClient.init();
+                    } catch (e) {
+                        console.error('[OpenAI API] Initial Gemini init failed, retrying once...', e);
+                        geminiClient = null; // Reset
+                        geminiClient = await client.createGeminiClient();
+                        await geminiClient.init();
+                    }
                 }
-                responseText = await geminiClient.research(prompt);
+
+                if (request.stream) {
+                    // Streaming response
+                    res.setHeader('Content-Type', 'text/event-stream');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.setHeader('Connection', 'keep-alive');
+                    res.flushHeaders();
+
+                    try {
+                        const traceId = generateId();
+                        const createdTime = Math.floor(Date.now() / 1000);
+
+                        // Send initial role chunk
+                        res.write(`data: ${JSON.stringify({
+                            id: traceId,
+                            object: 'chat.completion.chunk',
+                            created: createdTime,
+                            model,
+                            choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }]
+                        })}\n\n`);
+
+                        const text = await geminiClient.researchWithStreaming(
+                            prompt,
+                            (chunk) => {
+                                if (chunk.content) {
+                                    res.write(`data: ${JSON.stringify({
+                                        id: traceId,
+                                        object: 'chat.completion.chunk',
+                                        created: createdTime,
+                                        model,
+                                        choices: [{ index: 0, delta: { content: chunk.content }, finish_reason: null }]
+                                    })}\n\n`);
+                                }
+                            },
+                            {
+                                deepResearch: useDeepResearch,
+                                sessionId: sessionId
+                            }
+                        );
+
+                        // Final chunk
+                        res.write(`data: ${JSON.stringify({
+                            id: traceId,
+                            object: 'chat.completion.chunk',
+                            created: createdTime,
+                            model,
+                            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
+                        })}\n\n`);
+                        res.write('data: [DONE]\n\n');
+                        res.end();
+                        responseText = text;
+
+                    } catch (e: any) {
+                        console.error('[OpenAI API] Streaming research failed:', e);
+                        res.end(); // Ensure stream ends on error
+                        return; // Don't proceed to standard logging
+                    }
+
+                } else {
+                    // Non-streaming response
+                    try {
+                        responseText = await geminiClient.research(prompt, {
+                            deepResearch: useDeepResearch,
+                            sessionId: sessionId
+                        });
+                    } catch (e: any) {
+                        if (e.message.includes('Context not initialized') || e.message.includes('Target closed')) {
+                            console.warn('[OpenAI API] Gemini client stale/closed, re-initializing and retrying...');
+                            geminiClient = await client.createGeminiClient();
+                            await geminiClient.init();
+                            responseText = await geminiClient.research(prompt, {
+                                deepResearch: useDeepResearch,
+                                sessionId: sessionId
+                            });
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
             }
 
             // Complete observability trace

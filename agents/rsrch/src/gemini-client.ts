@@ -1550,9 +1550,27 @@ export class GeminiClient {
         }
     }
 
-    async research(query: string): Promise<string> {
-        console.log(`[Gemini] Researching: "${query}"`);
+    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean } = {}): Promise<string> {
+        console.log(`[Gemini] Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch})`);
         try {
+            // Handle Session Switching
+            if (options.sessionId) {
+                const currentId = this.getCurrentSessionId();
+                if (currentId !== options.sessionId) {
+                    await this.openSession(options.sessionId);
+                }
+            } else if (options.sessionName) {
+                // Try to find session by name if ID not provided
+                // This is expensive (crawls list), so use sparingly or if we implement caching
+                // For now, if name matches current title, we might be good.
+                // But generally, we rely on OpenAI API usage passing the ID if it knows it.
+            }
+
+            // Handle Deep Research Toggle
+            if (options.deepResearch) {
+                await this.enableDeepResearchMode();
+            }
+
             const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
             const input = this.page.locator(inputSelector).first();
             await input.waitFor({ state: 'visible', timeout: 20000 });
@@ -1560,15 +1578,31 @@ export class GeminiClient {
             await this.page.waitForTimeout(500);
             await input.press('Enter');
 
+            // Handle Deep Research Confirmation Flow
+            if (options.deepResearch) {
+                console.log('[Gemini] Deep Research started, waiting for plan...');
+                await this.waitForAndConfirmResearchPlan().catch(e => console.warn('[Gemini] Plan confirmation skipped/failed:', e.message));
+
+                console.log('[Gemini] Waiting for research completion...');
+                await this.waitForResearchCompletion();
+            }
+
             console.log('[Gemini] Waiting for response...');
             const responseSelector = 'model-response, .message-content, .response-container-content';
-            await this.page.waitForSelector(responseSelector, { timeout: 20000 });
+            await this.page.waitForSelector(responseSelector, { timeout: 60000 }); // Longer timeout for standard response too
             await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => { });
 
             const responses = this.page.locator(responseSelector);
             const count = await responses.count();
             if (count > 0) {
                 const lastResponse = responses.last();
+
+                // For Deep Research, we might want to expand reasoning/content
+                if (options.deepResearch) {
+                    // Try to extract from the specific deep research container if present
+                    // Or just use the standard last response which usually contains the summary
+                }
+
                 const text = await lastResponse.innerText();
                 console.log('[Gemini] Response extracted.');
                 return text;
@@ -1591,13 +1625,26 @@ export class GeminiClient {
     async researchWithStreaming(
         query: string,
         onChunk: (chunk: { content: string; isComplete: boolean }) => void,
-        options: { pollIntervalMs?: number; timeoutMs?: number } = {}
+        options: { pollIntervalMs?: number; timeoutMs?: number; sessionId?: string; sessionName?: string; deepResearch?: boolean } = {}
     ): Promise<string> {
         const { pollIntervalMs = 300, timeoutMs = 300000 } = options;
 
-        console.log(`[Gemini] Streaming research: "${query}"`);
+        console.log(`[Gemini] Streaming research: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch})`);
 
         try {
+            // Handle Session Switching
+            if (options.sessionId) {
+                const currentId = this.getCurrentSessionId();
+                if (currentId !== options.sessionId) {
+                    await this.openSession(options.sessionId);
+                }
+            }
+
+            // Handle Deep Research Toggle
+            if (options.deepResearch) {
+                await this.enableDeepResearchMode();
+            }
+
             // Send the query
             const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
             const input = this.page.locator(inputSelector).first();
@@ -1610,6 +1657,20 @@ export class GeminiClient {
             await input.fill(query);
             await this.page.waitForTimeout(500);
             await input.press('Enter');
+
+            // Handle Deep Research Confirmation Flow
+            if (options.deepResearch) {
+                console.log('[Gemini] Deep Research started, waiting for plan...');
+                // We emit a "Thinking..." generic chunk so the UI doesn't timeout
+                onChunk({ content: "Thinking (Deep Research Planning)...", isComplete: false });
+
+                await this.waitForAndConfirmResearchPlan().catch(e => console.warn('[Gemini] Plan confirmation skipped/failed warning:', e.message));
+
+                console.log('[Gemini] Waiting for research completion...');
+                onChunk({ content: "\nExecuting Research Plan (may take minutes)...\n", isComplete: false });
+
+                await this.waitForResearchCompletion();
+            }
 
             console.log('[Gemini] Query sent, starting stream...');
 
