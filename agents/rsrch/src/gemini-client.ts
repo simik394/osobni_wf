@@ -81,6 +81,20 @@ export interface ScrapedConversation {
     capturedAt: number;
 }
 
+// === Gem Configuration Types ===
+export interface GemConfig {
+    name: string;
+    instructions: string;  // System prompt
+    files?: string[];      // Paths to files to upload
+    greeting?: string;     // Optional greeting message
+}
+
+export interface GemInfo {
+    name: string;
+    id: string | null;     // URL ID if extractable
+    description?: string;
+}
+
 export class GeminiClient {
     private verbose: boolean = false;
     private deepResearchEnabled = false;
@@ -989,6 +1003,270 @@ export class GeminiClient {
         console.log(`[Gemini] Uploaded ${successCount}/${filePaths.length} files`);
         return successCount;
     }
+
+    // ==================== GEMS SUPPORT ====================
+
+    /**
+     * Navigate to the Gems page
+     */
+    async navigateToGems(): Promise<void> {
+        console.log('[Gemini] Navigating to Gems...');
+        await this.page.goto('https://gemini.google.com/gems', { waitUntil: 'domcontentloaded' });
+        await this.page.waitForTimeout(2000);
+
+        // Dismiss any popups
+        const dismissButtons = this.page.locator(
+            'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Got it"), button:has-text("Close")'
+        );
+        if (await dismissButtons.count() > 0) {
+            await dismissButtons.first().click().catch(() => { });
+            await this.page.waitForTimeout(500);
+        }
+    }
+
+    /**
+     * List available Gems
+     */
+    async listGems(): Promise<GemInfo[]> {
+        console.log('[Gemini] Listing Gems...');
+        const gems: GemInfo[] = [];
+
+        try {
+            await this.navigateToGems();
+
+            // Look for gem cards/items
+            const gemSelectors = [
+                '[class*="gem-card"]',
+                '[class*="gem-item"]',
+                '[data-gem-id]',
+                '.gem-tile',
+                '[role="button"][class*="gem"]',
+                'a[href*="/gem/"]',
+            ];
+
+            let gemItems = null;
+            for (const selector of gemSelectors) {
+                const items = this.page.locator(selector);
+                if (await items.count() > 0) {
+                    gemItems = items;
+                    console.log(`[Gemini] Found gems with: ${selector}`);
+                    break;
+                }
+            }
+
+            if (!gemItems) {
+                // Fallback: look for any clickable items in main content
+                gemItems = this.page.locator('main [role="button"], main a[href*="gem"]');
+            }
+
+            const count = await gemItems.count();
+            console.log(`[Gemini] Found ${count} gems`);
+
+            for (let i = 0; i < count; i++) {
+                const item = gemItems.nth(i);
+                const name = await item.innerText().catch(() => '');
+                const href = await item.getAttribute('href').catch(() => null);
+
+                let id = null;
+                if (href) {
+                    const match = href.match(/\/gem\/([^\/\?]+)/);
+                    if (match) id = match[1];
+                }
+
+                if (name.trim()) {
+                    gems.push({
+                        name: name.split('\n')[0].trim(),
+                        id,
+                    });
+                }
+            }
+        } catch (e: any) {
+            console.error('[Gemini] Error listing gems:', e.message);
+            await this.dumpState('list_gems_fail');
+        }
+
+        return gems;
+    }
+
+    /**
+     * Open a specific Gem by name or ID
+     */
+    async openGem(nameOrId: string): Promise<boolean> {
+        console.log(`[Gemini] Opening gem: ${nameOrId}`);
+
+        try {
+            // If it looks like an ID (alphanumeric), try direct navigation
+            if (/^[a-zA-Z0-9_-]+$/.test(nameOrId) && !nameOrId.includes(' ')) {
+                await this.page.goto(`https://gemini.google.com/gem/${nameOrId}`, { waitUntil: 'domcontentloaded' });
+                await this.page.waitForTimeout(2000);
+
+                // Check if we're in a valid gem session
+                const inputVisible = await this.page.locator('div[contenteditable="true"], textarea').count() > 0;
+                if (inputVisible) {
+                    console.log(`[Gemini] ✅ Opened gem: ${nameOrId}`);
+                    return true;
+                }
+            }
+
+            // Otherwise, search in gem list
+            await this.navigateToGems();
+
+            const gemItems = this.page.locator(`text="${nameOrId}"`);
+            if (await gemItems.count() > 0) {
+                await gemItems.first().click();
+                await this.page.waitForTimeout(2000);
+                console.log(`[Gemini] ✅ Opened gem by name: ${nameOrId}`);
+                return true;
+            }
+
+            console.warn(`[Gemini] Gem not found: ${nameOrId}`);
+            return false;
+
+        } catch (e: any) {
+            console.error(`[Gemini] Error opening gem: ${e.message}`);
+            await this.dumpState('open_gem_fail');
+            return false;
+        }
+    }
+
+    /**
+     * Create a new Gem with configuration
+     * 
+     * @param config - Gem configuration (name, instructions, files)
+     * @returns Created gem ID or null if failed
+     */
+    async createGem(config: GemConfig): Promise<string | null> {
+        console.log(`[Gemini] Creating gem: ${config.name}`);
+
+        try {
+            await this.navigateToGems();
+
+            // Find "Create" or "New Gem" button
+            const createButtonSelectors = [
+                'button:has-text("Create")',
+                'button:has-text("New Gem")',
+                'button:has-text("Vytvořit")',
+                'a:has-text("Create")',
+                '[aria-label*="Create" i]',
+                'button:has(mat-icon:has-text("add"))',
+            ];
+
+            let createButton = null;
+            for (const selector of createButtonSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.count() > 0 && await btn.isVisible()) {
+                    createButton = btn;
+                    break;
+                }
+            }
+
+            if (!createButton) {
+                await this.dumpState('create_gem_button_not_found');
+                throw new Error('Create Gem button not found');
+            }
+
+            await createButton.click();
+            await this.page.waitForTimeout(2000);
+
+            // Fill in gem name
+            const nameInput = this.page.locator('input[placeholder*="name" i], input[aria-label*="name" i], input').first();
+            if (await nameInput.count() > 0) {
+                await nameInput.fill(config.name);
+                await this.page.waitForTimeout(500);
+            }
+
+            // Fill in instructions (system prompt)
+            const instructionsInput = this.page.locator(
+                'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], ' +
+                'div[contenteditable="true"][placeholder*="instruction" i], textarea'
+            );
+            if (await instructionsInput.count() > 0) {
+                await instructionsInput.first().fill(config.instructions);
+                await this.page.waitForTimeout(500);
+            }
+
+            // Upload files if specified
+            if (config.files && config.files.length > 0) {
+                for (const filePath of config.files) {
+                    await this.uploadFile(filePath);
+                }
+            }
+
+            // Save/Create the gem
+            const saveButtonSelectors = [
+                'button:has-text("Save")',
+                'button:has-text("Create")',
+                'button:has-text("Uložit")',
+                'button[type="submit"]',
+            ];
+
+            let saveButton = null;
+            for (const selector of saveButtonSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.count() > 0 && await btn.isVisible()) {
+                    saveButton = btn;
+                    break;
+                }
+            }
+
+            if (saveButton) {
+                await saveButton.click();
+                await this.page.waitForTimeout(3000);
+            }
+
+            // Try to get created gem ID from URL
+            const url = this.page.url();
+            const match = url.match(/\/gem\/([^\/\?]+)/);
+            const gemId = match ? match[1] : null;
+
+            console.log(`[Gemini] ✅ Created gem: ${config.name}${gemId ? ` (ID: ${gemId})` : ''}`);
+            return gemId;
+
+        } catch (e: any) {
+            console.error(`[Gemini] Error creating gem: ${e.message}`);
+            await this.dumpState('create_gem_fail');
+            return null;
+        }
+    }
+
+    /**
+     * Chat with a Gem (send message and get response)
+     * 
+     * @param gemNameOrId - Gem to chat with
+     * @param message - Message to send
+     * @returns Response or null
+     */
+    async chatWithGem(gemNameOrId: string, message: string): Promise<string | null> {
+        console.log(`[Gemini] Chatting with gem: ${gemNameOrId}`);
+
+        const opened = await this.openGem(gemNameOrId);
+        if (!opened) {
+            return null;
+        }
+
+        return await this.sendMessage(message);
+    }
+
+    /**
+     * Run deep research using a specific Gem
+     * 
+     * @param gemNameOrId - Gem to use
+     * @param query - Research query
+     */
+    async researchWithGem(gemNameOrId: string, query: string): Promise<string | null> {
+        console.log(`[Gemini] Research with gem: ${gemNameOrId}`);
+
+        const opened = await this.openGem(gemNameOrId);
+        if (!opened) {
+            return null;
+        }
+
+        // Enable deep research if available
+        await this.enableDeepResearchMode();
+
+        return await this.sendMessage(query);
+    }
+
 
     async sendMessage(message: string, waitForResponse: boolean = true): Promise<string | null> {
         console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);

@@ -1345,6 +1345,131 @@ async function main() {
             } else {
                 console.log('Server mode for upload-files not yet implemented. Use --local.');
             }
+        } else if (subArg1 === 'list-gems') {
+            // gemini list-gems [--local]
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const gems = await gemini.listGems();
+
+                    console.log('\n--- Available Gems ---');
+                    if (gems.length === 0) {
+                        console.log('No gems found.');
+                    } else {
+                        gems.forEach((g: { name: string; id: string | null }, i: number) => {
+                            console.log(`${i + 1}. ${g.name}${g.id ? ` (ID: ${g.id})` : ''}`);
+                        });
+                    }
+                    console.log('----------------------\n');
+                    console.log('JSON:', JSON.stringify(gems, null, 2));
+                });
+            } else {
+                console.log('Server mode for list-gems not yet implemented. Use --local.');
+            }
+        } else if (subArg1 === 'open-gem') {
+            // gemini open-gem "GemNameOrID" [--local]
+            let gemNameOrId = '';
+            for (let i = 2; i < args.length; i++) {
+                if (!args[i].startsWith('--')) {
+                    gemNameOrId = args[i];
+                    break;
+                }
+            }
+
+            if (!gemNameOrId) {
+                console.error('Usage: rsrch gemini open-gem "GemNameOrID" [--local] [--headed]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const success = await gemini.openGem(gemNameOrId);
+                    if (success) {
+                        console.log(`\n✅ Opened gem: ${gemNameOrId}`);
+                    } else {
+                        console.log(`\n❌ Failed to open gem: ${gemNameOrId}`);
+                    }
+                });
+            } else {
+                console.log('Server mode for open-gem not yet implemented. Use --local.');
+            }
+        } else if (subArg1 === 'create-gem') {
+            // gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--local]
+            let gemName = '';
+            let instructions = '';
+            const files: string[] = [];
+
+            for (let i = 2; i < args.length; i++) {
+                const arg = args[i];
+                if (arg === '--instructions' && args[i + 1]) {
+                    instructions = args[i + 1];
+                    i++;
+                } else if (arg === '--file' && args[i + 1]) {
+                    files.push(args[i + 1]);
+                    i++;
+                } else if (!arg.startsWith('--')) {
+                    gemName = arg;
+                }
+            }
+
+            if (!gemName || !instructions) {
+                console.error('Usage: rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--local]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const gemId = await gemini.createGem({
+                        name: gemName,
+                        instructions,
+                        files: files.length > 0 ? files : undefined,
+                    });
+
+                    if (gemId) {
+                        console.log(`\n✅ Created gem: ${gemName} (ID: ${gemId})`);
+                    } else {
+                        console.log(`\n⚠️ Gem created but ID unknown: ${gemName}`);
+                    }
+                });
+            } else {
+                console.log('Server mode for create-gem not yet implemented. Use --local.');
+            }
+        } else if (subArg1 === 'chat-gem') {
+            // gemini chat-gem "GemNameOrID" "Message" [--local]
+            let gemNameOrId = '';
+            let message = '';
+            const nonFlagArgs: string[] = [];
+
+            for (let i = 2; i < args.length; i++) {
+                if (!args[i].startsWith('--')) {
+                    nonFlagArgs.push(args[i]);
+                }
+            }
+
+            if (nonFlagArgs.length >= 2) {
+                gemNameOrId = nonFlagArgs[0];
+                message = nonFlagArgs[1];
+            }
+
+            if (!gemNameOrId || !message) {
+                console.error('Usage: rsrch gemini chat-gem "GemNameOrID" "Message" [--local] [--headed]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const response = await gemini.chatWithGem(gemNameOrId, message);
+
+                    console.log('\n--- Response ---');
+                    if (response) {
+                        console.log(response);
+                    } else {
+                        console.log('No response received');
+                    }
+                    console.log('----------------\n');
+                });
+            } else {
+                console.log('Server mode for chat-gem not yet implemented. Use --local.');
+            }
         } else {
             console.log('Gemini commands:');
             console.log('  rsrch gemini research "Query" [--local]');
@@ -1360,6 +1485,12 @@ async function main() {
             console.log('  rsrch gemini sync-conversations [--limit=N] [--offset=M] [--local]  # Sync conversations to graph');
             console.log('  rsrch gemini upload-file [SessionID] "/path/to/file" [--local]  # Upload PDF, image, etc.');
             console.log('  rsrch gemini upload-files [SessionID] "file1" "file2" ... [--local]  # Upload multiple files');
+            console.log('');
+            console.log('Gems (custom assistants):');
+            console.log('  rsrch gemini list-gems [--local]                                   # List available gems');
+            console.log('  rsrch gemini open-gem "GemNameOrID" [--local]                      # Open a gem');
+            console.log('  rsrch gemini create-gem "Name" --instructions "..." [--file ...] [--local]  # Create gem');
+            console.log('  rsrch gemini chat-gem "GemNameOrID" "Message" [--local]            # Chat with gem');
             console.log('');
             console.log('Flags:');
             console.log('  --local    Use local browser (required for Google services)');
