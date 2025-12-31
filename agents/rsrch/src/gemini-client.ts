@@ -3,6 +3,10 @@ import { Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getRegistry } from './artifact-registry';
+import { getRsrchTelemetry } from '@agents/shared';
+
+// Get telemetry instance
+const telemetry = getRsrchTelemetry();
 
 export interface DeepResearchResult {
     query: string;
@@ -1271,6 +1275,15 @@ export class GeminiClient {
     async sendMessage(message: string, waitForResponse: boolean = true): Promise<string | null> {
         console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
 
+        // Start trace for this message exchange
+        const trace = telemetry.startTrace('gemini:send-message', {
+            messageLength: message.length,
+            waitForResponse
+        });
+
+        // Start generation tracking for LLM call
+        const generation = telemetry.startGeneration(trace, message, 'gemini-2.0-flash');
+
         try {
             const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
             const input = this.page.locator(inputSelector).first();
@@ -1283,6 +1296,8 @@ export class GeminiClient {
             await input.press('Enter');
 
             if (!waitForResponse) {
+                telemetry.endGeneration(generation, 'No response awaited');
+                telemetry.endTrace(trace, 'Fire and forget', true);
                 return null;
             }
 
@@ -1317,11 +1332,22 @@ export class GeminiClient {
 
             const response = await this.getLatestResponse();
             console.log(`[Gemini] Response received (${response?.length || 0} chars)`);
+
+            // End generation with response
+            telemetry.endGeneration(generation, response || '');
+            telemetry.addScore(trace, 'response_length', response?.length || 0);
+            telemetry.endTrace(trace, response?.substring(0, 200), true);
+
             return response;
 
         } catch (e) {
             console.error('[Gemini] Failed to send message:', e);
             await this.dumpState('send_message_fail');
+
+            telemetry.trackError(trace, e as Error);
+            telemetry.endGeneration(generation, '');
+            telemetry.endTrace(trace, undefined, false);
+
             return null;
         }
     }
