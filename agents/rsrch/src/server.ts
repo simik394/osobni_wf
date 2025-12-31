@@ -627,6 +627,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         // Get last user message for logging
         const lastMessage = request.messages.filter(m => m.role === 'user').pop();
 
+        /*
         const falkor = getFalkorClient();
         // Log query
         if (request.session && lastMessage) {
@@ -645,6 +646,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                 console.error('[FalkorDB] Failed to log query:', e);
             }
         }
+        */
 
         // Start observability trace
         const traceCtx = startChatCompletionTrace(request);
@@ -711,24 +713,45 @@ app.post('/v1/chat/completions', async (req, res) => {
                             choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }]
                         })}\n\n`);
 
-                        const text = await geminiClient.researchWithStreaming(
-                            prompt,
-                            (chunk) => {
-                                if (chunk.content) {
-                                    res.write(`data: ${JSON.stringify({
-                                        id: traceId,
-                                        object: 'chat.completion.chunk',
-                                        created: createdTime,
-                                        model,
-                                        choices: [{ index: 0, delta: { content: chunk.content }, finish_reason: null }]
-                                    })}\n\n`);
-                                }
-                            },
-                            {
-                                deepResearch: useDeepResearch,
-                                sessionId: sessionId
+                        const streamCallback = (chunk: any) => {
+                            if (chunk.content) {
+                                res.write(`data: ${JSON.stringify({
+                                    id: traceId,
+                                    object: 'chat.completion.chunk',
+                                    created: createdTime,
+                                    model,
+                                    choices: [{ index: 0, delta: { content: chunk.content }, finish_reason: null }]
+                                })}\n\n`);
                             }
-                        );
+                        };
+
+                        let text = '';
+                        try {
+                            text = await geminiClient.researchWithStreaming(
+                                prompt,
+                                streamCallback,
+                                {
+                                    deepResearch: useDeepResearch,
+                                    sessionId: sessionId
+                                }
+                            );
+                        } catch (e: any) {
+                            if (e.message.includes('Context not initialized') || e.message.includes('Target closed') || e.message.includes('Session closed')) {
+                                console.warn('[OpenAI API] Gemini client stale/closed, re-initializing and retrying streaming...');
+                                geminiClient = await client.createGeminiClient();
+                                await geminiClient.init();
+                                text = await geminiClient.researchWithStreaming(
+                                    prompt,
+                                    streamCallback,
+                                    {
+                                        deepResearch: useDeepResearch,
+                                        sessionId: sessionId
+                                    }
+                                );
+                            } else {
+                                throw e;
+                            }
+                        }
 
                         // Final chunk
                         res.write(`data: ${JSON.stringify({
@@ -775,10 +798,12 @@ app.post('/v1/chat/completions', async (req, res) => {
             completeChatCompletionTrace(traceCtx, responseText);
 
             // Log full response to FalkorDB
+            /*
             if (request.session) {
                 falkor.logInteraction(request.session, 'agent', 'response', responseText)
                     .catch((e: any) => console.error('[FalkorDB] Failed to log response:', e));
             }
+            */
 
             // Build OpenAI-compatible response
             const response: ChatCompletionResponse = {
