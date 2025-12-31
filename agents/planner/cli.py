@@ -289,6 +289,14 @@ def main():
     match_parser.add_argument('--json', '-j', action='store_true', help='Output JSON')
     match_parser.set_defaults(func=cmd_match)
     
+    # apply command (YouTrack Writer)
+    from youtrack_writer import cmd_apply
+    apply_parser = subparsers.add_parser('apply', help='Apply solver recommendations to YouTrack')
+    apply_parser.add_argument('--project', '-p', required=True, help='YouTrack project key')
+    apply_parser.add_argument('--issues-file', '-f', required=True, help='JSON file with issues')
+    apply_parser.add_argument('--execute', '-x', action='store_true', help='Generate MCP commands')
+    apply_parser.set_defaults(func=cmd_apply)
+    
     args = parser.parse_args()
     
     if args.command is None:
