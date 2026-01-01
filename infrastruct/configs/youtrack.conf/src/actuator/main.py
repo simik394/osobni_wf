@@ -8,6 +8,8 @@ from typing import Optional
 
 import requests
 
+from .workflow import WorkflowClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +57,9 @@ class YouTrackActuator:
         })
         # Cache for bundle IDs: name -> id
         self._bundle_cache = {}
+        
+        # Initialize workflow client
+        self.workflow = WorkflowClient(url, token, dry_run)
 
     def _resolve_bundle_id(self, name_or_id: str, bundle_type: str = 'enum') -> str:
         """
@@ -555,6 +560,75 @@ class YouTrackActuator:
             elif action_type == 'detach_field':
                 # detach_field(FieldName, ProjectId)
                 result = self.detach_field_from_project(args[0], args[1])
+            # Workflow operations
+            elif action_type == 'create_workflow':
+                # create_workflow(Name, Title)
+                wf_result = self.workflow.create_workflow(
+                    args[0], 
+                    title=args[1] if len(args) > 1 else None
+                )
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.workflow_id,
+                    error=wf_result.error
+                )
+            elif action_type == 'create_rule':
+                # create_rule(WorkflowId, RuleType, Name, Script)
+                wf_result = self.workflow.create_rule(
+                    args[0], args[1], args[2], args[3]
+                )
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.rule_id,
+                    error=wf_result.error
+                )
+            elif action_type == 'update_rule':
+                # update_rule(WorkflowId, RuleId, Script)
+                wf_result = self.workflow.update_rule(args[0], args[1], args[2])
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.rule_id,
+                    error=wf_result.error
+                )
+            elif action_type == 'delete_rule':
+                # delete_rule(WorkflowId, RuleId)
+                wf_result = self.workflow.delete_rule(args[0], args[1])
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.rule_id,
+                    error=wf_result.error
+                )
+            elif action_type == 'delete_workflow':
+                # delete_workflow(WorkflowId)
+                wf_result = self.workflow.delete_workflow(args[0])
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.workflow_id,
+                    error=wf_result.error
+                )
+            elif action_type == 'attach_workflow':
+                # attach_workflow(WorkflowId, ProjectId)
+                wf_result = self.workflow.attach_to_project(args[0], args[1])
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.usage_id,
+                    error=wf_result.error
+                )
+            elif action_type == 'detach_workflow':
+                # detach_workflow(ProjectId, UsageId)
+                wf_result = self.workflow.detach_from_project(args[0], args[1])
+                result = ActionResult(
+                    action=wf_result.action,
+                    success=wf_result.success,
+                    resource_id=wf_result.usage_id,
+                    error=wf_result.error
+                )
             else:
                 logger.warning(f"Unknown action type: {action_type}")
                 result = ActionResult(
