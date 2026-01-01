@@ -1,5 +1,5 @@
 job "traefik" {
-  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
+  datacenters = ["oci-eu"]
   type        = "service"
 
   group "traefik" {
@@ -17,8 +17,6 @@ job "traefik" {
       }
     }
 
-    # Create a volume for storing ACME certificates
-    # Note: You must create this directory on the host first: mkdir -p /opt/traefik/acme
     task "traefik" {
       driver = "docker"
 
@@ -31,7 +29,6 @@ job "traefik" {
         image        = "traefik:v2.10"
         network_mode = "host"
 
-        # Mount the volume for certificates
         volumes = [
            "/opt/traefik/acme:/letsencrypt"
         ]
@@ -43,16 +40,6 @@ job "traefik" {
           "--providers.consulcatalog.endpoint.address=127.0.0.1:8500",
           "--entrypoints.web.address=:80",
           "--entrypoints.websecure.address=:443",
-
-          # HTTP to HTTPS Redirection
-          "--entrypoints.web.http.redirections.entryPoint.to=websecure",
-          "--entrypoints.web.http.redirections.entryPoint.scheme=https",
-
-          # Certificate Resolver (LetsEncrypt)
-          "--certificatesresolvers.letsencrypt.acme.email=simon.trousil@gmail.com",
-          "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json",
-          "--certificatesresolvers.letsencrypt.acme.httpchallenge=true",
-          "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
         ]
       }
 
