@@ -164,6 +164,47 @@ Content-Type: application/json
 
 ---
 
+## Project Attachment
+
+### 10. Attach Workflow to Project
+
+Attaches a workflow to one or more projects.
+
+```http
+PUT /api/admin/apps/{workflow_id}/usages?fields=id,canUpdate,isBroken,enabled,isActive,project(id,name)
+Content-Type: application/json
+
+[{"project":{"id":"0-0"}}]
+```
+
+- Project ID `0-0` is typically the first/default project
+- Can attach to multiple projects by adding more objects to the array
+
+---
+
+### 11. Detach Workflow from Project
+
+```http
+DELETE /api/admin/projects/{project_id}/pluggableObjectUsages/{usage_id}
+```
+
+- The `usage_id` is returned when you attach the workflow (e.g., `182-16`)
+
+---
+
+### 12. Import Workflow from ZIP
+
+Imports a workflow package (exported from another YouTrack instance).
+
+```http
+POST /api/admin/apps/import?fields=id,title,name,usages(id,enabled,project(id))
+Content-Type: multipart/form-data
+
+[workflow.zip file as form-data]
+```
+
+---
+
 ## Example: Full Workflow Creation
 
 ### Step 1: Create Workflow Container
