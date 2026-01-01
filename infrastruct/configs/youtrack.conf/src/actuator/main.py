@@ -177,6 +177,76 @@ class YouTrackActuator:
             logger.error(f"Failed to add state value: {error}")
             return ActionResult(action=action, success=False, error=error)
     
+    def update_bundle_value(self, bundle_name_or_id: str, value_id: str,
+                            new_name: str, bundle_type: str = 'enum') -> ActionResult:
+        """Update (rename) a bundle value."""
+        bundle_id = self._resolve_bundle_id(bundle_name_or_id, bundle_type)
+        action = f"update_bundle_value({bundle_name_or_id}, {value_id}, {new_name})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            resp = self.session.post(
+                f'{self.url}/api/admin/customFieldSettings/bundles/{bundle_type}/{bundle_id}/values/{value_id}',
+                json={'name': new_name}
+            )
+            resp.raise_for_status()
+            logger.info(f"Updated value {value_id} to '{new_name}' in bundle {bundle_name_or_id}")
+            return ActionResult(action=action, success=True, resource_id=value_id)
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to update bundle value: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
+    def archive_bundle_value(self, bundle_name_or_id: str, value_id: str,
+                             bundle_type: str = 'enum') -> ActionResult:
+        """Archive (soft-delete) a bundle value."""
+        bundle_id = self._resolve_bundle_id(bundle_name_or_id, bundle_type)
+        action = f"archive_bundle_value({bundle_name_or_id}, {value_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            resp = self.session.post(
+                f'{self.url}/api/admin/customFieldSettings/bundles/{bundle_type}/{bundle_id}/values/{value_id}',
+                json={'archived': True}
+            )
+            resp.raise_for_status()
+            logger.info(f"Archived value {value_id} in bundle {bundle_name_or_id}")
+            return ActionResult(action=action, success=True, resource_id=value_id)
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to archive bundle value: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
+    def delete_bundle(self, bundle_name_or_id: str, bundle_type: str = 'enum') -> ActionResult:
+        """Delete an entire bundle. WARNING: Destructive operation."""
+        bundle_id = self._resolve_bundle_id(bundle_name_or_id, bundle_type)
+        action = f"delete_bundle({bundle_name_or_id}, {bundle_type})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            resp = self.session.delete(
+                f'{self.url}/api/admin/customFieldSettings/bundles/{bundle_type}/{bundle_id}'
+            )
+            resp.raise_for_status()
+            # Remove from cache
+            if bundle_name_or_id in self._bundle_cache:
+                del self._bundle_cache[bundle_name_or_id]
+            logger.info(f"Deleted bundle {bundle_name_or_id}")
+            return ActionResult(action=action, success=True, resource_id=bundle_id)
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to delete bundle: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
     # =========================================================================
     # PROJECT OPERATIONS
     # =========================================================================
@@ -303,6 +373,127 @@ class YouTrackActuator:
             logger.error(f"Failed to attach field to project: {error}")
             return ActionResult(action=action, success=False, error=error)
     
+    def update_field(self, field_name_or_id: str, new_name: Optional[str] = None,
+                     new_bundle_id: Optional[str] = None) -> ActionResult:
+        """Update a custom field's properties."""
+        field_id = self._resolve_field_id(field_name_or_id)
+        action = f"update_field({field_name_or_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        payload = {}
+        if new_name:
+            payload['name'] = new_name
+        if new_bundle_id:
+            payload['bundle'] = {'id': new_bundle_id}
+        
+        if not payload:
+            logger.warning(f"update_field called with no changes for {field_name_or_id}")
+            return ActionResult(action=action, success=True, resource_id=field_id)
+        
+        try:
+            resp = self.session.post(
+                f'{self.url}/api/admin/customFieldSettings/customFields/{field_id}',
+                json=payload,
+                params={'fields': 'id,name'}
+            )
+            resp.raise_for_status()
+            logger.info(f"Updated field {field_name_or_id}")
+            return ActionResult(action=action, success=True, resource_id=field_id)
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to update field: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
+    def delete_field(self, field_name_or_id: str) -> ActionResult:
+        """Delete a custom field. WARNING: Destructive operation."""
+        field_id = self._resolve_field_id(field_name_or_id)
+        action = f"delete_field({field_name_or_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            resp = self.session.delete(
+                f'{self.url}/api/admin/customFieldSettings/customFields/{field_id}'
+            )
+            resp.raise_for_status()
+            logger.info(f"Deleted field {field_name_or_id}")
+            return ActionResult(action=action, success=True, resource_id=field_id)
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to delete field: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
+    def detach_field_from_project(self, field_name_or_id: str, project_id: str) -> ActionResult:
+        """Detach a custom field from a project."""
+        field_id = self._resolve_field_id(field_name_or_id)
+        action = f"detach_field({field_name_or_id}, {project_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            # First, find the project field ID (not the same as global field ID)
+            resp = self.session.get(
+                f'{self.url}/api/admin/projects/{project_id}/customFields',
+                params={'fields': 'id,field(id,name)'}
+            )
+            resp.raise_for_status()
+            
+            project_field_id = None
+            for pf in resp.json():
+                if pf.get('field', {}).get('id') == field_id:
+                    project_field_id = pf['id']
+                    break
+            
+            if not project_field_id:
+                logger.warning(f"Field {field_name_or_id} not attached to project {project_id}")
+                return ActionResult(action=action, success=True)  # Idempotent
+            
+            resp = self.session.delete(
+                f'{self.url}/api/admin/projects/{project_id}/customFields/{project_field_id}'
+            )
+            resp.raise_for_status()
+            logger.info(f"Detached field {field_name_or_id} from project {project_id}")
+            return ActionResult(action=action, success=True, resource_id=project_field_id)
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to detach field from project: {error}")
+            return ActionResult(action=action, success=False, error=error)
+    
+    def _resolve_field_id(self, name_or_id: str) -> str:
+        """Resolve a field name to its ID."""
+        if not name_or_id:
+            return name_or_id
+        
+        # If it looks like a UUID, assume it's an ID
+        if len(name_or_id) > 20 and '-' in name_or_id:
+            return name_or_id
+        
+        if self.dry_run:
+            return f"dry-run-field-id-for-{name_or_id}"
+        
+        # Try to find by name via API
+        try:
+            resp = self.session.get(
+                f'{self.url}/api/admin/customFieldSettings/customFields',
+                params={'fields': 'id,name', 'query': name_or_id}
+            )
+            resp.raise_for_status()
+            for f in resp.json():
+                if f['name'] == name_or_id:
+                    return f['id']
+        except Exception as e:
+            logger.warning(f"Failed to lookup field ID for {name_or_id}: {e}")
+        
+        # Fallback: return as is
+        return name_or_id
+    
     # =========================================================================
     # PLAN EXECUTION
     # =========================================================================
@@ -340,6 +531,30 @@ class YouTrackActuator:
                 result = self.attach_field_to_project(*args)
             elif action_type == 'create_project':
                 result = self.create_project(*args)
+            # Update operations
+            elif action_type == 'update_bundle_value':
+                # update_bundle_value(BundleName, ValueId, NewName, Type)
+                result = self.update_bundle_value(args[0], args[1], args[2], 
+                                                  bundle_type=args[3] if len(args) > 3 else 'enum')
+            elif action_type == 'archive_bundle_value':
+                # archive_bundle_value(BundleName, ValueId, Type)
+                result = self.archive_bundle_value(args[0], args[1],
+                                                   bundle_type=args[2] if len(args) > 2 else 'enum')
+            elif action_type == 'update_field':
+                # update_field(FieldId, NewName, NewBundleId)
+                result = self.update_field(args[0], 
+                                          new_name=args[1] if len(args) > 1 else None,
+                                          new_bundle_id=args[2] if len(args) > 2 else None)
+            # Delete operations
+            elif action_type == 'delete_bundle':
+                # delete_bundle(BundleName, Type)
+                result = self.delete_bundle(args[0], bundle_type=args[1] if len(args) > 1 else 'enum')
+            elif action_type == 'delete_field':
+                # delete_field(FieldId)
+                result = self.delete_field(args[0])
+            elif action_type == 'detach_field':
+                # detach_field(FieldName, ProjectId)
+                result = self.detach_field_from_project(args[0], args[1])
             else:
                 logger.warning(f"Unknown action type: {action_type}")
                 result = ActionResult(

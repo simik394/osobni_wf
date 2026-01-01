@@ -170,3 +170,109 @@ class TestPlanExecution:
         
         assert len(results) == 3
         assert all(r.success for r in results)
+
+
+class TestUpdateOperations:
+    """Tests for update operations."""
+    
+    @patch('requests.Session')
+    def test_archive_bundle_value_success(self, mock_session_class):
+        """Test successful bundle value archiving."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": "value-123", "archived": True}
+        mock_response.raise_for_status = Mock()
+        mock_session.post.return_value = mock_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.archive_bundle_value("bundle-123", "value-123")
+        
+        assert result.success is True
+        assert result.resource_id == "value-123"
+    
+    @patch('requests.Session')
+    def test_update_bundle_value_success(self, mock_session_class):
+        """Test successful bundle value update."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {"id": "value-123", "name": "Renamed"}
+        mock_response.raise_for_status = Mock()
+        mock_session.post.return_value = mock_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.update_bundle_value("bundle-123", "value-123", "Renamed")
+        
+        assert result.success is True
+
+
+class TestDeleteOperations:
+    """Tests for delete operations."""
+    
+    @patch('requests.Session')
+    def test_delete_field_success(self, mock_session_class):
+        """Test successful field deletion."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.raise_for_status = Mock()
+        mock_session.delete.return_value = mock_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.delete_field("field-123-uuid-like-id")
+        
+        assert result.success is True
+    
+    @patch('requests.Session')
+    def test_detach_field_from_project(self, mock_session_class):
+        """Test detaching field from project."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock GET to find project-field mapping
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = [
+            {"id": "pf-001", "field": {"id": "field-123-uuid", "name": "Priority"}}
+        ]
+        mock_get_response.raise_for_status = Mock()
+        
+        # Mock DELETE
+        mock_delete_response = Mock()
+        mock_delete_response.raise_for_status = Mock()
+        
+        mock_session.get.return_value = mock_get_response
+        mock_session.delete.return_value = mock_delete_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.detach_field_from_project("field-123-uuid", "DEMO")
+        
+        assert result.success is True
+        assert result.resource_id == "pf-001"
+    
+    def test_delete_dry_run(self):
+        """Test that delete operations work in dry-run mode."""
+        from src.actuator import YouTrackActuator
+        
+        actuator = YouTrackActuator(
+            "https://yt.example.com", 
+            "token",
+            dry_run=True
+        )
+        
+        # All delete operations should succeed in dry-run
+        result1 = actuator.delete_field("TestField")
+        result2 = actuator.delete_bundle("TestBundle")
+        result3 = actuator.detach_field_from_project("TestField", "DEMO")
+        
+        assert result1.success is True
+        assert result2.success is True
+        assert result3.success is True

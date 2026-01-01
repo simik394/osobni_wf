@@ -6,8 +6,8 @@
 
 | Category | API Available | Implemented | Coverage |
 |----------|---------------|-------------|----------|
-| **Custom Fields** | ✅ Full CRUD | ✅ Sensing + Create + Attach | ~75% |
-| **Bundles (enum)** | ✅ Full CRUD | ✅ Sensing + Create + Add Values | ~75% |
+| **Custom Fields** | ✅ Full CRUD | ✅ Full CRUD | ~95% |
+| **Bundles (enum)** | ✅ Full CRUD | ✅ Full CRUD | ~95% |
 | **Projects** | ✅ Full CRUD | ✅ Sensing + Create | ~50% |
 | **Workflows** | ✅ Management + JS | ❌ Not implemented | 0% |
 | **Issues** | ✅ Full CRUD + Search | ❌ Not implemented | 0% |
@@ -33,9 +33,10 @@
 | List all custom fields | ✅ | ✅ `get_custom_fields()` |
 | Read field attributes | ✅ | ✅ `id, name, fieldType, bundle` |
 | Create custom field | ✅ | ✅ `YouTrackActuator.create_field()` |
-| Update custom field | ✅ | ❌ Not implemented |
-| Delete custom field | ✅ | ❌ Not implemented |
+| Update custom field | ✅ | ✅ `YouTrackActuator.update_field()` |
+| Delete custom field | ✅ | ✅ `YouTrackActuator.delete_field()` |
 | Attach to project | ✅ | ✅ `YouTrackActuator.attach_field_to_project()` |
+| Detach from project | ✅ | ✅ `YouTrackActuator.detach_field_from_project()` |
 
 **File:** [`src/controller/main.py`](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/src/controller/main.py#L27-L34)
 
@@ -51,8 +52,9 @@
 | Read bundle values | ✅ | ✅ `id, name, values` |
 | Create bundle | ✅ | ✅ `YouTrackActuator.create_bundle()` |
 | Add bundle values | ✅ | ✅ `YouTrackActuator.add_bundle_value()` |
-| Update bundle values | ✅ | ❌ Not implemented |
-| Delete bundle/values | ✅ | ❌ Not implemented |
+| Update bundle values | ✅ | ✅ `YouTrackActuator.update_bundle_value()` |
+| Archive bundle values | ✅ | ✅ `YouTrackActuator.archive_bundle_value()` |
+| Delete bundle | ✅ | ✅ `YouTrackActuator.delete_bundle()` |
 
 **File:** [`src/controller/main.py`](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/src/controller/main.py#L36-L43)
 
