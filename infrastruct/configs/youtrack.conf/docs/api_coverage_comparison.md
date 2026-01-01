@@ -24,7 +24,7 @@
 
 ### ✅ Currently Implemented
 
-#### Custom Fields (Sensing Only)
+#### Custom Fields (Sensing + Mutation)
 
 **API Endpoint:** `/api/admin/customFieldSettings/customFields`
 
@@ -32,16 +32,16 @@
 |------------|-----|------|
 | List all custom fields | ✅ | ✅ `get_custom_fields()` |
 | Read field attributes | ✅ | ✅ `id, name, fieldType, bundle` |
-| Create custom field | ✅ | ❌ Not implemented |
+| Create custom field | ✅ | ✅ `YouTrackActuator.create_field()` |
 | Update custom field | ✅ | ❌ Not implemented |
 | Delete custom field | ✅ | ❌ Not implemented |
-| Attach to project | ✅ | ❌ Not implemented |
+| Attach to project | ✅ | ✅ `YouTrackActuator.attach_field_to_project()` |
 
 **File:** [`src/controller/main.py`](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/src/controller/main.py#L27-L34)
 
 ---
 
-#### Enum Bundles (Sensing Only)
+#### Enum Bundles (Sensing + Mutation)
 
 **API Endpoint:** `/api/admin/customFieldSettings/bundles/enum`
 
@@ -49,8 +49,8 @@
 |------------|-----|------|
 | List all enum bundles | ✅ | ✅ `get_bundles()` |
 | Read bundle values | ✅ | ✅ `id, name, values` |
-| Create bundle | ✅ | ❌ Not implemented |
-| Add bundle values | ✅ | ❌ Not implemented |
+| Create bundle | ✅ | ✅ `YouTrackActuator.create_bundle()` |
+| Add bundle values | ✅ | ✅ `YouTrackActuator.add_bundle_value()` |
 | Update bundle values | ✅ | ❌ Not implemented |
 | Delete bundle/values | ✅ | ❌ Not implemented |
 
@@ -197,18 +197,18 @@ class YouTrackActuator:
 
 ## Roadmap Suggestion
 
-### Phase 1: Complete Field/Bundle Loop
-1. ✅ ~~Sensing (read fields/bundles)~~ — Done
-2. ⬜ Actuator: Create field
-3. ⬜ Actuator: Create bundle
-4. ⬜ Actuator: Add bundle values
-5. ⬜ Actuator: Attach field to project
-6. ⬜ Janus integration (Python ↔ Prolog)
+### Phase 1: Complete Field/Bundle Loop ✅
+1. ✅ Sensing (read fields/bundles) — Done
+2. ✅ Actuator: Create field — Done
+3. ✅ Actuator: Create bundle (enum + state) — Done
+4. ✅ Actuator: Add bundle values — Done
+5. ✅ Actuator: Attach field to project — Done
+6. ✅ Janus integration (Python ↔ Prolog) — Done
 
-### Phase 2: Project Configuration
-1. ⬜ Sensing: Read projects
-2. ⬜ Actuator: Create project
-3. ⬜ Actuator: Configure project fields
+### Phase 2: Project Configuration (In Progress)
+1. ✅ Sensing: Read projects — Done
+2. ✅ Actuator: Create project — Done
+3. ⬜ Full project field attachment validation
 4. ⬜ Logic: Project-level dependencies
 
 ### Phase 3: Workflows

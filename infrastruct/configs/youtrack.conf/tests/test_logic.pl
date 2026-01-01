@@ -10,22 +10,22 @@
 
 setup_test_state :-
     % Current state (from YouTrack API)
-    assertz(curr_field('f1', 'Status', 'state')),
-    assertz(curr_field('f2', 'Priority', 'enum')),
-    assertz(bundle_value('b1', 'v1', 'Open')),
-    assertz(bundle_value('b1', 'v2', 'Closed')),
+    assertz(user:curr_field('f1', 'Status', 'state')),
+    assertz(user:curr_field('f2', 'Priority', 'enum')),
+    assertz(user:bundle_value('b1', 'v1', 'Open')),
+    assertz(user:bundle_value('b1', 'v2', 'Closed')),
     
     % Target state (from Obsidian rules)
-    assertz(target_field('Status', 'state', 'DEMO')),
-    assertz(target_field('Priority', 'enum', 'DEMO')),
-    assertz(target_field('Severity', 'enum', 'DEMO')),  % Missing!
-    assertz(field_uses_bundle('Severity', 'SeverityBundle')).
+    assertz(user:target_field('Status', 'state', 'DEMO')),
+    assertz(user:target_field('Priority', 'enum', 'DEMO')),
+    assertz(user:target_field('Severity', 'enum', 'DEMO')),  % Missing!
+    assertz(user:field_uses_bundle('Severity', 'SeverityBundle')).
 
 cleanup_test_state :-
-    retractall(curr_field(_, _, _)),
-    retractall(target_field(_, _, _)),
-    retractall(bundle_value(_, _, _)),
-    retractall(field_uses_bundle(_, _)).
+    retractall(user:curr_field(_, _, _)),
+    retractall(user:target_field(_, _, _)),
+    retractall(user:bundle_value(_, _, _)),
+    retractall(user:field_uses_bundle(_, _)).
 
 %% =============================================================================
 %% Diff Logic Tests
@@ -40,25 +40,15 @@ test(existing_field_not_missing, [setup(setup_test_state), cleanup(cleanup_test_
     missing_field('Status', 'state', 'DEMO').
 
 setup_drift_state :-
-    assertz(curr_field('f2', 'Priority', 'enum')),
-    assertz(target_field('Priority', 'string', 'DEMO')).
+    assertz(user:curr_field('f2', 'Priority', 'enum')),
+    assertz(user:target_field('Priority', 'string', 'DEMO')).
 
 cleanup_drift_state :-
-    retractall(curr_field(_, _, _)),
-    retractall(target_field(_, _, _)).
+    retractall(user:curr_field(_, _, _)),
+    retractall(user:target_field(_, _, _)).
 
 test(drifted_field_detected, [setup(setup_drift_state), cleanup(cleanup_drift_state)]) :-
-    findall(curr_field(A,B,C), curr_field(A,B,C), Currs),
-    format('DBG Currs: ~w~n', [Currs]),
-    findall(target_field(X,Y,Z), target_field(X,Y,Z), Targs),
-    format('DBG Targs: ~w~n', [Targs]),
-    
-    (curr_field('f2', 'Priority', 'enum') -> writeln('Step 1: curr_field OK'); writeln('Step 1: curr_field FAIL')),
-    (curr_field('f2', 'Priority', 'enum') -> writeln('Step 1: curr_field OK'); writeln('Step 1: curr_field FAIL')),
-    (target_field('Priority', 'string', _) -> writeln('Step 2: target_field OK'); writeln('Step 2: target_field FAIL')),
-    ('enum' \= 'string' -> writeln('Step 3: Diff OK'); writeln('Step 3: Diff FAIL')),
-
-    user:drifted_field('f2', 'Priority', 'enum', 'string'). 
+    drifted_field('f2', 'Priority', 'enum', 'string'). 
 
 :- end_tests(diff_logic).
 
