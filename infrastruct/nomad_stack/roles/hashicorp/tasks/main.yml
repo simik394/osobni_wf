@@ -1,4 +1,31 @@
 ---
+# CRITICAL: Protect existing Vault/Consul data from being wiped
+- name: Check if Consul data directory exists (protection against data loss)
+  ansible.builtin.stat:
+    path: /opt/consul/data
+  register: consul_data_dir
+
+- name: Check if Vault is already initialized
+  ansible.builtin.command: vault operator init -status -address=http://127.0.0.1:8200
+  register: vault_pre_check
+  failed_when: false
+  changed_when: false
+  when: consul_data_dir.stat.exists
+  ignore_errors: true
+
+- name: FAIL-SAFE - Abort if Vault data exists but keys file is missing
+  ansible.builtin.fail:
+    msg: |
+      ⛔ CRITICAL: Vault is initialized but vault_keys.json is missing!
+      This could result in PERMANENT DATA LOSS if we continue.
+      Please ensure vault_keys.json exists at: {{ playbook_dir }}/vault_keys.json
+      Or manually unseal Vault and backup your secrets before proceeding.
+  when:
+    - consul_data_dir.stat.exists
+    - vault_pre_check.rc is defined
+    - vault_pre_check.rc == 0
+    - not (lookup('file', playbook_dir + '/vault_keys.json', errors='ignore') | default('', true))
+
 - name: Add HashiCorp GPG key
   ansible.builtin.shell: |
     wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
