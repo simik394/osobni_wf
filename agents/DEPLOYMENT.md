@@ -171,12 +171,32 @@ nomad alloc logs -job rsrch-browser
 
 ## Port Mappings
 
-| Service | CDP Port | VNC Port |
-|---------|----------|----------|
-| rsrch-browser | 9223 | 5900 |
-| angrav-browser | 9224 | 5901 |
+| Service | API Port | CDP Port | VNC Port | Image |
+|---------|----------|----------|----------|-------|
+| rsrch | 3030 | 9223 | 5900 | `ghcr.io/simik394/osobni_wf/rsrch:latest` |
+| angrav | 3031 | 9224 | 5901 | `ghcr.io/simik394/osobni_wf/angrav:latest` |
 
 Access VNC: `vncviewer halvarm:5900` (no password)
+
+### Triggering CI Rebuild
+
+Both agents use GitHub Actions for CI. To rebuild:
+
+```bash
+# Manual trigger via GitHub CLI
+gh workflow run deploy-angrav.yml
+gh workflow run deploy-rsrch.yml
+
+# Or push changes to agents/angrav/** or agents/rsrch/**
+```
+
+After CI builds, restart the Nomad job to pull the new image:
+
+```bash
+ssh halvarm "nomad job restart angrav"
+ssh halvarm "nomad job restart rsrch"
+```
+
 
 ---
 
