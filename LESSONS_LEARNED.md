@@ -111,3 +111,11 @@ When wrapping browser automation as OpenAI-compatible API:
 - **iframes and Webviews**: In Electron apps, the main content often lives in an iframe (like `cascade-panel.html`). Use `page.frames().find(f => f.url().includes('target.html'))` to locate it, not `page.mainFrame()`.
 - **Popover Confusion**: CSS class selectors like `div.bg-ide-chat-background` may match hidden popovers/dialogs rather than the actual content. Always filter by `role !== 'dialog'` or verify visibility.
 - **Virtualized Lists & Scrolling**: React-style virtualized lists often "snap" scroll positions when scrolling forward, re-rendering entire sections and jumping to unexpected positions. *Fix*: Scroll BACKWARDS from the bottom instead - virtualized UIs handle precise upward scrolling better because they're optimized for "load more" at the top. Use `scrollTop = targetPosition` with explicit targets rather than incremental `scrollTop += offset`.
+
+## Web Scraping: Virtualized UIs & Collapsed Content
+- **Expansion Before Extraction**: In virtualized lists (like React-Window), content inside collapsed sections often isn't even in the DOM until expanded. You MUST expand these sections first to extract their content.
+- **Two-Pass Extraction Strategy**: For aggressively virtualized UIs that re-collapse content when scrolled away, use a two-pass approach:
+    1. **Pass 1 (Expansion + Fast Capture)**: Rapidly scroll through and expand sections (like "Progress Updates" or file diffs). Extract content *immediately* after expansion if possible, as it might disappear when you scroll past.
+    2. **Pass 2 (Verification Capture)**: Scroll through again (e.g., upwards from bottom) to capture any persistent content.
+- **Specific Selector Targeting**: DO NOT use generic `button.click()` loops. Inspect triggers specifically (e.g., buttons containing "Files With Changes" or headers with tooltips) to avoid clicking destructive actions or navigating away.
+- **Hidden Content Heuristics**: "Thought" blocks or file diffs are often hidden via `display: none` rather than removed. Checking `window.getComputedStyle(el).display === 'none'` is a robust way to decide whether to click an expansion button.
