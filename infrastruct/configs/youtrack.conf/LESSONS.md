@@ -23,3 +23,7 @@ An actuator must be able to run repeatedly without side effects if the state mat
 ## 4. SWI-Prolog and Pip (Ansible)
 Installing `janus-swi` via Ansible `pip` module can be brittle if it tries to install into a user directory that doesn't exist or isn't in Python's path.
 **Lesson**: For infrastructure roles, prefer system-wide installation (`become: true` and no `--user` flag) to ensure all services (like Windmill or background workers) can access the library.
+
+## 5. Prolog plunit Module Context
+When using `plunit` test framework, tests run inside a generated module (e.g., `plunit_diff_logic`). If you `assertz` facts without module qualification, they go into the test module's namespace—not the `user` module where your production rules look for them.
+**Lesson**: Always use `assertz(user:fact(...))` and `retractall(user:fact(...))` in plunit setup/cleanup to ensure facts are visible to rules defined in `core.pl`.
