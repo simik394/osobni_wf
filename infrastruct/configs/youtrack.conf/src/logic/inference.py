@@ -91,7 +91,10 @@ class PrologInferenceEngine:
         for bundle in bundles:
             bundle_id = self._escape(bundle.get('id', ''))
             bundle_name = self._escape(bundle.get('name', ''))
-            bundle_type = 'enum'  # TODO: detect actual type
+            # Detect bundle type
+            values = bundle.get('values', [])
+            first_val = values[0] if values else {}
+            bundle_type = 'state' if 'isResolved' in first_val else 'enum'
             janus.query_once(f"assertz(curr_bundle('{bundle_id}', '{bundle_name}', '{bundle_type}'))")
             
             for value in bundle.get('values', []):

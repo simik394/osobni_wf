@@ -172,21 +172,25 @@ User management is handled by **JetBrains Hub**, not YouTrack directly.
 
 ---
 
-## Actuator - Missing Component
+## Actuator - Implemented Component
 
-> [!WARNING]
-> The `src/actuator/` directory is currently **empty**. This is the component that would apply changes to YouTrack.
+The `src/actuator/` directory contains the implementation for applying changes to YouTrack.
 
-To complete the IaC loop, the actuator needs to implement:
+It currently supports:
+- Creating custom fields
+- Creating bundles (enum and state)
+- Adding values to bundles
+- Creating projects
+- Attaching fields to projects
 
 ```python
-# Proposed actuator methods
+# Actuator interface
 class YouTrackActuator:
-    def create_field(self, name: str, type: str, project: str) -> None: ...
-    def update_field_type(self, id: str, new_type: str) -> None: ...
-    def create_bundle(self, name: str, type: str) -> None: ...
-    def add_bundle_value(self, bundle_id: str, value: str) -> None: ...
-    def attach_field_to_project(self, field_id: str, project_id: str) -> None: ...
+    def create_field(self, name: str, type: str, bundle_name_or_id: Optional[str] = None) -> ActionResult: ...
+    def create_bundle(self, name: str, bundle_type: str = 'enum') -> ActionResult: ...
+    def add_bundle_value(self, bundle_name_or_id: str, value_name: str, bundle_type: str = 'enum') -> ActionResult: ...
+    def create_project(self, name: str, short_name: str, leader_id: Optional[str] = None) -> ActionResult: ...
+    def attach_field_to_project(self, field_name_or_id: str, project_id: str, can_be_empty: bool = True) -> ActionResult: ...
 ```
 
 ---

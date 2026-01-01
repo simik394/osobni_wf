@@ -39,10 +39,26 @@ test(missing_field_detected, [setup(setup_test_state), cleanup(cleanup_test_stat
 test(existing_field_not_missing, [setup(setup_test_state), cleanup(cleanup_test_state), fail]) :-
     missing_field('Status', 'state', 'DEMO').
 
-%% TODO: This test passes when run inline but fails in plunit.
-%% The issue appears to be related to atom quoting in plunit's assertion handling.
-%% Keeping as documentation of the expected behavior.
-%% test(drifted_field_detected, ...) 
+setup_drift_state :-
+    assertz(curr_field('f2', 'Priority', 'enum')),
+    assertz(target_field('Priority', 'string', 'DEMO')).
+
+cleanup_drift_state :-
+    retractall(curr_field(_, _, _)),
+    retractall(target_field(_, _, _)).
+
+test(drifted_field_detected, [setup(setup_drift_state), cleanup(cleanup_drift_state)]) :-
+    findall(curr_field(A,B,C), curr_field(A,B,C), Currs),
+    format('DBG Currs: ~w~n', [Currs]),
+    findall(target_field(X,Y,Z), target_field(X,Y,Z), Targs),
+    format('DBG Targs: ~w~n', [Targs]),
+    
+    (curr_field('f2', 'Priority', 'enum') -> writeln('Step 1: curr_field OK'); writeln('Step 1: curr_field FAIL')),
+    (curr_field('f2', 'Priority', 'enum') -> writeln('Step 1: curr_field OK'); writeln('Step 1: curr_field FAIL')),
+    (target_field('Priority', 'string', _) -> writeln('Step 2: target_field OK'); writeln('Step 2: target_field FAIL')),
+    ('enum' \= 'string' -> writeln('Step 3: Diff OK'); writeln('Step 3: Diff FAIL')),
+
+    user:drifted_field('f2', 'Priority', 'enum', 'string'). 
 
 :- end_tests(diff_logic).
 
@@ -53,7 +69,7 @@ test(existing_field_not_missing, [setup(setup_test_state), cleanup(cleanup_test_
 :- begin_tests(action_generation).
 
 test(create_action_for_missing, [setup(setup_test_state), cleanup(cleanup_test_state)]) :-
-    action(create_field('Severity', 'enum', 'DEMO')).
+    action(create_field('Severity', 'enum', 'SeverityBundle')).
 
 test(no_action_for_existing, [setup(setup_test_state), cleanup(cleanup_test_state), fail]) :-
     action(create_field('Status', 'state', 'DEMO')).
@@ -67,7 +83,7 @@ test(no_action_for_existing, [setup(setup_test_state), cleanup(cleanup_test_stat
 :- begin_tests(dependencies).
 
 test(field_depends_on_bundle, [setup(setup_test_state), cleanup(cleanup_test_state)]) :-
-    depends_on(create_field('Severity', 'enum', 'DEMO'), ensure_bundle('SeverityBundle')).
+    depends_on(create_field('Severity', 'enum', 'SeverityBundle'), ensure_bundle('SeverityBundle', _)).
 
 :- end_tests(dependencies).
 
@@ -77,9 +93,11 @@ test(field_depends_on_bundle, [setup(setup_test_state), cleanup(cleanup_test_sta
 
 :- begin_tests(topological_sort).
 
-%% TODO: The topological sort test works when run inline but fails in plunit.
-%% Same issue as drifted_field - dynamic facts behave differently in plunit context.
-%% test(simple_sort, ...)
+test(simple_sort) :-
+    Actions = [create_field(f, t, b), ensure_bundle(b, enum)],
+    % Dependency: create_field(..., b) depends on ensure_bundle(b, ...)
+    topological_sort(Actions, Sorted),
+    Sorted = [ensure_bundle(b, enum), create_field(f, t, b)].
 
 :- end_tests(topological_sort).
 
