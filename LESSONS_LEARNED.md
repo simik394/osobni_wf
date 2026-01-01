@@ -88,6 +88,9 @@ When wrapping browser automation as OpenAI-compatible API:
 - **The "White Box" Fallacy**: I initially proposed "Tool Middleware" for Angrav, assuming we could wrap its function calls. I failed to realize Angrav is a "UI Driver" (Black Box) until late in the planning. *Lesson:* Explicitly categorize agents as "Code Executors" (Middleware possible) vs "UI Drivers" (Scrapers only) at the start of design.
 
 ## Playwright & Browser Automation
+- **Text-Pattern Matching for Dynamic UIs**: When DOM classes are unstable (e.g. Tailwind classes changing or being generic), rely on robust Regex matching against `textContent` to identify item types (like "Edited file.ts" or tool outputs) rather than fragile CSS selectors.
+- **Markdown Output**: For knowledge management systems (like Obsidian), generating Markdown output directly from the scraper is vastly more useful than plain text. It allows for rich formatting (syntax highlighting, alerts) that improves readability.
+- **Limit Option for Testing**: Always implement a `--limit` or `--dry-run` option early in scraper development to allow fast feedback loops without waiting for full history processing.
 - **Stealth Plugin Dependencies**: `puppeteer-extra-plugin-stealth` can fail with "dependency not found (stealth/evasions/chrome.app)" in some persistent environments or when bundled. If this blocks execution, disabling the plugin is a valid temporary workaround for local tools, provided you don't aggressively scrape.
 - **Binary vs Source Execution**: When debugging CLI tools (like `rsrch`), always verify if the global command is an alias to a stale binary (`pkg` snapshot) or the actual local code. Prefer running `node dist/index.js` or `ts-node src/index.ts` directly during development to ensure you are testing the latest changes.
 
@@ -119,3 +122,8 @@ When wrapping browser automation as OpenAI-compatible API:
     2. **Pass 2 (Verification Capture)**: Scroll through again (e.g., upwards from bottom) to capture any persistent content.
 - **Specific Selector Targeting**: DO NOT use generic `button.click()` loops. Inspect triggers specifically (e.g., buttons containing "Files With Changes" or headers with tooltips) to avoid clicking destructive actions or navigating away.
 - **Hidden Content Heuristics**: "Thought" blocks or file diffs are often hidden via `display: none` rather than removed. Checking `window.getComputedStyle(el).display === 'none'` is a robust way to decide whether to click an expansion button.
+
+- **Web Scraping: Debugging & State Management**:
+    - **Exfiltration over Remote Debugging**: When diagnosing DOM issues in complex, authenticated environments (like Antigravity), capturing `outerHTML` of specific containers (via the scraper script itself) is often faster and more accurate than trying to attach external debuggers or run isolated scripts that lack the full session context.
+    - **Reverse Scanning for Limits**: When implementing a "preview" or "limit" feature for logs/chats, always scan from the *bottom up* (or calculate the start index: `total - limit`). Scanning from the top and stopping early yields the *oldest* data, which is rarely what is wanted for a "latest activity" check.
+    - **Robust Selectors**: Prefer `className.includes('foo')` over `classList.contains('foo')` when dealing with complex frameworks like Tailwind where classes might be dynamically concatenated or include arbitrary values.
