@@ -13,9 +13,11 @@ logger = logging.getLogger(__name__)
 try:
     import janus_swi as janus
     JANUS_AVAILABLE = True
-except ImportError:
+except Exception as e:
+    import sys
+    print(f"Janus import failed: {e}", file=sys.stderr)
     JANUS_AVAILABLE = False
-    logger.warning("janus-swi not available - Prolog inference disabled")
+    logger.warning(f"janus-swi not available: {e}")
 
 
 class PrologInferenceEngine:
@@ -64,10 +66,19 @@ class PrologInferenceEngine:
         janus.query_once("retractall(target_state_value(_, _, _))")
         janus.query_once("retractall(field_uses_bundle(_, _))")
         janus.query_once("retractall(field_required(_, _))")
+        
+        # Workflow facts
+        janus.query_once("retractall(curr_workflow(_, _, _))")
+        janus.query_once("retractall(curr_rule(_, _, _, _, _))")
+        janus.query_once("retractall(curr_workflow_usage(_, _, _))")
+        janus.query_once("retractall(target_workflow(_, _, _))")
+        janus.query_once("retractall(target_rule(_, _, _, _))")
+        janus.query_once("retractall(target_workflow_attachment(_, _))")
+        
         logger.debug("Cleared all dynamic facts")
     
     def assert_current_state(self, fields: list[dict], bundles: list[dict], 
-                            projects: list[dict] = None) -> None:
+                            projects: list[dict] = None, workflows: list[dict] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -75,6 +86,7 @@ class PrologInferenceEngine:
             fields: Custom fields from YouTrack API
             bundles: Bundles from YouTrack API
             projects: Projects from YouTrack API
+            workflows: Workflows from YouTrack API
         """
         self.initialize()
         
@@ -114,6 +126,25 @@ class PrologInferenceEngine:
                 janus.query_once(f"assertz(curr_project('{project_id}', '{name}', '{short_name}'))")
             
             logger.debug(f"Asserted {len(projects)} current projects")
+
+        # Assert workflows and rules
+        if workflows:
+            for wf in workflows:
+                wf_id = self._escape(wf.get('id', ''))
+                name = self._escape(wf.get('name', ''))
+                title = self._escape(wf.get('title', ''))
+                janus.query_once(f"assertz(curr_workflow('{wf_id}', '{name}', '{title}'))")
+                
+                # Rules
+                for rule in wf.get('rules', []):
+                    rule_id = self._escape(rule.get('id', ''))
+                    rule_name = self._escape(rule.get('name', ''))
+                    # Note: YouTrack list_workflow API might not return script content directly
+                    # If empty, drift detection might be limited unless populated elsewhere
+                    script = self._escape(rule.get('script', ''))
+                    janus.query_once(f"assertz(curr_rule('{wf_id}', '{rule_id}', '{rule_name}', 'unknown', '{script}'))")
+            
+            logger.debug(f"Asserted {len(workflows)} current workflows")
     
     def assert_target_state(self, prolog_facts: str) -> None:
         """
@@ -184,7 +215,7 @@ class PrologInferenceEngine:
 
 
 def run_inference(fields: list[dict], bundles: list[dict], 
-                  target_facts: str, projects: list[dict] = None) -> list[tuple]:
+                  target_facts: str, projects: list[dict] = None, workflows: list[dict] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -193,12 +224,14 @@ def run_inference(fields: list[dict], bundles: list[dict],
         bundles: Current bundles from YouTrack API
         target_facts: Prolog facts string from config translator
         projects: Current projects from YouTrack API
+        workflows: Current workflows from YouTrack API
         
     Returns:
         List of action tuples for the actuator
     """
     engine = PrologInferenceEngine()
     engine.clear_facts()
-    engine.assert_current_state(fields, bundles, projects)
+    engine.assert_current_state(fields, bundles, projects, workflows)
     engine.assert_target_state(target_facts)
+    
     return engine.compute_plan()

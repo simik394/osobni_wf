@@ -356,7 +356,7 @@ class WorkflowClient:
                 f'{self.url}/api/admin/workflows',
                 params={
                     '$top': '-1',
-                    'fields': 'id,name,title,rules(id,name,type)',
+                    'fields': 'id,name,title,rules(id,name,type,script)',
                     'query': 'language:JS,visual,mps'
                 }
             )

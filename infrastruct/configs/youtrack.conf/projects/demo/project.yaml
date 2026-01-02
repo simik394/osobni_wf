@@ -28,12 +28,7 @@ fields:
       - High
       - Medium
       - Low
-
-  # Simple text field
-  - name: Description
-    type: text
-    can_be_empty: true
-
+  #
   # Estimated time
   - name: Estimation
     type: period
@@ -46,3 +41,6 @@ workflows:
       - name: tag-critical-urgent
         type: on-change
         script_file: workflows/tag-critical-urgent.js
+      - name: log-changes-iac-test
+        type: on-change
+        script_file: workflows/log-changes.js

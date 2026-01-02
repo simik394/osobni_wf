@@ -328,31 +328,29 @@ class YouTrackActuator:
             logger.error(f"Failed to create field {name}: {error}")
             return ActionResult(action=action, success=False, error=error)
     
+    # Project Custom Field Type Mapping
+    PROJECT_FIELD_TYPE_MAP = {
+        'state[1]': 'StateProjectCustomField',
+        'enum[1]': 'EnumProjectCustomField',
+        'user[1]': 'UserProjectCustomField',
+        'version': 'VersionProjectCustomField',
+        'build[1]': 'BuildProjectCustomField',
+        'ownedField[1]': 'OwnedProjectCustomField',
+        'period': 'PeriodProjectCustomField', 
+        'date': 'SimpleProjectCustomField',
+        'integer': 'SimpleProjectCustomField',
+        'string': 'SimpleProjectCustomField',
+        'text': 'SimpleProjectCustomField',
+        'float': 'SimpleProjectCustomField',
+        'group[1]': 'GroupProjectCustomField'
+    }
+
     def attach_field_to_project(self, field_name_or_id: str, project_id: str,
                                 can_be_empty: bool = True) -> ActionResult:
         """Attach an existing custom field to a project."""
-        # Simple fix: Assume name for field, act needs ID.
-        # But we don't have a field cache yet.
-        # For now, let's assume if it doesn't look like ID, we lookup.
-        # Minimal implementation for now: fetch ALL fields and find ID?
-        # Or assumes caller passes ID (which Prolog curr_field was doing, but create_field creates with Name).
         
-        # NOTE: create_field returns ID, but we don't store it for next steps in simplistic execute_plan.
-        # We need lookup here too.
-        field_id = field_name_or_id
-        if not (len(field_id) > 20 and '-' in field_id) and not self.dry_run:
-             # Try lookup field by name
-             try:
-                resp = self.session.get(
-                    f'{self.url}/api/admin/customFieldSettings/customFields',
-                    params={'fields': 'id,name', 'query': field_name_or_id}
-                )
-                resp.raise_for_status()
-                for f in resp.json():
-                    if f['name'] == field_name_or_id:
-                        field_id = f['id']
-                        break
-             except: pass
+        # Get field info (ID and Type)
+        field_id, field_type_id = self._resolve_field_info(field_name_or_id)
         
         action = f"attach_field({field_name_or_id}, {project_id})"
         
@@ -360,13 +358,29 @@ class YouTrackActuator:
             logger.info(f"[DRY RUN] {action}")
             return ActionResult(action=action, success=True)
         
+        # Determine strict ProjectCustomField type
+        # Default to generic if unknown, but State/Enum MUST be specific
+        project_field_type = self.PROJECT_FIELD_TYPE_MAP.get(field_type_id)
+        if not project_field_type:
+             # Fallback: some types are just ProjectCustomField or Simple...
+             # If it looks like a simple type, try SimpleProjectCustomField
+             if field_type_id in ('string', 'text', 'integer', 'float', 'date'):
+                 project_field_type = 'SimpleProjectCustomField'
+             else:
+                 # Generic fallback - might fail for Bundles but works for others?
+                 project_field_type = 'ProjectCustomField'
+
+        payload = {
+            'field': {'id': field_id},
+            'canBeEmpty': can_be_empty
+        }
+        if project_field_type:
+            payload['$type'] = project_field_type
+            
         try:
             resp = self.session.post(
                 f'{self.url}/api/admin/projects/{project_id}/customFields',
-                json={
-                    'field': {'id': field_id},
-                    'canBeEmpty': can_be_empty
-                },
+                json=payload,
                 params={'fields': 'id,field(id,name)'}
             )
             resp.raise_for_status()
@@ -377,127 +391,55 @@ class YouTrackActuator:
             error = f"HTTP {e.response.status_code}: {e.response.text}"
             logger.error(f"Failed to attach field to project: {error}")
             return ActionResult(action=action, success=False, error=error)
-    
-    def update_field(self, field_name_or_id: str, new_name: Optional[str] = None,
-                     new_bundle_id: Optional[str] = None) -> ActionResult:
-        """Update a custom field's properties."""
-        field_id = self._resolve_field_id(field_name_or_id)
-        action = f"update_field({field_name_or_id})"
-        
-        if self.dry_run:
-            logger.info(f"[DRY RUN] {action}")
-            return ActionResult(action=action, success=True)
-        
-        payload = {}
-        if new_name:
-            payload['name'] = new_name
-        if new_bundle_id:
-            payload['bundle'] = {'id': new_bundle_id}
-        
-        if not payload:
-            logger.warning(f"update_field called with no changes for {field_name_or_id}")
-            return ActionResult(action=action, success=True, resource_id=field_id)
-        
-        try:
-            resp = self.session.post(
-                f'{self.url}/api/admin/customFieldSettings/customFields/{field_id}',
-                json=payload,
-                params={'fields': 'id,name'}
-            )
-            resp.raise_for_status()
-            logger.info(f"Updated field {field_name_or_id}")
-            return ActionResult(action=action, success=True, resource_id=field_id)
-        except requests.HTTPError as e:
-            error = f"HTTP {e.response.status_code}: {e.response.text}"
-            logger.error(f"Failed to update field: {error}")
-            return ActionResult(action=action, success=False, error=error)
-    
-    def delete_field(self, field_name_or_id: str) -> ActionResult:
-        """Delete a custom field. WARNING: Destructive operation."""
-        field_id = self._resolve_field_id(field_name_or_id)
-        action = f"delete_field({field_name_or_id})"
-        
-        if self.dry_run:
-            logger.info(f"[DRY RUN] {action}")
-            return ActionResult(action=action, success=True)
-        
-        try:
-            resp = self.session.delete(
-                f'{self.url}/api/admin/customFieldSettings/customFields/{field_id}'
-            )
-            resp.raise_for_status()
-            logger.info(f"Deleted field {field_name_or_id}")
-            return ActionResult(action=action, success=True, resource_id=field_id)
-        except requests.HTTPError as e:
-            error = f"HTTP {e.response.status_code}: {e.response.text}"
-            logger.error(f"Failed to delete field: {error}")
-            return ActionResult(action=action, success=False, error=error)
-    
-    def detach_field_from_project(self, field_name_or_id: str, project_id: str) -> ActionResult:
-        """Detach a custom field from a project."""
-        field_id = self._resolve_field_id(field_name_or_id)
-        action = f"detach_field({field_name_or_id}, {project_id})"
-        
-        if self.dry_run:
-            logger.info(f"[DRY RUN] {action}")
-            return ActionResult(action=action, success=True)
-        
-        try:
-            # First, find the project field ID (not the same as global field ID)
-            resp = self.session.get(
-                f'{self.url}/api/admin/projects/{project_id}/customFields',
-                params={'fields': 'id,field(id,name)'}
-            )
-            resp.raise_for_status()
             
-            project_field_id = None
-            for pf in resp.json():
-                if pf.get('field', {}).get('id') == field_id:
-                    project_field_id = pf['id']
-                    break
-            
-            if not project_field_id:
-                logger.warning(f"Field {field_name_or_id} not attached to project {project_id}")
-                return ActionResult(action=action, success=True)  # Idempotent
-            
-            resp = self.session.delete(
-                f'{self.url}/api/admin/projects/{project_id}/customFields/{project_field_id}'
-            )
-            resp.raise_for_status()
-            logger.info(f"Detached field {field_name_or_id} from project {project_id}")
-            return ActionResult(action=action, success=True, resource_id=project_field_id)
-        except requests.HTTPError as e:
-            error = f"HTTP {e.response.status_code}: {e.response.text}"
-            logger.error(f"Failed to detach field from project: {error}")
-            return ActionResult(action=action, success=False, error=error)
-    
-    def _resolve_field_id(self, name_or_id: str) -> str:
-        """Resolve a field name to its ID."""
+    def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
+        """
+        Resolve a field name to its (ID, fieldTypeId).
+        Returns (id, type_id).
+        """
         if not name_or_id:
-            return name_or_id
-        
-        # If it looks like a UUID, assume it's an ID
+             return name_or_id, None
+
+        # Check if it looks like an ID
         if len(name_or_id) > 20 and '-' in name_or_id:
-            return name_or_id
+             # If it is an ID, we still ideally need the type.
+             # In dry-run we might strip it, but for reliability let's fetch it if not dry-run
+             if not self.dry_run:
+                 try:
+                     resp = self.session.get(
+                         f'{self.url}/api/admin/customFieldSettings/customFields/{name_or_id}',
+                         params={'fields': 'id,fieldType(id)'}
+                     )
+                     if resp.status_code == 200:
+                         data = resp.json()
+                         return data['id'], data['fieldType']['id']
+                 except: pass # Fallback
+             return name_or_id, None
         
         if self.dry_run:
-            return f"dry-run-field-id-for-{name_or_id}"
+            return f"dry-run-field-id-for-{name_or_id}", "string"
         
-        # Try to find by name via API
+        # Look up by name
         try:
             resp = self.session.get(
                 f'{self.url}/api/admin/customFieldSettings/customFields',
-                params={'fields': 'id,name', 'query': name_or_id}
+                params={'fields': 'id,name,fieldType(id)', 'query': name_or_id}
             )
             resp.raise_for_status()
             for f in resp.json():
                 if f['name'] == name_or_id:
-                    return f['id']
+                    return f['id'], f['fieldType']['id']
         except Exception as e:
-            logger.warning(f"Failed to lookup field ID for {name_or_id}: {e}")
+            logger.warning(f"Failed to lookup field info for {name_or_id}: {e}")
         
-        # Fallback: return as is
-        return name_or_id
+        # Fallback
+        return name_or_id, None
+
+    def _resolve_field_id(self, name_or_id: str) -> str:
+        """Resolve just the ID (helper wrapper)."""
+        fid, _ = self._resolve_field_info(name_or_id)
+        return fid
+
     
     # =========================================================================
     # PLAN EXECUTION
@@ -528,7 +470,9 @@ class YouTrackActuator:
                 result = self.add_bundle_value(args[0], args[1], bundle_type=args[2])
             elif action_type == 'add_state_value':
                 # add_state_value(BundleName, Value, IsResolved)
-                result = self.add_state_value(args[0], args[1], is_resolved=args[2])
+                # Convert 'true'/'false' string to boolean
+                is_resolved = str(args[2]).lower() == 'true'
+                result = self.add_state_value(args[0], args[1], is_resolved=is_resolved)
             elif action_type == 'create_field':
                 # create_field(Name, Type, BundleName) or (Name, Type)
                 result = self.create_field(*args)

@@ -10,7 +10,7 @@ from pathlib import Path
 import requests
 
 from src.config import load_configs_from_dir, config_to_prolog_facts
-from src.actuator import YouTrackActuator
+from src.actuator import YouTrackActuator, WorkflowClient
 
 # Optional Janus import - will fail gracefully if not available
 try:
@@ -71,6 +71,12 @@ class YouTrackClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_workflows(self) -> list[dict]:
+        """Fetch all workflows with their rules and usage."""
+        # We reuse the WorkflowClient logic which already knows the internal API
+        wf_client = WorkflowClient(self.url, self.token)
+        return wf_client.list_workflows()
+
 
 def main():
     parser = argparse.ArgumentParser(description='Logic-Driven IaC Controller')
@@ -95,11 +101,12 @@ def main():
     bundles = client.get_bundles()
     state_bundles = client.get_state_bundles()
     projects = client.get_projects()
+    workflows = client.get_workflows()
     
     # Merge enum and state bundles
     all_bundles = bundles + state_bundles
     
-    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects')
+    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows')
     
     # 2. LOAD CONFIG - Read YAML configs and convert to Prolog facts
     config_dir = Path(args.config_dir)
@@ -126,7 +133,8 @@ def main():
         return
     
     logger.info('Running Prolog inference...')
-    plan = run_inference(fields, all_bundles, target_facts, projects)
+    # Pass workflows to inference
+    plan = run_inference(fields, all_bundles, target_facts, projects, workflows)
     
     if not plan:
         logger.info('No changes needed - configuration is in sync!')
