@@ -64,6 +64,8 @@ class PrologInferenceEngine:
         janus.query_once("retractall(target_project(_, _, _))")
         janus.query_once("retractall(target_bundle_value(_, _))")
         janus.query_once("retractall(target_state_value(_, _, _))")
+        janus.query_once("retractall(target_state_value(_, _, _))")
+        janus.query_once("retractall(target_field_default(_, _, _))")
         janus.query_once("retractall(field_uses_bundle(_, _))")
         janus.query_once("retractall(field_required(_, _))")
         
@@ -71,6 +73,7 @@ class PrologInferenceEngine:
         janus.query_once("retractall(curr_workflow(_, _, _))")
         janus.query_once("retractall(curr_rule(_, _, _, _, _))")
         janus.query_once("retractall(curr_workflow_usage(_, _, _))")
+        janus.query_once("retractall(curr_field_default(_, _, _))")
         janus.query_once("retractall(target_workflow(_, _, _))")
         janus.query_once("retractall(target_rule(_, _, _, _))")
         janus.query_once("retractall(target_workflow_attachment(_, _))")
@@ -83,7 +86,8 @@ class PrologInferenceEngine:
         logger.debug("Cleared all dynamic facts")
     
     def assert_current_state(self, fields: list[dict], bundles: list[dict], 
-                            projects: list[dict] = None, workflows: list[dict] = None) -> None:
+                            projects: list[dict] = None, workflows: list[dict] = None,
+                            project_fields: dict[str, list[dict]] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -92,6 +96,7 @@ class PrologInferenceEngine:
             bundles: Bundles from YouTrack API
             projects: Projects from YouTrack API
             workflows: Workflows from YouTrack API
+            project_fields: Per-project fields with defaults {project_id: [fields]}
         """
         self.initialize()
         
@@ -131,6 +136,26 @@ class PrologInferenceEngine:
                 janus.query_once(f"assertz(curr_project('{project_id}', '{name}', '{short_name}'))")
             
             logger.debug(f"Asserted {len(projects)} current projects")
+            
+            # Assert project-specific field defaults
+            if project_fields:
+                count_defaults = 0
+                for pid, pfields in project_fields.items():
+                    for f in pfields:
+                        default_elem = f.get('defaultBundleElement')
+                        if default_elem:
+                            fid = self._escape(f.get('id', ''))
+                            val_name = self._escape(default_elem.get('name', ''))
+                            # Assert curr_field_default(FieldId, ValueName, ProjectId)
+                            # Note: Logic uses FieldId (177-0) which is unique to project
+                            # But core logic might want to verify project matches? 
+                            # Actually core uses curr_field(FieldId, Name, _) and curr_project(ProjectId, _, _)
+                            # The field 177-0 is a ProjectCustomField, distinct from GlobalCustomField (50-x)
+                            # We assert this specific field has this default
+                            if fid and val_name:
+                                janus.query_once(f"assertz(curr_field_default('{fid}', '{val_name}', '{pid}'))")
+                                count_defaults += 1
+                logger.debug(f"Asserted {count_defaults} current field defaults")
 
         # Assert workflows and rules
         if workflows:
@@ -220,7 +245,8 @@ class PrologInferenceEngine:
 
 
 def run_inference(fields: list[dict], bundles: list[dict], 
-                  target_facts: str, projects: list[dict] = None, workflows: list[dict] = None) -> list[tuple]:
+                  target_facts: str, projects: list[dict] = None, workflows: list[dict] = None,
+                  project_fields: dict[str, list[dict]] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -230,13 +256,14 @@ def run_inference(fields: list[dict], bundles: list[dict],
         target_facts: Prolog facts string from config translator
         projects: Current projects from YouTrack API
         workflows: Current workflows from YouTrack API
+        project_fields: Map of project_id -> list of fields with defaults
         
     Returns:
         List of action tuples for the actuator
     """
     engine = PrologInferenceEngine()
     engine.clear_facts()
-    engine.assert_current_state(fields, bundles, projects, workflows)
+    engine.assert_current_state(fields, bundles, projects, workflows, project_fields)
     engine.assert_target_state(target_facts)
     
     return engine.compute_plan()

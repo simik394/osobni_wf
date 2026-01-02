@@ -35,6 +35,7 @@
 :- dynamic curr_workflow/3.
 :- dynamic curr_rule/5.
 :- dynamic curr_workflow_usage/3.
+:- dynamic curr_field_default/3.        %% curr_field_default(FieldId, ValueName, ProjectId)
 
 :- dynamic target_field/3.
 :- dynamic target_project/2.
@@ -43,7 +44,9 @@
 :- dynamic target_state_value/3.
 :- dynamic target_workflow/3.
 :- dynamic target_rule/4.
+:- dynamic target_rule/4.
 :- dynamic target_workflow_attachment/2.
+:- dynamic target_field_default/3.      %% target_field_default(FieldName, DefaultValue, Project)
 
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
@@ -64,6 +67,20 @@
 missing_field(Name, Type, Project) :-
     target_field(Name, Type, Project),
     \+ curr_field(_, Name, Type).
+
+%% Field default missing or drifted
+missing_field_default(Name, DefaultValue, Project) :-
+    target_field_default(Name, DefaultValue, Project),
+    curr_project(ProjectId, _, Project),
+    curr_field(FieldId, Name, _),
+    \+ curr_field_default(FieldId, _, ProjectId).
+
+drifted_field_default(Name, CurrentDefault, TargetDefault, Project) :-
+    target_field_default(Name, TargetDefault, Project),
+    curr_project(ProjectId, _, Project),
+    curr_field(FieldId, Name, _),
+    curr_field_default(FieldId, CurrentDefault, ProjectId),
+    CurrentDefault \= TargetDefault.
 
 %% Workflow missing
 missing_workflow(Name, Title) :-
@@ -154,6 +171,11 @@ action(attach_field(Name, Project)) :-
     target_field(Name, _, Project).
     % Ideally check if already attached, but we lack curr_project_field(Project, Field) fact yet.
 
+%% Set field default value
+action(set_field_default(Name, Value, Project)) :-
+    (missing_field_default(Name, Value, Project) ;
+     drifted_field_default(Name, _, Value, Project)).
+
 %% 3. Workflows
 %% Create missing workflow container
 action(create_workflow(Name, Title)) :-
@@ -205,6 +227,9 @@ depends_on(attach_field(F, _), create_field(F, _, B)) :-
     field_uses_bundle(F, B).
 depends_on(attach_field(F, _), create_field(F, _)) :-
     \+ field_uses_bundle(F, _).
+
+%% Setting default depends on field being attached
+depends_on(set_field_default(F, _, P), attach_field(F, P)).
 
 %% Workflow dependencies
 %% Use logic variable WfId so rule creation depends on the creation of *that specific* workflow

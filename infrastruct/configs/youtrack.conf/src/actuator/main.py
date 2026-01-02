@@ -484,7 +484,74 @@ class YouTrackActuator:
             error = f"HTTP {e.response.status_code}: {e.response.text}"
             logger.error(f"Failed to detach field from project: {error}")
             return ActionResult(action=action, success=False, error=error)
+    
+    def set_field_default(self, field_name: str, value_name: str, project_id: str) -> ActionResult:
+        """Set the default value for a project custom field."""
+        action = f"set_field_default({field_name}, {value_name}, {project_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
             
+        # 1. Resolve Project Custom Field ID
+        # We need the ID of the field *instance* in this project
+        # This duplicates some logic from detach, consider helper if reused more
+        try:
+            resp = self.session.get(
+                f'{self.url}/api/admin/projects/{project_id}/customFields',
+                params={'fields': 'id,field(name),bundle(id,values(id,name))'}
+            )
+            resp.raise_for_status()
+            
+            project_field_id = None
+            value_id = None
+            bundle_values = []
+            
+            for pf in resp.json():
+                if pf.get('field', {}).get('name') == field_name:
+                    project_field_id = pf['id']
+                    # Get bundle values from this field instance
+                    if 'bundle' in pf and 'values' in pf['bundle']:
+                        bundle_values = pf['bundle']['values']
+                    break
+            
+            if not project_field_id:
+                error = f"Field {field_name} not found in project {project_id}"
+                logger.error(error)
+                return ActionResult(action=action, success=False, error=error)
+            
+            # 2. Resolve Value ID
+            for val in bundle_values:
+                if val.get('name') == value_name:
+                    value_id = val.get('id')
+                    break
+            
+            if not value_id:
+                # Fallback for types that might not use bundles (e.g. simple types not supported yet)
+                # But simple types usually rely on strictly default values which simple types don't have in this way
+                error = f"Value '{value_name}' not found in bundle for field {field_name}"
+                logger.error(error)
+                return ActionResult(action=action, success=False, error=error)
+            
+            # 3. Set Default
+            patch_payload = {
+                'defaultBundleElement': {'id': value_id}
+            }
+            
+            resp = self.session.post(
+                f'{self.url}/api/admin/projects/{project_id}/customFields/{project_field_id}',
+                json=patch_payload,
+                params={'fields': 'id,defaultBundleElement(id,name)'}
+            )
+            resp.raise_for_status()
+            logger.info(f"Set default value for {field_name} to '{value_name}' in project {project_id}")
+            return ActionResult(action=action, success=True, resource_id=project_field_id)
+            
+        except Exception as e:
+            error = f"Failed to set field default: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -597,6 +664,9 @@ class YouTrackActuator:
             elif action_type == 'detach_field':
                 # detach_field(FieldName, ProjectId)
                 result = self.detach_field_from_project(args[0], args[1])
+            elif action_type == 'set_field_default':
+                # set_field_default(FieldName, Value, ProjectId)
+                result = self.set_field_default(args[0], args[1], args[2])
             # Workflow operations
             elif action_type == 'create_workflow':
                 # create_workflow(Name, Title)

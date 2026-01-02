@@ -43,6 +43,15 @@ class YouTrackClient:
         )
         resp.raise_for_status()
         return resp.json()
+
+    def get_project_fields(self, project_id: str) -> list[dict]:
+        """Fetch fields for a specific project with defaults."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/projects/{project_id}/customFields',
+            params={'fields': 'id,field(name),defaultBundleElement(name)'}
+        )
+        resp.raise_for_status()
+        return resp.json()
     
     def get_bundles(self) -> list[dict]:
         """Fetch all enum bundles."""
@@ -135,8 +144,19 @@ def main():
         return
     
     logger.info('Running Prolog inference...')
-    # Pass workflows to inference
-    plan = run_inference(fields, all_bundles, target_facts, projects, workflows)
+    
+    # Fetch fields with defaults for each project
+    project_fields = {}
+    for proj in projects:
+        pid = proj['id']
+        try:
+            pfields = client.get_project_fields(pid)
+            project_fields[pid] = pfields
+        except Exception as e:
+            logger.warning(f"Failed to fetch fields for project {pid}: {e}")
+    
+    # Pass workflows and project fields to inference
+    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields)
     
     if not plan:
         logger.info('No changes needed - configuration is in sync!')

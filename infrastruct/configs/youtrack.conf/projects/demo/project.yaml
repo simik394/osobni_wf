@@ -23,6 +23,7 @@ fields:
   - name: Priority
     type: enum
     bundle: PriorityBundle
+    default_value: Medium
     values:
       - Critical
       - High

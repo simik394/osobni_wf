@@ -28,6 +28,10 @@ class FieldConfig(BaseModel):
         default='present',
         description="Set to 'absent' to delete/detach this field"
     )
+    default_value: Optional[str] = Field(
+        default=None,
+        description="Default value name (must verify if type supports defaults)"
+    )
 
 
 class WorkflowRuleConfig(BaseModel):

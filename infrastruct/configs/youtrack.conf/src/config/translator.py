@@ -155,6 +155,11 @@ def _generate_field_facts(field: FieldConfig, project: str) -> Iterator[str]:
     # Field definition
     yield f"target_field('{name}', '{field_type}', '{project}')."
     
+    # Default Value
+    if field.default_value:
+        default_val = escape_prolog_string(field.default_value)
+        yield f"target_field_default('{name}', '{default_val}', '{project}')."
+    
     # Bundle association
     if field.bundle:
         bundle = escape_prolog_string(field.bundle)
