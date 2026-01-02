@@ -773,7 +773,8 @@ class YouTrackActuator:
                            estimation_field: str = None,
                            original_estimation_field: str = None,
                            orphans_at_top: bool = None,
-                           hide_orphans_swimlane: bool = None) -> ActionResult:
+                           hide_orphans_swimlane: bool = None,
+                           backlog_query: str = None) -> ActionResult:
         """
         Update agile board.
         
@@ -958,6 +959,31 @@ class YouTrackActuator:
                     orphan_payload['hideOrphansSwimlane'] = hide_orphans_swimlane
                 self.session.post(f'{self.url}/api/agiles/{board_id}', json=orphan_payload).raise_for_status()
                 logger.debug(f"Updated orphan settings (top={orphans_at_top}, hide={hide_orphans_swimlane})")
+
+            # 10. Update Backlog Query
+            if backlog_query is not None:
+                # First, try to get existing backlog saved query
+                resp = self.session.get(f'{self.url}/api/agiles/{board_id}', params={'fields': 'backlog(id,query)'})
+                if resp.status_code == 200:
+                    existing_backlog = resp.json().get('backlog')
+                    if existing_backlog and existing_backlog.get('id'):
+                        # Update existing saved query
+                        sq_id = existing_backlog['id']
+                        sq_payload = {'query': backlog_query}
+                        self.session.post(f'{self.url}/api/savedQueries/{sq_id}', json=sq_payload).raise_for_status()
+                        logger.debug(f"Updated backlog query to '{backlog_query}'")
+                    else:
+                        # Create new saved query and link to board
+                        sq_create = {
+                            'name': f"{name} Backlog",
+                            'query': backlog_query
+                        }
+                        sq_resp = self.session.post(f'{self.url}/api/savedQueries', json=sq_create, params={'fields': 'id'})
+                        if sq_resp.status_code == 200:
+                            sq_id = sq_resp.json().get('id')
+                            # Link to board
+                            self.session.post(f'{self.url}/api/agiles/{board_id}', json={'backlog': {'id': sq_id}}).raise_for_status()
+                            logger.debug(f"Created and linked new backlog with query '{backlog_query}'")
 
             logger.info(f"Updated Agile Board '{name}' (id={board_id})")
             return ActionResult(action=action, success=True, resource_id=board_id)
@@ -1229,6 +1255,12 @@ class YouTrackActuator:
                     hide_res = list(janus.query(f"target_board_hide_orphans('{board_name}', Val)"))
                     if hide_res:
                         hide_orphans_swimlane = hide_res[0]['Val'] == 'true'
+                    
+                    # Get backlog query
+                    backlog_query = None
+                    bl_res = list(janus.query(f"target_board_backlog('{board_name}', Query)"))
+                    if bl_res:
+                        backlog_query = bl_res[0]['Query']
                         
                 except Exception as e:
                     logger.warning(f"Failed to query board config for update: {e}")
@@ -1243,6 +1275,7 @@ class YouTrackActuator:
                     original_estimation_field = None
                     orphans_at_top = None
                     hide_orphans_swimlane = None
+                    backlog_query = None
                     
                 result = self.update_agile_board(
                     board_name, board_id,
@@ -1256,7 +1289,8 @@ class YouTrackActuator:
                     estimation_field=estimation_field,
                     original_estimation_field=original_estimation_field,
                     orphans_at_top=orphans_at_top,
-                    hide_orphans_swimlane=hide_orphans_swimlane
+                    hide_orphans_swimlane=hide_orphans_swimlane,
+                    backlog_query=backlog_query
                 )
             elif action_type == 'delete_agile_board':
                 # delete_agile_board(BoardId)

@@ -139,6 +139,12 @@ class AgileBoardConfig(BaseModel):
         default=False,
         description="Hide the orphans swimlane from the board"
     )
+    
+    # Backlog configuration
+    backlog_query: Optional[str] = Field(
+        default=None,
+        description="YouTrack search query for the board backlog (e.g., 'project: DEMO State: Open')"
+    )
 
 
 class ColumnConfig(BaseModel):

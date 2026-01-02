@@ -305,6 +305,13 @@ class PrologInferenceEngine:
                 janus.query_once(f"assertz(curr_board_orphans_at_top('{bid}', {orphans_top}))")
                 hide_orphans = 'true' if board.get('hideOrphansSwimlane', False) else 'false'
                 janus.query_once(f"assertz(curr_board_hide_orphans('{bid}', {hide_orphans}))")
+                
+                # Backlog
+                backlog = board.get('backlog')
+                if backlog:
+                    bl_query = self._escape(backlog.get('query', ''))
+                    if bl_query:
+                        janus.query_once(f"assertz(curr_board_backlog('{bid}', '{bl_query}'))")
             
             logger.debug(f"Asserted {len(agiles)} current agile boards")
     

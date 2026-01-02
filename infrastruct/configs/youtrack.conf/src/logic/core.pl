@@ -69,6 +69,8 @@
 :- dynamic curr_board_orphans_at_top/2.
 :- dynamic target_board_hide_orphans/2.
 :- dynamic curr_board_hide_orphans/2.
+:- dynamic target_board_backlog/2.    %% target_board_backlog(BoardName, Query)
+:- dynamic curr_board_backlog/2.      %% curr_board_backlog(BoardId, Query)
 
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
@@ -227,7 +229,8 @@ drifted_board(Name, Id) :-
         drifted_board_color_coding(Name, Id);
         drifted_board_column_wip(Name, Id);
         drifted_board_estimation(Name, Id);
-        drifted_board_orphans(Name, Id)
+        drifted_board_orphans(Name, Id);
+        drifted_board_backlog(Name, Id)
     ).
 
 drifted_board_projects(Name, Id) :-
@@ -266,6 +269,10 @@ drifted_board_estimation(Name, Id) :-
 drifted_board_orphans(Name, Id) :-
     ( target_board_orphans_at_top(Name, V), \+ curr_board_orphans_at_top(Id, V) );
     ( target_board_hide_orphans(Name, V), \+ curr_board_hide_orphans(Id, V) ).
+
+drifted_board_backlog(Name, Id) :-
+    target_board_backlog(Name, Query),
+    \+ curr_board_backlog(Id, Query).
 
 %% Plan Action: Create Board
 action(create_agile_board(Name, MainProject, ColField)) :-

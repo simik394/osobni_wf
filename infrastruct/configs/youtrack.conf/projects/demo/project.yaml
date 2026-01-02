@@ -22,6 +22,7 @@ boards:
     color_coding:
       mode: field
       field: Priority
+    backlog_query: "project: DEMO State: Open #Unresolved"
 
   - name: "Sprint Board 2026"
     column_field: "State"

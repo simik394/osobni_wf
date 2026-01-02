@@ -252,3 +252,8 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
     yield f"target_board_orphans_at_top('{name}', {orphans_top})."
     hide_orphans = 'true' if board.hide_orphans_swimlane else 'false'
     yield f"target_board_hide_orphans('{name}', {hide_orphans})."
+    
+    # Backlog configuration
+    if board.backlog_query:
+        query = escape_prolog_string(board.backlog_query)
+        yield f"target_board_backlog('{name}', '{query}')."
