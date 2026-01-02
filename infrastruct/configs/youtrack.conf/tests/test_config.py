@@ -142,3 +142,82 @@ class TestTranslator:
         from src.config.translator import escape_prolog_string
         
         assert escape_prolog_string("O'Brien") == "O\\'Brien"
+
+
+class TestAgileBoardConfig:
+    """Tests for Agile Board configuration."""
+    
+    def test_agile_board_config_minimal(self):
+        """Test minimal agile board config."""
+        from src.config.schema import AgileBoardConfig
+        
+        config = AgileBoardConfig(name="My Board")
+        assert config.name == "My Board"
+        assert config.column_field == "State"  # Default
+        assert config.projects == []
+        assert config.state == "present"
+    
+    def test_agile_board_config_with_projects(self):
+        """Test agile board config with project list."""
+        from src.config.schema import AgileBoardConfig
+        
+        config = AgileBoardConfig(
+            name="Multi-Project Board",
+            projects=["PROJ1", "PROJ2"],
+            column_field="Status"
+        )
+        assert len(config.projects) == 2
+        assert config.column_field == "Status"
+
+
+class TestAgileTranslator:
+    """Tests for Agile Board translator."""
+    
+    def test_agile_board_translation(self):
+        """Test translating agile board to Prolog facts."""
+        from src.config.schema import YouTrackConfig, ProjectConfig, AgileBoardConfig
+        from src.config.translator import config_to_prolog_facts
+        
+        config = YouTrackConfig(
+            projects=[
+                ProjectConfig(
+                    name="Test",
+                    short_name="TEST",
+                    boards=[
+                        AgileBoardConfig(name="Test Board", column_field="State")
+                    ]
+                )
+            ]
+        )
+        
+        facts = config_to_prolog_facts(config)
+        
+        assert "target_board('Test Board', 'State', 'TEST')" in facts
+        assert "target_board_project('Test Board', 'TEST')" in facts
+    
+    def test_field_default_translation(self):
+        """Test translating field default_value to Prolog facts."""
+        from src.config.schema import YouTrackConfig, ProjectConfig, FieldConfig
+        from src.config.translator import config_to_prolog_facts
+        
+        config = YouTrackConfig(
+            projects=[
+                ProjectConfig(
+                    name="Test",
+                    short_name="TEST",
+                    fields=[
+                        FieldConfig(
+                            name="Priority",
+                            type="enum",
+                            bundle="PriorityBundle",
+                            default_value="Normal"
+                        )
+                    ]
+                )
+            ]
+        )
+        
+        facts = config_to_prolog_facts(config)
+        
+        assert "target_field_default('Priority', 'Normal', 'TEST')" in facts
+
