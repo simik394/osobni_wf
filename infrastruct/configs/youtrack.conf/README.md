@@ -1,76 +1,63 @@
-# Logic-Driven Infrastructure (LDI)
+# YouTrack IaC - Infrastructure as Code
 
-> Model-based configuration management for JetBrains YouTrack using logic programming.
+> Declarative configuration management for JetBrains YouTrack using Prolog-based logic programming.
 
 ## Overview
 
-This project lets you define your YouTrack setup (projects, fields, bundles) as YAML configuration files. A Prolog inference engine computes what's different from your actual YouTrack, and an actuator applies the changes automatically.
+Define your YouTrack setup (projects, fields, bundles, workflows, agile boards, tags) as YAML. A Prolog inference engine computes the diff from your actual YouTrack, and an actuator applies changes automatically.
 
----
-
-## Prerequisites
-
-- **Docker** - For development environment
-- **YouTrack Instance** - Self-hosted or Cloud
-- **YouTrack API Token** - Generate from YouTrack profile settings
+```
+┌──────────────┐    ┌────────────┐    ┌──────────┐    ┌───────────┐
+│  YAML Config │ →  │ Controller │ →  │  Prolog  │ →  │  Actuator │
+│   (desired)  │    │  (sense)   │    │  (plan)  │    │  (apply)  │
+└──────────────┘    └────────────┘    └──────────┘    └───────────┘
+```
 
 ---
 
 ## Quick Start
 
-### 1. Start Development Environment
-
 ```bash
-# Interactive shell with Python + Prolog
+# 1. Start dev container
 ./dev.sh
 
-# Or run tests first
-./dev.sh test
-```
-
-### 2. Configure YouTrack Connection
-
-```bash
+# 2. Set credentials (or use Vault)
 export YOUTRACK_URL=https://youtrack.example.com
-export YOUTRACK_TOKEN=perm:xxx...
-```
+export YOUTRACK_TOKEN=perm:xxx
 
-### 3. Run Sync (Dry-Run)
+# 3. Dry run to see planned changes
+python3 -m src.controller.main --config-dir projects/demo --dry-run
 
-```bash
-python3 -m src.controller.main --dry-run
-```
-
----
-
-## How It Works
-
-1. **You define** your desired state in `obsidian-rules/*.yaml`
-2. **Controller** reads your actual YouTrack via REST API
-3. **Prolog** computes the diff (missing fields, wrong values)
-4. **Actuator** applies changes to YouTrack
-
-```
-┌────────────────┐    ┌─────────────┐    ┌──────────┐    ┌─────────────┐
-│ obsidian-rules │ → │ Controller  │ → │  Prolog  │ → │  Actuator   │
-│   (YAML/MD)    │    │ (read API)  │    │  (diff)  │    │ (write API) │
-└────────────────┘    └─────────────┘    └──────────┘    └─────────────┘
+# 4. Apply changes
+python3 -m src.controller.main --config-dir projects/demo
 ```
 
 ---
 
-## Defining Your Configuration
+## YAML Schema Reference
 
-Create YAML files in `obsidian-rules/`:
+### Project Configuration
 
 ```yaml
-# obsidian-rules/my-project.yaml
+# projects/<name>/project.yaml
 project:
-  name: My Project
-  shortName: DEMO
-  leader: admin
+  name: "My Project"
+  shortName: DEMO      # Issue prefix (DEMO-1, DEMO-2)
+  leader: admin        # Username
+```
 
+### Fields
+
+```yaml
 fields:
+  # Enum field (dropdown)
+  - name: Priority
+    type: enum
+    bundle: PriorityBundle
+    default_value: Medium
+    values: [Critical, High, Medium, Low]
+
+  # State field (workflow states)
   - name: State
     type: state
     bundle: StateBundle
@@ -82,127 +69,219 @@ fields:
       - name: Done
         resolved: true
 
-  - name: Priority
-    type: enum
-    bundle: PriorityBundle
-    values: [Critical, High, Medium, Low]
+  # Other types
+  - name: Estimation
+    type: period
+
+  - name: Story Points
+    type: integer
+
+  # Delete a field
+  - name: OldField
+    state: absent
 ```
 
-### Supported Field Types
+**Supported Types**: `enum`, `state`, `string`, `integer`, `text`, `period`, `date`, `float`
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `enum` | Dropdown list | Priority, Category |
-| `state` | Workflow state | Open, Done (with resolved flag) |
-| `string` | Text field | Description |
-| `integer` | Number | Story Points |
-| `text` | Multi-line text | Notes |
-| `period` | Time duration | Estimate |
-
-### State Bundles (Workflow States)
-
-State bundles define issue lifecycle states:
+### Agile Boards
 
 ```yaml
-fields:
-  - name: State
-    type: state
-    bundle: MyStateBundle
-    values:
-      - name: Open
-        resolved: false
-      - name: In Progress
-        resolved: false
-      - name: Done
-        resolved: true   # Marks issues as resolved
+boards:
+  - name: "Sprint Board"
+    column_field: State        # Field for columns
+    
+    # Sprint settings
+    sprints:
+      enabled: false           # false = Kanban, true = Scrum
+    
+    # Visibility
+    visible_to:
+      - "All Users"
+    
+    # Columns with optional WIP limits
+    columns:
+      - "To do"
+      - name: "In Progress"
+        max_wip: 3             # Work-in-progress limit
+      - "Done"
+    
+    # Swimlanes
+    swimlane_field: Subsystem
+    
+    # Color coding
+    color_coding:
+      mode: field              # 'field' or 'project'
+      field: Priority
+    
+    # Estimation fields (for charts)
+    estimation_field: Story Points
+    original_estimation_field: Estimation
+    
+    # Orphan issues
+    orphans_at_top: true
+    hide_orphans_swimlane: false
+    
+    # Backlog query
+    backlog_query: "project: DEMO State: Open #Unresolved"
+    
+    # Multi-project board
+    projects:
+      - DEMO
+      - CORE
 ```
+
+### Workflows
+
+```yaml
+workflows:
+  - name: my-workflow
+    title: "My Workflow"
+    attached: true             # Attach to project
+    rules:
+      - name: on-change-rule
+        type: on-change
+        script_file: workflows/my-rule.js
+      
+      - name: action-rule
+        type: action
+        script: |
+          // Inline JavaScript
+          workflow.action({
+            title: 'Do Something'
+          });
+    
+    # Delete workflow
+    state: absent
+```
+
+**Rule Types**: `on-change`, `on-schedule`, `state-machine`, `action`, `custom`
+
+### Tags (Global)
+
+```yaml
+tags:
+  - name: urgent
+    untag_on_resolve: true     # Auto-remove when resolved
+  
+  - name: blocked
+    untag_on_resolve: false
+  
+  - name: old-tag
+    state: absent              # Delete tag
+```
+
+### Saved Queries (Global)
+
+```yaml
+saved_queries:
+  - name: "My Open Issues"
+    query: "project: DEMO for: me State: -Done"
+  
+  - name: "Critical Bugs"
+    query: "project: DEMO Priority: Critical"
+  
+  - name: "Old Search"
+    state: absent
+```
+
+---
+
+## Full Feature Matrix
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Projects** | ✅ | Create, update |
+| **Custom Fields** | ✅ | All types, bundles |
+| **Bundles (enum/state)** | ✅ | Create, add values |
+| **Default Values** | ✅ | Per-project defaults |
+| **Workflows** | ✅ | Create, attach/detach |
+| **Workflow Rules** | ✅ | JS from file or inline |
+| **Agile Boards** | ✅ | Full configuration |
+| **Columns** | ✅ | Order, WIP limits |
+| **Swimlanes** | ✅ | Field-based |
+| **Color Coding** | ✅ | Field or project |
+| **Estimation Fields** | ✅ | For burndown |
+| **Backlog Query** | ✅ | Saved search |
+| **Tags** | ✅ | Create, delete |
+| **Saved Queries** | ✅ | Create, update, delete |
+| Card Field Visibility | ❌ | UI-only, not API |
+| Sprints | ⚠️ | Manual only |
+| Reports | 📋 | [Proposal](docs/PROPOSAL_reports_iac.md) |
+| User Groups | ❌ | Requires Hub API |
 
 ---
 
 ## Directory Structure
 
 ```
-├── obsidian-rules/     ← YOUR CONFIG GOES HERE
-│   └── *.yaml          # Project/field definitions
+├── projects/           ← Your project configs
+│   └── demo/
+│       ├── project.yaml
+│       └── workflows/
 ├── src/
-│   ├── controller/     # Python: reads YouTrack API
-│   ├── logic/          # Prolog: computes diff
-│   ├── actuator/       # Python: applies changes
-│   └── config/         # YAML/Prolog config parsers
-├── docs/
-│   └── api_coverage_comparison.md
-├── dev.sh              # Development environment
-├── tests/              # Python + Prolog tests
-└── windmill/           # Windmill integration (CI/CD)
+│   ├── controller/     # API client
+│   ├── logic/          # Prolog engine
+│   ├── actuator/       # Change applier
+│   └── config/         # YAML parser
+├── tests/              # Test suite
+└── docs/               # Documentation
+```
+
+---
+
+## Advanced Usage
+
+### Vault Integration
+
+```bash
+export VAULT_ADDR=http://vault:8200
+export VAULT_TOKEN=xxx
+# Token read from: secret/data/youtrack/api -> token
+python3 -m src.controller.main --config-dir projects/demo
+```
+
+### Export Current State
+
+```bash
+python3 -m src.controller.main --export current-state.yaml
+```
+
+### Verbose Logging
+
+```bash
+python3 -m src.controller.main --config-dir projects/demo -v
 ```
 
 ---
 
 ## Development
 
-### Running Tests
-
 ```bash
+# Run tests
 ./dev.sh test
-```
 
-### Interactive Shell
-
-```bash
+# Interactive shell
 ./dev.sh
 
-# Inside container:
-python3 -m src.controller.main --help
+# Run Prolog directly
 swipl src/logic/core.pl
 ```
-
-### With Live YouTrack
-
-```bash
-YOUTRACK_URL=https://yt.example.com YOUTRACK_TOKEN=xxx ./dev.sh shell
-
-# Then inside:
-python3 -m src.controller.main --dry-run
-```
-
----
-
-## API Coverage
-
-See [docs/api_coverage_comparison.md](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/docs/api_coverage_comparison.md) for:
-- What YouTrack API endpoints are supported
-- What's implemented vs planned
-- Roadmap for additional features
-
-**Current coverage**: ~50-75% for fields, bundles, projects
-
----
-
-## Windmill Integration
-
-For automated deployments via Windmill, see [windmill/README.md](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/windmill/README.md).
 
 ---
 
 ## Troubleshooting
 
-### "Token not found" or 401 errors
+| Issue | Solution |
+|-------|----------|
+| 401 Unauthorized | Check token permissions |
+| Field not updating | Verify field is attached to project |
+| Bundle conflict | Bundles are global, ensure consistent values |
+| Workflow error | Check JS syntax in script files |
 
-Ensure your token has admin permissions and is correctly set:
-```bash
-echo $YOUTRACK_TOKEN
-```
+---
 
-### Prolog syntax errors
+## See Also
 
-Validate your YAML first:
-```bash
-python3 -c "import yaml; yaml.safe_load(open('obsidian-rules/my-project.yaml'))"
-```
-
-### Docker container won't start
-
-Check Docker is running:
-```bash
-docker info
-```
+- [API Coverage](docs/api_coverage_comparison.md)
+- [Reports Proposal](docs/PROPOSAL_reports_iac.md)
+- [Windmill Integration](windmill/README.md)

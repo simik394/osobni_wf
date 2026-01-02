@@ -221,3 +221,103 @@ class TestAgileTranslator:
         
         assert "target_field_default('Priority', 'Normal', 'TEST')" in facts
 
+
+class TestTagConfig:
+    """Tests for Tag configuration."""
+    
+    def test_tag_config_minimal(self):
+        """Test minimal tag config."""
+        from src.config.schema import TagConfig
+        
+        config = TagConfig(name="urgent")
+        assert config.name == "urgent"
+        assert config.untag_on_resolve is False
+        assert config.state == "present"
+    
+    def test_tag_config_full(self):
+        """Test tag config with all options."""
+        from src.config.schema import TagConfig
+        
+        config = TagConfig(
+            name="blocked",
+            untag_on_resolve=True,
+            visible_to="All Users",
+            state="present"
+        )
+        assert config.untag_on_resolve is True
+        assert config.visible_to == "All Users"
+    
+    def test_tag_translation(self):
+        """Test translating tags to Prolog facts."""
+        from src.config.schema import YouTrackConfig, TagConfig
+        from src.config.translator import config_to_prolog_facts
+        
+        config = YouTrackConfig(
+            projects=[],
+            tags=[
+                TagConfig(name="urgent", untag_on_resolve=True),
+                TagConfig(name="blocked", untag_on_resolve=False),
+            ]
+        )
+        
+        facts = config_to_prolog_facts(config)
+        
+        assert "target_tag('urgent', 'null', true, 'null')" in facts
+        assert "target_tag('blocked', 'null', false, 'null')" in facts
+    
+    def test_tag_deletion(self):
+        """Test tag marked for deletion."""
+        from src.config.schema import YouTrackConfig, TagConfig
+        from src.config.translator import config_to_prolog_facts
+        
+        config = YouTrackConfig(
+            projects=[],
+            tags=[TagConfig(name="old-tag", state="absent")]
+        )
+        
+        facts = config_to_prolog_facts(config)
+        
+        assert "target_delete_tag('old-tag')" in facts
+
+
+class TestSavedQueryConfig:
+    """Tests for Saved Query configuration."""
+    
+    def test_saved_query_minimal(self):
+        """Test minimal saved query config."""
+        from src.config.schema import SavedQueryConfig
+        
+        config = SavedQueryConfig(name="My Issues", query="for: me")
+        assert config.name == "My Issues"
+        assert config.query == "for: me"
+        assert config.state == "present"
+    
+    def test_saved_query_translation(self):
+        """Test translating saved queries to Prolog facts."""
+        from src.config.schema import YouTrackConfig, SavedQueryConfig
+        from src.config.translator import config_to_prolog_facts
+        
+        config = YouTrackConfig(
+            projects=[],
+            saved_queries=[
+                SavedQueryConfig(name="Open Bugs", query="Type: Bug State: Open"),
+            ]
+        )
+        
+        facts = config_to_prolog_facts(config)
+        
+        assert "target_saved_query('Open Bugs', 'Type: Bug State: Open', 'null')" in facts
+    
+    def test_saved_query_deletion(self):
+        """Test saved query marked for deletion."""
+        from src.config.schema import YouTrackConfig, SavedQueryConfig
+        from src.config.translator import config_to_prolog_facts
+        
+        config = YouTrackConfig(
+            projects=[],
+            saved_queries=[SavedQueryConfig(name="Old Query", query="obsolete", state="absent")]
+        )
+        
+        facts = config_to_prolog_facts(config)
+        
+        assert "target_delete_saved_query('Old Query')" in facts
