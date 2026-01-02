@@ -89,9 +89,11 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    token = os.environ.get('YOUTRACK_TOKEN')
+    # Get token from Vault (with env var fallback)
+    from src.config.vault import get_youtrack_token
+    token = get_youtrack_token()
     if not token:
-        raise ValueError('YOUTRACK_TOKEN environment variable required')
+        raise ValueError('YOUTRACK_TOKEN not found - set YOUTRACK_TOKEN env var or configure Vault')
     
     # 1. SENSE - Fetch current state from YouTrack
     logger.info('Fetching current state from YouTrack...')
