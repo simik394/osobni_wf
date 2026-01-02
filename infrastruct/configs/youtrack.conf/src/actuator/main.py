@@ -721,12 +721,13 @@ class YouTrackActuator:
                            disable_sprints: bool = None,
                            visible_to: list[str] = None,
                            columns: list[str] = None,
-                           swimlane_field: str = None) -> ActionResult:
+                           swimlane_field: str = None,
+                           projects: list[str] = None) -> ActionResult:
         """Update an existing Agile Board configuration."""
         action = f"update_agile_board({name}, {board_id})"
         
         if self.dry_run:
-            logger.info(f"[DRY RUN] {action} (sprints={disable_sprints}, visible={visible_to}, cols={columns}, swim={swimlane_field})")
+            logger.info(f"[DRY RUN] {action} (sprints={disable_sprints}, visible={visible_to}, cols={columns}, swim={swimlane_field}, projects={projects})")
             return ActionResult(action=action, success=True)
             
         try:
@@ -741,7 +742,24 @@ class YouTrackActuator:
                 self.session.post(f'{self.url}/api/agiles/{board_id}', json=payload).raise_for_status()
                 logger.debug(f"Updated sprint settings for board {board_id}")
 
-            # 2. Update visibility
+            # 2. Update projects
+            if projects is not None:
+                project_ids = []
+                for p_name in projects:
+                    try:
+                        pid = self._resolve_project_id(p_name)
+                        project_ids.append({'id': pid})
+                    except Exception as e:
+                        logger.warning(f"Failed to resolve project {p_name}: {e}")
+                
+                if project_ids:
+                    payload = {
+                        "projects": project_ids
+                    }
+                    self.session.post(f'{self.url}/api/agiles/{board_id}', json=payload).raise_for_status()
+                    logger.debug(f"Updated projects for board {board_id}")
+
+            # 3. Update visibility
             if visible_to is not None:
                 permitted_groups = []
                 resp = self.session.get(f'{self.url}/api/groups', params={'fields': 'id,name'})
@@ -762,7 +780,7 @@ class YouTrackActuator:
                 self.session.post(f'{self.url}/api/agiles/{board_id}', json=payload).raise_for_status()
                 logger.debug(f"Updated visibility for board {board_id}")
 
-            # 3. Update columns (Additive + Reordering if needed, but for now just ensure existence)
+            # 4. Update columns (Additive + Reordering if needed, but for now just ensure existence)
             # Fetch current columns to avoid duplicates if API doesn't handle it
             if columns:
                 # Get field first (needed for payload)
@@ -790,7 +808,7 @@ class YouTrackActuator:
                             else:
                                 logger.warning(f"Failed to add column '{col_name}': {resp.status_code}")
 
-            # 4. Update Swimlanes
+            # 5. Update Swimlanes
             if swimlane_field:
                 # Resolve swimlane field ID
                 resp = self.session.get(f'{self.url}/api/admin/customFieldSettings/customFields', params={'fields': 'id,name'})
@@ -809,7 +827,7 @@ class YouTrackActuator:
                             '$type': 'FieldBasedSwimlaneSettings'
                         }
                     }
-                    self.session.post(f'{self.url}/api/agiles/{board_id}', json=swim_payload).raise_for_status()
+                    self.session.post(f'{self.url}/api/agiles/{board_id}/swimlaneSettings', json=swim_payload.get('swimlaneSettings')).raise_for_status()
                     logger.debug(f"Updated swimlane field for board {board_id}")
 
             logger.info(f"Updated Agile Board '{name}' (id={board_id})")
@@ -1027,11 +1045,18 @@ class YouTrackActuator:
                     for r in col_res:
                         columns.append(r['ColName'])
                         
+
                     # Get swimlane field
                     swimlane_field = None
                     swim_res = list(janus.query(f"target_board_swimlane('{board_name}', FieldName)"))
                     if swim_res:
                         swimlane_field = swim_res[0]['FieldName']
+                        
+                    # Get projects
+                    projects = []
+                    proj_res = list(janus.query(f"target_board_project('{board_name}', ProjShort)"))
+                    for r in proj_res:
+                        projects.append(r['ProjShort'])
                         
                 except Exception as e:
                     logger.warning(f"Failed to query board config for update: {e}")
@@ -1039,13 +1064,15 @@ class YouTrackActuator:
                     visible_to = None
                     columns = None
                     swimlane_field = None
+                    projects = None
                     
                 result = self.update_agile_board(
                     board_name, board_id,
                     disable_sprints=disable_sprints,
                     visible_to=visible_to,
                     columns=columns,
-                    swimlane_field=swimlane_field
+                    swimlane_field=swimlane_field,
+                    projects=projects
                 )
             elif action_type == 'delete_agile_board':
                 # delete_agile_board(BoardId)

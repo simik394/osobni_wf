@@ -10,6 +10,7 @@ from pathlib import Path
 import requests
 
 from src.config import load_configs_from_dir, config_to_prolog_facts
+import src.config.parser as config_parser
 from src.actuator import YouTrackActuator, WorkflowClient
 
 # Optional Janus import - will fail gracefully if not available
@@ -97,13 +98,13 @@ class YouTrackClient:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Logic-Driven IaC Controller')
-    parser.add_argument('--youtrack-url', required=True, help='YouTrack base URL')
-    parser.add_argument('--config-dir', default='obsidian-rules', help='Directory with YAML configs')
-    parser.add_argument('--dry-run', action='store_true', help='Print plan without executing')
-    parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    parser.add_argument('--export', help='Export current configuration to YAML file')
-    args = parser.parse_args()
+    arg_parser = argparse.ArgumentParser(description='Logic-Driven IaC Controller')
+    arg_parser.add_argument('--youtrack-url', required=True, help='YouTrack base URL')
+    arg_parser.add_argument('--config-dir', default='obsidian-rules', help='Directory with YAML configs')
+    arg_parser.add_argument('--dry-run', action='store_true', help='Print plan without executing')
+    arg_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    arg_parser.add_argument('--export', help='Export current configuration to YAML file')
+    args = arg_parser.parse_args()
     
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -114,20 +115,23 @@ def main():
     if not token:
         raise ValueError('YOUTRACK_TOKEN not found - set YOUTRACK_TOKEN env var or configure Vault')
     
-    # 1. SENSE - Fetch current state from YouTrack
-    logger.info('Fetching current state from YouTrack...')
     client = YouTrackClient(args.youtrack_url, token)
     
-    fields = client.get_custom_fields()
-    bundles = client.get_bundles()
-    state_bundles = client.get_state_bundles()
-    state_bundles = client.get_state_bundles()
-    projects = client.get_projects()
-    workflows = client.get_workflows()
-    agiles = client.get_agiles()
-    
-    # Merge enum and state bundles
-    all_bundles = bundles + state_bundles
+    # 1. SENSE - Fetch current state
+    logger.info('Fetching current state from YouTrack...')
+    try:
+        fields = client.get_custom_fields()
+        bundles = client.get_bundles()
+        state_bundles = client.get_state_bundles()
+        projects = client.get_projects()
+        workflows = client.get_workflows()
+        agiles = client.get_agiles()
+        
+        # Merge enum and state bundles
+        all_bundles = bundles + state_bundles
+    except Exception as e:
+        logger.error(f"Failed to fetch YouTrack state: {e}")
+        return
     
     logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows, {len(agiles)} boards')
     
@@ -147,9 +151,12 @@ def main():
     logger.info(f'Loading config from {config_dir}...')
     try:
         if (config_dir / 'project.yaml').exists():
-            target_facts = parser.load_single_project_config(config_dir / 'project.yaml')
+            cfg = config_parser.load_config(config_dir / 'project.yaml')
         else:
-            target_facts = parser.load_config(config_dir)
+            configs = config_parser.load_configs_from_dir(config_dir)
+            cfg = config_parser.merge_configs(configs)
+            
+        target_facts = config_to_prolog_facts(cfg)
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         return
@@ -187,12 +194,8 @@ def main():
         logger.info(f'  {i}. {action}')
     
     # 4. ACTUATE - Execute the plan
-    if args.dry_run:
-        logger.info('DRY RUN - no changes made')
-        return
-    
     logger.info('Executing plan...')
-    actuator = YouTrackActuator(args.youtrack_url, token, dry_run=False)
+    actuator = YouTrackActuator(args.youtrack_url, token, dry_run=args.dry_run)
     results = actuator.execute_plan(plan)
     
     # Report results

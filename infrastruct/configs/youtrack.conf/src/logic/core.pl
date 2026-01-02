@@ -207,10 +207,15 @@ drifted_board(Name, Id) :-
     curr_board(Id, Name, _),
     (
         drifted_board_sprints(Name, Id);
+        drifted_board_projects(Name, Id);
         drifted_board_visibility(Name, Id);
         drifted_board_columns(Name, Id);
         drifted_board_swimlane(Name, Id)
     ).
+
+drifted_board_projects(Name, Id) :-
+    ( target_board_project(Name, P), \+ curr_board_project(Id, P) ) ;
+    ( curr_board_project(Id, P), \+ target_board_project(Name, P) ).
 
 drifted_board_sprints(Name, Id) :-
     target_board_sprints(Name, TargetVal),
