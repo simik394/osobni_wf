@@ -114,6 +114,17 @@ class AgileBoardConfig(BaseModel):
         default='present',
         description="Set to 'absent' to delete this board"
     )
+    
+    color_coding: Optional['ColorCodingConfig'] = Field(
+        default=None,
+        description="Configuration for card color coding"
+    )
+
+
+class ColorCodingConfig(BaseModel):
+    """Configuration for card color coding on the board."""
+    mode: Literal['field', 'project'] = Field(description="Coloring mode: 'field' or 'project'")
+    field: Optional[str] = Field(default=None, description="Name of custom field if mode is 'field'")
 
 
 

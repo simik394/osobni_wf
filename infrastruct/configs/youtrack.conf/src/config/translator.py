@@ -218,8 +218,14 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
     for col in board.columns:
         col_name = escape_prolog_string(col)
         yield f"target_board_column('{name}', '{col_name}')."
-    
-    # Swimlane field
+        
+    # Swimlane settings
     if board.swimlane_field:
-        swim_field = escape_prolog_string(board.swimlane_field)
-        yield f"target_board_swimlane('{name}', '{swim_field}')."
+        sl_field = escape_prolog_string(board.swimlane_field)
+        yield f"target_board_swimlane('{name}', '{sl_field}')."
+
+    # Color coding
+    if board.color_coding:
+        mode = board.color_coding.mode
+        field = escape_prolog_string(board.color_coding.field) if board.color_coding.field else 'null'
+        yield f"target_board_color_coding('{name}', '{mode}', '{field}')."

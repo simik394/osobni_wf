@@ -267,6 +267,18 @@ class PrologInferenceEngine:
                 for proj in projects:
                     p_short = self._escape(proj.get('shortName', ''))
                     janus.query_once(f"assertz(curr_board_project('{bid}', '{p_short}'))")
+                    
+                # Color Coding
+                color_coding = board.get('colorCoding')
+                if color_coding:
+                    cc_field = color_coding.get('field', {})
+                    if cc_field:
+                        mode = 'field'
+                        f_name = self._escape(cc_field.get('name', ''))
+                    else:
+                        mode = 'project'
+                        f_name = 'null'
+                    janus.query_once(f"assertz(curr_board_color_coding('{bid}', '{mode}', '{f_name}'))")
             
             logger.debug(f"Asserted {len(agiles)} current agile boards")
     
