@@ -46,7 +46,7 @@ job "angrav-browser" {
       service {
         name = "angrav-browser-cdp"
         port = 9224
-        address_mode = "driver"
+        address_mode = "host"
         tags = ["browser", "cdp", "angrav"]
         
         check {
@@ -54,7 +54,7 @@ job "angrav-browser" {
           type         = "http"
           path         = "/json/version"
           port         = 9224
-          address_mode = "driver"
+          address_mode = "host"
           interval     = "10s"
           timeout      = "5s"
         }

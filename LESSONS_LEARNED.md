@@ -128,3 +128,8 @@ When wrapping browser automation as OpenAI-compatible API:
     - **Exfiltration over Remote Debugging**: When diagnosing DOM issues in complex, authenticated environments (like Antigravity), capturing `outerHTML` of specific containers (via the scraper script itself) is often faster and more accurate than trying to attach external debuggers or run isolated scripts that lack the full session context.
     - **Reverse Scanning for Limits**: When implementing a "preview" or "limit" feature for logs/chats, always scan from the *bottom up* (or calculate the start index: `total - limit`). Scanning from the top and stopping early yields the *oldest* data, which is rarely what is wanted for a "latest activity" check.
     - **Robust Selectors**: Prefer `className.includes('foo')` over `classList.contains('foo')` when dealing with complex frameworks like Tailwind where classes might be dynamically concatenated or include arbitrary values.
+
+## YouTrack API & IaC
+
+- **Explicit `$type` for Polymorphic Resources**: YouTrack's REST API requires an explicit `$type` property when creating resources that inherit from a base class (e.g., `ProjectCustomField` subtypes like `StateProjectCustomField`, `EnumProjectCustomField`). Without it, the server fails with a `ClassCastException` (HTTP 500) or type mismatch (HTTP 400). *Fix*: Map internal field types (e.g., `state[1]`, `enum[1]`) to their corresponding concrete REST types.
+- **Prolog Set Deduplication**: When using `findall/3` in Prolog to collect actions, the same action can be generated multiple times through different proof paths. This leads to duplicate API calls and corrupted state. *Fix*: Use `list_to_set/2` after `findall` to ensure the action list is unique before performing topological sort.
