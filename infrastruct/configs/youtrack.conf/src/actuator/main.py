@@ -533,15 +533,15 @@ class YouTrackActuator:
                 logger.error(error)
                 return ActionResult(action=action, success=False, error=error)
             
-            # 3. Set Default
+            # 3. Set Default (use defaultValues array, not defaultBundleElement)
             patch_payload = {
-                'defaultBundleElement': {'id': value_id}
+                'defaultValues': [{'id': value_id, '$type': 'EnumBundleElement'}]
             }
             
             resp = self.session.post(
                 f'{self.url}/api/admin/projects/{project_id}/customFields/{project_field_id}',
                 json=patch_payload,
-                params={'fields': 'id,defaultBundleElement(id,name)'}
+                params={'fields': 'id,defaultValues(id,name)'}
             )
             resp.raise_for_status()
             logger.info(f"Set default value for {field_name} to '{value_name}' in project {project_id}")

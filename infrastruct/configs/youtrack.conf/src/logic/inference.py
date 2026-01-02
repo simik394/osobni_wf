@@ -89,6 +89,7 @@ class PrologInferenceEngine:
         janus.query_once("retractall(target_board(_, _, _))")
         janus.query_once("retractall(target_board_project(_, _))")
         janus.query_once("retractall(curr_board(_, _, _))")
+        janus.query_once("retractall(curr_project_field(_, _))")
         
         logger.debug("Cleared all dynamic facts")
     
@@ -148,23 +149,50 @@ class PrologInferenceEngine:
             
             # Assert project-specific field defaults
             if project_fields:
+                # Build project_id -> short_name mapping
+                proj_id_to_short = {p.get('id'): p.get('shortName') for p in projects}
                 count_defaults = 0
                 for pid, pfields in project_fields.items():
+                    short_name = proj_id_to_short.get(pid)
+                    if not short_name:
+                        continue
+                    short_name_escaped = self._escape(short_name)
                     for f in pfields:
-                        default_elem = f.get('defaultBundleElement')
-                        if default_elem:
-                            fid = self._escape(f.get('id', ''))
-                            val_name = self._escape(default_elem.get('name', ''))
-                            # Assert curr_field_default(FieldId, ValueName, ProjectId)
-                            # Note: Logic uses FieldId (177-0) which is unique to project
-                            # But core logic might want to verify project matches? 
-                            # Actually core uses curr_field(FieldId, Name, _) and curr_project(ProjectId, _, _)
-                            # The field 177-0 is a ProjectCustomField, distinct from GlobalCustomField (50-x)
-                            # We assert this specific field has this default
-                            if fid and val_name:
-                                janus.query_once(f"assertz(curr_field_default('{fid}', '{val_name}', '{pid}'))")
+                        # defaultValues is an array, take first element if exists
+                        default_values = f.get('defaultValues', [])
+                        if default_values and len(default_values) > 0:
+                            default_elem = default_values[0]
+                            # Get field name from nested 'field' object
+                            field_obj = f.get('field', {})
+                            field_name = field_obj.get('name', '')
+                            val_name = default_elem.get('name', '')
+                            if field_name and val_name:
+                                fn_escaped = self._escape(field_name)
+                                vn_escaped = self._escape(val_name)
+                                # Assert curr_field_default(FieldName, DefaultValueName, ProjectShortName)
+                                janus.query_once(f"assertz(curr_field_default('{fn_escaped}', '{vn_escaped}', '{short_name_escaped}'))")
                                 count_defaults += 1
                 logger.debug(f"Asserted {count_defaults} current field defaults")
+            
+            # Assert field attachments to projects (for attach_field idempotency)
+            if project_fields:
+                # Build project_id -> short_name mapping
+                proj_id_to_short = {p.get('id'): p.get('shortName') for p in projects}
+                count_attachments = 0
+                for pid, pfields in project_fields.items():
+                    short_name = proj_id_to_short.get(pid)
+                    if not short_name:
+                        continue
+                    short_name_escaped = self._escape(short_name)
+                    for f in pfields:
+                        # Get field name from nested 'field' object
+                        field_obj = f.get('field', {})
+                        field_name = field_obj.get('name', '')
+                        if field_name:
+                            fn_escaped = self._escape(field_name)
+                            janus.query_once(f"assertz(curr_project_field('{short_name_escaped}', '{fn_escaped}'))")
+                            count_attachments += 1
+                logger.debug(f"Asserted {count_attachments} current project-field attachments")
 
         # Assert workflows and rules
         if workflows:
@@ -182,7 +210,14 @@ class PrologInferenceEngine:
                     # If empty, drift detection might be limited unless populated elsewhere
                     script = self._escape(rule.get('script', ''))
                     janus.query_once(f"assertz(curr_rule('{wf_id}', '{rule_id}', '{rule_name}', 'unknown', '{script}'))")
-            
+                
+                # Workflow usages (attachments to projects)
+                for usage in wf.get('usages', []):
+                    usage_id = self._escape(usage.get('id', ''))
+                    proj = usage.get('project', {})
+                    proj_id = self._escape(proj.get('id', ''))
+                    if wf_id and proj_id:
+                        janus.query_once(f"assertz(curr_workflow_usage('{wf_id}', '{proj_id}', '{usage_id}'))")
             
             logger.debug(f"Asserted {len(workflows)} current workflows")
             

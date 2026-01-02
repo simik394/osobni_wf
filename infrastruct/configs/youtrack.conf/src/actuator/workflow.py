@@ -424,7 +424,7 @@ class WorkflowClient:
                 f'{self.url}/api/admin/workflows',
                 params={
                     '$top': '-1',
-                    'fields': 'id,name,title,rules(id,name,type,script)',
+                    'fields': 'id,name,title,rules(id,name,type,script),usages(id,project(id,shortName))',
                     'query': 'language:JS,visual,mps'
                 }
             )

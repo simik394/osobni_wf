@@ -36,7 +36,9 @@
 :- dynamic curr_rule/5.
 :- dynamic curr_workflow_usage/3.
 :- dynamic curr_field_default/3.        %% curr_field_default(FieldId, ValueName, ProjectId)
-:- dynamic curr_board/3.                %% curr_board(Id, Name, ColumnFieldId) -> Sensing needs to be simple for name match
+:- dynamic curr_board/3.                %% curr_board(Id, Name, ColumnFieldId)
+:- dynamic curr_project_field/2.        %% curr_project_field(ProjectShortName, FieldName) - field attached to project
+:- dynamic curr_field_default/3.        %% curr_field_default(FieldName, DefaultValueName, ProjectShortName)
 
 :- dynamic target_field/3.
 :- dynamic target_project/2.
@@ -71,18 +73,15 @@ missing_field(Name, Type, Project) :-
     target_field(Name, Type, Project),
     \+ curr_field(_, Name, Type).
 
-%% Field default missing or drifted
+%% Field default missing or drifted (use field name and project short_name)
 missing_field_default(Name, DefaultValue, Project) :-
     target_field_default(Name, DefaultValue, Project),
-    curr_project(ProjectId, _, Project),
-    curr_field(FieldId, Name, _),
-    \+ curr_field_default(FieldId, _, ProjectId).
+    curr_project_field(Project, Name),
+    \+ curr_field_default(Name, _, Project).
 
 drifted_field_default(Name, CurrentDefault, TargetDefault, Project) :-
     target_field_default(Name, TargetDefault, Project),
-    curr_project(ProjectId, _, Project),
-    curr_field(FieldId, Name, _),
-    curr_field_default(FieldId, CurrentDefault, ProjectId),
+    curr_field_default(Name, CurrentDefault, Project),
     CurrentDefault \= TargetDefault.
 
 %% Workflow missing
@@ -169,10 +168,10 @@ action(create_field(Name, Type)) :-
     \+ curr_field(_, Name, _),
     \+ field_uses_bundle(Name, _).
 
-%% Attach field to project if missing from project
+%% Attach field to project if not already attached
 action(attach_field(Name, Project)) :-
-    target_field(Name, _, Project).
-    % Ideally check if already attached, but we lack curr_project_field(Project, Field) fact yet.
+    target_field(Name, _, Project),
+    \+ curr_project_field(Project, Name).
 
 %% Set field default value
 action(set_field_default(Name, Value, Project)) :-

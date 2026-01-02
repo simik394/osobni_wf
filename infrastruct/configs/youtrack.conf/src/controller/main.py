@@ -48,7 +48,7 @@ class YouTrackClient:
         """Fetch fields for a specific project with defaults."""
         resp = self.session.get(
             f'{self.url}/api/admin/projects/{project_id}/customFields',
-            params={'fields': 'id,field(name),defaultBundleElement(name)'}
+            params={'fields': 'id,field(name),defaultValues(name)'}
         )
         resp.raise_for_status()
         return resp.json()
