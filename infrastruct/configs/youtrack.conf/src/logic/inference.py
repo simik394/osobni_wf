@@ -233,7 +233,40 @@ class PrologInferenceEngine:
                 col_field = col_settings.get('field', {})
                 col_field_id = self._escape(col_field.get('id', ''))
                 
+                
                 janus.query_once(f"assertz(curr_board('{bid}', '{name}', '{col_field_id}'))")
+                
+                # Sprints
+                sprints_settings = board.get('sprintsSettings', {})
+                disable_sprints = sprints_settings.get('disableSprints', True)
+                ds_val = 'true' if disable_sprints else 'false'
+                janus.query_once(f"assertz(curr_board_sprints('{bid}', {ds_val}))")
+                
+                # Visibility (Permitted Groups)
+                sharing = board.get('readSharingSettings', {})
+                groups = sharing.get('permittedGroups', [])
+                for group in groups:
+                    g_name = self._escape(group.get('name', ''))
+                    janus.query_once(f"assertz(curr_board_visibility('{bid}', '{g_name}'))")
+                    
+                # Columns
+                columns = col_settings.get('columns', [])
+                for col in columns:
+                    c_name = self._escape(col.get('presentation', ''))
+                    janus.query_once(f"assertz(curr_board_column('{bid}', '{c_name}'))")
+
+                # Swimlanes
+                swim_settings = board.get('swimlaneSettings') or {}
+                swim_field = swim_settings.get('field', {})
+                if swim_field:
+                    s_name = self._escape(swim_field.get('name', ''))
+                    janus.query_once(f"assertz(curr_board_swimlane('{bid}', '{s_name}'))")
+                
+                # Projects
+                projects = board.get('projects', [])
+                for proj in projects:
+                    p_short = self._escape(proj.get('shortName', ''))
+                    janus.query_once(f"assertz(curr_board_project('{bid}', '{p_short}'))")
             
             logger.debug(f"Asserted {len(agiles)} current agile boards")
     

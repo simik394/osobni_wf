@@ -63,10 +63,10 @@ class YouTrackClient:
         return resp.json()
     
     def get_agiles(self) -> list[dict]:
-        """Fetch all Agile Boards."""
+        """Fetch all Agile Boards with full configuration."""
         resp = self.session.get(
             f'{self.url}/api/agiles',
-            params={'fields': 'id,name,columnSettings(field(id))'}
+            params={'fields': 'id,name,projects(shortName),columnSettings(field(id),columns(presentation)),sprintsSettings(disableSprints),readSharingSettings(permittedGroups(name)),swimlaneSettings(field(name))'}
         )
         resp.raise_for_status()
         return resp.json()
