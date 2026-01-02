@@ -717,6 +717,109 @@ class YouTrackActuator:
             return ActionResult(action=action, success=False, error=error)
 
 
+    def update_agile_board(self, name: str, board_id: str,
+                           disable_sprints: bool = None,
+                           visible_to: list[str] = None,
+                           columns: list[str] = None,
+                           swimlane_field: str = None) -> ActionResult:
+        """Update an existing Agile Board configuration."""
+        action = f"update_agile_board({name}, {board_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action} (sprints={disable_sprints}, visible={visible_to}, cols={columns}, swim={swimlane_field})")
+            return ActionResult(action=action, success=True)
+            
+        try:
+            # 1. Update general settings (sprints)
+            if disable_sprints is not None:
+                payload = {
+                    "sprintsSettings": {
+                        "disableSprints": disable_sprints,
+                        "$type": "SprintsSettings"
+                    }
+                }
+                self.session.post(f'{self.url}/api/agiles/{board_id}', json=payload).raise_for_status()
+                logger.debug(f"Updated sprint settings for board {board_id}")
+
+            # 2. Update visibility
+            if visible_to is not None:
+                permitted_groups = []
+                resp = self.session.get(f'{self.url}/api/groups', params={'fields': 'id,name'})
+                resp.raise_for_status()
+                all_groups = {g.get('name'): g.get('id') for g in resp.json()}
+                
+                for group_name in visible_to:
+                    if group_name in all_groups:
+                        permitted_groups.append({'id': all_groups[group_name], '$type': 'UserGroup'})
+                
+                # We overwrite the sharing settings
+                payload = {
+                    "readSharingSettings": {
+                        "permittedGroups": permitted_groups,
+                        "$type": "AgileSharingSettings"
+                    }
+                }
+                self.session.post(f'{self.url}/api/agiles/{board_id}', json=payload).raise_for_status()
+                logger.debug(f"Updated visibility for board {board_id}")
+
+            # 3. Update columns (Additive + Reordering if needed, but for now just ensure existence)
+            # Fetch current columns to avoid duplicates if API doesn't handle it
+            if columns:
+                # Get field first (needed for payload)
+                resp = self.session.get(f'{self.url}/api/agiles/{board_id}/columnSettings', params={'fields': 'field(id)'})
+                if resp.status_code == 200:
+                    col_field_id = resp.json().get('field', {}).get('id')
+                    
+                    # Fetch current columns
+                    resp = self.session.get(f'{self.url}/api/agiles/{board_id}/columnSettings/columns', params={'fields': 'id,presentation'})
+                    current_col_names = {c.get('presentation') for c in resp.json()}
+                    
+                    for col_name in columns:
+                        if col_name not in current_col_names:
+                            col_payload = {
+                                'presentation': col_name,
+                                'fieldValues': [{'name': col_name, '$type': 'AgileColumnFieldValue'}],
+                                '$type': 'AgileColumn'
+                            }
+                            resp = self.session.post(
+                                f'{self.url}/api/agiles/{board_id}/columnSettings/columns',
+                                json=col_payload
+                            )
+                            if resp.status_code == 200:
+                                logger.debug(f"Added column '{col_name}' to board {board_id}")
+                            else:
+                                logger.warning(f"Failed to add column '{col_name}': {resp.status_code}")
+
+            # 4. Update Swimlanes
+            if swimlane_field:
+                # Resolve swimlane field ID
+                resp = self.session.get(f'{self.url}/api/admin/customFieldSettings/customFields', params={'fields': 'id,name'})
+                fields = resp.json()
+                swim_field_id = None
+                for f in fields:
+                    if f.get('name') == swimlane_field:
+                        swim_field_id = f['id']
+                        break
+                
+                if swim_field_id:
+                    swim_payload = {
+                        'swimlaneSettings': {
+                            'enabled': True,
+                            'field': {'id': swim_field_id, '$type': 'CustomField'},
+                            '$type': 'FieldBasedSwimlaneSettings'
+                        }
+                    }
+                    self.session.post(f'{self.url}/api/agiles/{board_id}', json=swim_payload).raise_for_status()
+                    logger.debug(f"Updated swimlane field for board {board_id}")
+
+            logger.info(f"Updated Agile Board '{name}' (id={board_id})")
+            return ActionResult(action=action, success=True, resource_id=board_id)
+
+        except Exception as e:
+            error = f"Failed to update board: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -878,6 +981,54 @@ class YouTrackActuator:
                     columns=columns if columns else None,
                     swimlane_field=swimlane_field
                 )
+            elif action_type == 'update_agile_board':
+                # update_agile_board(Name, BoardId)
+                board_name = args[0]
+                board_id = args[1]
+                
+                # Query Prolog for target board settings
+                try:
+                    import janus_swi as janus
+                    
+                    # Get sprints setting
+                    disable_sprints = True
+                    sprint_res = list(janus.query(f"target_board_sprints('{board_name}', DisableSprints)"))
+                    if sprint_res:
+                        disable_sprints = sprint_res[0]['DisableSprints'] == 'true'
+                    
+                    # Get visibility groups
+                    visible_to = []
+                    vis_res = list(janus.query(f"target_board_visibility('{board_name}', GroupName)"))
+                    for r in vis_res:
+                        visible_to.append(r['GroupName'])
+                        
+                    # Get columns
+                    columns = []
+                    col_res = list(janus.query(f"target_board_column('{board_name}', ColName)"))
+                    for r in col_res:
+                        columns.append(r['ColName'])
+                        
+                    # Get swimlane field
+                    swimlane_field = None
+                    swim_res = list(janus.query(f"target_board_swimlane('{board_name}', FieldName)"))
+                    if swim_res:
+                        swimlane_field = swim_res[0]['FieldName']
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to query board config for update: {e}")
+                    disable_sprints = None # Don't update if failed query
+                    visible_to = None
+                    columns = None
+                    swimlane_field = None
+                    
+                result = self.update_agile_board(
+                    board_name, board_id,
+                    disable_sprints=disable_sprints,
+                    visible_to=visible_to,
+                    columns=columns,
+                    swimlane_field=swimlane_field
+                )
+
             # Workflow operations
             elif action_type == 'create_workflow':
                 # create_workflow(Name, Title)

@@ -183,13 +183,46 @@ action(set_field_default(Name, Value, Project)) :-
      drifted_field_default(Name, _, Value, Project)).
 
 %% 4. Agile Boards
-%% Board missing (simple name check)
-missing_board(Name, ColField, MainProj) :-
-    target_board(Name, ColField, MainProj),
+%% Board missing (create)
+missing_board(Name, MainProject, ColField) :-
+    target_board(Name, ColField, MainProject),
     \+ curr_board(_, Name, _).
 
-action(create_agile_board(Name, ProjShortName, ColField)) :-
-    missing_board(Name, ColField, ProjShortName).
+%% Board drifted (update)
+drifted_board(Name, Id) :-
+    target_board(Name, _, _),
+    curr_board(Id, Name, _),
+    (
+        drifted_board_sprints(Name, Id);
+        drifted_board_visibility(Name, Id);
+        drifted_board_columns(Name, Id);
+        drifted_board_swimlane(Name, Id)
+    ).
+
+drifted_board_sprints(Name, Id) :-
+    target_board_sprints(Name, TargetVal),
+    curr_board_sprints(Id, CurrVal),
+    TargetVal \= CurrVal.
+    
+drifted_board_visibility(Name, Id) :-
+    target_board_visibility(Name, Group),
+    \+ curr_board_visibility(Id, Group).
+    
+drifted_board_columns(Name, Id) :-
+    target_board_column(Name, Col),
+    \+ curr_board_column(Id, Col).
+
+drifted_board_swimlane(Name, Id) :-
+    target_board_swimlane(Name, TargetField),
+    \+ curr_board_swimlane(Id, TargetField).
+
+%% Plan Action: Create Board
+action(create_agile_board(Name, MainProject, ColField)) :-
+    missing_board(Name, MainProject, ColField).
+
+%% Plan Action: Update Board
+action(update_agile_board(Name, Id)) :-
+    drifted_board(Name, Id).
 
 %% 3. Workflows
 %% Create missing workflow container
