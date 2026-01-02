@@ -216,6 +216,41 @@ python3 -m src.controller.main [OPTIONS]
 
 ---
 
+---
+
+## Safety Principles
+
+**"Will this delete my existing configuration?"**
+No. The tool follows a **strict non-destructive by default** policy.
+
+1.  **Explicit Deletion Only**: Resources are ONLY deleted if you explicitly set `state: absent` in YAML. Simply removing a line from YAML will **not** delete the corresponding resource in YouTrack (it just stops managing it).
+2.  **Dry Run First**: Always runs in dry-run mode by default or when requested.
+3.  **Idempotency**: Re-running the tool is safe; it detects that the desired state matches the actual state and does nothing.
+
+---
+
+## Local Development (Non-Docker)
+
+If you prefer to run locally without Docker, you must install **SWI-Prolog** manually because the `janus-swi` Python bridge requires it.
+
+1.  **Install SWI-Prolog**:
+    - Ubuntu/Debian: `sudo apt-get install swi-prolog libswipl-dev`
+    - MacOS: `brew install swi-prolog`
+2.  **Install Dependencies**:
+    ```bash
+    pip3 install -r requirements.txt
+    ```
+3.  **Run**:
+    ```bash
+    export PYTHONPATH=$PYTHONPATH:.
+    python3 -m src.controller.main ...
+    ```
+
+> [!TIP]
+> The Docker container (`./dev.sh`) pre-configures all of this for you.
+
+---
+
 ## Vault Configuration
 
 When using `--import-vault`, the tool expects the following environment variables:
@@ -230,13 +265,17 @@ The secret must contain a key named `token` containing your YouTrack permanent t
 
 ---
 
-## Troubleshooting
+## Troubleshooting & Debugging
+
+**Where are the logs?**
+By default, logs are printed to stderr. Use `-v` for debug-level logs, which include API payloads and Prolog decisions.
 
 | Issue | Solution |
 |-------|----------|
 | **401 Unauthorized** | Verify your token has *Low-level administration* permissions. |
 | **`FileNotFoundError`** | Ensure workflow `.js` files are in the `workflows/` subfolder. |
 | **Bundle Conflict** | Use unique names for bundles if they differ across projects. |
+| **`libswipl.so` not found** | You are running locally but missed the SWI-Prolog install step (see "Local Development"). |
 
 ---
 
