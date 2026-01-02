@@ -65,6 +65,7 @@
 :- dynamic target_delete_field/2.       %% target_delete_field(Name, Project)
 :- dynamic target_delete_rule/2.        %% target_delete_rule(WorkflowName, RuleName)
 :- dynamic target_delete_workflow/1.    %% target_delete_workflow(WorkflowName)
+:- dynamic target_delete_board/1.       %% target_delete_board(BoardName)
 
 %% =============================================================================
 %% DIFF LOGIC - Detect missing/drifted resources
@@ -76,6 +77,18 @@
 missing_field(Name, Type, Project) :-
     target_field(Name, Type, Project),
     \+ curr_field(_, Name, Type).
+
+%% ... (omitted actions)
+
+%% Plan Action: Update Board
+action(update_agile_board(Name, Id)) :-
+    drifted_board(Name, Id).
+
+%% Plan Action: Delete Board
+action(delete_agile_board(Id)) :-
+    target_delete_board(Name),
+    curr_board(Id, Name, _).
+
 
 %% Field default missing or drifted (use field name and project short_name)
 missing_field_default(Name, DefaultValue, Project) :-

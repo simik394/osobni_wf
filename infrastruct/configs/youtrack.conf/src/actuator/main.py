@@ -820,6 +820,25 @@ class YouTrackActuator:
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
 
+
+    def delete_agile_board(self, board_id: str) -> ActionResult:
+        """Delete an Agile Board."""
+        action = f"delete_agile_board({board_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+            
+        try:
+            self.session.delete(f'{self.url}/api/agiles/{board_id}').raise_for_status()
+            logger.info(f"Deleted Agile Board (id={board_id})")
+            return ActionResult(action=action, success=True, resource_id=board_id)
+            
+        except Exception as e:
+            error = f"Failed to delete board: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -1028,6 +1047,9 @@ class YouTrackActuator:
                     columns=columns,
                     swimlane_field=swimlane_field
                 )
+            elif action_type == 'delete_agile_board':
+                # delete_agile_board(BoardId)
+                result = self.delete_agile_board(args[0])
 
             # Workflow operations
             elif action_type == 'create_workflow':

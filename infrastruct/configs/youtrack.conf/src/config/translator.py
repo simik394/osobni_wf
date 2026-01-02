@@ -189,8 +189,7 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
     name = escape_prolog_string(board.name)
     
     if board.state == 'absent':
-        # TODO: Implement delete logic for boards if needed
-        # yield f"target_delete_board('{name}')."
+        yield f"target_delete_board('{name}')."
         return
 
     col_field = escape_prolog_string(board.column_field)
