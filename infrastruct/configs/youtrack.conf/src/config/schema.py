@@ -119,6 +119,26 @@ class AgileBoardConfig(BaseModel):
         default=None,
         description="Configuration for card color coding"
     )
+    
+    # Estimation fields for burndown charts
+    estimation_field: Optional[str] = Field(
+        default=None,
+        description="Custom field used for estimation (e.g., 'Story Points')"
+    )
+    original_estimation_field: Optional[str] = Field(
+        default=None,
+        description="Custom field for original estimation"
+    )
+    
+    # Orphan swimlane settings
+    orphans_at_top: bool = Field(
+        default=True,
+        description="Place orphan swimlane at the top of the board"
+    )
+    hide_orphans_swimlane: bool = Field(
+        default=False,
+        description="Hide the orphans swimlane from the board"
+    )
 
 
 class ColumnConfig(BaseModel):

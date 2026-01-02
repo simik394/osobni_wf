@@ -61,6 +61,14 @@
 :- dynamic curr_board_color_coding/3.
 :- dynamic target_board_column_wip/4.  %% target_board_column_wip(BoardName, ColumnName, Min, Max)
 :- dynamic curr_board_column_wip/4.    %% curr_board_column_wip(BoardId, ColumnName, Min, Max)
+:- dynamic target_board_estimation/2.  %% target_board_estimation(BoardName, FieldName)
+:- dynamic curr_board_estimation/2.    %% curr_board_estimation(BoardId, FieldName)
+:- dynamic target_board_original_estimation/2.
+:- dynamic curr_board_original_estimation/2.
+:- dynamic target_board_orphans_at_top/2.  %% target_board_orphans_at_top(BoardName, Bool)
+:- dynamic curr_board_orphans_at_top/2.
+:- dynamic target_board_hide_orphans/2.
+:- dynamic curr_board_hide_orphans/2.
 
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
@@ -217,7 +225,9 @@ drifted_board(Name, Id) :-
         drifted_board_columns(Name, Id);
         drifted_board_swimlane(Name, Id);
         drifted_board_color_coding(Name, Id);
-        drifted_board_column_wip(Name, Id)
+        drifted_board_column_wip(Name, Id);
+        drifted_board_estimation(Name, Id);
+        drifted_board_orphans(Name, Id)
     ).
 
 drifted_board_projects(Name, Id) :-
@@ -248,6 +258,14 @@ drifted_board_color_coding(Name, Id) :-
 drifted_board_column_wip(Name, Id) :-
     target_board_column_wip(Name, ColName, TargetMin, TargetMax),
     \+ curr_board_column_wip(Id, ColName, TargetMin, TargetMax).
+
+drifted_board_estimation(Name, Id) :-
+    ( target_board_estimation(Name, F), \+ curr_board_estimation(Id, F) );
+    ( target_board_original_estimation(Name, F), \+ curr_board_original_estimation(Id, F) ).
+
+drifted_board_orphans(Name, Id) :-
+    ( target_board_orphans_at_top(Name, V), \+ curr_board_orphans_at_top(Id, V) );
+    ( target_board_hide_orphans(Name, V), \+ curr_board_hide_orphans(Id, V) ).
 
 %% Plan Action: Create Board
 action(create_agile_board(Name, MainProject, ColField)) :-

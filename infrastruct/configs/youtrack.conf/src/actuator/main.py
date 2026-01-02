@@ -769,7 +769,11 @@ class YouTrackActuator:
                            swimlane_field: str = None,
                            projects: list[str] = None,
                            color_coding: dict = None,
-                           column_wip_limits: list[dict] = None) -> ActionResult:
+                           column_wip_limits: list[dict] = None,
+                           estimation_field: str = None,
+                           original_estimation_field: str = None,
+                           orphans_at_top: bool = None,
+                           hide_orphans_swimlane: bool = None) -> ActionResult:
         """
         Update agile board.
         
@@ -931,6 +935,29 @@ class YouTrackActuator:
                             }
                             self.session.post(f'{self.url}/api/agiles/{board_id}/columnSettings/columns/{col_id}', json=wip_payload).raise_for_status()
                             logger.debug(f"Updated WIP limit for column '{col_name}' (min={wip_cfg.get('min')}, max={wip_cfg.get('max')})")
+
+            # 8. Update Estimation Fields
+            if estimation_field is not None:
+                est_id = self._resolve_field_id(estimation_field) if estimation_field else None
+                est_payload = {'estimationField': {'id': est_id} if est_id else None}
+                self.session.post(f'{self.url}/api/agiles/{board_id}', json=est_payload).raise_for_status()
+                logger.debug(f"Updated estimation field to '{estimation_field}'")
+            
+            if original_estimation_field is not None:
+                orig_id = self._resolve_field_id(original_estimation_field) if original_estimation_field else None
+                orig_payload = {'originalEstimationField': {'id': orig_id} if orig_id else None}
+                self.session.post(f'{self.url}/api/agiles/{board_id}', json=orig_payload).raise_for_status()
+                logger.debug(f"Updated original estimation field to '{original_estimation_field}'")
+            
+            # 9. Update Orphan Settings
+            if orphans_at_top is not None or hide_orphans_swimlane is not None:
+                orphan_payload = {}
+                if orphans_at_top is not None:
+                    orphan_payload['orphansAtTheTop'] = orphans_at_top
+                if hide_orphans_swimlane is not None:
+                    orphan_payload['hideOrphansSwimlane'] = hide_orphans_swimlane
+                self.session.post(f'{self.url}/api/agiles/{board_id}', json=orphan_payload).raise_for_status()
+                logger.debug(f"Updated orphan settings (top={orphans_at_top}, hide={hide_orphans_swimlane})")
 
             logger.info(f"Updated Agile Board '{name}' (id={board_id})")
             return ActionResult(action=action, success=True, resource_id=board_id)
@@ -1180,6 +1207,28 @@ class YouTrackActuator:
                             'min': None if r['Min'] == 'null' else r['Min'],
                             'max': None if r['Max'] == 'null' else r['Max']
                         })
+                    
+                    # Get estimation fields
+                    estimation_field = None
+                    est_res = list(janus.query(f"target_board_estimation('{board_name}', FieldName)"))
+                    if est_res:
+                        estimation_field = est_res[0]['FieldName']
+                    
+                    original_estimation_field = None
+                    orig_est_res = list(janus.query(f"target_board_original_estimation('{board_name}', FieldName)"))
+                    if orig_est_res:
+                        original_estimation_field = orig_est_res[0]['FieldName']
+                    
+                    # Get orphan settings
+                    orphans_at_top = None
+                    orphans_top_res = list(janus.query(f"target_board_orphans_at_top('{board_name}', Val)"))
+                    if orphans_top_res:
+                        orphans_at_top = orphans_top_res[0]['Val'] == 'true'
+                    
+                    hide_orphans_swimlane = None
+                    hide_res = list(janus.query(f"target_board_hide_orphans('{board_name}', Val)"))
+                    if hide_res:
+                        hide_orphans_swimlane = hide_res[0]['Val'] == 'true'
                         
                 except Exception as e:
                     logger.warning(f"Failed to query board config for update: {e}")
@@ -1190,6 +1239,10 @@ class YouTrackActuator:
                     projects = None
                     color_coding = None
                     column_wip_limits = None
+                    estimation_field = None
+                    original_estimation_field = None
+                    orphans_at_top = None
+                    hide_orphans_swimlane = None
                     
                 result = self.update_agile_board(
                     board_name, board_id,
@@ -1199,7 +1252,11 @@ class YouTrackActuator:
                     swimlane_field=swimlane_field,
                     projects=projects,
                     color_coding=color_coding,
-                    column_wip_limits=column_wip_limits
+                    column_wip_limits=column_wip_limits,
+                    estimation_field=estimation_field,
+                    original_estimation_field=original_estimation_field,
+                    orphans_at_top=orphans_at_top,
+                    hide_orphans_swimlane=hide_orphans_swimlane
                 )
             elif action_type == 'delete_agile_board':
                 # delete_agile_board(BoardId)

@@ -238,3 +238,17 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
         mode = board.color_coding.mode
         field = escape_prolog_string(board.color_coding.field) if board.color_coding.field else 'null'
         yield f"target_board_color_coding('{name}', '{mode}', '{field}')."
+
+    # Estimation fields
+    if board.estimation_field:
+        est_field = escape_prolog_string(board.estimation_field)
+        yield f"target_board_estimation('{name}', '{est_field}')."
+    if board.original_estimation_field:
+        orig_est = escape_prolog_string(board.original_estimation_field)
+        yield f"target_board_original_estimation('{name}', '{orig_est}')."
+    
+    # Orphan settings
+    orphans_top = 'true' if board.orphans_at_top else 'false'
+    yield f"target_board_orphans_at_top('{name}', {orphans_top})."
+    hide_orphans = 'true' if board.hide_orphans_swimlane else 'false'
+    yield f"target_board_hide_orphans('{name}', {hide_orphans})."

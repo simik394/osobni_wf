@@ -289,6 +289,22 @@ class PrologInferenceEngine:
                         mode = 'project'
                         f_name = 'null'
                     janus.query_once(f"assertz(curr_board_color_coding('{bid}', '{mode}', '{f_name}'))")
+                
+                # Estimation Fields
+                est_field = board.get('estimationField')
+                if est_field:
+                    est_name = self._escape(est_field.get('name', ''))
+                    janus.query_once(f"assertz(curr_board_estimation('{bid}', '{est_name}'))")
+                orig_est = board.get('originalEstimationField')
+                if orig_est:
+                    orig_name = self._escape(orig_est.get('name', ''))
+                    janus.query_once(f"assertz(curr_board_original_estimation('{bid}', '{orig_name}'))")
+                
+                # Orphan Settings
+                orphans_top = 'true' if board.get('orphansAtTheTop', True) else 'false'
+                janus.query_once(f"assertz(curr_board_orphans_at_top('{bid}', {orphans_top}))")
+                hide_orphans = 'true' if board.get('hideOrphansSwimlane', False) else 'false'
+                janus.query_once(f"assertz(curr_board_hide_orphans('{bid}', {hide_orphans}))")
             
             logger.debug(f"Asserted {len(agiles)} current agile boards")
     
