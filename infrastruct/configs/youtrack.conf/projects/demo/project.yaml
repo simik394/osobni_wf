@@ -74,3 +74,18 @@ workflows:
       - name: log-changes-iac-test
         type: on-change
         script_file: workflows/log-changes.js
+
+# Global Tags managed by IaC
+tags:
+  - name: "urgent"
+    untag_on_resolve: true
+  - name: "blocked"
+    untag_on_resolve: false
+  - name: "needs-review"
+
+# Saved Queries (Searches)
+saved_queries:
+  - name: "My Open Issues"
+    query: "project: DEMO for: me State: -Done"
+  - name: "Critical Bugs"
+    query: "project: DEMO Priority: Critical"

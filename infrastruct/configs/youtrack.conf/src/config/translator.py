@@ -8,7 +8,7 @@ from typing import Iterator
 
 from .schema import (
     YouTrackConfig, ProjectConfig, FieldConfig, BundleValueConfig,
-    WorkflowConfig, WorkflowRuleConfig, AgileBoardConfig
+    WorkflowConfig, WorkflowRuleConfig, AgileBoardConfig, TagConfig, SavedQueryConfig
 )
 
 
@@ -51,6 +51,29 @@ def _generate_facts(config: YouTrackConfig) -> Iterator[str]:
     if config.workflows:
         for workflow in config.workflows:
             yield from _generate_workflow_facts(workflow)
+    
+    # Global tags
+    if config.tags:
+        for tag in config.tags:
+            name = escape_prolog_string(tag.name)
+            color = escape_prolog_string(tag.color) if tag.color else 'null'
+            untag = 'true' if tag.untag_on_resolve else 'false'
+            visible = escape_prolog_string(tag.visible_to) if tag.visible_to else 'null'
+            if tag.state == 'absent':
+                yield f"target_delete_tag('{name}')."
+            else:
+                yield f"target_tag('{name}', '{color}', {untag}, '{visible}')."
+    
+    # Saved queries
+    if config.saved_queries:
+        for sq in config.saved_queries:
+            name = escape_prolog_string(sq.name)
+            query = escape_prolog_string(sq.query)
+            visible = escape_prolog_string(sq.visible_to) if sq.visible_to else 'null'
+            if sq.state == 'absent':
+                yield f"target_delete_saved_query('{name}')."
+            else:
+                yield f"target_saved_query('{name}', '{query}', '{visible}')."
     
     # Projects
     for project in config.projects:

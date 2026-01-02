@@ -95,6 +95,24 @@ class YouTrackClient:
         # We reuse the WorkflowClient logic which already knows the internal API
         wf_client = WorkflowClient(self.url, self.token)
         return wf_client.list_workflows()
+    
+    def get_tags(self) -> list[dict]:
+        """Fetch all global tags."""
+        resp = self.session.get(
+            f'{self.url}/api/tags',
+            params={'fields': 'id,name,untagOnResolve,visibleFor(name)'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+    
+    def get_saved_queries(self) -> list[dict]:
+        """Fetch all saved queries."""
+        resp = self.session.get(
+            f'{self.url}/api/savedQueries',
+            params={'fields': 'id,name,query'}
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 def main():
@@ -126,6 +144,8 @@ def main():
         projects = client.get_projects()
         workflows = client.get_workflows()
         agiles = client.get_agiles()
+        tags = client.get_tags()
+        saved_queries = client.get_saved_queries()
         
         # Merge enum and state bundles
         all_bundles = bundles + state_bundles
@@ -133,7 +153,7 @@ def main():
         logger.error(f"Failed to fetch YouTrack state: {e}")
         return
     
-    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows, {len(agiles)} boards')
+    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows, {len(agiles)} boards, {len(tags)} tags, {len(saved_queries)} queries')
     
 
     # 2. LOAD CONFIG - Read YAML configs and convert to Prolog facts
@@ -183,7 +203,7 @@ def main():
     
     
     # Pass workflows and project fields to inference
-    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles)
+    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries)
     
     if not plan:
         logger.info('No changes needed - configuration is in sync!')

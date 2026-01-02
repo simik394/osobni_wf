@@ -75,6 +75,41 @@ class WorkflowConfig(BaseModel):
     )
 
 
+class TagConfig(BaseModel):
+    """Configuration for a global tag."""
+    name: str = Field(description="Tag name")
+    color: Optional[str] = Field(
+        default=None,
+        description="Tag color (hex code like '#ff0000')"
+    )
+    untag_on_resolve: bool = Field(
+        default=False,
+        description="Automatically remove tag when issue is resolved"
+    )
+    visible_to: Optional[str] = Field(
+        default=None,
+        description="Group name that can see this tag (None = owner only)"
+    )
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this tag"
+    )
+
+
+class SavedQueryConfig(BaseModel):
+    """Configuration for a saved search."""
+    name: str = Field(description="Saved search name")
+    query: str = Field(description="YouTrack search query")
+    visible_to: Optional[str] = Field(
+        default=None,
+        description="Group name that can see this search (None = owner only)"
+    )
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this saved search"
+    )
+
+
 class SprintSettings(BaseModel):
     """Sprint settings for an Agile Board."""
     enabled: bool = Field(default=False, description="Enable sprints (False = show all issues)")
@@ -187,4 +222,16 @@ class YouTrackConfig(BaseModel):
     workflows: Optional[list[WorkflowConfig]] = Field(
         default=None,
         description="Global workflow definitions"
+    )
+    
+    # Global tags
+    tags: Optional[list[TagConfig]] = Field(
+        default=None,
+        description="Global tag definitions"
+    )
+    
+    # Saved queries (searches)
+    saved_queries: Optional[list[SavedQueryConfig]] = Field(
+        default=None,
+        description="Saved search definitions"
     )

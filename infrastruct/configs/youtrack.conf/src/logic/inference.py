@@ -96,7 +96,9 @@ class PrologInferenceEngine:
     def assert_current_state(self, fields: list[dict], bundles: list[dict], 
                             projects: list[dict] = None, workflows: list[dict] = None,
                             project_fields: dict[str, list[dict]] = None,
-                            agiles: list[dict] = None) -> None:
+                            agiles: list[dict] = None,
+                            tags: list[dict] = None,
+                            saved_queries: list[dict] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -314,6 +316,25 @@ class PrologInferenceEngine:
                         janus.query_once(f"assertz(curr_board_backlog('{bid}', '{bl_query}'))")
             
             logger.debug(f"Asserted {len(agiles)} current agile boards")
+        
+        # Tags
+        if tags:
+            for tag in tags:
+                tid = tag['id']
+                tname = self._escape(tag.get('name', ''))
+                untag = 'true' if tag.get('untagOnResolve', False) else 'false'
+                visible = tag.get('visibleFor', {}).get('name', '') if tag.get('visibleFor') else ''
+                janus.query_once(f"assertz(curr_tag('{tid}', '{tname}', {untag}, '{self._escape(visible)}'))")
+            logger.debug(f"Asserted {len(tags)} current tags")
+        
+        # Saved Queries
+        if saved_queries:
+            for sq in saved_queries:
+                sqid = sq['id']
+                sqname = self._escape(sq.get('name', ''))
+                sqquery = self._escape(sq.get('query', ''))
+                janus.query_once(f"assertz(curr_saved_query('{sqid}', '{sqname}', '{sqquery}'))")
+            logger.debug(f"Asserted {len(saved_queries)} current saved queries")
     
     def assert_target_state(self, prolog_facts: str) -> None:
         """
@@ -386,7 +407,9 @@ class PrologInferenceEngine:
 def run_inference(fields: list[dict], bundles: list[dict], 
                   target_facts: str, projects: list[dict] = None, workflows: list[dict] = None,
                   project_fields: dict[str, list[dict]] = None,
-                  agiles: list[dict] = None) -> list[tuple]:
+                  agiles: list[dict] = None,
+                  tags: list[dict] = None,
+                  saved_queries: list[dict] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -398,13 +421,15 @@ def run_inference(fields: list[dict], bundles: list[dict],
         workflows: Current workflows from YouTrack API
         project_fields: Map of project_id -> list of fields with defaults
         agiles: Agile Boards from YouTrack API
+        tags: Tags from YouTrack API
+        saved_queries: Saved queries from YouTrack API
         
     Returns:
         List of action tuples for the actuator
     """
     engine = PrologInferenceEngine()
     engine.clear_facts()
-    engine.assert_current_state(fields, bundles, projects, workflows, project_fields, agiles)
+    engine.assert_current_state(fields, bundles, projects, workflows, project_fields, agiles, tags, saved_queries)
     engine.assert_target_state(target_facts)
     
     return engine.compute_plan()

@@ -1012,6 +1012,132 @@ class YouTrackActuator:
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
 
+    # ==========================================================================
+    # TAGS
+    # ==========================================================================
+    
+    def create_tag(self, name: str, color: str = None, 
+                   untag_on_resolve: bool = False, visible_to: str = None) -> ActionResult:
+        """Create a new global tag."""
+        action = f"create_tag({name})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            payload = {'name': name, 'untagOnResolve': untag_on_resolve}
+            
+            resp = self.session.post(f'{self.url}/api/tags', json=payload, params={'fields': 'id'})
+            resp.raise_for_status()
+            tag_id = resp.json().get('id')
+            
+            logger.info(f"Created tag '{name}' (id={tag_id})")
+            return ActionResult(action=action, success=True, resource_id=tag_id)
+        except Exception as e:
+            error = f"Failed to create tag: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+    
+    def update_tag(self, tag_id: str, name: str, color: str = None,
+                   untag_on_resolve: bool = False, visible_to: str = None) -> ActionResult:
+        """Update an existing tag."""
+        action = f"update_tag({name})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            payload = {'untagOnResolve': untag_on_resolve}
+            
+            self.session.post(f'{self.url}/api/tags/{tag_id}', json=payload).raise_for_status()
+            logger.info(f"Updated tag '{name}' (id={tag_id})")
+            return ActionResult(action=action, success=True, resource_id=tag_id)
+        except Exception as e:
+            error = f"Failed to update tag: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+    
+    def delete_tag(self, tag_id: str) -> ActionResult:
+        """Delete a tag."""
+        action = f"delete_tag({tag_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            self.session.delete(f'{self.url}/api/tags/{tag_id}').raise_for_status()
+            logger.info(f"Deleted tag (id={tag_id})")
+            return ActionResult(action=action, success=True, resource_id=tag_id)
+        except Exception as e:
+            error = f"Failed to delete tag: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    # ==========================================================================
+    # SAVED QUERIES
+    # ==========================================================================
+    
+    def create_saved_query(self, name: str, query: str, visible_to: str = None) -> ActionResult:
+        """Create a new saved query."""
+        action = f"create_saved_query({name})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            payload = {'name': name, 'query': query}
+            
+            resp = self.session.post(f'{self.url}/api/savedQueries', json=payload, params={'fields': 'id'})
+            resp.raise_for_status()
+            sq_id = resp.json().get('id')
+            
+            logger.info(f"Created saved query '{name}' (id={sq_id})")
+            return ActionResult(action=action, success=True, resource_id=sq_id)
+        except Exception as e:
+            error = f"Failed to create saved query: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+    
+    def update_saved_query(self, sq_id: str, name: str, query: str) -> ActionResult:
+        """Update an existing saved query."""
+        action = f"update_saved_query({name})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            payload = {'query': query}
+            
+            self.session.post(f'{self.url}/api/savedQueries/{sq_id}', json=payload).raise_for_status()
+            logger.info(f"Updated saved query '{name}' (id={sq_id})")
+            return ActionResult(action=action, success=True, resource_id=sq_id)
+        except Exception as e:
+            error = f"Failed to update saved query: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+    
+    def delete_saved_query(self, sq_id: str) -> ActionResult:
+        """Delete a saved query."""
+        action = f"delete_saved_query({sq_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        
+        try:
+            self.session.delete(f'{self.url}/api/savedQueries/{sq_id}').raise_for_status()
+            logger.info(f"Deleted saved query (id={sq_id})")
+            return ActionResult(action=action, success=True, resource_id=sq_id)
+        except Exception as e:
+            error = f"Failed to delete saved query: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -1365,6 +1491,35 @@ class YouTrackActuator:
                     resource_id=wf_result.usage_id,
                     error=wf_result.error
                 )
+            
+            # Tag operations
+            elif action_type == 'create_tag':
+                # create_tag(Name, Color, UntagOnResolve, VisibleTo)
+                untag = args[2] == 'true' if len(args) > 2 else False
+                result = self.create_tag(args[0], 
+                                        color=args[1] if len(args) > 1 and args[1] != 'null' else None,
+                                        untag_on_resolve=untag)
+            elif action_type == 'update_tag':
+                # update_tag(Id, Name, Color, UntagOnResolve, VisibleTo)
+                untag = args[3] == 'true' if len(args) > 3 else False
+                result = self.update_tag(args[0], args[1],
+                                        color=args[2] if len(args) > 2 and args[2] != 'null' else None,
+                                        untag_on_resolve=untag)
+            elif action_type == 'delete_tag':
+                # delete_tag(Id)
+                result = self.delete_tag(args[0])
+            
+            # Saved Query operations
+            elif action_type == 'create_saved_query':
+                # create_saved_query(Name, Query, VisibleTo)
+                result = self.create_saved_query(args[0], args[1])
+            elif action_type == 'update_saved_query':
+                # update_saved_query(Id, Name, Query)
+                result = self.update_saved_query(args[0], args[1], args[2])
+            elif action_type == 'delete_saved_query':
+                # delete_saved_query(Id)
+                result = self.delete_saved_query(args[0])
+            
             else:
                 logger.warning(f"Unknown action type: {action_type}")
                 result = ActionResult(

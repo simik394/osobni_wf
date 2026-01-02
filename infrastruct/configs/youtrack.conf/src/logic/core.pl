@@ -72,6 +72,16 @@
 :- dynamic target_board_backlog/2.    %% target_board_backlog(BoardName, Query)
 :- dynamic curr_board_backlog/2.      %% curr_board_backlog(BoardId, Query)
 
+%% Tags
+:- dynamic target_tag/4.              %% target_tag(Name, Color, UntagOnResolve, VisibleTo)
+:- dynamic curr_tag/4.                %% curr_tag(Id, Name, UntagOnResolve, VisibleTo)
+:- dynamic target_delete_tag/1.       %% target_delete_tag(Name)
+
+%% Saved Queries
+:- dynamic target_saved_query/3.      %% target_saved_query(Name, Query, VisibleTo)
+:- dynamic curr_saved_query/3.        %% curr_saved_query(Id, Name, Query)
+:- dynamic target_delete_saved_query/1. %% target_delete_saved_query(Name)
+
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
 :- dynamic field_required/2.
@@ -316,6 +326,62 @@ action(delete_rule(WorkflowId, RuleId)) :-
 %% Delete entire workflow (must delete rules first - see dependencies)
 action(delete_workflow(WorkflowId)) :-
     deletable_workflow(WorkflowId, _).
+
+%% 5. Tags
+
+%% Create missing tag
+missing_tag(Name, Color, UntagOnResolve, VisibleTo) :-
+    target_tag(Name, Color, UntagOnResolve, VisibleTo),
+    \+ curr_tag(_, Name, _, _).
+
+action(create_tag(Name, Color, UntagOnResolve, VisibleTo)) :-
+    missing_tag(Name, Color, UntagOnResolve, VisibleTo).
+
+%% Update drifted tag
+drifted_tag(Id, Name, Color, UntagOnResolve, VisibleTo) :-
+    target_tag(Name, Color, UntagOnResolve, VisibleTo),
+    curr_tag(Id, Name, CurrUntag, _),
+    (atom_string(UntagOnResolve, UntagStr), atom_string(CurrUntag, CurrUntagStr), UntagStr \= CurrUntagStr ; true).
+
+action(update_tag(Id, Name, Color, UntagOnResolve, VisibleTo)) :-
+    drifted_tag(Id, Name, Color, UntagOnResolve, VisibleTo).
+
+%% Delete tag
+deletable_tag(Id, Name) :-
+    target_delete_tag(Name),
+    curr_tag(Id, Name, _, _).
+
+action(delete_tag(Id)) :-
+    deletable_tag(Id, _).
+
+%% 6. Saved Queries
+
+%% Create missing saved query
+missing_saved_query(Name, Query, VisibleTo) :-
+    target_saved_query(Name, Query, VisibleTo),
+    \+ curr_saved_query(_, Name, _).
+
+action(create_saved_query(Name, Query, VisibleTo)) :-
+    missing_saved_query(Name, Query, VisibleTo).
+
+%% Update drifted saved query
+drifted_saved_query(Id, Name, Query, VisibleTo) :-
+    target_saved_query(Name, Query, VisibleTo),
+    curr_saved_query(Id, Name, CurrQuery),
+    Query \= CurrQuery.
+
+action(update_saved_query(Id, Name, Query)) :-
+    target_saved_query(Name, Query, _),
+    curr_saved_query(Id, Name, CurrQuery),
+    Query \= CurrQuery.
+
+%% Delete saved query
+deletable_saved_query(Id, Name) :-
+    target_delete_saved_query(Name),
+    curr_saved_query(Id, Name, _).
+
+action(delete_saved_query(Id)) :-
+    deletable_saved_query(Id, _).
 
 %% =============================================================================
 %% DEPENDENCY GRAPH

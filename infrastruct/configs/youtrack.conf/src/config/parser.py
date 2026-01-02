@@ -54,7 +54,9 @@ def load_config(path: Union[str, Path], base_path: Optional[Path] = None) -> You
         return YouTrackConfig(
             projects=[ProjectConfig(**project_data)],
             bundles=data.get('bundles'),
-            workflows=_resolve_workflow_scripts(data.get('workflows', []), base_path) or None
+            workflows=_resolve_workflow_scripts(data.get('workflows', []), base_path) or None,
+            tags=data.get('tags'),
+            saved_queries=data.get('saved_queries')
         )
     
     # Multi-project format
