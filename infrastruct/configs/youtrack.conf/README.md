@@ -130,7 +130,12 @@ boards:
       - CORE
 ```
 
+> [!NOTE]
+> **Card Field Visibility**: Configuration of which fields appear on board cards is currently UI-only and not supported by the YouTrack REST API.
+
 ### Workflows
+
+Workflows can be defined globally or per-project. Rules can reference external `.js` files or contain inline scripts.
 
 ```yaml
 workflows:
@@ -140,21 +145,21 @@ workflows:
     rules:
       - name: on-change-rule
         type: on-change
-        script_file: workflows/my-rule.js
+        script_file: workflows/my-rule.js  # Relative to the yaml file
       
       - name: action-rule
         type: action
         script: |
-          // Inline JavaScript
+          // Inline JavaScript (recommended for simple one-liners)
           workflow.action({
             title: 'Do Something'
           });
-    
-    # Delete workflow
-    state: absent
 ```
 
-**Rule Types**: `on-change`, `on-schedule`, `state-machine`, `action`, `custom`
+**Implementation Rules**:
+- **`script_file`**: Must be placed in a `workflows/` directory relative to your configuration YAML.
+- **Rule Types**: `on-change`, `on-schedule`, `state-machine`, `action`, `custom`.
+- **Recommendation**: Use `script_file` for complex logic to enable syntax highlighting and easier debugging.
 
 ### Tags (Global)
 
@@ -165,9 +170,6 @@ tags:
   
   - name: blocked
     untag_on_resolve: false
-  
-  - name: old-tag
-    state: absent              # Delete tag
 ```
 
 ### Saved Queries (Global)
@@ -176,96 +178,55 @@ tags:
 saved_queries:
   - name: "My Open Issues"
     query: "project: DEMO for: me State: -Done"
-  
-  - name: "Critical Bugs"
-    query: "project: DEMO Priority: Critical"
-  
-  - name: "Old Search"
-    state: absent
 ```
 
 ---
 
-## Full Feature Matrix
+## CLI Reference
+
+The main entry point is `src.controller.main`.
+
+```bash
+python3 -m src.controller.main [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--youtrack-url` | Base URL of your YouTrack instance (e.g. `http://youtrack.internal`) |
+| `--config-dir` | Directory containing your YAML configurations (default: `projects/demo`) |
+| `--dry-run` | Only show planned actions without applying them |
+| `--import-vault` | Fetch YouTrack token from HashiCorp Vault |
+| `--export FILE` | Export current YouTrack state to a YAML file |
+| `-v, --verbose` | Enable debug logging |
+
+---
+
+## Feature Matrix
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | **Projects** | ✅ | Create, update |
 | **Custom Fields** | ✅ | All types, bundles |
-| **Bundles (enum/state)** | ✅ | Create, add values |
-| **Default Values** | ✅ | Per-project defaults |
-| **Workflows** | ✅ | Create, attach/detach |
-| **Workflow Rules** | ✅ | JS from file or inline |
-| **Agile Boards** | ✅ | Full configuration |
-| **Columns** | ✅ | Order, WIP limits |
-| **Swimlanes** | ✅ | Field-based |
-| **Color Coding** | ✅ | Field or project |
-| **Estimation Fields** | ✅ | For burndown |
-| **Backlog Query** | ✅ | Saved search |
-| **Tags** | ✅ | Create, delete |
-| **Saved Queries** | ✅ | Create, update, delete |
-| Card Field Visibility | ❌ | UI-only, not API |
-| Sprints | ⚠️ | Manual only |
+| **Agile Boards** | ✅ | Columns, WIP, Swimlanes, Color Coding |
+| **Workflows** | ✅ | Attach, Detach, Rules (file/inline) |
+| **Tags** | ✅ | Global management with `untag_on_resolve` |
+| **Saved Queries** | ✅ | Creation and management |
+| Card Visibility | ❌ | API Limitation |
 | Reports | 📋 | [Proposal](docs/PROPOSAL_reports_iac.md) |
-| User Groups | ❌ | Requires Hub API |
 
 ---
 
-## Directory Structure
+## Vault Configuration
 
-```
-├── projects/           ← Your project configs
-│   └── demo/
-│       ├── project.yaml
-│       └── workflows/
-├── src/
-│   ├── controller/     # API client
-│   ├── logic/          # Prolog engine
-│   ├── actuator/       # Change applier
-│   └── config/         # YAML parser
-├── tests/              # Test suite
-└── docs/               # Documentation
-```
+When using `--import-vault`, the tool expects the following environment variables:
 
----
+- `VAULT_ADDR`: Your Vault endpoint.
+- `VAULT_TOKEN`: Your Vault authentication token.
 
-## Advanced Usage
-
-### Vault Integration
-
-```bash
-export VAULT_ADDR=http://vault:8200
-export VAULT_TOKEN=xxx
-# Token read from: secret/data/youtrack/api -> token
-python3 -m src.controller.main --config-dir projects/demo
-```
-
-### Export Current State
-
-```bash
-python3 -m src.controller.main --export current-state.yaml
-```
-
-### Verbose Logging
-
-```bash
-python3 -m src.controller.main --config-dir projects/demo -v
-```
-
----
-
-## Development
-
-```bash
-# Run tests
-./dev.sh test
-
-# Interactive shell
-./dev.sh
-
-# Run Prolog directly
-swipl src/logic/core.pl
-```
+**Secret Path**:
+The tool looks for the secret at: `secret/data/youtrack/api`
+**Expected Key**:
+The secret must contain a key named `token` containing your YouTrack permanent token.
 
 ---
 
@@ -273,10 +234,9 @@ swipl src/logic/core.pl
 
 | Issue | Solution |
 |-------|----------|
-| 401 Unauthorized | Check token permissions |
-| Field not updating | Verify field is attached to project |
-| Bundle conflict | Bundles are global, ensure consistent values |
-| Workflow error | Check JS syntax in script files |
+| **401 Unauthorized** | Verify your token has *Low-level administration* permissions. |
+| **`FileNotFoundError`** | Ensure workflow `.js` files are in the `workflows/` subfolder. |
+| **Bundle Conflict** | Use unique names for bundles if they differ across projects. |
 
 ---
 
