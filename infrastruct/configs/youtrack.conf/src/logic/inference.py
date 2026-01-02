@@ -271,10 +271,11 @@ class PrologInferenceEngine:
                 # Color Coding
                 color_coding = board.get('colorCoding')
                 if color_coding:
-                    cc_field = color_coding.get('field', {})
-                    if cc_field:
+                    # FieldBasedColorCoding uses 'prototype', not 'field'
+                    cc_prototype = color_coding.get('prototype', {})
+                    if cc_prototype:
                         mode = 'field'
-                        f_name = self._escape(cc_field.get('name', ''))
+                        f_name = self._escape(cc_prototype.get('name', ''))
                     else:
                         mode = 'project'
                         f_name = 'null'

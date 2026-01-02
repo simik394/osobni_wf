@@ -867,8 +867,7 @@ class YouTrackActuator:
                                 logger.warning(f"Failed to add column '{col_name}': {resp.status_code}")
 
             # 5. Update Swimlanes
-            # FIXME: Swimlane updates failing (400 Bad Request), disabled to unblock Color Coding
-            if False and swimlane_field:
+            if swimlane_field:
                 # Resolve swimlane field ID
                 resp = self.session.get(f'{self.url}/api/admin/customFieldSettings/customFields', params={'fields': 'id,name'})
                 fields = resp.json()
@@ -882,8 +881,8 @@ class YouTrackActuator:
                     swim_payload = {
                         'swimlaneSettings': {
                             'enabled': True,
-                            'field': {'id': swim_field_id},
-                            '$type': 'FieldBasedSwimlaneSettings'
+                            'field': {'id': swim_field_id, '$type': 'CustomFilterField'},
+                            '$type': 'AttributeBasedSwimlaneSettings'
                         }
                     }
                     self.session.post(f'{self.url}/api/agiles/{board_id}', json=swim_payload).raise_for_status()
@@ -898,7 +897,7 @@ class YouTrackActuator:
                     payload = {
                         "colorCoding": {
                             "$type": "FieldBasedColorCoding",
-                            "field": {"id": fid, "$type": "CustomField"}
+                            "prototype": {"id": fid}
                         }
                     }
                 else: # project
