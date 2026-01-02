@@ -24,6 +24,10 @@ class FieldConfig(BaseModel):
         description="Values for the bundle. Use strings for enum, or BundleValueConfig for states."
     )
     can_be_empty: bool = True
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete/detach this field"
+    )
 
 
 class WorkflowRuleConfig(BaseModel):
@@ -40,12 +44,19 @@ class WorkflowRuleConfig(BaseModel):
     
     @model_validator(mode='after')
     def check_script_source(self):
-        """Ensure either script or script_file is provided, not both."""
+        """Ensure either script or script_file is provided, not both (unless deleting)."""
+        if self.state == 'absent':
+            return self  # No validation needed for deletion
         if self.script and self.script_file:
             raise ValueError("Provide either 'script' or 'script_file', not both")
         if not self.script and not self.script_file:
             raise ValueError("Either 'script' or 'script_file' is required")
         return self
+    
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this rule"
+    )
 
 
 class WorkflowConfig(BaseModel):
@@ -54,6 +65,10 @@ class WorkflowConfig(BaseModel):
     title: Optional[str] = Field(default=None, description="Human-readable title")
     attached: bool = Field(default=True, description="Whether to attach to the project")
     rules: list[WorkflowRuleConfig] = Field(default_factory=list)
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this workflow and all its rules"
+    )
 
 
 class ProjectConfig(BaseModel):

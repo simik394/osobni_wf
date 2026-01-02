@@ -49,6 +49,11 @@
 :- dynamic field_uses_bundle/2.
 :- dynamic field_required/2.
 
+%% Delete targets (from YAML state: absent)
+:- dynamic target_delete_field/2.       %% target_delete_field(Name, Project)
+:- dynamic target_delete_rule/2.        %% target_delete_rule(WorkflowName, RuleName)
+:- dynamic target_delete_workflow/1.    %% target_delete_workflow(WorkflowName)
+
 %% =============================================================================
 %% DIFF LOGIC - Detect missing/drifted resources
 %% =============================================================================
@@ -92,6 +97,24 @@ drifted_rule(WorkflowId, RuleId, WorkflowName, RuleName, TargetScript) :-
     curr_workflow(WorkflowId, WorkflowName, _),
     curr_rule(WorkflowId, RuleId, RuleName, _, CurrentScript),
     CurrentScript \= TargetScript.
+
+%% Resource Deletion Logic (marked for removal in YAML)
+
+%% Field marked for deletion exists in current state
+deletable_field(FieldId, Name, Project) :-
+    target_delete_field(Name, Project),
+    curr_field(FieldId, Name, _).
+
+%% Rule marked for deletion exists in current state
+deletable_rule(WorkflowId, RuleId, WorkflowName, RuleName) :-
+    target_delete_rule(WorkflowName, RuleName),
+    curr_workflow(WorkflowId, WorkflowName, _),
+    curr_rule(WorkflowId, RuleId, RuleName, _, _).
+
+%% Workflow marked for deletion exists in current state  
+deletable_workflow(WorkflowId, Name) :-
+    target_delete_workflow(Name),
+    curr_workflow(WorkflowId, Name, _).
 
 %% =============================================================================
 %% ACTION GENERATION
@@ -151,6 +174,21 @@ action(attach_workflow(WorkflowId, ProjectId)) :-
     curr_workflow(WorkflowId, WorkflowName, _),
     curr_project(ProjectId, _, ProjectShortName).
 
+%% 4. Delete Operations (state: absent in YAML)
+
+%% Delete field from project (detach + optionally delete global)
+action(detach_field(Name, ProjectId)) :-
+    deletable_field(_, Name, ProjectShortName),
+    curr_project(ProjectId, _, ProjectShortName).
+
+%% Delete workflow rule
+action(delete_rule(WorkflowId, RuleId)) :-
+    deletable_rule(WorkflowId, RuleId, _, _).
+
+%% Delete entire workflow (must delete rules first - see dependencies)
+action(delete_workflow(WorkflowId)) :-
+    deletable_workflow(WorkflowId, _).
+
 %% =============================================================================
 %% DEPENDENCY GRAPH
 %% =============================================================================
@@ -176,6 +214,10 @@ depends_on(create_rule(_, _, _, _), create_workflow(Name, _)) :-
 depends_on(create_rule(WorkflowName, _, _, _), create_workflow(WorkflowName, _)).
 depends_on(attach_workflow(WorkflowName, _), create_workflow(WorkflowName, _)).
 depends_on(attach_workflow(WorkflowName, _), create_rule(WorkflowName, _, _, _)).
+
+%% Delete dependencies
+%% Must delete rules before deleting the workflow
+depends_on(delete_workflow(WfId), delete_rule(WfId, _)).
 
 %% =============================================================================
 %% TOPOLOGICAL SORT

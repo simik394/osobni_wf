@@ -64,15 +64,24 @@ def _generate_workflow_facts(workflow: WorkflowConfig, project_short_name: str =
     attached = 'true' if workflow.attached else 'false'
     
     # Workflow definition (idempotent, title ignored for identity but used for create)
+    if workflow.state == 'absent':
+        # Mark workflow for deletion
+        yield f"target_delete_workflow('{name}')."
+        return  # No rules or attachments for deleted workflows
+    
     yield f"target_workflow('{name}', '{title}', {attached})."
     
     # Rules
     for rule in workflow.rules:
         rule_name = escape_prolog_string(rule.name)
-        rule_type = escape_prolog_string(rule.type)
-        # Use script content (either inline or loaded from file)
-        script = escape_prolog_string(rule.script)
-        yield f"target_rule('{name}', '{rule_name}', '{rule_type}', '{script}')."
+        if rule.state == 'absent':
+            # Mark rule for deletion
+            yield f"target_delete_rule('{name}', '{rule_name}')."
+        else:
+            rule_type = escape_prolog_string(rule.type)
+            # Use script content (either inline or loaded from file)
+            script = escape_prolog_string(rule.script)
+            yield f"target_rule('{name}', '{rule_name}', '{rule_type}', '{script}')."
     
     # Attachment info is implicitly handled by `target_workflow(... true)` context,
     # but we need to link it to the project if specific.
@@ -137,6 +146,11 @@ def _generate_field_facts(field: FieldConfig, project: str) -> Iterator[str]:
     """Generate facts for a custom field."""
     name = escape_prolog_string(field.name)
     field_type = escape_prolog_string(field.type)
+    
+    # Handle deletion
+    if field.state == 'absent':
+        yield f"target_delete_field('{name}', '{project}')."
+        return  # No other facts needed for deletion
     
     # Field definition
     yield f"target_field('{name}', '{field_type}', '{project}')."

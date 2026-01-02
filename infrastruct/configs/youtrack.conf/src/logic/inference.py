@@ -75,6 +75,11 @@ class PrologInferenceEngine:
         janus.query_once("retractall(target_rule(_, _, _, _))")
         janus.query_once("retractall(target_workflow_attachment(_, _))")
         
+        # Delete target facts (state: absent in YAML)
+        janus.query_once("retractall(target_delete_field(_, _))")
+        janus.query_once("retractall(target_delete_rule(_, _))")
+        janus.query_once("retractall(target_delete_workflow(_))")
+        
         logger.debug("Cleared all dynamic facts")
     
     def assert_current_state(self, fields: list[dict], bundles: list[dict], 
