@@ -102,6 +102,7 @@ def main():
     parser.add_argument('--config-dir', default='obsidian-rules', help='Directory with YAML configs')
     parser.add_argument('--dry-run', action='store_true', help='Print plan without executing')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    parser.add_argument('--export', help='Export current configuration to YAML file')
     args = parser.parse_args()
     
     if args.verbose:
@@ -130,21 +131,28 @@ def main():
     
     logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows, {len(agiles)} boards')
     
+
     # 2. LOAD CONFIG - Read YAML configs and convert to Prolog facts
+    # If export requested, do it and exit
+    if args.export:
+        logger.info(f"Exporting current YouTrack state to {args.export}...")
+        export_config(args.export, fields, all_bundles, projects, workflows, agiles)
+        return
+
     config_dir = Path(args.config_dir)
     if not config_dir.exists():
-        logger.warning(f'Config directory not found: {config_dir}')
+        logger.error(f'Config dir {config_dir} does not exist')
         return
-    
-    configs = load_configs_from_dir(config_dir)
-    if not configs:
-        logger.warning(f'No YAML configs found in {config_dir}')
+        
+    logger.info(f'Loading config from {config_dir}...')
+    try:
+        if (config_dir / 'project.yaml').exists():
+            target_facts = parser.load_single_project_config(config_dir / 'project.yaml')
+        else:
+            target_facts = parser.load_config(config_dir)
+    except Exception as e:
+        logger.error(f"Failed to load config: {e}")
         return
-    
-    # Merge all configs and generate Prolog facts
-    from src.config.parser import merge_configs
-    merged_config = merge_configs(configs)
-    target_facts = config_to_prolog_facts(merged_config)
     
     logger.debug(f'Generated target facts:\n{target_facts}')
     
@@ -198,6 +206,57 @@ def main():
                 logger.error(f'  FAILED: {r.action} - {r.error}')
     else:
         logger.info(f'Plan execution complete: {succeeded} actions succeeded')
+
+
+
+def export_config(output_file: str, fields: list, bundles: list, projects: list, workflows: list, agiles: list):
+    """Export current state to YAML configuration."""
+    import yaml
+    
+    config = {
+        'projects': [],
+        'bundles': {},
+        'workflows': []
+    }
+    
+    # Export Projects & Boards
+    for proj in projects:
+        p_conf = {
+            'name': proj.get('name'),
+            'shortName': proj.get('shortName'),
+            'leader': proj.get('leader', {}).get('login'),
+            'boards': []
+        }
+        
+        # Find boards for this project
+        p_short = proj.get('shortName')
+        for board in agiles:
+            # Check if project is in board's projects
+            b_projects = [p.get('shortName') for p in board.get('projects', [])]
+            if p_short in b_projects:
+                b_conf = {
+                    'name': board.get('name'),
+                    'column_field': board.get('columnSettings', {}).get('field', {}).get('name'),
+                    'sprints': {
+                        'enabled': not board.get('sprintsSettings', {}).get('disableSprints', True)
+                    },
+                    'visible_to': [g.get('name') for g in board.get('readSharingSettings', {}).get('permittedGroups', [])],
+                    'columns': [c.get('presentation') for c in board.get('columnSettings', {}).get('columns', [])],
+                    'swimlane_field': (board.get('swimlaneSettings') or {}).get('field', {}).get('name')
+                }
+                # Clean up None/Empty
+                if not b_conf['swimlane_field']: del b_conf['swimlane_field']
+                
+                p_conf['boards'].append(b_conf)
+                
+        if not p_conf['boards']: del p_conf['boards']
+        config['projects'].append(p_conf)
+        
+    # Write to file
+    with open(output_file, 'w') as f:
+        yaml.dump(config, f, sort_keys=False)
+    
+    logger.info(f"Exported configuration to {output_file}")
 
 
 if __name__ == '__main__':
