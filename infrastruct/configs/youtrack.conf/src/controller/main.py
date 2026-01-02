@@ -62,6 +62,15 @@ class YouTrackClient:
         resp.raise_for_status()
         return resp.json()
     
+    def get_agiles(self) -> list[dict]:
+        """Fetch all Agile Boards."""
+        resp = self.session.get(
+            f'{self.url}/api/agiles',
+            params={'fields': 'id,name,columnSettings(field(id))'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+    
     def get_state_bundles(self) -> list[dict]:
         """Fetch all state bundles."""
         resp = self.session.get(
@@ -111,13 +120,15 @@ def main():
     fields = client.get_custom_fields()
     bundles = client.get_bundles()
     state_bundles = client.get_state_bundles()
+    state_bundles = client.get_state_bundles()
     projects = client.get_projects()
     workflows = client.get_workflows()
+    agiles = client.get_agiles()
     
     # Merge enum and state bundles
     all_bundles = bundles + state_bundles
     
-    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows')
+    logger.info(f'Found {len(fields)} fields, {len(all_bundles)} bundles, {len(projects)} projects, {len(workflows)} workflows, {len(agiles)} boards')
     
     # 2. LOAD CONFIG - Read YAML configs and convert to Prolog facts
     config_dir = Path(args.config_dir)
@@ -155,8 +166,9 @@ def main():
         except Exception as e:
             logger.warning(f"Failed to fetch fields for project {pid}: {e}")
     
+    
     # Pass workflows and project fields to inference
-    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields)
+    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles)
     
     if not plan:
         logger.info('No changes needed - configuration is in sync!')

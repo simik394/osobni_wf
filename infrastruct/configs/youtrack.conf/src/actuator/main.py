@@ -552,6 +552,84 @@ class YouTrackActuator:
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
 
+    def create_agile_board(self, name: str, project_short_name: str, column_field: str) -> ActionResult:
+        """Create a new Agile Board."""
+        action = f"create_agile_board({name}, {project_short_name}, {column_field})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+            
+        try:
+            # 1. Resolve Project ID
+            # We assume project_short_name is unique
+            # Fetch all projects to be safe (query param can be flaky)
+            resp = self.session.get(
+                f'{self.url}/api/admin/projects',
+                params={'fields': 'id,shortName'}
+            )
+            resp.raise_for_status()
+            all_projects = resp.json()
+            
+            project_id = None
+            for p in all_projects:
+                if p.get('shortName') == project_short_name or p.get('id') == project_short_name:
+                    project_id = p['id']
+                    break
+            
+            if not project_id:
+                error = f"Project {project_short_name} not found"
+                return ActionResult(action=action, success=False, error=error)
+            
+            # 2. Resolve Field ID (GLOBAL Custom Field)
+            # Filter in Python to avoid query syntax issues
+            resp = self.session.get(
+                f'{self.url}/api/admin/customFieldSettings/customFields',
+                params={'fields': 'id,name'}
+            )
+            resp.raise_for_status()
+            fields = resp.json()
+            
+            field_id = None
+            for f in fields:
+                if f.get('name') == column_field:
+                    field_id = f['id']
+                    break
+            
+            if not field_id:
+                error = f"Global Field {column_field} not found"
+                return ActionResult(action=action, success=False, error=error)
+
+            # 3. Create Board Payload (Mimicking strict structure)
+            payload = {
+                "name": name,
+                "projects": [{"id": project_id, "$type": "Project"}],
+                "columnSettings": {
+                    "$type": "ColumnSettings",
+                    "field": {"id": field_id, "$type": "CustomField"}
+                },
+                "$type": "Agile"
+            }
+            
+            resp = self.session.post(
+                f'{self.url}/api/agiles',
+                json=payload,
+                params={'fields': 'id,name'}
+            )
+            if resp.status_code >= 400:
+                logger.error(f"API Error ({resp.status_code}): {resp.text}")
+            resp.raise_for_status()
+            data = resp.json()
+            board_id = data.get('id')
+            
+            logger.info(f"Created Agile Board '{name}' (id={board_id})")
+            return ActionResult(action=action, success=True, resource_id=board_id)
+            
+        except Exception as e:
+            error = f"Failed to create board: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -667,6 +745,10 @@ class YouTrackActuator:
             elif action_type == 'set_field_default':
                 # set_field_default(FieldName, Value, ProjectId)
                 result = self.set_field_default(args[0], args[1], args[2])
+            # Agile Board operations
+            elif action_type == 'create_agile_board':
+                # create_agile_board(Name, ProjShortName, ColField)
+                result = self.create_agile_board(args[0], args[1], args[2])
             # Workflow operations
             elif action_type == 'create_workflow':
                 # create_workflow(Name, Title)

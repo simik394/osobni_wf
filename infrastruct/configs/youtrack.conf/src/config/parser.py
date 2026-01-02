@@ -42,6 +42,8 @@ def load_config(path: Union[str, Path], base_path: Optional[Path] = None) -> You
             project_data['fields'] = data['fields']
         if 'workflows' in data:
             project_data['workflows'] = data['workflows']
+        if 'boards' in data:
+            project_data['boards'] = data['boards']
         
         # Load script files for project workflows
         if 'workflows' in project_data:

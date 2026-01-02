@@ -75,6 +75,18 @@ class WorkflowConfig(BaseModel):
     )
 
 
+class AgileBoardConfig(BaseModel):
+    """Configuration for an Agile Board."""
+    name: str = Field(description="Board name")
+    projects: list[str] = Field(default_factory=list, description="Project shortNames to include")
+    column_field: str = Field(default="State", description="Custom field to use for columns")
+    
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this board"
+    )
+
+
 class ProjectConfig(BaseModel):
     """Configuration for a YouTrack project."""
     name: str = Field(description="Full project name")
@@ -82,6 +94,7 @@ class ProjectConfig(BaseModel):
     leader: Optional[str] = Field(default=None, description="Leader username or ID")
     fields: list[FieldConfig] = Field(default_factory=list)
     workflows: list[WorkflowConfig] = Field(default_factory=list)
+    boards: list[AgileBoardConfig] = Field(default_factory=list, description="Agile boards for this project")
     
     model_config = {"populate_by_name": True}  # Allow both short_name and shortName
 

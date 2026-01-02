@@ -36,6 +36,7 @@
 :- dynamic curr_rule/5.
 :- dynamic curr_workflow_usage/3.
 :- dynamic curr_field_default/3.        %% curr_field_default(FieldId, ValueName, ProjectId)
+:- dynamic curr_board/3.                %% curr_board(Id, Name, ColumnFieldId) -> Sensing needs to be simple for name match
 
 :- dynamic target_field/3.
 :- dynamic target_project/2.
@@ -47,6 +48,8 @@
 :- dynamic target_rule/4.
 :- dynamic target_workflow_attachment/2.
 :- dynamic target_field_default/3.      %% target_field_default(FieldName, DefaultValue, Project)
+:- dynamic target_board/3.            %% target_board(Name, ColumnFieldName, MainProject)
+:- dynamic target_board_project/2.    %% target_board_project(BoardName, ProjectShortName)
 
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
@@ -176,6 +179,15 @@ action(set_field_default(Name, Value, Project)) :-
     (missing_field_default(Name, Value, Project) ;
      drifted_field_default(Name, _, Value, Project)).
 
+%% 4. Agile Boards
+%% Board missing (simple name check)
+missing_board(Name, ColField, MainProj) :-
+    target_board(Name, ColField, MainProj),
+    \+ curr_board(_, Name, _).
+
+action(create_agile_board(Name, ProjShortName, ColField)) :-
+    missing_board(Name, ColField, ProjShortName).
+
 %% 3. Workflows
 %% Create missing workflow container
 action(create_workflow(Name, Title)) :-
@@ -230,6 +242,12 @@ depends_on(attach_field(F, _), create_field(F, _)) :-
 
 %% Setting default depends on field being attached
 depends_on(set_field_default(F, _, P), attach_field(F, P)).
+
+%% Agile Board Dependencies
+%% Board creation needs the Main Project to exist
+depends_on(create_agile_board(_, MainProj, _), create_project(MainProj, _)).
+%% Board creation needs the Column Field to be attached to Main Project
+depends_on(create_agile_board(_, MainProj, ColField), attach_field(ColField, MainProj)).
 
 %% Workflow dependencies
 %% Use logic variable WfId so rule creation depends on the creation of *that specific* workflow

@@ -8,7 +8,7 @@ from typing import Iterator
 
 from .schema import (
     YouTrackConfig, ProjectConfig, FieldConfig, BundleValueConfig,
-    WorkflowConfig, WorkflowRuleConfig
+    WorkflowConfig, WorkflowRuleConfig, AgileBoardConfig
 )
 
 
@@ -141,6 +141,11 @@ def _generate_project_facts(project: ProjectConfig) -> Iterator[str]:
         for wf in project.workflows:
             yield from _generate_workflow_facts(wf, project_short_name=short_name)
 
+    # Agile Boards
+    if project.boards:
+        for board in project.boards:
+            yield from _generate_agile_board_facts(board, main_project=short_name)
+
 
 def _generate_field_facts(field: FieldConfig, project: str) -> Iterator[str]:
     """Generate facts for a custom field."""
@@ -177,3 +182,31 @@ def _generate_field_facts(field: FieldConfig, project: str) -> Iterator[str]:
     # Can be empty setting
     if not field.can_be_empty:
         yield f"field_required('{name}', '{project}')."
+
+
+def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> Iterator[str]:
+    """Generate Prolog facts for an Agile Board."""
+    name = escape_prolog_string(board.name)
+    
+    if board.state == 'absent':
+        # TODO: Implement delete logic for boards if needed
+        # yield f"target_delete_board('{name}')."
+        return
+
+    col_field = escape_prolog_string(board.column_field)
+    main_proj = escape_prolog_string(main_project)
+    
+    yield f"target_board('{name}', '{col_field}', '{main_proj}')."
+    
+    # Projects included in the board
+    # If explicit list is empty, assume just the main project
+    # If explicit list exists, ensure main project is included or respected
+    projects = board.projects if board.projects else [main_project]
+    
+    # Ensure main project is in the list
+    if main_project not in projects:
+        projects.append(main_project)
+        
+    for proj in set(projects): # Dedup
+        p_name = escape_prolog_string(proj)
+        yield f"target_board_project('{name}', '{p_name}')."

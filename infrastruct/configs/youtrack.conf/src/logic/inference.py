@@ -81,13 +81,21 @@ class PrologInferenceEngine:
         # Delete target facts (state: absent in YAML)
         janus.query_once("retractall(target_delete_field(_, _))")
         janus.query_once("retractall(target_delete_rule(_, _))")
+        janus.query_once("retractall(target_delete_field(_, _))")
+        janus.query_once("retractall(target_delete_rule(_, _))")
         janus.query_once("retractall(target_delete_workflow(_))")
+        
+        # Agile Boards
+        janus.query_once("retractall(target_board(_, _, _))")
+        janus.query_once("retractall(target_board_project(_, _))")
+        janus.query_once("retractall(curr_board(_, _, _))")
         
         logger.debug("Cleared all dynamic facts")
     
     def assert_current_state(self, fields: list[dict], bundles: list[dict], 
                             projects: list[dict] = None, workflows: list[dict] = None,
-                            project_fields: dict[str, list[dict]] = None) -> None:
+                            project_fields: dict[str, list[dict]] = None,
+                            agiles: list[dict] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -96,7 +104,8 @@ class PrologInferenceEngine:
             bundles: Bundles from YouTrack API
             projects: Projects from YouTrack API
             workflows: Workflows from YouTrack API
-            project_fields: Per-project fields with defaults {project_id: [fields]}
+            project_fields: Per-project fields with defaults
+            agiles: Agile Boards from YouTrack API
         """
         self.initialize()
         
@@ -174,7 +183,24 @@ class PrologInferenceEngine:
                     script = self._escape(rule.get('script', ''))
                     janus.query_once(f"assertz(curr_rule('{wf_id}', '{rule_id}', '{rule_name}', 'unknown', '{script}'))")
             
+            
             logger.debug(f"Asserted {len(workflows)} current workflows")
+            
+        # Assert Agile Boards
+        if agiles:
+            for board in agiles:
+                bid = self._escape(board.get('id', ''))
+                name = self._escape(board.get('name', ''))
+                # Get column settings field ID
+                col_settings = board.get('columnSettings', {})
+                # Note: API might structure it as columnSettings -> field -> id
+                # Or sometimes just columnSettings -> field (object)
+                col_field = col_settings.get('field', {})
+                col_field_id = self._escape(col_field.get('id', ''))
+                
+                janus.query_once(f"assertz(curr_board('{bid}', '{name}', '{col_field_id}'))")
+            
+            logger.debug(f"Asserted {len(agiles)} current agile boards")
     
     def assert_target_state(self, prolog_facts: str) -> None:
         """
@@ -246,7 +272,8 @@ class PrologInferenceEngine:
 
 def run_inference(fields: list[dict], bundles: list[dict], 
                   target_facts: str, projects: list[dict] = None, workflows: list[dict] = None,
-                  project_fields: dict[str, list[dict]] = None) -> list[tuple]:
+                  project_fields: dict[str, list[dict]] = None,
+                  agiles: list[dict] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -257,13 +284,14 @@ def run_inference(fields: list[dict], bundles: list[dict],
         projects: Current projects from YouTrack API
         workflows: Current workflows from YouTrack API
         project_fields: Map of project_id -> list of fields with defaults
+        agiles: Agile Boards from YouTrack API
         
     Returns:
         List of action tuples for the actuator
     """
     engine = PrologInferenceEngine()
     engine.clear_facts()
-    engine.assert_current_state(fields, bundles, projects, workflows, project_fields)
+    engine.assert_current_state(fields, bundles, projects, workflows, project_fields, agiles)
     engine.assert_target_state(target_facts)
     
     return engine.compute_plan()

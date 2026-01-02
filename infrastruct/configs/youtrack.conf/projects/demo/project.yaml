@@ -6,6 +6,10 @@ project:
   shortName: DEMO
   leader: admin
 
+boards:
+  - name: "Demo Agile Board"
+    column_field: "State"
+
 fields:
   # State field for issue workflow
   - name: State
