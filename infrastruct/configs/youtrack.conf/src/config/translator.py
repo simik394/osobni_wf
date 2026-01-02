@@ -199,14 +199,28 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
     yield f"target_board('{name}', '{col_field}', '{main_proj}')."
     
     # Projects included in the board
-    # If explicit list is empty, assume just the main project
-    # If explicit list exists, ensure main project is included or respected
     projects = board.projects if board.projects else [main_project]
-    
-    # Ensure main project is in the list
     if main_project not in projects:
         projects.append(main_project)
-        
-    for proj in set(projects): # Dedup
+    for proj in set(projects):
         p_name = escape_prolog_string(proj)
         yield f"target_board_project('{name}', '{p_name}')."
+    
+    # Sprint settings - sprints.enabled = False means disableSprints = True
+    disable_sprints = 'true' if not board.sprints.enabled else 'false'
+    yield f"target_board_sprints('{name}', {disable_sprints})."
+    
+    # Visibility - groups that can view the board
+    for group in board.visible_to:
+        g_name = escape_prolog_string(group)
+        yield f"target_board_visibility('{name}', '{g_name}')."
+    
+    # Columns - explicit column names
+    for col in board.columns:
+        col_name = escape_prolog_string(col)
+        yield f"target_board_column('{name}', '{col_name}')."
+    
+    # Swimlane field
+    if board.swimlane_field:
+        swim_field = escape_prolog_string(board.swimlane_field)
+        yield f"target_board_swimlane('{name}', '{swim_field}')."

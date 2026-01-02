@@ -552,8 +552,22 @@ class YouTrackActuator:
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
 
-    def create_agile_board(self, name: str, project_short_name: str, column_field: str) -> ActionResult:
-        """Create a new Agile Board."""
+    def create_agile_board(self, name: str, project_short_name: str, column_field: str,
+                           disable_sprints: bool = True,
+                           visible_to: list[str] = None,
+                           columns: list[str] = None,
+                           swimlane_field: str = None) -> ActionResult:
+        """Create a new Agile Board with full configuration.
+        
+        Args:
+            name: Board name
+            project_short_name: Project short name
+            column_field: Field to use for columns (e.g., 'State')
+            disable_sprints: If True, show all issues without sprint assignment
+            visible_to: List of group names that can view the board
+            columns: List of column names to create
+            swimlane_field: Field to use for swimlanes (e.g., 'Subsystem')
+        """
         action = f"create_agile_board({name}, {project_short_name}, {column_field})"
         
         if self.dry_run:
@@ -562,8 +576,6 @@ class YouTrackActuator:
             
         try:
             # 1. Resolve Project ID
-            # We assume project_short_name is unique
-            # Fetch all projects to be safe (query param can be flaky)
             resp = self.session.get(
                 f'{self.url}/api/admin/projects',
                 params={'fields': 'id,shortName'}
@@ -581,8 +593,7 @@ class YouTrackActuator:
                 error = f"Project {project_short_name} not found"
                 return ActionResult(action=action, success=False, error=error)
             
-            # 2. Resolve Field ID (GLOBAL Custom Field)
-            # Filter in Python to avoid query syntax issues
+            # 2. Resolve Column Field ID (GLOBAL Custom Field)
             resp = self.session.get(
                 f'{self.url}/api/admin/customFieldSettings/customFields',
                 params={'fields': 'id,name'}
@@ -600,7 +611,23 @@ class YouTrackActuator:
                 error = f"Global Field {column_field} not found"
                 return ActionResult(action=action, success=False, error=error)
 
-            # 3. Create Board Payload (Mimicking strict structure)
+            # 3. Resolve Visibility Groups
+            permitted_groups = []
+            if visible_to:
+                resp = self.session.get(
+                    f'{self.url}/api/groups',
+                    params={'fields': 'id,name'}
+                )
+                resp.raise_for_status()
+                all_groups = {g.get('name'): g.get('id') for g in resp.json()}
+                
+                for group_name in visible_to:
+                    if group_name in all_groups:
+                        permitted_groups.append({'id': all_groups[group_name], '$type': 'UserGroup'})
+                    else:
+                        logger.warning(f"Group '{group_name}' not found, skipping")
+
+            # 4. Create Board Payload
             payload = {
                 "name": name,
                 "projects": [{"id": project_id, "$type": "Project"}],
@@ -608,8 +635,19 @@ class YouTrackActuator:
                     "$type": "ColumnSettings",
                     "field": {"id": field_id, "$type": "CustomField"}
                 },
+                "sprintsSettings": {
+                    "disableSprints": disable_sprints,
+                    "$type": "SprintsSettings"
+                },
                 "$type": "Agile"
             }
+            
+            # Add visibility if groups were resolved
+            if permitted_groups:
+                payload["readSharingSettings"] = {
+                    "permittedGroups": permitted_groups,
+                    "$type": "AgileSharingSettings"
+                }
             
             resp = self.session.post(
                 f'{self.url}/api/agiles',
@@ -623,12 +661,61 @@ class YouTrackActuator:
             board_id = data.get('id')
             
             logger.info(f"Created Agile Board '{name}' (id={board_id})")
+            
+            # 5. Add columns after creation
+            if columns:
+                for col_name in columns:
+                    col_payload = {
+                        'presentation': col_name,
+                        'fieldValues': [{'name': col_name, '$type': 'AgileColumnFieldValue'}],
+                        '$type': 'AgileColumn'
+                    }
+                    resp = self.session.post(
+                        f'{self.url}/api/agiles/{board_id}/columnSettings/columns',
+                        json=col_payload,
+                        params={'fields': 'id,presentation'}
+                    )
+                    if resp.status_code == 200:
+                        logger.debug(f"Added column '{col_name}' to board {board_id}")
+                    else:
+                        logger.warning(f"Failed to add column '{col_name}': {resp.status_code}")
+            
+            # 6. Set swimlane field if specified
+            if swimlane_field:
+                # Resolve swimlane field ID
+                swim_field_id = None
+                for f in fields:
+                    if f.get('name') == swimlane_field:
+                        swim_field_id = f['id']
+                        break
+                
+                if swim_field_id:
+                    swim_payload = {
+                        'swimlaneSettings': {
+                            'enabled': True,
+                            'field': {'id': swim_field_id, '$type': 'CustomField'},
+                            '$type': 'FieldBasedSwimlaneSettings'
+                        }
+                    }
+                    resp = self.session.post(
+                        f'{self.url}/api/agiles/{board_id}',
+                        json=swim_payload,
+                        params={'fields': 'id,swimlaneSettings(field(name))'}
+                    )
+                    if resp.status_code == 200:
+                        logger.debug(f"Set swimlane field to '{swimlane_field}'")
+                    else:
+                        logger.warning(f"Failed to set swimlane: {resp.status_code}")
+                else:
+                    logger.warning(f"Swimlane field '{swimlane_field}' not found")
+            
             return ActionResult(action=action, success=True, resource_id=board_id)
             
         except Exception as e:
             error = f"Failed to create board: {e}"
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
+
 
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
@@ -748,7 +835,49 @@ class YouTrackActuator:
             # Agile Board operations
             elif action_type == 'create_agile_board':
                 # create_agile_board(Name, ProjShortName, ColField)
-                result = self.create_agile_board(args[0], args[1], args[2])
+                board_name = args[0]
+                # Query Prolog for additional board settings
+                try:
+                    import janus_swi as janus
+                    
+                    # Get sprints setting (default to disable if not specified)
+                    disable_sprints = True
+                    sprint_res = list(janus.query(f"target_board_sprints('{board_name}', DisableSprints)"))
+                    if sprint_res:
+                        disable_sprints = sprint_res[0]['DisableSprints'] == 'true'
+                    
+                    # Get visibility groups
+                    visible_to = []
+                    vis_res = list(janus.query(f"target_board_visibility('{board_name}', GroupName)"))
+                    for r in vis_res:
+                        visible_to.append(r['GroupName'])
+                    
+                    # Get columns
+                    columns = []
+                    col_res = list(janus.query(f"target_board_column('{board_name}', ColName)"))
+                    for r in col_res:
+                        columns.append(r['ColName'])
+                    
+                    # Get swimlane field
+                    swimlane_field = None
+                    swim_res = list(janus.query(f"target_board_swimlane('{board_name}', FieldName)"))
+                    if swim_res:
+                        swimlane_field = swim_res[0]['FieldName']
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to query board config: {e}")
+                    disable_sprints = True
+                    visible_to = ['All Users']
+                    columns = []
+                    swimlane_field = None
+                
+                result = self.create_agile_board(
+                    args[0], args[1], args[2],
+                    disable_sprints=disable_sprints,
+                    visible_to=visible_to if visible_to else ['All Users'],
+                    columns=columns if columns else None,
+                    swimlane_field=swimlane_field
+                )
             # Workflow operations
             elif action_type == 'create_workflow':
                 # create_workflow(Name, Title)

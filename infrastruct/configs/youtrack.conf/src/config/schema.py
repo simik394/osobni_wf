@@ -75,16 +75,46 @@ class WorkflowConfig(BaseModel):
     )
 
 
+class SprintSettings(BaseModel):
+    """Sprint settings for an Agile Board."""
+    enabled: bool = Field(default=False, description="Enable sprints (False = show all issues)")
+
+
 class AgileBoardConfig(BaseModel):
     """Configuration for an Agile Board."""
     name: str = Field(description="Board name")
     projects: list[str] = Field(default_factory=list, description="Project shortNames to include")
     column_field: str = Field(default="State", description="Custom field to use for columns")
     
+    # Sprint settings
+    sprints: SprintSettings = Field(
+        default_factory=lambda: SprintSettings(enabled=False),
+        description="Sprint configuration"
+    )
+    
+    # Visibility - list of group names
+    visible_to: list[str] = Field(
+        default_factory=lambda: ["All Users"],
+        description="Group names that can view the board"
+    )
+    
+    # Columns - list of column names (auto-created if not specified)
+    columns: list[str] = Field(
+        default_factory=list,
+        description="Column names to create (empty = use all field values)"
+    )
+    
+    # Swimlane field
+    swimlane_field: Optional[str] = Field(
+        default=None,
+        description="Custom field to use for swimlanes (e.g., 'Subsystem')"
+    )
+    
     state: Literal['present', 'absent'] = Field(
         default='present',
         description="Set to 'absent' to delete this board"
     )
+
 
 
 class ProjectConfig(BaseModel):

@@ -50,8 +50,12 @@
 :- dynamic target_rule/4.
 :- dynamic target_workflow_attachment/2.
 :- dynamic target_field_default/3.      %% target_field_default(FieldName, DefaultValue, Project)
-:- dynamic target_board/3.            %% target_board(Name, ColumnFieldName, MainProject)
-:- dynamic target_board_project/2.    %% target_board_project(BoardName, ProjectShortName)
+:- dynamic target_board/3.              %% target_board(Name, ColumnFieldName, MainProject)
+:- dynamic target_board_project/2.      %% target_board_project(BoardName, ProjectShortName)
+:- dynamic target_board_sprints/2.      %% target_board_sprints(BoardName, DisableSprints)
+:- dynamic target_board_visibility/2.   %% target_board_visibility(BoardName, GroupName)
+:- dynamic target_board_column/2.       %% target_board_column(BoardName, ColumnName)
+:- dynamic target_board_swimlane/2.     %% target_board_swimlane(BoardName, FieldName)
 
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.

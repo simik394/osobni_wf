@@ -6,30 +6,6 @@ project:
   shortName: DEMO
   leader: admin
 
-boards:
-  - name: "Demo Agile Board"
-    column_field: "State"
-    sprints:
-      enabled: false
-    visible_to:
-      - "All Users"
-    columns:
-      - "To do"
-      - "In Progress"
-      - "Done"
-    swimlane_field: "Subsystem"
-
-  - name: "Sprint Board 2026"
-    column_field: "State"
-    sprints:
-      enabled: false
-    visible_to:
-      - "All Users"
-    columns:
-      - "To do"
-      - "In Progress"
-      - "Done"
-
 fields:
   # State field for issue workflow
   - name: State
@@ -47,7 +23,6 @@ fields:
   - name: Priority
     type: enum
     bundle: PriorityBundle
-    default_value: Medium
     values:
       - Critical
       - High
