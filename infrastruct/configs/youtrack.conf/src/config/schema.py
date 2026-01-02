@@ -4,7 +4,7 @@ Pydantic schema for YouTrack project configuration.
 This allows users to define their YouTrack configuration in YAML
 instead of raw Prolog facts.
 """
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -98,10 +98,10 @@ class AgileBoardConfig(BaseModel):
         description="Group names that can view the board"
     )
     
-    # Columns - list of column names (auto-created if not specified)
-    columns: list[str] = Field(
+    # Columns - list of column names or detailed config with WIP limits
+    columns: list[Union[str, 'ColumnConfig']] = Field(
         default_factory=list,
-        description="Column names to create (empty = use all field values)"
+        description="Column names or column configs with WIP limits"
     )
     
     # Swimlane field
@@ -119,6 +119,13 @@ class AgileBoardConfig(BaseModel):
         default=None,
         description="Configuration for card color coding"
     )
+
+
+class ColumnConfig(BaseModel):
+    """Configuration for a board column with WIP limits."""
+    name: str = Field(description="Column name (must match a field value)")
+    min_wip: Optional[int] = Field(default=None, description="Minimum cards in column")
+    max_wip: Optional[int] = Field(default=None, description="Maximum cards in column")
 
 
 class ColorCodingConfig(BaseModel):

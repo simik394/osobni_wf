@@ -768,7 +768,8 @@ class YouTrackActuator:
                            columns: list[str] = None,
                            swimlane_field: str = None,
                            projects: list[str] = None,
-                           color_coding: dict = None) -> ActionResult:
+                           color_coding: dict = None,
+                           column_wip_limits: list[dict] = None) -> ActionResult:
         """
         Update agile board.
         
@@ -909,6 +910,27 @@ class YouTrackActuator:
                 
                 self.session.post(f'{self.url}/api/agiles/{board_id}', json=payload).raise_for_status()
                 logger.debug(f"Updated color coding for {board_id}")
+
+            # 7. Update Column WIP Limits
+            if column_wip_limits:
+                # Get current columns to resolve IDs
+                resp = self.session.get(f'{self.url}/api/agiles/{board_id}/columnSettings/columns', params={'fields': 'id,presentation'})
+                if resp.status_code == 200:
+                    col_id_map = {c.get('presentation'): c.get('id') for c in resp.json()}
+                    
+                    for wip_cfg in column_wip_limits:
+                        col_name = wip_cfg.get('name')
+                        col_id = col_id_map.get(col_name)
+                        if col_id:
+                            wip_payload = {
+                                'wipLimit': {
+                                    'min': wip_cfg.get('min'),
+                                    'max': wip_cfg.get('max'),
+                                    '$type': 'WIPLimit'
+                                }
+                            }
+                            self.session.post(f'{self.url}/api/agiles/{board_id}/columnSettings/columns/{col_id}', json=wip_payload).raise_for_status()
+                            logger.debug(f"Updated WIP limit for column '{col_name}' (min={wip_cfg.get('min')}, max={wip_cfg.get('max')})")
 
             logger.info(f"Updated Agile Board '{name}' (id={board_id})")
             return ActionResult(action=action, success=True, resource_id=board_id)
@@ -1149,6 +1171,16 @@ class YouTrackActuator:
                         if mode == 'field' and field != 'null':
                             color_coding['field'] = field
                         
+                    # Get column WIP limits
+                    column_wip_limits = []
+                    wip_res = list(janus.query(f"target_board_column_wip('{board_name}', ColName, Min, Max)"))
+                    for r in wip_res:
+                        column_wip_limits.append({
+                            'name': r['ColName'],
+                            'min': None if r['Min'] == 'null' else r['Min'],
+                            'max': None if r['Max'] == 'null' else r['Max']
+                        })
+                        
                 except Exception as e:
                     logger.warning(f"Failed to query board config for update: {e}")
                     disable_sprints = None 
@@ -1157,6 +1189,7 @@ class YouTrackActuator:
                     swimlane_field = None
                     projects = None
                     color_coding = None
+                    column_wip_limits = None
                     
                 result = self.update_agile_board(
                     board_name, board_id,
@@ -1165,7 +1198,8 @@ class YouTrackActuator:
                     columns=columns,
                     swimlane_field=swimlane_field,
                     projects=projects,
-                    color_coding=color_coding
+                    color_coding=color_coding,
+                    column_wip_limits=column_wip_limits
                 )
             elif action_type == 'delete_agile_board':
                 # delete_agile_board(BoardId)

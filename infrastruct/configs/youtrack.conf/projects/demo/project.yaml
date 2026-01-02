@@ -15,7 +15,8 @@ boards:
       - "All Users"
     columns:
       - "To do"
-      - "In Progress"
+      - name: "In Progress"
+        max_wip: 3
       - "Done"
     swimlane_field: "Subsystem"
     color_coding:

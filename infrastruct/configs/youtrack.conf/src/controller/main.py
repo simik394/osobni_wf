@@ -67,7 +67,7 @@ class YouTrackClient:
         """Fetch all Agile Boards with full configuration."""
         resp = self.session.get(
             f'{self.url}/api/agiles',
-            params={'fields': 'id,name,projects(shortName),columnSettings(field(id),columns(presentation)),sprintsSettings(disableSprints),readSharingSettings(permittedGroups(name)),swimlaneSettings(field(name)),colorCoding(prototype(name))'}
+            params={'fields': 'id,name,projects(shortName),columnSettings(field(id),columns(presentation,wipLimit(min,max))),sprintsSettings(disableSprints),readSharingSettings(permittedGroups(name)),swimlaneSettings(field(name)),colorCoding(prototype(name))'}
         )
         resp.raise_for_status()
         return resp.json()

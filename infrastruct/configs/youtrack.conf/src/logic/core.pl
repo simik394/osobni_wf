@@ -59,6 +59,8 @@
 :- dynamic curr_board_swimlane/2.
 :- dynamic target_board_color_coding/3.
 :- dynamic curr_board_color_coding/3.
+:- dynamic target_board_column_wip/4.  %% target_board_column_wip(BoardName, ColumnName, Min, Max)
+:- dynamic curr_board_column_wip/4.    %% curr_board_column_wip(BoardId, ColumnName, Min, Max)
 
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
@@ -214,7 +216,8 @@ drifted_board(Name, Id) :-
         drifted_board_visibility(Name, Id);
         drifted_board_columns(Name, Id);
         drifted_board_swimlane(Name, Id);
-        drifted_board_color_coding(Name, Id)
+        drifted_board_color_coding(Name, Id);
+        drifted_board_column_wip(Name, Id)
     ).
 
 drifted_board_projects(Name, Id) :-
@@ -241,6 +244,10 @@ drifted_board_swimlane(Name, Id) :-
 drifted_board_color_coding(Name, Id) :-
     target_board_color_coding(Name, Mode, Field),
     \+ curr_board_color_coding(Id, Mode, Field).
+
+drifted_board_column_wip(Name, Id) :-
+    target_board_column_wip(Name, ColName, TargetMin, TargetMax),
+    \+ curr_board_column_wip(Id, ColName, TargetMin, TargetMax).
 
 %% Plan Action: Create Board
 action(create_agile_board(Name, MainProject, ColField)) :-

@@ -249,11 +249,20 @@ class PrologInferenceEngine:
                     g_name = self._escape(group.get('name', ''))
                     janus.query_once(f"assertz(curr_board_visibility('{bid}', '{g_name}'))")
                     
-                # Columns
+                # Columns (including WIP limits)
                 columns = col_settings.get('columns', [])
                 for col in columns:
                     c_name = self._escape(col.get('presentation', ''))
                     janus.query_once(f"assertz(curr_board_column('{bid}', '{c_name}'))")
+                    
+                    # Check for WIP limits
+                    wip_limit = col.get('wipLimit')
+                    if wip_limit:
+                        min_val = wip_limit.get('min')
+                        max_val = wip_limit.get('max')
+                        min_str = min_val if min_val is not None else 'null'
+                        max_str = max_val if max_val is not None else 'null'
+                        janus.query_once(f"assertz(curr_board_column_wip('{bid}', '{c_name}', {min_str}, {max_str}))")
 
                 # Swimlanes
                 swim_settings = board.get('swimlaneSettings') or {}

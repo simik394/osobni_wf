@@ -214,10 +214,19 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
         g_name = escape_prolog_string(group)
         yield f"target_board_visibility('{name}', '{g_name}')."
     
-    # Columns - explicit column names
+    # Columns - explicit column names (supports both string and ColumnConfig)
     for col in board.columns:
-        col_name = escape_prolog_string(col)
-        yield f"target_board_column('{name}', '{col_name}')."
+        if isinstance(col, str):
+            col_name = escape_prolog_string(col)
+            yield f"target_board_column('{name}', '{col_name}')."
+        else:
+            # ColumnConfig object with WIP limits
+            col_name = escape_prolog_string(col.name)
+            yield f"target_board_column('{name}', '{col_name}')."
+            if col.min_wip is not None or col.max_wip is not None:
+                min_val = col.min_wip if col.min_wip is not None else 'null'
+                max_val = col.max_wip if col.max_wip is not None else 'null'
+                yield f"target_board_column_wip('{name}', '{col_name}', {min_val}, {max_val})."
         
     # Swimlane settings
     if board.swimlane_field:
