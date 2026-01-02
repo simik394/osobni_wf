@@ -261,6 +261,74 @@ class WorkflowClient:
             logger.error(f"Failed to delete workflow: {e}")
             return WorkflowResult(action=action, success=False, error=str(e))
     
+    def update_workflow_manifest(
+        self, workflow_id: str, 
+        name: Optional[str] = None, 
+        title: Optional[str] = None,
+        version: Optional[str] = None,
+        vendor_name: Optional[str] = None
+    ) -> WorkflowResult:
+        """
+        Update workflow metadata (manifest).
+        
+        Args:
+            workflow_id: Workflow ID to update
+            name: New internal name (optional)
+            title: New human-readable title (optional)
+            version: Version string, e.g., "0.0.2" (optional)
+            vendor_name: Vendor/author name (optional)
+        
+        Returns:
+            WorkflowResult on success
+        """
+        action = f"update_workflow_manifest({workflow_id})"
+        
+        if self.dry_run:
+            logger.info(f"[DRY-RUN] {action}")
+            return WorkflowResult(action=action, success=True, workflow_id=workflow_id)
+        
+        # Build manifest JSON content
+        manifest = {}
+        if name:
+            manifest['name'] = name
+        if title:
+            manifest['title'] = title
+        if version:
+            manifest['version'] = version
+        if vendor_name:
+            manifest['vendor'] = {'name': vendor_name}
+        
+        if not manifest:
+            logger.warning(f"update_workflow_manifest called with no changes")
+            return WorkflowResult(action=action, success=True, workflow_id=workflow_id)
+        
+        # Encode manifest as JSON string for manifestFile.content
+        import json
+        manifest_content = json.dumps(manifest, indent=2)
+        
+        try:
+            resp = self.session.post(
+                f'{self.url}/api/admin/workflows/{workflow_id}',
+                json={
+                    'id': workflow_id,
+                    'manifestFile': {'content': manifest_content}
+                },
+                params={'fields': 'id,name,title'}
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            
+            logger.info(f"Updated workflow manifest for {workflow_id}")
+            return WorkflowResult(action=action, success=True, workflow_id=data.get('id'))
+            
+        except requests.HTTPError as e:
+            error = f"HTTP {e.response.status_code}: {e.response.text}"
+            logger.error(f"Failed to update workflow manifest: {error}")
+            return WorkflowResult(action=action, success=False, error=error)
+        except Exception as e:
+            logger.error(f"Failed to update workflow manifest: {e}")
+            return WorkflowResult(action=action, success=False, error=str(e))
+    
     # =========================================================================
     # PROJECT ATTACHMENT
     # =========================================================================
