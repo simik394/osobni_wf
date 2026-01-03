@@ -1,0 +1,14 @@
+project:
+  name: "YouTrack IaC"
+  shortName: YTIAC
+  leader: admin
+  template: std-agent-v1
+  description: "Prolog-based YouTrack configuration management and scaling tools."
+
+boards:
+  - name: "YTIAC Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"

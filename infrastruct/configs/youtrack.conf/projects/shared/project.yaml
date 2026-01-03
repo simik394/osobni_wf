@@ -1,0 +1,14 @@
+project:
+  name: "Shared Agent Library"
+  shortName: SHARED
+  leader: admin
+  template: std-agent-v1
+  description: "Common TypeScript library for Nomad, FalkorDB, and service discovery."
+
+boards:
+  - name: "SHARED Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"

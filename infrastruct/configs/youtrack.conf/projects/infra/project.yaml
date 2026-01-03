@@ -1,0 +1,14 @@
+project:
+  name: "Infrastructure Stack"
+  shortName: INFRA
+  leader: admin
+  template: std-agent-v1
+  description: "Nomad, Consul, Vault, Traefik deployment and Ansible playbooks."
+
+boards:
+  - name: "INFRA Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"

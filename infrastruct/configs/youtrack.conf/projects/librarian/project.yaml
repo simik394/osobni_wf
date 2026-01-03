@@ -1,0 +1,15 @@
+project:
+  name: "Vault Librarian"
+  shortName: LIBR
+  leader: admin
+  template: std-agent-v1
+  description: "Omniscient vault indexer, FalkorDB integration, and Obsidian tools."
+
+boards:
+  - name: "LIBR Board"
+    column_field: "State"
+    columns:
+      - "To do"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: LIBR #Unresolved"

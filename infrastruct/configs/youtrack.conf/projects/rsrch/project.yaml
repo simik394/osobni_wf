@@ -1,0 +1,21 @@
+project:
+  name: "Research Agent"
+  shortName: RSRCH
+  leader: admin
+  template: std-agent-v1
+  description: "NotebookLM & Gemini automation, API server, and deep research capabilities."
+
+boards:
+  - name: "RSRCH Board"
+    column_field: "State"
+    sprints:
+      enabled: true
+    columns:
+      - "Open"
+      - "Ready"
+      - name: "In Progress"
+        max_wip: 5
+      - "Review"
+      - "Done"
+    swimlane_field: "Layer"
+    backlog_query: "project: RSRCH State: Open #Unresolved"

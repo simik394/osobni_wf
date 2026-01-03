@@ -1,0 +1,15 @@
+project:
+  name: "Antigravity Scraper"
+  shortName: ANGRAV
+  leader: admin
+  template: std-agent-v1
+  description: "Playwright-based session scraper for Antigravity."
+
+boards:
+  - name: "ANGRAV Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: ANGRAV #Unresolved"

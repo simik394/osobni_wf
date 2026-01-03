@@ -1,0 +1,14 @@
+project:
+  name: "Flows & Processes"
+  shortName: FLOWS
+  leader: admin
+  template: std-agent-v1
+  description: "Process documentation, workflow definitions, and knowledge base."
+
+boards:
+  - name: "FLOWS Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
