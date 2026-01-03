@@ -278,3 +278,18 @@ consul catalog nodes -service rsrch-browser
                        │            "rsrch-browser"  │
                        └─────────────────────────────┘
 ```
+
+## OpenWebUI Configuration
+
+OpenWebUI is deployed as a single service connecting to both agents.
+
+- **Nomad Job**: `/opt/nomad/jobs/openwebui.nomad.hcl`
+- **Backends**: Configured via `OPENAI_API_BASE_URLS` environment variable.
+  - `http://localhost:3030/v1` (rsrch)
+  - `http://localhost:3031/v1` (angrav)
+
+To update:
+1. Edit `infrastruct/nomad_stack/nomad/jobs/openwebui.nomad.hcl`
+2. Copy to cloud: `scp infrastruct/nomad_stack/nomad/jobs/openwebui.nomad.hcl halvarm:/opt/nomad/jobs/`
+3. Run: `ssh halvarm "nomad job run /opt/nomad/jobs/openwebui.nomad.hcl"`
+
