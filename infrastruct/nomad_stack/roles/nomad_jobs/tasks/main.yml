@@ -34,17 +34,6 @@
     group: 1000
     mode: "0750"
 
-- name: Create Memgraph data directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  loop:
-    - /opt/memgraph/data
-    - /opt/memgraph/log
-
 - name: Create Obsidian data directories with correct permissions (UID 1000)
   ansible.builtin.file:
     path: "{{ item }}"
@@ -132,6 +121,17 @@
     group: 1000
     mode: "0600"
 
+# Browser jobs are NOT started automatically - they're on-demand
+# Use Windmill's start-browser.ts or: nomad job run /opt/nomad/jobs/rsrch-browser.nomad.hcl
+
+- name: Create FalkorDB data directory
+  ansible.builtin.file:
+    path: /opt/falkor/data
+    state: directory
+    owner: 999
+    group: 999
+    mode: "0750"
+
 - name: Copy Nomad job templates
   ansible.builtin.template:
     src: "{{ item }}"
@@ -146,7 +146,7 @@
     - rsrch-browser.nomad.hcl.j2
     - angrav-browser.nomad.hcl.j2
     - rsrch.nomad.hcl.j2
-    - memgraph.nomad.hcl.j2
+    - falkor.nomad.hcl.j2
     - goose.nomad.hcl.j2
 
 - name: Run Traefik
@@ -185,8 +185,8 @@
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false
 
-- name: Run Memgraph
-  ansible.builtin.command: nomad job run /opt/nomad/jobs/memgraph.nomad.hcl
+- name: Run FalkorDB
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/falkor.nomad.hcl
   environment:
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false
