@@ -1,0 +1,22 @@
+project:
+  name: "PWF Roadmap"
+  shortName: ROADMAP
+  description: "Meta-project for high-level initiatives and Epics. Parent to all agent/infra tasks."
+  leader: admin
+  template: std-agent-v1 # Uses standard fields even for roadmap items
+
+boards:
+  - name: "Strategic View"
+    column_field: "State"
+    swimlane_field: "Layer" # Swimlanes by Arch Layer (Agent, Infra, etc)
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: ROADMAP #Unresolved"
+
+fields:
+  # Epics often need a "Due Quarter" instead of specific dates
+  - name: "Target Quarter"
+    type: enum
+    values: ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"]

@@ -1,0 +1,63 @@
+job "falkor" {
+  datacenters = ["{{ nomad_datacenter | default("oci-eu") }}"]
+  type        = "service"
+
+  group "server" {
+    count = 1
+
+    network {
+      mode = "host"
+      port "db" {
+        static = 6379
+      }
+    }
+
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
+    }
+
+    task "falkor" {
+      driver = "docker"
+
+      config {
+        image = "falkordb/falkordb:latest"
+        network_mode = "host"
+        args = [
+          "--save", "60", "1",
+          "--loglevel", "notice"
+        ]
+        mounts = [
+            {
+                type     = "bind"
+                target   = "/data"
+                source   = "/opt/falkor/data"
+                readonly = false
+            }
+        ]
+      }
+
+      resources {
+        cpu    = 500
+        memory = 1024
+      }
+
+      service {
+        name = "falkor"
+        port = "db"
+        tags = [
+          "falkor",
+          "db",
+          "traefik.enable=false"
+        ]
+
+        check {
+          name     = "redis-alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}

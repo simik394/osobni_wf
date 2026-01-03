@@ -13,6 +13,7 @@ from .schema import (
     ProjectConfig, YouTrackConfig, FieldConfig, BundleValueConfig,
     WorkflowConfig, WorkflowRuleConfig
 )
+from .templates import TemplateExpander
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +52,16 @@ def load_config(path: Union[str, Path], base_path: Optional[Path] = None) -> You
                 project_data['workflows'], base_path
             )
         
-        return YouTrackConfig(
+        config = YouTrackConfig(
             projects=[ProjectConfig(**project_data)],
             bundles=data.get('bundles'),
             workflows=_resolve_workflow_scripts(data.get('workflows', []), base_path) or None,
             tags=data.get('tags'),
             saved_queries=data.get('saved_queries')
         )
+        # Apply templates
+        config.projects = [TemplateExpander.expand(p) for p in config.projects]
+        return config
     
     # Multi-project format
     config_data = data.copy()
@@ -76,7 +80,10 @@ def load_config(path: Union[str, Path], base_path: Optional[Path] = None) -> You
                     project['workflows'], base_path
                 )
     
-    return YouTrackConfig(**config_data)
+    config = YouTrackConfig(**config_data)
+    # Apply templates
+    config.projects = [TemplateExpander.expand(p) for p in config.projects]
+    return config
 
 
 def _resolve_workflow_scripts(workflows: list[dict], base_path: Path) -> list[dict]:

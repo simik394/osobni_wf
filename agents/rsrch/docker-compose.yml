@@ -1,11 +1,11 @@
-version: '3.8'
+version: "3.8"
 
 services:
   chromium:
     build: ./browser
     ports:
       - "5900:5900"
-      - "3002:3000"
+      - "3005:3000"
       - "9223:9223" # CDP port (socat proxy)
     ipc: host
     volumes:
@@ -15,7 +15,9 @@ services:
     restart: unless-stopped
 
   perplexity-server:
-    build: .
+    build:
+      context: ..
+      dockerfile: rsrch/Dockerfile
     image: perplexity-researcher:latest
     container_name: perplexity-server
     ports:

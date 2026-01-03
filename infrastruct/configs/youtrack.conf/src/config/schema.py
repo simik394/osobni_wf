@@ -201,6 +201,10 @@ class ProjectConfig(BaseModel):
     name: str = Field(description="Full project name")
     short_name: str = Field(alias="shortName", description="Short name for issue IDs (e.g., 'DEMO')")
     leader: Optional[str] = Field(default=None, description="Leader username or ID")
+    template: Optional[str] = Field(
+        default=None, 
+        description="Name of a standard template to apply (e.g., 'std-agent-v1')"
+    )
     fields: list[FieldConfig] = Field(default_factory=list)
     workflows: list[WorkflowConfig] = Field(default_factory=list)
     boards: list[AgileBoardConfig] = Field(default_factory=list, description="Agile boards for this project")

@@ -5,6 +5,7 @@ project:
   name: Demo Project
   shortName: DEMO
   leader: admin
+  template: std-agent-v1
 
 boards:
   - name: "Demo Agile Board"
@@ -58,10 +59,6 @@ fields:
       - High
       - Medium
       - Low
-  #
-  # Estimated time
-  - name: Estimation
-    type: period
 
 workflows:
   - name: auto-tag-urgent

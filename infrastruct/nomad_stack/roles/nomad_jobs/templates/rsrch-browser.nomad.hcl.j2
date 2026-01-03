@@ -40,6 +40,9 @@ job "rsrch-browser" {
         SE_NODE_MAX_SESSIONS = "5"
         VNC_NO_PASSWORD      = "1"
         START_XVFB           = "true"
+        SE_SCREEN_WIDTH      = "1920"
+        SE_SCREEN_HEIGHT     = "1080"
+        SE_SCREEN_DEPTH      = "24"
       }
 
       resources {
@@ -80,14 +83,14 @@ job "rsrch-browser" {
       service {
         name         = "rsrch-browser-cdp"
         port         = 9223
-        address_mode = "host"
+        address_mode = "driver"
         tags         = ["browser", "cdp", "rsrch"]
         
         check {
           name         = "cdp-health"
           type         = "http"
           path         = "/json/version"
-          address_mode = "host"
+          address_mode = "driver"
           interval     = "30s"
           timeout      = "10s"
         }
