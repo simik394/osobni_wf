@@ -28,11 +28,21 @@ else
     echo "⚠️  Policy file not found at $POLICY_FILE"
 fi
 
+# Check for auto mode
+if [ "$1" = "--auto" ] && [ -f .tokens.env ]; then
+    echo "🤖 Auto-mode: Loading tokens from .tokens.env"
+    source .tokens.env
+fi
+
 # Prompt for Windmill token
 echo ""
 echo "🌀 Windmill Token Setup"
-echo "   Get your token from: http://windmill.100.73.45.27.nip.io/user/settings/tokens"
-read -p "   Enter WINDMILL_TOKEN (or press Enter to skip): " WINDMILL_TOKEN
+if [ -z "$WINDMILL_TOKEN" ]; then
+    echo "   Get your token from: http://windmill.100.73.45.27.nip.io/user/settings/tokens"
+    read -p "   Enter WINDMILL_TOKEN (or press Enter to skip): " WINDMILL_TOKEN
+else
+    echo "   Using pre-fetched WINDMILL_TOKEN"
+fi
 
 if [ -n "$WINDMILL_TOKEN" ]; then
     vault kv put secret/agents/windmill token="$WINDMILL_TOKEN"
@@ -44,8 +54,12 @@ fi
 # Prompt for Langfuse keys
 echo ""
 echo "📊 Langfuse Keys Setup"
-read -p "   Enter LANGFUSE_PUBLIC_KEY (or press Enter to skip): " LANGFUSE_PUBLIC_KEY
-read -p "   Enter LANGFUSE_SECRET_KEY (or press Enter to skip): " LANGFUSE_SECRET_KEY
+if [ -z "$LANGFUSE_PUBLIC_KEY" ]; then
+    read -p "   Enter LANGFUSE_PUBLIC_KEY (or press Enter to skip): " LANGFUSE_PUBLIC_KEY
+fi
+if [ -z "$LANGFUSE_SECRET_KEY" ]; then
+    read -p "   Enter LANGFUSE_SECRET_KEY (or press Enter to skip): " LANGFUSE_SECRET_KEY
+fi
 
 if [ -n "$LANGFUSE_PUBLIC_KEY" ] && [ -n "$LANGFUSE_SECRET_KEY" ]; then
     vault kv put secret/agents/langfuse \
