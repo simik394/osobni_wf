@@ -19,3 +19,13 @@ export type {
     SpanHandle,
     GenerationHandle
 } from './telemetry';
+
+// Windmill Proxy
+export {
+    createWindmillProxyMiddleware,
+    proxyChatCompletion,
+    shouldBypass,
+    isWindmillProxyEnabled,
+    runWindmillJob
+} from './windmill-proxy';
+export type { WindmillConfig, ChatCompletionRequest } from './windmill-proxy';

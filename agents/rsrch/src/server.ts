@@ -9,13 +9,17 @@ import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
 
-// Optional FalkorDB import (may not be available in Docker)
+// Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
+let shouldBypass: (headers: any) => boolean = () => false;
+let proxyChatCompletion: any = null;
 try {
     const shared = require('@agents/shared');
     getFalkorClient = shared.getFalkorClient;
+    shouldBypass = shared.shouldBypass || (() => false);
+    proxyChatCompletion = shared.proxyChatCompletion;
 } catch (e) {
-    console.log('[Server] @agents/shared not available, FalkorDB logging disabled');
+    console.log('[Server] @agents/shared not available, FalkorDB/Windmill logging disabled');
     getFalkorClient = () => ({
         findSession: async () => null,
         logInteraction: async () => { }
@@ -493,6 +497,18 @@ app.get('/v1/models/:modelId', (req, res) => {
 app.post('/v1/chat/completions', async (req, res) => {
     try {
         const request = req.body as ChatCompletionRequest;
+
+        // Windmill proxy check - route through Windmill unless bypassed
+        if (proxyChatCompletion && process.env.WINDMILL_TOKEN && !shouldBypass(req.headers)) {
+            console.log('[Server] Routing through Windmill proxy...');
+            try {
+                const result = await proxyChatCompletion('rsrch', request);
+                return res.json(result);
+            } catch (windmillError: any) {
+                console.error('[Server] Windmill proxy failed:', windmillError.message);
+                // Fall through to direct execution on Windmill failure
+            }
+        }
 
         // Validate request
         if (!request.messages || !Array.isArray(request.messages)) {
