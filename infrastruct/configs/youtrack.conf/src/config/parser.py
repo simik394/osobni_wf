@@ -140,10 +140,10 @@ def load_configs_from_dir(directory: Union[str, Path]) -> list[YouTrackConfig]:
     directory = Path(directory)
     configs = []
     
-    for path in directory.glob('*.yaml'):
+    for path in directory.rglob('*.yaml'):
         configs.append(load_config(path, base_path=path.parent))
     
-    for path in directory.glob('*.yml'):
+    for path in directory.rglob('*.yml'):
         configs.append(load_config(path, base_path=path.parent))
     
     return configs
