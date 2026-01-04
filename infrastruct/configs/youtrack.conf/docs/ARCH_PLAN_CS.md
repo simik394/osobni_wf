@@ -4,7 +4,7 @@ Tento report představuje vyčerpávající architektonickou analýzu a implemen
 Cílem je navrhnout robustní systém založený na logickém programování (Logic Programming - LP), který posune paradigma od imperativního skriptování ("pokud neexistuje X, vytvoř X") k deklarativnímu vyvozování ("systém musí splňovat axiomy Y"). Report analyzuje dvě hlavní varianty řešení:
 1. Varianta A (Rekurzivní inferenční engine): Využití SWI-Prolog ve spojení s knihovnou Janus pro obousměrnou integraci s Pythonem. Tato varianta sází na flexibilitu unifikace a schopnost introspekce.
 2. Varianta B (Optimalizační engine omezení): Využití Answer Set Programming (ASP) a řešiče Clingo s Python ORM knihovnou Clorm. Tato varianta, inspirovaná balíčkovacím manažerem Spack, rámuje konfiguraci jako NP-těžký problém splnitelnosti podmínek (SAT) s globální optimalizací.
-Analýza je zasazena do kontextu moderního technologického stacku zahrnujícího Obsidian jako znalostní bázi a UI pro definici pravidel, n8n pro orchestraci workflow a HashiCorp Nomad pro efektivní a flexibilní exekuci logických jader.
+Analýza je zasazena do kontextu moderního technologického stacku zahrnujícího Obsidian jako znalostní bázi a UI pro definici pravidel, Windmill pro orchestraci workflow a HashiCorp Nomad pro efektivní a flexibilní exekuci logických jader.
 ________________
 2. Anatomie problému: Krize komplexity v konfiguraci YouTrack
 Pro pochopení nutnosti radikální změny paradigmatu je nezbytné detailně analyzovat specifika konfiguračního prostoru JetBrains YouTrack. Na rozdíl od "plochých" API pro správu cloudových instancí, YouTrack představuje systém s "hlubokým schématem" (Deep Schema), kde entity nejsou izolované, ale tvoří hustou síť sémantických závislostí.
@@ -28,19 +28,19 @@ Práce s YouTrack REST API přináší specifická technická rizika, která mus
 * Rozlišení Bundle typů: API rozlišuje mezi EnumBundle, StateBundle, UserBundle atd. Záměna ID nebo typu vede k chybám, které jsou v JSONu těžko čitelné, ale v silně typovaném logickém modelu (Clorm/Prolog) jsou odhalitelné při kompilaci.
 ________________
 3. Metodologie a Nástrojový Ekosystém
-Pro úspěšnou implementaci "Logic-Driven Infrastructure" nestačí pouze vybrat logický jazyk. Je nutné integrovat celý ekosystém nástrojů, které uživatel již ovládá (Obsidian, n8n, Nomad), do soudržného celku.
+Pro úspěšnou implementaci "Logic-Driven Infrastructure" nestačí pouze vybrat logický jazyk. Je nutné integrovat celý ekosystém nástrojů, které uživatel již ovládá (Obsidian, Windmill, Nomad), do soudržného celku.
 3.1 Znalostní báze: Obsidian jako IDE pro logiku
 Obsidian nebude sloužit pouze pro psaní poznámek, ale stane se primárním rozhraním pro definici konfiguračních pravidel (Input Interface).
 * Mechanismus: Uživatel definuje pravidla v Markdown souborech s využitím YAML frontmatter pro statická fakta a code blocků pro dynamická pravidla.
 * Integrace: Pomocí Python skriptů (využívajících knihovnu python-frontmatter) a regulárních výrazů bude obsah vaultu parsován a transformován do vstupních souborů pro logický solver (.pl nebo .lp).
 * Vizualizace: Grafové zobrazení v Obsidianu bude využito pro vizualizaci závislostí mezi entitami (projekt -> pole -> bundle) ještě před nasazením, což umožní vizuální kontrolu komplexity.
-3.2 Orchestrace: n8n jako nervové centrum
-n8n převezme roli orchestrátora, který řídí tok dat mezi Gitem (kde jsou uložena pravidla), YouTrack API a Nomad joby.
+3.2 Orchestrace: Windmill jako nervové centrum
+Windmill převezme roli orchestrátora, který řídí tok dat mezi Gitem (kde jsou uložena pravidla), YouTrack API a Nomad joby.
 * Workflow Design:
    1. Trigger: Webhook z Git repozitáře (při pushi do main) nebo plánovač (Schedule) pro detekci driftu.
-   2. Submission: n8n sestaví Nomad job specifikaci (HCL/JSON) a odešle ji do Nomad API.
-   3. Wait & Poll: n8n využije "Wait" node nebo polling loop k dotazování Nomad API na stav jobu (Allocation Status). Nomad je pro batch joby ideální, protože po dokončení kontejneru automaticky reportuje exit code.
-   4. Result Retrieval: Po úspěšném doběhnutí jobu n8n stáhne vygenerovaný plán (např. z artefaktů nebo logů, pokud jsou malé).
+   2. Submission: Windmill sestaví Nomad job specifikaci (HCL/JSON) a odešle ji do Nomad API.
+   3. Wait & Poll: Windmill využije "Wait" node nebo polling loop k dotazování Nomad API na stav jobu (Allocation Status). Nomad je pro batch joby ideální, protože po dokončení kontejneru automaticky reportuje exit code.
+   4. Result Retrieval: Po úspěšném doběhnutí jobu Windmill stáhne vygenerovaný plán (např. z artefaktů nebo logů, pokud jsou malé).
 3.3 Exekuce: HashiCorp Nomad
 Místo těžkotonážního Kubernetes využijeme Nomad, který je pro tento typ zátěže (krátkodobé, intenzivní výpočetní batch joby) výrazně vhodnější.
 * Batch Jobs: Využijeme typ jobu batch (nikoliv service). To zajistí, že Nomad kontejner spustí, počká na dokončení logického výpočtu a poté uvolní zdroje. Kubernetes by se snažil pod neustále restartovat, pokud bychom správně nenastavili RestartPolicy: OnFailure.
@@ -219,7 +219,7 @@ Varianta B přistupuje ke konfiguraci jako k optimalizačnímu problému. Místo
 6.1 Technický design
    * Answer Set Programming (ASP): ASP (Clingo) hledá všechny stabilní modely a může mezi nimi vybírat ten optimální (např. pomocí #minimize). To je klíčové, pokud existuje více způsobů, jak dosáhnout cíle.
    * Clorm (Object Relational Mapping): Knihovna Clorm umožňuje definovat Python třídy, které se mapují na predikáty Clinga. To přináší typovou kontrolu (Type Safety).
-   * Nomad Parametrizace: Nomad joby lze snadno parametrizovat (Parameterized Jobs). To umožňuje spustit stejný job s různými parametry "optimalizace" (např. --optimize=speed vs --optimize=safety) přímo z n8n.
+   * Nomad Parametrizace: Nomad joby lze snadno parametrizovat (Parameterized Jobs). To umožňuje spustit stejný job s různými parametry "optimalizace" (např. --optimize=speed vs --optimize=safety) přímo z Windmill.
 6.2 Work Breakdown Structure (WBS) - Varianta B (Nomad)
 ID
 	Úkol (Task Name)
@@ -242,7 +242,7 @@ ID
 	Low
 	B.1.2
 	Nomad Job Template
-	Vytvoření parametrizovaného Nomad jobu. Využití meta stanza pro předání parametrů z n8n do kontejneru (např. TIMEOUT, OPTIMIZATION_LEVEL).
+	Vytvoření parametrizovaného Nomad jobu. Využití meta stanza pro předání parametrů z Windmill do kontejneru (např. TIMEOUT, OPTIMIZATION_LEVEL).
 	B.1.1
 	0.5 / 1 MD
 	Medium
@@ -360,7 +360,7 @@ Implementační Roadmapa (Next Steps):
    1. Den 1-3: Setup Docker image s SWI-Prolog a Janus. Vytvoření základního batch.nomad jobu a test nasazení do clusteru.
    2. Den 4-7: Vytvoření "Sensing" vrstvy v Pythonu pro stažení schématu YouTracku do JSON.
    3. Den 8-14: Implementace ontologie v Prologu a základních pravidel depends_on.
-   4. Den 15+: Integrace do n8n (HTTP Request node -> Nomad API /v1/jobs -> POST).
+   4. Den 15+: Integrace do Windmill (HTTP Request node -> Nomad API /v1/jobs -> POST).
 8. Budoucí výhled: Neuro-symbolická AI a MCP
 V horizontu 1-2 let se otevírá možnost integrace Model Context Protocol (MCP).
    * Vize: AI agenti (např. v editoru Windsurf nebo Claude) budou schopni přímo interagovat s naším Prolog serverem přes MCP.

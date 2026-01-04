@@ -8,7 +8,7 @@
 - **Solution:** Maintain a "Dual-Access" table in the README that shows both the IP-based URL (for quick/legacy access) and the Consul DNS URL (for the permanent setup). This eases the transition and provides fallback options.
 
 ### 2. Exhaustive Service Mapping
-- **Issue:** When updating service tables, it's tempting to only show "major" services (Windmill, n8n), but this leads to confusion about the status of management UIs (Consul, Nomad, Vault).
+- **Issue:** When updating service tables, it's tempting to only show "major" services (Windmill), but this leads to confusion about the status of management UIs (Consul, Nomad, Vault).
 - **Solution:** Always include core infrastructure UIs in the primary "Services & Access" table. Truncating these in documentation often leads to the user thinking they are missing or misconfigured.
 
 ### 3. Progressive DNS Disclosure

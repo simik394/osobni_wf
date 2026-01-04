@@ -11,7 +11,6 @@ graph TB
         CS --> Traefik[Traefik<br/>:80/:443]
         CS --> Windmill[Windmill]
         CS --> YouTrack[YouTrack]
-        CS --> N8N[n8n]
         CS --> Obsidian[Obsidian Remote]
     end
     
@@ -48,7 +47,7 @@ graph TB
 | `tailscale` | Tailscale installation and authentication check |
 | `docker` | Docker CE installation with Compose plugin |
 | `hashicorp` | Consul, Vault, Nomad installation and configuration |
-| `nomad_jobs` | Deploys Nomad job files (Traefik, Windmill, YouTrack, n8n, Obsidian) |
+| `nomad_jobs` | Deploys Nomad job files (Traefik, Windmill, YouTrack, Obsidian) |
 
 ## Services & Access
 
@@ -60,7 +59,6 @@ After deployment, services are available via:
 |---------|-----|-------------|
 | **Windmill** | `http://windmill.130.61.225.114.nip.io` | First user becomes Super Admin |
 | **YouTrack** | `http://youtrack.130.61.225.114.nip.io` | Setup wizard on first run |
-| **n8n** | `http://n8n.130.61.225.114.nip.io` | Create owner on first run |
 | **Obsidian** | `http://obsidian.130.61.225.114.nip.io` | `admin` / `ObsidianSecure2025!` |
 | **Traefik** | `http://130.61.225.114:8080` | Dashboard (no auth) |
 
@@ -179,7 +177,6 @@ scp halvarm:/opt/youtrack/backups/<backup_file> ./
 |---------|-----------|
 | YouTrack | `/opt/youtrack/{data,conf,logs,backups}` |
 | Windmill | `/opt/windmill/{db,worker_cache,lsp_cache}` |
-| n8n | `/opt/n8n/data` |
 | Obsidian | `/opt/obsidian/{config,vaults}` |
 | Traefik | `/opt/traefik/acme` |
 
