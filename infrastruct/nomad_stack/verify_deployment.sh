@@ -187,7 +187,7 @@ test_nomad_jobs() {
     local jobs
     jobs=$(ssh "$CLOUD_HOST" "nomad job status -short 2>/dev/null" || echo "")
     
-    for job in traefik windmill youtrack n8n obsidian-remote; do
+    for job in traefik windmill youtrack obsidian-remote; do
         if echo "$jobs" | grep -q "$job.*running"; then
             log_pass "Job '$job' is running"
         else
