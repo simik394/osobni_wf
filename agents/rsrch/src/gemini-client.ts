@@ -354,55 +354,112 @@ export class GeminiClient {
     }
 
     /**
-     * Crawls recent sessions to find Deep Research documents.
-     * This involves navigating to each session in the sidebar.
+     * Crawls the "My Content" section to find Deep Research documents.
+     * Deep Research docs are in library-item-card elements, not conversation elements.
      */
     async listDeepResearchDocuments(limit: number = 10): Promise<ResearchInfo[]> {
         const docs: ResearchInfo[] = [];
-        console.log(`[Gemini] Crawling last ${limit} sessions for Deep Research...`);
+        console.log(`[Gemini] Looking for Deep Research documents (limit: ${limit})...`);
 
         try {
-            // Get count of visible sessions
-            const sessionItems = this.page.locator('div.conversation[role="button"]');
-            let count = await sessionItems.count();
+            // First, try to expand the sidebar if needed
+            const menuButton = this.page.locator('button[aria-label*="nabídka"], button[aria-label*="menu"]').first();
+            if (await menuButton.count() > 0) {
+                try {
+                    await menuButton.click({ timeout: 2000 });
+                    await this.page.waitForTimeout(500);
+                } catch (e) {
+                    // Sidebar might already be expanded
+                }
+            }
+
+            // Deep Research documents are in library-item-card elements
+            const libraryItems = this.page.locator('div.library-item-card');
+            let count = await libraryItems.count();
+            console.log(`[Gemini] Found ${count} library-item-card elements`);
+
             if (count > limit) count = limit;
 
             for (let i = 0; i < count; i++) {
-                // Re-locate items in case of DOM updates
-                const items = this.page.locator('div.conversation[role="button"]');
-                if (await items.count() <= i) break;
-
-                const item = items.nth(i);
-                const name = await item.innerText().catch(() => 'Unknown');
-                console.log(`[Gemini] Checking session ${i + 1}/${count}: ${name.split('\n')[0]}...`);
-
                 try {
-                    // Force click to bypass overlays (e.g. infinite-scroller issues)
-                    await item.click({ force: true });
+                    const item = libraryItems.nth(i);
 
-                    // Wait for navigation/load
-                    await this.page.waitForTimeout(2000);
-                    // Wait for either deep research panel or standard response container
-                    // But standard response might take longer if generating. 
-                    // Assuming we are browsing history, it should load fast.
+                    // Get title from .title element
+                    const titleEl = item.locator('.title');
+                    const title = await titleEl.innerText().catch(() => '');
 
-                    // Check for Deep Research Panel
-                    const deepResearchPanel = this.page.locator('deep-research-immersive-panel');
-                    if (await deepResearchPanel.count() > 0) {
-                        console.log(`[Gemini] Found Deep Research in session: ${name}`);
-                        const info = await this.getResearchInfo();
-                        if (info.title || info.firstHeading) {
-                            docs.push(info);
+                    // Try to extract session ID from jslog attribute
+                    const jslog = await item.getAttribute('jslog') || '';
+                    let sessionId: string | null = null;
+
+                    // Parse session ID from jslog: look for pattern like "c_3305a180c04ec1da"
+                    const match = jslog.match(/"(c_[a-f0-9]+)"/);
+                    if (match) {
+                        sessionId = match[1];
+                    }
+
+                    // If no session ID in jslog, try clicking and getting from URL
+                    if (!sessionId && title) {
+                        try {
+                            await item.click({ force: true });
+                            await this.page.waitForTimeout(1500);
+                            const url = this.page.url();
+                            const urlMatch = url.match(/\/app\/([a-f0-9]+)/);
+                            if (urlMatch) {
+                                sessionId = urlMatch[1];
+                            }
+                        } catch (clickErr) {
+                            console.warn(`[Gemini] Could not click item ${i}: ${clickErr}`);
                         }
                     }
+
+                    if (title) {
+                        console.log(`[Gemini] Found Deep Research: ${title} (${sessionId || 'no-id'})`);
+                        docs.push({
+                            title: title,
+                            firstHeading: null,
+                            sessionId: sessionId
+                        });
+                    }
                 } catch (err) {
-                    console.warn(`[Gemini] Failed to process session ${i}:`, err);
+                    console.warn(`[Gemini] Failed to process library item ${i}:`, err);
+                }
+            }
+
+            // Also check for conversation items that might be Deep Research
+            if (docs.length === 0) {
+                console.log('[Gemini] No library items found, checking conversation items...');
+                const convItems = this.page.locator('div.conversation[role="button"]');
+                let convCount = await convItems.count();
+                if (convCount > limit) convCount = limit;
+
+                for (let i = 0; i < convCount; i++) {
+                    const item = convItems.nth(i);
+                    const name = await item.innerText().catch(() => '');
+
+                    try {
+                        await item.click({ force: true });
+                        await this.page.waitForTimeout(2000);
+
+                        // Check for Deep Research Panel
+                        const deepResearchPanel = this.page.locator('deep-research-immersive-panel');
+                        if (await deepResearchPanel.count() > 0) {
+                            console.log(`[Gemini] Found Deep Research in conversation: ${name}`);
+                            const info = await this.getResearchInfo();
+                            if (info.title || info.firstHeading) {
+                                docs.push(info);
+                            }
+                        }
+                    } catch (err) {
+                        console.warn(`[Gemini] Failed to process conversation ${i}:`, err);
+                    }
                 }
             }
         } catch (e) {
             console.error('[Gemini] Error listing deep research documents:', e);
         }
 
+        console.log(`[Gemini] Total Deep Research documents found: ${docs.length}`);
         return docs;
     }
 
