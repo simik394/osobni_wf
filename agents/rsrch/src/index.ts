@@ -317,9 +317,10 @@ async function main() {
             }
 
         } else if (subArg1 === 'download-all-audio') {
-            // formula: notebook download-all-audio [output_dir] --notebook <Title> [--local]
+            // formula: notebook download-all-audio [output_dir] --notebook <Title> [--local] [--limit N]
             let notebookTitle: string | undefined = undefined;
             let outputDir: string = './audio_downloads'; // Default output directory
+            let limit: number | undefined = undefined;
 
             // subArg2 is the optional output directory
             if (subArg2 && !subArg2.startsWith('--')) {
@@ -332,6 +333,8 @@ async function main() {
                     i++;
                 } else if (args[i] === '--local') {
                     // Consume --local flag
+                } else if (args[i].startsWith('--limit=')) {
+                    limit = parseInt(args[i].split('=')[1]);
                 } else if (i === 2 && !args[i].startsWith('--')) {
                     // Already handled subArg2 as output directory
                 } else if (args[i].startsWith('--')) {
@@ -340,16 +343,16 @@ async function main() {
             }
 
             if (!notebookTitle) {
-                console.error('Usage: rsrch notebook download-all-audio [output_dir] --notebook "Title" [--local]');
+                console.error('Usage: rsrch notebook download-all-audio [output_dir] --notebook "Title" [--local] [--limit=N]');
                 process.exit(1);
             }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const resolvedOutputDir = path.resolve(process.cwd(), outputDir);
-                    console.log(`[CLI] Downloading ALL audio... Output: ${resolvedOutputDir}`);
+                    console.log(`[CLI] Downloading ${limit ? 'top ' + limit : 'ALL'} audio... Output: ${resolvedOutputDir}`);
 
-                    await notebook.downloadAllAudio(notebookTitle as string, resolvedOutputDir);
+                    await notebook.downloadAllAudio(notebookTitle as string, resolvedOutputDir, { limit });
                 });
             } else {
                 console.log('Server mode for download-all-audio not yet implemented. Use --local.');
@@ -536,8 +539,8 @@ async function main() {
                 });
             }
 
-        } else if (subArg1 === 'download-audio') {
-            // rsrch notebook download-audio --titles "A,B,C" --output "/path/to/dir" [--local]
+        } else if (subArg1 === 'download-batch-audio') {
+            // rsrch notebook download-batch-audio --titles "A,B,C" --output "/path/to/dir" [--local]
             const parseArgs = require('util').parseArgs;
             const options = {
                 titles: { type: 'string' },
@@ -619,7 +622,8 @@ async function main() {
             console.log('  rsrch notebook add-drive-source "Doc Name" --notebook "Title" [--local]');
             console.log('  rsrch notebook generate-audio --notebook "Title" [--sources "A,B"] [--prompt "Prompt"] [--wet] [--local]');
             console.log('  rsrch notebook download-audio [path] --notebook "Title" [--latest] [--pattern "regex"] [--local]');
-            console.log('  rsrch notebook download-all-audio [dir] --notebook "Title" [--local]');
+            console.log('  rsrch notebook download-all-audio [dir] --notebook "Title" [--limit N] [--local]');
+            console.log('  rsrch notebook download-batch-audio --titles "A,B" --output [dir] [--local]');
             console.log('  rsrch notebook sync [--title "Title"] [-a] [--local]');
             console.log('  rsrch notebook list [--local]');
             console.log('  rsrch notebook stats "Title" [--local]');
@@ -955,28 +959,35 @@ async function main() {
                 await sendServerRequest('/gemini/research', { query });
             }
         } else if (subArg1 === 'deep-research') {
-            // gemini deep-research "Query string" [--local]
+            // gemini deep-research "Query string" [--gem "GemName"] [--local]
             // Find query string (first non-flag arg after 'deep-research')
             let query = '';
+            let gemName = undefined;
+
             for (let i = 2; i < args.length; i++) {
-                if (!args[i].startsWith('--')) {
+                if (args[i].startsWith('--gem=') && args[i].split('=')[1]) {
+                    gemName = args[i].split('=')[1];
+                } else if (!args[i].startsWith('--') && !query) {
                     query = args[i];
-                    break;
+                } else if (args[i] === '--gem' && args[i + 1]) {
+                    gemName = args[i + 1];
+                    i++;
                 }
             }
 
             if (!query) {
-                console.error('Usage: rsrch gemini deep-research "Query" [--local] [--headed]');
+                console.error('Usage: rsrch gemini deep-research "Query" [--gem "GemName"] [--local] [--headed]');
                 process.exit(1);
             }
 
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
                     console.log('\n[Deep Research] Starting...');
+                    if (gemName) console.log(`[Deep Research] Using Gem: ${gemName}`);
                     console.log('[Deep Research] This may take several minutes.');
                     console.log('[Deep Research] The research plan will be automatically confirmed.\n');
 
-                    const result = await gemini.startDeepResearch(query);
+                    const result = await gemini.startDeepResearch(query, gemName);
 
                     console.log('\n--- Deep Research Result ---');
                     console.log(`Status: ${result.status} `);
@@ -1417,6 +1428,62 @@ async function main() {
             } else {
                 console.log('Server mode for upload-files not yet implemented. Use --local.');
             }
+
+        } else if (subArg1 === 'upload-repo') {
+            // gemini upload-repo <RepoURL> [SessionID] [--local] [--branch=main]
+            let repoUrl = '';
+            let sessionId = '';
+            let branch = undefined;
+
+            const nonFlagArgs: string[] = [];
+            for (let i = 2; i < args.length; i++) {
+                if (args[i].startsWith('--branch=')) {
+                    branch = args[i].split('=')[1];
+                } else if (!args[i].startsWith('--')) {
+                    nonFlagArgs.push(args[i]);
+                }
+            }
+
+            if (nonFlagArgs.length >= 1) {
+                repoUrl = nonFlagArgs[0];
+            }
+            if (nonFlagArgs.length >= 2) {
+                sessionId = nonFlagArgs[1];
+            }
+
+            if (!repoUrl) {
+                console.error('Usage: rsrch gemini upload-repo <RepoURL> [SessionID] [--local] [--branch=main]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution) {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const { RepoLoader } = await import('./repo-loader');
+                    const loader = new RepoLoader();
+
+                    try {
+                        console.log(`\n[Repo] Processing repository: ${repoUrl}`);
+                        const contextFile = await loader.loadRepoAsFile(repoUrl, { branch });
+                        console.log(`\n[Repo] Context file created at: ${contextFile}`);
+
+                        console.log(`[Repo] Uploading to Gemini...`);
+                        const success = await gemini.uploadFile(contextFile);
+
+                        if (success) {
+                            console.log(`\n✅ Repository context uploaded successfully!`);
+                        } else {
+                            console.log(`\n❌ Failed to upload repository context.`);
+                        }
+                    } catch (e: any) {
+                        console.error(`\n❌ Error processing repository: ${e.message}`);
+                    } finally {
+                        console.log(`[Repo] Temporary files kept in temp dir for reference.`);
+                    }
+
+                }, sessionId || undefined);
+            } else {
+                console.log('Server mode for upload-repo not yet implemented. Use --local.');
+            }
         } else if (subArg1 === 'list-gems') {
             // gemini list-gems [--local]
             if (isLocalExecution) {
@@ -1465,10 +1532,11 @@ async function main() {
                 console.log('Server mode for open-gem not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'create-gem') {
-            // gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--local]
+            // gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--config gem.yaml] [--local]
             let gemName = '';
             let instructions = '';
             const files: string[] = [];
+            let configPath = '';
 
             for (let i = 2; i < args.length; i++) {
                 const arg = args[i];
@@ -1478,13 +1546,30 @@ async function main() {
                 } else if (arg === '--file' && args[i + 1]) {
                     files.push(args[i + 1]);
                     i++;
+                } else if (arg === '--config' && args[i + 1]) {
+                    configPath = args[i + 1];
+                    i++;
                 } else if (!arg.startsWith('--')) {
                     gemName = arg;
                 }
             }
 
+            if (configPath) {
+                try {
+                    const { loadGemConfig } = require('./gem-config');
+                    const config = loadGemConfig(configPath);
+                    if (!gemName) gemName = config.name;
+                    if (!instructions) instructions = config.instructions;
+                    if (config.files) files.push(...config.files);
+                    console.log(`[Gemini] Loaded config from ${configPath}`);
+                } catch (e: any) {
+                    console.error(`Error loading config: ${e.message}`);
+                    process.exit(1);
+                }
+            }
+
             if (!gemName || !instructions) {
-                console.error('Usage: rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--local]');
+                console.error('Usage: rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--config gem.yaml] [--local]');
                 process.exit(1);
             }
 
@@ -1545,7 +1630,7 @@ async function main() {
         } else {
             console.log('Gemini commands:');
             console.log('  rsrch gemini research "Query" [--local]');
-            console.log('  rsrch gemini deep-research "Query" [--local] [--headed]');
+            console.log('  rsrch gemini deep-research "Query" [--gem "GemName"] [--local] [--headed]');
             console.log('  rsrch gemini send-message [SessionID] "Message" [--local] [--headed]');
             console.log('  rsrch gemini get-response [SessionID] [Index] [--local]  # Index: 1=first, -1=last');
             console.log('  rsrch gemini get-responses [SessionID] [--local]');
@@ -1557,11 +1642,12 @@ async function main() {
             console.log('  rsrch gemini sync-conversations [--limit=N] [--offset=M] [--local]  # Sync conversations to graph');
             console.log('  rsrch gemini upload-file [SessionID] "/path/to/file" [--local]  # Upload PDF, image, etc.');
             console.log('  rsrch gemini upload-files [SessionID] "file1" "file2" ... [--local]  # Upload multiple files');
+            console.log('  rsrch gemini upload-repo <RepoURL> [SessionID] [--branch=main] [--local]  # Upload git repo context');
             console.log('');
             console.log('Gems (custom assistants):');
             console.log('  rsrch gemini list-gems [--local]                                   # List available gems');
             console.log('  rsrch gemini open-gem "GemNameOrID" [--local]                      # Open a gem');
-            console.log('  rsrch gemini create-gem "Name" --instructions "..." [--file ...] [--local]  # Create gem');
+            console.log('  rsrch gemini create-gem "Name" --instructions "..." [--config gem.yaml] [--local]  # Create gem');
             console.log('  rsrch gemini chat-gem "GemNameOrID" "Message" [--local]            # Chat with gem');
             console.log('');
             console.log('Flags:');

@@ -1750,10 +1750,11 @@ export class GeminiClient {
      * 6. Renames the Google Doc with the registry ID prefix
      * 
      * @param query The research question/topic
+     * @param gemIdOrName Optional Gem ID or Name to use context from
      * @returns DeepResearchResult with status, doc info, and registry IDs
      */
-    async startDeepResearch(query: string): Promise<DeepResearchResult> {
-        console.log(`[Gemini] Starting Deep Research: "${query}"`);
+    async startDeepResearch(query: string, gemIdOrName?: string): Promise<DeepResearchResult> {
+        console.log(`[Gemini] Starting Deep Research: "${query}"${gemIdOrName ? ` (Gem: ${gemIdOrName})` : ''}`);
 
         const result: DeepResearchResult = {
             query,
@@ -1761,6 +1762,22 @@ export class GeminiClient {
         };
 
         try {
+            if (gemIdOrName) {
+                const opened = await this.openGem(gemIdOrName);
+                if (!opened) {
+                    throw new Error(`Failed to open Gem: ${gemIdOrName}`);
+                }
+                // Wait a bit to ensure context is fully loaded
+                await this.page.waitForTimeout(2000);
+            } else {
+                // Ensure we are in a fresh session or standard state if needed?
+                // Currently startDeepResearch assumes we are just on the page.
+                // If we are in a gem, and no gem specified, it might use the gem.
+                // But usually the user wants to start from scratch if they don't specify gem.
+                // However, navigating to Gems list or Home might be needed if side effects exist.
+                // For now, assume user knows what they are doing or we reuse current state.
+            }
+
             const registry = getRegistry();
 
             // Register session at the start

@@ -974,12 +974,12 @@ export class NotebookLMClient {
         return false;
     }
 
-    async downloadAllAudio(notebookTitle: string, outputDir: string) {
+    async downloadAllAudio(notebookTitle: string, outputDir: string, options: { limit?: number } = {}) {
         if (notebookTitle) {
             await this.openNotebook(notebookTitle);
         }
 
-        console.log(`[DEBUG] Downloading ALL audio files to directory: ${outputDir}`);
+        console.log(`[DEBUG] Downloading ${options.limit ? 'top ' + options.limit : 'ALL'} audio files to directory: ${outputDir}`);
 
         // Create output directory if it doesn't exist
         const fs = require('fs');
@@ -1011,7 +1011,9 @@ export class NotebookLMClient {
         const downloaded = [];
 
         // Iterate through each audio artifact
-        for (let i = 0; i < count; i++) {
+        const processCount = options.limit ? Math.min(count, options.limit) : count;
+
+        for (let i = 0; i < processCount; i++) {
             console.log(`\n[DEBUG] === Processing audio ${i + 1} of ${count} ===`);
 
             const artifact = audioArtifacts.nth(i);
