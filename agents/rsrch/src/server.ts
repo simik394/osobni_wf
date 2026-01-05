@@ -133,6 +133,19 @@ app.post('/query', async (req, res) => {
 
 // NotebookLM Endpoints
 
+app.post('/notebook/list', async (req, res) => {
+    try {
+        if (!notebookClient) {
+            notebookClient = await client.createNotebookClient();
+        }
+        const notebooks = await notebookClient.listNotebooks();
+        res.json(notebooks);
+    } catch (e: any) {
+        console.error('[Server] List notebooks failed:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/notebook/create', async (req, res) => {
     try {
         const { title } = req.body;
@@ -933,6 +946,39 @@ app.get('/gemini/list-research-docs', async (req, res) => {
         res.json({ success: true, data: docs });
     } catch (e: any) {
         console.error('[Server] Gemini list research docs failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Graph Endpoints
+
+app.get('/graph/status', async (req, res) => {
+    try {
+        const jobs = await graphStore.listJobs();
+        const stats = {
+            jobs: jobs.length,
+            queued: jobs.filter(j => j.status === 'queued').length,
+            running: jobs.filter(j => j.status === 'running').length,
+            completed: jobs.filter(j => j.status === 'completed').length,
+            failed: jobs.filter(j => j.status === 'failed').length,
+        };
+
+        res.json({
+            success: true,
+            connection: 'OK',
+            stats
+        });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.get('/graph/conversations', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const conversations = await graphStore.getConversationsByPlatform('gemini', limit);
+        res.json({ success: true, data: conversations });
+    } catch (e: any) {
         res.status(500).json({ success: false, error: e.message });
     }
 });

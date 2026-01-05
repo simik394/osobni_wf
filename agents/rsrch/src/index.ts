@@ -660,6 +660,78 @@ async function main() {
                 await store.disconnect();
             }
 
+        } else if (subArg === 'status') {
+            // rsrch graph status [--local]
+            if (isLocalExecution) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                try {
+                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                    console.log('✅ FalkorDB connection: OK');
+                    const jobs = await store.listJobs();
+                    const queued = jobs.filter(j => j.status === 'queued').length;
+                    const running = jobs.filter(j => j.status === 'running').length;
+                    const completed = jobs.filter(j => j.status === 'completed').length;
+                    const failed = jobs.filter(j => j.status === 'failed').length;
+                    console.log(`\nJobs: ${jobs.length} total`);
+                    console.log(`  Queued: ${queued}`);
+                    console.log(`  Running: ${running}`);
+                    console.log(`  Completed: ${completed}`);
+                    console.log(`  Failed: ${failed}`);
+                } finally {
+                    await store.disconnect();
+                }
+            } else {
+                await sendServerRequest('/graph/status');
+            }
+
+        } else if (subArg === 'jobs') {
+            // rsrch graph jobs [status] [--local]
+            const status = args[2] as any; // naive check
+            if (isLocalExecution) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                try {
+                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                    const jobs = status && !status.startsWith('--') ? await store.listJobs(status) : await store.listJobs();
+                    console.log(`\nJobs (${jobs.length}):`);
+                    for (const job of jobs) {
+                        const time = new Date(job.createdAt).toISOString();
+                        console.log(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
+                    }
+                } finally {
+                    await store.disconnect();
+                }
+            } else {
+                // Server endpoint for jobs already exists: /jobs
+                await sendServerRequest('/jobs');
+                // Note: server /jobs endpoint returns full json, we might want to format it? 
+                // sendServerRequest logs the JSON.
+            }
+
+        } else if (subArg === 'lineage') {
+            const artifactId = args[2];
+            if (!artifactId) {
+                console.error('Usage: rsrch graph lineage <artifact-id>');
+                process.exit(1);
+            }
+            if (isLocalExecution) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                await store.connect(process.env.FALKORDB_HOST || 'localhost', parseInt(process.env.FALKORDB_PORT || '6379'));
+                try {
+                    // const lineage = await store.getArtifactLineage(artifactId);
+                    // console.log(JSON.stringify(lineage, null, 2));
+                    console.log('Lineage not implemented in current GraphStore version');
+                } finally {
+                    await store.disconnect();
+                }
+            } else {
+                console.log('Server mode for lineage not implemented');
+            }
+
         } else if (subArg === 'conversations') {
             // rsrch graph conversations [--limit=N]
             const limit = parseInt(args[2]?.replace('--limit=', '') || '50');
@@ -691,7 +763,7 @@ async function main() {
                     await store.disconnect();
                 }
             } else {
-                console.log('Server mode for graph conversations not implemented');
+                await sendServerRequest('/graph/conversations', { limit });
             }
         } else if (subArg === 'export') {
             // rsrch graph export [--platform=gemini|perplexity] [--format=md|json] [--output=path] [--since=timestamp] [--limit=N]
