@@ -362,16 +362,35 @@ export class GeminiClient {
         console.log(`[Gemini] Looking for Deep Research documents (limit: ${limit})...`);
 
         try {
-            // First, try to expand the sidebar if needed
-            const menuButton = this.page.locator('button[aria-label*="nabídka"], button[aria-label*="menu"]').first();
+            // Wait for page to fully load
+            await this.page.waitForTimeout(2000);
+
+            // First, try to expand the sidebar if needed by clicking the menu button
+            const menuButton = this.page.locator('button[aria-label*="nabídka"], button[aria-label*="menu"], button[aria-label*="Menu"]').first();
             if (await menuButton.count() > 0) {
                 try {
                     await menuButton.click({ timeout: 2000 });
-                    await this.page.waitForTimeout(500);
+                    await this.page.waitForTimeout(1000);
+                    console.log('[Gemini] Clicked menu button to expand sidebar');
                 } catch (e) {
                     // Sidebar might already be expanded
                 }
             }
+
+            // Try to expand "My Content" / "Můj obsah" section
+            const myContentSection = this.page.locator('text=/Můj obsah|My content|My Content/i').first();
+            if (await myContentSection.count() > 0) {
+                try {
+                    await myContentSection.click({ timeout: 2000 });
+                    await this.page.waitForTimeout(1000);
+                    console.log('[Gemini] Clicked "My Content" section');
+                } catch (e) {
+                    // Section might already be expanded
+                }
+            }
+
+            // Wait for library items to render
+            await this.page.waitForTimeout(1000);
 
             // Deep Research documents are in library-item-card elements
             const libraryItems = this.page.locator('div.library-item-card');
