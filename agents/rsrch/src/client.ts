@@ -6,6 +6,7 @@ import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'p
 import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
 
 // Add stealth plugin
 // chromium.use(StealthPlugin());
@@ -37,6 +38,8 @@ export interface ClientOptions {
     userDataDir?: string;
     keepAlive?: boolean;
     verbose?: boolean;
+    profileId?: string;
+    cdpEndpoint?: string; // Override CDP endpoint for container mode
 }
 
 export abstract class BaseClient {
@@ -45,15 +48,21 @@ export abstract class BaseClient {
     protected page: Page | null = null;
     protected options: ClientOptions;
     protected isInitialized = false;
+    protected profileId: string = 'default';
 
     constructor(options: ClientOptions = {}) {
         this.options = { headless: true, ...options };
+        this.profileId = options.profileId || 'default';
     }
 
     protected log(message: string) {
         if (this.options.verbose) {
             console.log(`[DEBUG] ${message}`);
         }
+    }
+
+    getProfileId(): string {
+        return this.profileId;
     }
 }
 
@@ -65,30 +74,28 @@ export class PerplexityClient extends BaseClient {
         super(options);
     }
 
-    async init(options: { keepAlive?: boolean, local?: boolean } = {}) {
+    async init(options: { keepAlive?: boolean, local?: boolean, profileId?: string, cdpEndpoint?: string } = {}) {
         if (this.isInitialized) {
             this.log('Client already initialized');
             return;
         }
         this.keepAlive = options.keepAlive || this.options.keepAlive || false;
 
+        // Profile support: use passed profileId or fall back to options or 'default'
+        const profileId = options.profileId || this.options.profileId || 'default';
+        this.profileId = profileId;
+        console.log(`[Client] Using profile: ${profileId}`);
+
+        // CDP endpoint override for container mode
+        const cdpEndpoint = options.cdpEndpoint || this.options.cdpEndpoint;
+
         // Force local mode if requested, bypassing env vars
         if (!options.local && process.env.BROWSER_WS_ENDPOINT) {
             console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
             this.browser = await (chromium.connect(config.browserWsEndpoint) as unknown as Browser);
 
-            // Load storage state if exists
-            let storageState = undefined;
-            if (fs.existsSync(config.auth.authFile)) {
-                console.log(`Loading auth state from ${config.auth.authFile} `);
-                try {
-                    const authContent = fs.readFileSync(config.auth.authFile, 'utf-8');
-                    storageState = JSON.parse(authContent);
-                    console.log('[Client] Auth state loaded into memory.');
-                } catch (e: any) {
-                    console.error('[Client] Failed to parse auth file:', e);
-                }
-            }
+            // Load storage state from profile
+            const storageState = loadStorageState(profileId);
 
             if (!this.browser) throw new Error('Browser not initialized');
             this.context = await this.browser.newContext({
@@ -207,12 +214,13 @@ export class PerplexityClient extends BaseClient {
                 });
             }
 
-        } else if (!options.local && (process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT)) {
+        } else if (!options.local && (cdpEndpoint || process.env.BROWSER_CDP_ENDPOINT || process.env.REMOTE_DEBUGGING_PORT)) {
             try {
                 // CDP/WebSocket connection to remote browser
-                let endpoint = process.env.BROWSER_CDP_ENDPOINT ||
+                // Priority: explicit cdpEndpoint > BROWSER_CDP_ENDPOINT > REMOTE_DEBUGGING_PORT
+                let endpoint = cdpEndpoint || process.env.BROWSER_CDP_ENDPOINT ||
                     `http://localhost:${process.env.REMOTE_DEBUGGING_PORT}`;
-                console.log(`Connecting to browser at ${endpoint}...`);
+                console.log(`Connecting to browser at ${endpoint} (profile: ${profileId})...`);
 
                 // Normalize endpoint
                 if (!endpoint.startsWith('http') && !endpoint.startsWith('ws')) {
@@ -242,21 +250,26 @@ export class PerplexityClient extends BaseClient {
                 }
 
                 if (!this.browser) throw new Error('Browser failed to initialize');
-                const contexts = this.browser.contexts();
-                if (contexts.length > 0) {
-                    this.context = contexts[0];
-                } else {
-                    console.log('Acquired context via new page creation.');
-                }
+
+                // Create new context with profile storage state
+                const storageState = loadStorageState(profileId);
+                this.context = await this.browser.newContext({
+                    storageState: storageState,
+                    viewport: { width: 1280, height: 1024 }
+                });
+                console.log(`[Client] Created browser context for profile: ${profileId}`);
             } catch (e: any) {
                 throw new Error(`Could not acquire context from remote browser: ${e.message}`);
             }
         } else {
-            // Local mode
-            console.log('Launching browser (Persistent Local Mode)...');
-            // Ensure dir exists
-            if (!fs.existsSync(config.auth.userDataDir)) {
-                fs.mkdirSync(config.auth.userDataDir, { recursive: true });
+            // Local mode - use profile-based state directory
+            console.log(`Launching browser (Local Mode, profile: ${profileId})...`);
+
+            // Get or create profile state directory
+            const stateDir = getStateDir(profileId);
+            ensureProfileDir(profileId);
+            if (!fs.existsSync(stateDir)) {
+                fs.mkdirSync(stateDir, { recursive: true });
             }
 
             // Default to headless unless:
@@ -267,29 +280,21 @@ export class PerplexityClient extends BaseClient {
             const headless = headlessEnv === 'false' ? false : (hasHeadedFlag ? false : true);
             console.log(`Headless: ${headless}${hasHeadedFlag ? ' (--headed flag detected)' : ''}`);
 
-            if (config.auth.userDataDir) {
-                console.log(`Launching persistent context from: ${config.auth.userDataDir}`);
-                // Cast chromium to any to avoid type mismatch between playwright-extra and downgraded playwright
-                this.context = await (chromium as any).launchPersistentContext(config.auth.userDataDir, {
-                    headless: headless,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--no-zygote',
-                        '--disable-gpu'
-                    ],
-                    viewport: { width: 1280, height: 800 }
-                });
-            } else {
-                console.log('Launching ephemeral context (no profile)');
-                this.browser = await (chromium as any).launch({
-                    headless: headless
-                });
-                this.context = await this.browser!.newContext();
-            }
+            console.log(`Launching persistent context from: ${stateDir}`);
+            // Cast chromium to any to avoid type mismatch between playwright-extra and downgraded playwright
+            this.context = await (chromium as any).launchPersistentContext(stateDir, {
+                headless: headless,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ],
+                viewport: { width: 1280, height: 800 }
+            });
 
             // Get or create page
             if (!this.context) throw new Error('Failed to create browser context');
@@ -677,9 +682,7 @@ export class PerplexityClient extends BaseClient {
 
     async saveAuth() {
         if (!this.context) return;
-        console.log(`Saving auth state to ${config.auth.authFile}...`);
-        await this.context.storageState({ path: config.auth.authFile });
-        console.log('Auth state saved.');
+        await saveStorageState(this.context, this.profileId);
     }
 
     async createNotebookClient(): Promise<NotebookLMClient> {

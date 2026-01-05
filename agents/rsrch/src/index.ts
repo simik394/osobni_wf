@@ -6,9 +6,26 @@ import * as fs from 'fs';
 import { config } from './config';
 import * as path from 'path';
 import { GeminiClient, ResearchInfo } from './gemini-client';
+import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 
 const args = process.argv.slice(2);
 const command = args[0];
+
+// Global flags parsing
+function getGlobalFlag(flag: string): string | undefined {
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === flag && args[i + 1]) {
+            return args[i + 1];
+        }
+        if (args[i].startsWith(`${flag}=`)) {
+            return args[i].split('=')[1];
+        }
+    }
+    return undefined;
+}
+
+const globalProfileId = getGlobalFlag('--profile') || 'default';
+const globalCdpEndpoint = getGlobalFlag('--cdp');
 
 // Helper to send request to server
 async function sendServerRequest(path: string, body: any = {}) {
@@ -74,8 +91,8 @@ async function main() {
     if (command === 'auth') {
         await login();
     } else if (command === 'login') {
-        const client = new PerplexityClient();
-        await client.init();
+        const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+        await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
 
         console.log('Opening Perplexity for interactive login...');
         const ppUrl = 'https://www.perplexity.ai';
@@ -99,15 +116,62 @@ async function main() {
     } else if (command === 'stop') {
         await sendServerRequest('/shutdown');
 
+    } else if (command === 'profile') {
+        // Profile management commands
+        const subCmd = args[1];
+
+        if (subCmd === 'list') {
+            const profiles = listProfiles();
+            if (profiles.length === 0) {
+                console.log('No profiles found.');
+            } else {
+                console.log('Available profiles:');
+                for (const p of profiles) {
+                    const authStatus = p.hasAuth ? '✓ authenticated' : '✗ no auth';
+                    const indicator = p.id === globalProfileId ? ' (current)' : '';
+                    console.log(`  ${p.id}${indicator}: ${authStatus}`);
+                }
+            }
+        } else if (subCmd === 'info') {
+            const profileId = args[2] || globalProfileId;
+            const info = getProfileInfo(profileId);
+            console.log(`Profile: ${info.id}`);
+            console.log(`  Auth file: ${info.authFile}`);
+            console.log(`  State dir: ${info.stateDir}`);
+            console.log(`  Exists: ${info.exists}`);
+            console.log(`  Has auth: ${info.hasAuth}`);
+        } else if (subCmd === 'delete') {
+            const profileId = args[2];
+            if (!profileId) {
+                console.error('Usage: rsrch profile delete <profileId>');
+                process.exit(1);
+            }
+            if (deleteProfile(profileId)) {
+                console.log(`Profile '${profileId}' deleted.`);
+            }
+        } else {
+            console.log('Profile commands:');
+            console.log('  rsrch profile list                    # List all profiles');
+            console.log('  rsrch profile info [profileId]        # Show profile details');
+            console.log('  rsrch profile delete <profileId>      # Delete a profile');
+            console.log('');
+            console.log('Usage with --profile flag:');
+            console.log('  rsrch --profile work auth             # Auth with "work" profile');
+            console.log('  rsrch --profile work gemini list-research-docs --local');
+            console.log('');
+            console.log('Usage with --cdp flag (container mode):');
+            console.log('  rsrch --cdp http://localhost:9224 --profile work ...');
+        }
+
     } else if (command === 'notebook') {
         // notebook audio [--notebook "Title"] [--sources "a,b"] [--prompt "..."]
 
         const isLocalExecution = (argv?: any) => args.includes('--local');
 
         const runLocalNotebookAction = async (argv: any, action: (client: PerplexityClient, notebook: any) => Promise<void>) => {
-            console.log('Running in LOCAL mode...');
-            const client = new PerplexityClient();
-            await client.init();
+            console.log(`Running in LOCAL mode (profile: ${globalProfileId})...`);
+            const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+            await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             const notebook = await client.createNotebookClient();
             try {
                 await action(client, notebook);
@@ -921,8 +985,8 @@ async function main() {
         // Helper for local execution
         const runLocalGeminiAction = async (action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string) => {
             console.log(`Running Gemini in ${hasLocalFlag ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
-            const client = new PerplexityClient();
-            await client.init({ local: hasLocalFlag });
+            const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+            await client.init({ local: hasLocalFlag, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             const gemini = await client.createGeminiClient();
             await gemini.init(sessionId); // Pass sessionId to navigate directly
             try {
@@ -1736,8 +1800,8 @@ async function main() {
     } else if (command === 'query') {
         const { query, options } = parseArgs(args);
         if (query) {
-            const client = new PerplexityClient();
-            await client.init({ keepAlive: options.keepAlive });
+            const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+            await client.init({ keepAlive: options.keepAlive, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             try { await client.query(query, options); } finally { await client.close(); }
         } else {
             // If no direct query, fall back to legacy mode (queries.json or error)
@@ -2056,8 +2120,8 @@ async function runLegacyMode() {
 
         console.log(`Found ${queries.length} queries in batch file.`);
 
-        const client = new PerplexityClient();
-        await client.init();
+        const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+        await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
 
         try {
             for (let i = 0; i < queries.length; i++) {
@@ -2077,8 +2141,8 @@ async function runLegacyMode() {
             console.log('No query argument provided. Reading from queries.json...');
             const queries = JSON.parse(fs.readFileSync(config.paths.queriesFile, 'utf-8'));
             if (Array.isArray(queries)) {
-                const client = new PerplexityClient();
-                await client.init();
+                const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+                await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
                 try {
                     for (const q of queries) {
                         await client.query(q, options);
