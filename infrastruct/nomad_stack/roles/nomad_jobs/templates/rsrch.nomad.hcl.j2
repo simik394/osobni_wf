@@ -26,9 +26,9 @@ job "rsrch" {
         mounts = [
           {
             type     = "bind"
-            target   = "/secrets/auth.json"
-            source   = "/opt/rsrch/secrets/auth.json"
-            readonly = true
+            target   = "/opt/rsrch/profiles"
+            source   = "/opt/rsrch/profiles"
+            readonly = false
           }
         ]
       }

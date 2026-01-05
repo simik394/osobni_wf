@@ -251,13 +251,21 @@ export class PerplexityClient extends BaseClient {
 
                 if (!this.browser) throw new Error('Browser failed to initialize');
 
-                // Create new context with profile storage state
-                const storageState = loadStorageState(profileId);
-                this.context = await this.browser.newContext({
-                    storageState: storageState,
-                    viewport: { width: 1280, height: 1024 }
-                });
-                console.log(`[Client] Created browser context for profile: ${profileId}`);
+                // For CDP connections, prefer reusing the browser's existing context
+                // (where the user logged in via VNC) instead of creating a new one
+                const existingContexts = this.browser.contexts();
+                if (existingContexts.length > 0) {
+                    this.context = existingContexts[0];
+                    console.log(`[Client] Reusing existing browser context (profile: ${profileId}, contexts: ${existingContexts.length})`);
+                } else {
+                    // Only create new context if none exist (shouldn't happen normally)
+                    const storageState = loadStorageState(profileId);
+                    this.context = await this.browser.newContext({
+                        storageState: storageState,
+                        viewport: { width: 1280, height: 1024 }
+                    });
+                    console.log(`[Client] Created new browser context for profile: ${profileId}`);
+                }
             } catch (e: any) {
                 throw new Error(`Could not acquire context from remote browser: ${e.message}`);
             }
