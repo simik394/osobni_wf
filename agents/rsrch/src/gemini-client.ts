@@ -428,11 +428,13 @@ export class GeminiClient {
                     if (!sessionId && title) {
                         try {
                             await item.click({ force: true });
-                            await this.page.waitForTimeout(1500);
+                            await this.page.waitForTimeout(2000);
                             const url = this.page.url();
-                            const urlMatch = url.match(/\/app\/([a-f0-9]+)/);
+                            // Deep Research URLs are like /gem/95da53cfcb0b/0b72911dae760a7b
+                            const urlMatch = url.match(/\/gem\/([a-f0-9]+)/);
                             if (urlMatch) {
                                 sessionId = urlMatch[1];
+                                console.log(`[Gemini] Extracted sessionId from URL: ${sessionId}`);
                             }
                         } catch (clickErr) {
                             console.warn(`[Gemini] Could not click item ${i}: ${clickErr}`);
