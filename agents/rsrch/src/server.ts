@@ -295,6 +295,135 @@ app.post('/notebook/generate-audio', async (req, res) => {
     }
 });
 
+app.post('/notebook/audio-status', async (req, res) => {
+    try {
+        const { notebookTitle } = req.body;
+
+        if (!notebookClient) {
+            notebookClient = await client.createNotebookClient();
+        }
+
+        console.log(`[Server] Checking audio status for: ${notebookTitle || 'current'}`);
+        const status = await notebookClient.checkAudioStatus(notebookTitle);
+
+        res.json({ success: true, ...status });
+    } catch (e: any) {
+        console.error('[Server] Audio status check failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
+    try {
+        const { researchDocId, notebookTitle, dryRun } = req.body;
+        if (!researchDocId) return res.status(400).json({ error: 'researchDocId is required' });
+
+        // 1. Check if already exists
+        const existingAudio = await graphStore.getAudioForResearchDoc(researchDocId);
+        if (existingAudio && !dryRun) {
+            console.log(`[Server] Audio already exists for doc ${researchDocId}: ${existingAudio.id}`);
+            return res.json({ success: true, audio: existingAudio, cached: true });
+        }
+
+        // 2. Get ResearchDoc lineage
+        const lineage = await graphStore.getLineage(researchDocId);
+        const docNode = lineage.find(n => n.type === 'ResearchDoc' || n.type === 'Document'); // Support legacy node type
+
+        if (!docNode) {
+            // Fallback: try direct lookup if lineage fails (e.g. if graph is disconnected fragments)
+            // But we don't have direct lookup exposed yet. 
+            // For now, assume if lineage fails, doc doesn't exist or is orphan.
+            return res.status(404).json({ error: 'ResearchDoc not found' });
+        }
+
+        const title = docNode.title;
+        const content = docNode.content || ''; // Legacy Document nodes might not have content stored?
+        // Note: ResearchDoc has content. Document (legacy) might not.
+
+        if (!content && !docNode.url) {
+            return res.status(400).json({ error: 'Document has no content or URL to process' });
+        }
+
+        console.log(`[Server] Converting ResearchDoc to Audio: ${title} (${content.length} chars)`);
+
+        if (!notebookClient) {
+            notebookClient = await client.createNotebookClient();
+        }
+
+        // 3. Create or Open Notebook
+        // Use a dedicated notebook for research audio? Or per session?
+        // Let's use a "Research Audio" notebook default if not provided
+        const targetNotebook = notebookTitle || `Research Audio: ${new Date().toISOString().split('T')[0]}`;
+
+        // 4. Add Source
+        // If content is available, paste it. If only URL (legacy), add URL.
+        if (content) {
+            // We prepend title to content to give context
+            const fullText = `# ${title}\n\n${content}`;
+            await notebookClient.addSourceText(fullText, title, targetNotebook);
+        } else if (docNode.url) {
+            await notebookClient.openNotebook(targetNotebook);
+            await notebookClient.addSourceUrl(docNode.url);
+        }
+
+        // 5. Generate Audio
+        // We trigger generation and wait for it
+        if (notebookClient.isBusy) {
+            return res.status(409).json({ error: 'NotebookLM client is busy' });
+        }
+
+        console.log(`[Server] Triggering audio generation for: ${title}`);
+        const result = await notebookClient.generateAudioOverview(targetNotebook, [title], undefined, true, dryRun);
+
+        if (!result.success) {
+            throw new Error('Audio generation failed or timed out');
+        }
+
+        if (dryRun) {
+            return res.json({ success: true, dryRun: true });
+        }
+
+        // 6. Download Audio
+        const audioName = result.artifactTitle || `Audio Overview - ${title}`;
+        const safeFilename = audioName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+
+        // Define local output directory
+        const outputDir = process.env.AUDIO_OUTPUT_DIR || '/home/sim/Obsi/Audio';
+        const fs = require('fs');
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        const localFilename = `${safeFilename}__${Date.now()}.mp3`;
+        const localPath = `${outputDir}/${localFilename}`;
+
+        console.log(`[Server] Downloading audio to: ${localPath}`);
+
+        const downloadSuccess = await notebookClient.downloadAudio(targetNotebook, localPath, {
+            audioTitlePattern: result.artifactTitle, // Explicitly target the one we just made
+            latestOnly: true
+        });
+
+        if (!downloadSuccess) {
+            console.warn('[Server] Download reported failure, but proceeding to record in graph just in case.');
+        }
+
+        // 7. Track in Graph
+        const audioNode = await graphStore.createResearchAudio({
+            researchDocId,
+            path: localPath,
+            filename: localFilename,
+            duration: 0
+        });
+
+        res.json({ success: true, audio: audioNode, downloaded: downloadSuccess, localPath });
+
+    } catch (e: any) {
+        console.error('[Server] Create audio from doc failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.get('/jobs/:id', async (req, res) => {
     const jobId = req.params.id;
     const job = await graphStore.getJob(jobId);

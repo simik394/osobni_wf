@@ -517,6 +517,25 @@ export class NotebookLMClient {
         return titles;
     }
 
+    async checkAudioStatus(notebookTitle?: string): Promise<{ generating: boolean; artifactTitles: string[] }> {
+        return this.enqueueTask(`Check Audio Status: ${notebookTitle || 'Current'}`, async () => {
+            if (notebookTitle) {
+                await this.openNotebook(notebookTitle);
+            }
+
+            // Check if it is still generating
+            const generating = await this.page.locator('artifact-library-item').filter({ hasText: /(Generating|Generovat|Generování)/i }).count();
+
+            // Get all current audio artifact titles
+            const artifactTitles = await this.getAudioArtifactTitles();
+
+            return {
+                generating: generating > 0,
+                artifactTitles
+            };
+        });
+    }
+
     /**
      * Rename an artifact in the Studio panel.
      * @param currentTitle The current title to search for

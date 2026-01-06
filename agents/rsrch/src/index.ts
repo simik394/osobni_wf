@@ -679,6 +679,26 @@ async function main() {
                 await sendServerRequest('/notebook/artifacts', { title });
             }
 
+        } else if (subArg1 === 'audio-status') {
+            // rsrch notebook audio-status --notebook "Title" [--local]
+            let notebookTitle = undefined;
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                }
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    const status = await notebook.checkAudioStatus(notebookTitle);
+                    console.log(JSON.stringify(status, null, 2));
+                });
+            } else {
+                await sendServerRequest('/notebook/audio-status', { notebookTitle });
+            }
+
         } else {
             console.log('NotebookLM commands:');
             console.log('  rsrch notebook create "Title" [--local]');
@@ -694,6 +714,7 @@ async function main() {
             console.log('  rsrch notebook sources "Title" [--local]');
             console.log('  rsrch notebook messages "Title" [--local]');
             console.log('  rsrch notebook artifacts "Title" [--local]');
+            console.log('  rsrch notebook audio-status --notebook "Title" [--local]');
         }
 
     } else if (command === 'graph') {
