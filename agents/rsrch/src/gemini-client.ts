@@ -377,25 +377,32 @@ export class GeminiClient {
                 }
             }
 
-            // Try to expand "My Content" / "Můj obsah" section
-            const myContentSection = this.page.locator('text=/Můj obsah|My content|My Content/i').first();
+            // Try to expand "My Stuff" / "Můj obsah" section (note: English label is "My Stuff", not "My Content")
+            const myContentSection = this.page.locator('text=/Můj obsah|My Stuff|My stuff/i').first();
             if (await myContentSection.count() > 0) {
                 try {
                     await myContentSection.click({ timeout: 2000 });
                     await this.page.waitForTimeout(1000);
-                    console.log('[Gemini] Clicked "My Content" section');
+                    console.log('[Gemini] Clicked "My Stuff" section');
                 } catch (e) {
                     // Section might already be expanded
                 }
             }
 
-            // Wait for library items to render
-            await this.page.waitForTimeout(1000);
+            // Wait for library items to render with proper dimensions
+            await this.page.waitForTimeout(1500);
 
             // Deep Research documents are in library-item-card elements
+            // Use JavaScript to find visible items (width > 0) since collapsed items have width=0
+            const visibleCount = await this.page.evaluate(() => {
+                const items = document.querySelectorAll('div.library-item-card');
+                return Array.from(items).filter(el => (el as HTMLElement).offsetWidth > 0).length;
+            });
+            console.log(`[Gemini] Found ${visibleCount} visible library-item-card elements`);
+
+            // Get all library items but only process visible ones
             const libraryItems = this.page.locator('div.library-item-card');
-            let count = await libraryItems.count();
-            console.log(`[Gemini] Found ${count} library-item-card elements`);
+            let count = visibleCount;
 
             if (count > limit) count = limit;
 
