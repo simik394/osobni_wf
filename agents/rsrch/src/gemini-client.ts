@@ -431,9 +431,11 @@ export class GeminiClient {
                             await this.page.waitForTimeout(2000);
                             const url = this.page.url();
                             // Deep Research URLs are like /gem/95da53cfcb0b/0b72911dae760a7b
-                            const urlMatch = url.match(/\/gem\/([a-f0-9]+)/);
+                            // First segment is shared across all docs, second segment is unique
+                            const urlMatch = url.match(/\/gem\/([a-f0-9]+)\/([a-f0-9]+)/);
                             if (urlMatch) {
-                                sessionId = urlMatch[1];
+                                // Use full path as sessionId for uniqueness
+                                sessionId = `${urlMatch[1]}-${urlMatch[2]}`;
                                 console.log(`[Gemini] Extracted sessionId from URL: ${sessionId}`);
                             }
                         } catch (clickErr) {
