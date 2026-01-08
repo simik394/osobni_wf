@@ -27,6 +27,24 @@ function getGlobalFlag(flag: string): string | undefined {
 const globalProfileId = getGlobalFlag('--profile') || 'default';
 const globalCdpEndpoint = getGlobalFlag('--cdp');
 
+// ntfy notification helper
+async function notifyNtfy(title: string, message: string, tags?: string[]) {
+    const ntfyTopic = process.env.NTFY_TOPIC || 'rsrch-audio';
+    const ntfyServer = process.env.NTFY_SERVER || 'https://ntfy.sh';
+    try {
+        await fetch(`${ntfyServer}/${ntfyTopic}`, {
+            method: 'POST',
+            headers: {
+                'Title': title,
+                'Tags': (tags || ['audio']).join(',')
+            },
+            body: message
+        });
+    } catch (e) {
+        console.error(`[ntfy] Failed to send notification: ${e}`);
+    }
+}
+
 // Helper to send request to server
 async function sendServerRequest(path: string, body: any = {}) {
     const port = config.port;
@@ -835,6 +853,18 @@ async function main() {
                             const customPrompt = promptTemplate.replace(/{title}/g, source.title);
                             console.log(`   Prompt: "${customPrompt}"`);
 
+                            // Track timing
+                            const startTime = Date.now();
+                            const startTimeStr = new Date(startTime).toLocaleTimeString('cs-CZ');
+                            console.log(`   ⏱️  Started: ${startTimeStr}`);
+
+                            // Notify generation start
+                            await notifyNtfy(
+                                `🎵 Starting: ${source.title.substring(0, 40)}`,
+                                `Generating audio for source ${i + 1}/${sources.length}\nNotebook: ${notebookTitle}`,
+                                ['hourglass_flowing_sand', 'audio']
+                            );
+
                             try {
                                 // Generate audio for this specific source
                                 const result = await notebook.generateAudioOverview(
@@ -845,11 +875,24 @@ async function main() {
                                     dryRun
                                 );
 
+                                const endTime = Date.now();
+                                const durationSec = Math.round((endTime - startTime) / 1000);
+                                const durationMin = Math.floor(durationSec / 60);
+                                const durationSecRemainder = durationSec % 60;
+                                console.log(`   ⏱️  Duration: ${durationMin}m ${durationSecRemainder}s`);
+
                                 if (result.success) {
                                     if (dryRun) {
                                         console.log(`   ✅ [DRY RUN] Audio generation simulated successfully`);
                                     } else {
                                         console.log(`   ✅ Audio generated: "${result.artifactTitle}"`);
+
+                                        // Notify success
+                                        await notifyNtfy(
+                                            `✅ Complete: ${source.title.substring(0, 40)}`,
+                                            `Audio generated in ${durationMin}m ${durationSecRemainder}s\nSource ${i + 1}/${sources.length}`,
+                                            ['white_check_mark', 'audio']
+                                        );
 
                                         // Sync to graph
                                         try {
@@ -872,6 +915,11 @@ async function main() {
                                     }
                                 } else {
                                     console.error(`   ❌ Failed to generate audio`);
+                                    await notifyNtfy(
+                                        `❌ Failed: ${source.title.substring(0, 40)}`,
+                                        `Audio generation failed after ${durationMin}m ${durationSecRemainder}s`,
+                                        ['x', 'warning']
+                                    );
                                 }
 
                                 // Wait between generations to avoid rate limits
@@ -919,18 +967,17 @@ async function main() {
         } else if (subArg1 === 'sources-without-audio') {
             // Query FalkorDB for sources that don't have audio yet
             // Usage: rsrch notebook sources-without-audio --notebook "Title"
-            let notebookPlatformId: string | undefined = undefined;
+            let notebookTitle: string | undefined = undefined;
 
             for (let i = 2; i < args.length; i++) {
-                if (args[i] === '--notebook' || args[i] === '--id') {
-                    notebookPlatformId = args[i + 1];
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
                     i++;
                 }
             }
 
-            if (!notebookPlatformId) {
-                console.error('Usage: rsrch notebook sources-without-audio --notebook "PLATFORM_ID"');
-                console.error('  Note: Use the platformId (from notebook URL), not the title');
+            if (!notebookTitle) {
+                console.error('Usage: rsrch notebook sources-without-audio --notebook "Notebook Title"');
                 process.exit(1);
             }
 
@@ -940,7 +987,22 @@ async function main() {
 
             try {
                 await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
-                const sources = await store.getSourcesWithoutAudio(notebookPlatformId);
+
+                // Look up notebook by title to get platformId
+                const notebooks = await store.getNotebooks(100);
+                const notebook = notebooks.find(n => n.title.includes(notebookTitle!) || notebookTitle!.includes(n.title));
+
+                if (!notebook) {
+                    console.error(`❌ Notebook "${notebookTitle}" not found in FalkorDB`);
+                    console.error('   Make sure to sync the notebook first: rsrch notebook sync --title "..." --local');
+                    process.exit(1);
+                }
+
+                // Extract platformId from notebook id (format: nb_PLATFORM_ID)
+                const platformId = notebook.id.replace('nb_', '');
+                console.log(`📓 Notebook: ${notebook.title} (${platformId})`);
+
+                const sources = await store.getSourcesWithoutAudio(platformId);
 
                 if (sources.length === 0) {
                     console.log('✅ All sources have audio generated!');
