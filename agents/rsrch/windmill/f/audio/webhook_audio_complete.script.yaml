@@ -1,0 +1,38 @@
+summary: ''
+description: ''
+lock: '!inline f/audio/webhook_audio_complete.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    args:
+      type: object
+      description: ''
+      default: null
+      format: resource-audio_complete_request
+      properties:
+        audio_title:
+          type: string
+          description: ''
+          originalType: string
+        notebook_id:
+          type: string
+          description: ''
+          originalType: string
+        pending_audio_id:
+          type: string
+          description: ''
+          originalType: string
+        source_count:
+          type: number
+          description: ''
+        source_title:
+          type: string
+          description: ''
+          originalType: string
+        start_time:
+          type: number
+          description: ''
+  required:
+    - args

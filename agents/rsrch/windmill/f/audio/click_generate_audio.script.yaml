@@ -1,0 +1,28 @@
+summary: ''
+description: ''
+lock: '!inline f/audio/click_generate_audio.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    args:
+      type: object
+      description: ''
+      default: null
+      format: resource-audio_generation_request
+      properties:
+        custom_prompt:
+          type: string
+          description: ''
+          originalType: string
+        notebook_title:
+          type: string
+          description: ''
+          originalType: string
+        source_title:
+          type: string
+          description: ''
+          originalType: string
+  required:
+    - args

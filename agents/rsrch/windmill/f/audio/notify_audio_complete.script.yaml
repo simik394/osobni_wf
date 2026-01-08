@@ -1,0 +1,39 @@
+summary: ''
+description: ''
+lock: '!inline f/audio/notify_audio_complete.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    args:
+      type: object
+      description: ''
+      default: null
+      properties:
+        artifact_title:
+          type: string
+          description: ''
+          originalType: string
+        notebook_title:
+          type: string
+          description: ''
+          originalType: string
+        source_index:
+          type: number
+          description: ''
+        source_title:
+          type: string
+          description: ''
+          originalType: string
+        start_time:
+          type: number
+          description: ''
+        success:
+          type: boolean
+          description: ''
+        total_sources:
+          type: number
+          description: ''
+  required:
+    - args

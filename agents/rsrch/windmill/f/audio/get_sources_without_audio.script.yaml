@@ -1,0 +1,19 @@
+summary: ''
+description: ''
+lock: '!inline f/audio/get_sources_without_audio.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    args:
+      type: object
+      description: ''
+      default: null
+      properties:
+        notebook_title:
+          type: string
+          description: ''
+          originalType: string
+  required:
+    - args

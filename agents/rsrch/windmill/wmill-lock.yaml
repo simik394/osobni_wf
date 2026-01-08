@@ -1,0 +1,7 @@
+version: v2
+locks:
+  f/audio/click_generate_audio: 8f4c30ae29ffd4301279a99a0195a0b4df999a13c588b49c3810ee74ba4d1e94
+  f/audio/get_sources_without_audio: 51147d3dcc29e9b59b573cfbf65b06b2fbd46d4e1db0f8913abce36decfa9e49
+  f/audio/notify_audio_complete: a0d575f0c9922e48040e9e508372d9d16128ffd5aa7453b4ecb9e7bf40a7f54d
+  f/audio/notify_audio_start: cfa7aed24786a4c2d55e4a4114477a63382dfbffa0026371c5e68d5b6f862b8e
+  f/audio/webhook_audio_complete: 855078cef9f9564041dbcdc86f66f0e0de6239726f2103904cd205e29c111c26
