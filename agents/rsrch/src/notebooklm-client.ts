@@ -469,23 +469,9 @@ export class NotebookLMClient {
                     await this.selectSources(sources);
                 }
 
-                // Check for generating status - if something is already generating, wait for it first
+                // Ensure Studio is open
                 await this.maximizeStudio();
                 await this.humanDelay(500);
-
-                // Use text-based detection since element selectors are unreliable
-                const pageText = await this.page.locator('body').innerText();
-                const isGenerating = /Generování|Generating/i.test(pageText);
-
-                if (isGenerating) {
-                    console.log('[DEBUG] Previous audio generation in progress, waiting for it to complete first...');
-                    await this.waitForGeneration(notebookTitle);
-                    console.log('[DEBUG] Previous generation finished. Now triggering new generation for selected sources.');
-                    await this.humanDelay(1000);
-                }
-
-                // Re-open studio after waiting (page state may have changed)
-                await this.maximizeStudio();
 
                 // Trigger Generation (click Generate or Customize -> Generate)
                 const triggered = await this.triggerAudioGeneration(customPrompt, dryRun, notebookTitle);
