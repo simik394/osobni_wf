@@ -1,0 +1,36 @@
+---
+- name: Get latest Zellij release info
+  uri:
+    url: https://api.github.com/repos/zellij-org/zellij/releases/latest
+    return_content: true
+  register: zellij_release
+
+- name: Set zellij download url
+  set_fact:
+    zellij_tarball_url: "{{ zellij_release.json.assets | selectattr('name', 'search', 'x86_64-unknown-linux-musl.tar.gz') | map(attribute='browser_download_url') | first }}"
+    zellij_version: "{{ zellij_release.json.tag_name }}"
+
+- name: Ensure .local/bin exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin"
+    state: directory
+    mode: '0755'
+
+- name: Download and unarchive Zellij
+  unarchive:
+    src: "{{ zellij_tarball_url }}"
+    dest: "{{ ansible_env.HOME }}/.local/bin"
+    remote_src: yes
+    mode: '0755'
+    extra_opts:
+      - --no-anchored
+      - zellij
+
+- name: Verify Zellij installation
+  command: "{{ ansible_env.HOME }}/.local/bin/zellij --version"
+  register: zellij_ver_check
+  changed_when: false
+
+- name: Display Zellij version
+  debug:
+    msg: "Installed Zellij version: {{ zellij_ver_check.stdout }}"

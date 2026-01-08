@@ -18,3 +18,6 @@
       tags: x11vnc
       # vars:
       #   vnc_password: "your-secure-password"  # Pass via -e instead
+    - role: zellij
+      tags: zellij
+

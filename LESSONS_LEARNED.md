@@ -146,3 +146,39 @@ When wrapping browser automation as OpenAI-compatible API:
 - **One-Shot Status Checks**: Implementing a standalone `checkAudioStatus` by reusing polling logic (checking for "Generating" indicators) provides a low-overhead way to monitor long-running tasks without blocking or re-triggering them.
 - **Verification via Subagent**: When a CLI/Agent environment lacks authentication (e.g. fresh `default` profile), use a `browser_subagent` to verify UI state and content. It acts as a "live observer" that can bridge the authentication gap during development and verification.
 - **Artifact Identification**: In NotebookLM, identifying newly generated artifacts is most robust by "snapshotting" the titles before generation and comparing them after completion, followed by immediate renaming to a unique timestamped title.
+- **Google Auth Stealth**: Google login via Playwright requires `slowMo` (e.g. 100ms) and `StealthPlugin` with `AutomationControlled` disabled (`--disable-blink-features=AutomationControlled` and `ignoreDefaultArgs: ['--enable-automation']`) to avoid "Not secure" blocks.
+
+## CopyQ Integration & CLI Scripting
+
+- **No CLI for `importCommands`**: Despite documentation suggesting `copyq importCommands file.ini`, CopyQ v13.0 does not have this command. The only reliable import method is via **GUI**: F6 → Import button → select file.
+
+- **Quote Escaping Hell**: Adding commands programmatically via `copyq eval '...'` fails spectacularly when the command script contains:
+  - Nested quotes (single inside double or vice versa)
+  - Regex patterns with backslashes (`/https?:\/\//`)
+  - Newlines in multi-line JavaScript
+  
+  *Each layer of interpretation (bash → copyq → JavaScript engine) strips or transforms escape sequences.*
+
+- **The Fix - Simplify**: Instead of complex `copyq:` JavaScript scripts, use the `bash:` prefix which directly executes a shell command:
+  ```javascript
+  // ❌ Fails - quote/escape nightmare
+  copyq eval 'var c=commands(); c.push({cmd: "copyq:\nvar x = selectedItems();\n..."});'
+  
+  // ✅ Works - simple bash prefix
+  copyq eval 'var c=commands(); c.push({name:"My Cmd", cmd:"bash:/path/to/script.sh -qn", inMenu:true}); setCommands(c);'
+  ```
+  
+- **Script Design for Automation**: To support CopyQ/automation triggers, scripts should accept:
+  - `-i FILE` for input from file (avoid clipboard race conditions)
+  - `-i -` for stdin (allows piping from CopyQ's `selectedItemData`)
+  - `-q` quiet mode (no stdout noise)
+  - `-n` desktop notification (feedback without terminal)
+
+- **Item Actions vs Global Shortcuts**: CopyQ distinguishes between:
+  - **Global Shortcuts**: Triggered anywhere, use `clipboard()` for current system clipboard
+  - **Item Actions**: Triggered on selected items in CopyQ, use `selectedItems()` + `read(row)` to get item content
+
+- **Duplicate Commands**: Running `setCommands(cmds.push(...))` multiple times appends duplicates. Always check `cmds.some(c => c.name === 'X')` before adding.
+
+- **Implicit Configuration Expectations**: Users may request to "use" a configuration that doesn't strictly exist as a file but is implied by the project structure. In such cases, filling the gap by creating the missing standard component (e.g., a new Ansible role) is often the correct interpretation of "using the config" (i.e., extending the existing system).
+
