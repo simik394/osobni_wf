@@ -442,9 +442,15 @@ export class NotebookLMClient {
                     await this.selectSources(sources);
                 }
 
-                // Check for generating status
-                const generatingLocator = this.page.locator('.artifact-title').filter({ hasText: /Generování|Generating/ });
-                if (await generatingLocator.count() > 0) {
+                // Check for generating status - look for "Generování" text in Studio panel
+                await this.maximizeStudio();
+                await this.humanDelay(500);
+
+                // Use text-based detection since element selectors are unreliable
+                const pageText = await this.page.locator('body').innerText();
+                const isGenerating = /Generování|Generating/i.test(pageText);
+
+                if (isGenerating) {
                     console.log('[DEBUG] Audio generation already in progress.');
                     if (waitForCompletion) {
                         await this.waitForGeneration(notebookTitle);
@@ -503,18 +509,31 @@ export class NotebookLMClient {
     private async getAudioArtifactTitles(): Promise<string[]> {
         // Ensure the list is visible
         await this.maximizeStudio();
+        await this.humanDelay(500);
 
         const titles: string[] = [];
-        const items = this.page.locator('artifact-library-item .artifact-title');
-        const count = await items.count();
+
+        // Look for items in Studio panel that look like audio artifacts
+        // Based on screenshot: items contain source names like "Architektura Proxmox..."
+        // Try multiple selector strategies
+        const studioPanel = this.page.locator('div:has-text("Studio")').first();
+
+        // Find all clickable items that could be audio artifacts (exclude the main "Audio přehled" button)
+        // Audio artifacts typically have the source document title in them
+        const potentialItems = this.page.locator('button, [role="button"], div[aria-label]')
+            .filter({ hasText: /Architektura|Analýza|Destilace|Filesystém|Hookmark|Moderní|Notebook/i });
+
+        const count = await potentialItems.count();
+        console.log(`[DEBUG] Found ${count} potential audio artifact items`);
 
         for (let i = 0; i < count; i++) {
-            const text = await items.nth(i).innerText();
-            if (/Audio (Overview|přehled)|audio_magic_eraser/i.test(text)) {
-                titles.push(text);
+            const text = await potentialItems.nth(i).innerText().catch(() => '');
+            if (text && text.length > 5 && !text.includes('Přidat') && !text.includes('zdroj')) {
+                titles.push(text.substring(0, 80));
             }
         }
-        return titles;
+
+        return [...new Set(titles)]; // Remove duplicates
     }
 
     async checkAudioStatus(notebookTitle?: string): Promise<{ generating: boolean; artifactTitles: string[] }> {
@@ -523,14 +542,20 @@ export class NotebookLMClient {
                 await this.openNotebook(notebookTitle);
             }
 
-            // Check if it is still generating
-            const generating = await this.page.locator('artifact-library-item').filter({ hasText: /(Generating|Generovat|Generování)/i }).count();
+            await this.maximizeStudio();
+            await this.humanDelay(500);
+
+            // Check if it is still generating - look for "Generování" text anywhere in Studio
+            const generatingLocator = this.page.locator('body').filter({ hasText: /Generování|Generating/i });
+            const generating = await generatingLocator.count() > 0;
+            console.log(`[DEBUG] Generation in progress: ${generating}`);
 
             // Get all current audio artifact titles
             const artifactTitles = await this.getAudioArtifactTitles();
+            console.log(`[DEBUG] Found ${artifactTitles.length} audio artifacts`);
 
             return {
-                generating: generating > 0,
+                generating,
                 artifactTitles
             };
         });
@@ -725,13 +750,14 @@ export class NotebookLMClient {
 
         while (Date.now() - startTime < maxWait) {
             await this.page.waitForTimeout(5000);
-            // Check if it is still generating
-            const generating = await this.page.locator('artifact-library-item').filter({ hasText: /(Generating|Generovat|Generování)/i }).count();
 
-            // Check if complete (just look for the item generally, if it exists and NOT generating)
-            const completed = await this.page.locator('artifact-library-item').filter({ hasText: /Audio (Overview|přehled)|audio_magic_eraser/i }).count();
+            // Use text-based detection since element selectors are unreliable
+            const pageText = await this.page.locator('body').innerText();
+            const isGenerating = /Generování|Generating/i.test(pageText);
 
-            if (generating === 0 && completed > 0) {
+            console.log(`[DEBUG] Still generating: ${isGenerating}, elapsed: ${Math.round((Date.now() - startTime) / 1000)}s`);
+
+            if (!isGenerating) {
                 console.log('[DEBUG] Generation complete!');
                 await this.notifyDiscord(`✅ Audio Overview generation complete for notebook: "${notebookTitle || 'Current'}"`);
                 return;
