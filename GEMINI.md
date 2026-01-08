@@ -16,18 +16,29 @@ test
 > NotebookLM supports parallel audio generation. NEVER wait for one generation to complete before starting another.
 
 ### Required Architecture:
-1. **Click Script** (Windmill) → Start generation → Set up watcher → **RETURN IMMEDIATELY**
+1. **Click Script** (Windmill) → Start generation → **Update FalkorDB** → Set up watcher → **RETURN IMMEDIATELY**
 2. **Watcher** → Monitor page in background → Call webhook on completion
-3. **Webhook** → Update FalkorDB → Send ntfy notification
+3. **Webhook** → **Update FalkorDB** → Send ntfy notification
 4. **Queue** → Next click job runs in parallel
+
+### MANDATORY: State Sync with FalkorDB     
+> [!IMPORTANT]
+> **EVERY browser operation MUST update FalkorDB state.**
+> 
+> - Click to start generation → Create pending AudioOverview in FalkorDB
+> - Audio completes → Update AudioOverview with final title, sourceCount
+> - Source selection → Record which source was selected
+> - Any state change in browser → Reflect in FalkorDB
 
 ### Forbidden Patterns:
 - ❌ `await waitForGeneration()` - NEVER block waiting for audio to complete
 - ❌ `while (isGenerating) { sleep() }` - NEVER poll in a blocking loop
 - ❌ Assuming only one generation can run at a time
+- ❌ **Browser actions without corresponding FalkorDB updates**
 
 ### Required Behaviors:
 - ✅ Trigger generation and return immediately
 - ✅ Use existing browser tab if already on correct notebook
 - ✅ Queue multiple generations - they run in parallel on cloud
 - ✅ Notifications via webhook/watcher, not by blocking
+- ✅ **Every browser action updates FalkorDB state**
