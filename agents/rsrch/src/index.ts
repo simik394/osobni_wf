@@ -340,8 +340,8 @@ async function main() {
                         }
                     }
 
-                    // 1. Generate Audio
-                    const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, false, dryRun);
+                    // 1. Generate Audio (wait for completion)
+                    const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
 
                     if (dryRun) return;
 
