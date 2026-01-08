@@ -711,7 +711,7 @@ async function main() {
                 if (args[i] === '--notebook') {
                     notebookTitle = args[i + 1];
                     i++;
-                } else if (args[i] === '--prompt-template') {
+                } else if (args[i] === '--prompt-template' || args[i] === '--prompt') {
                     promptTemplate = args[i + 1];
                     i++;
                 } else if (args[i] === '--wet') {
@@ -781,7 +781,7 @@ async function main() {
                                     notebookTitle,
                                     [source.title],  // Select only this source
                                     customPrompt,
-                                    false,  // Do NOT wait for completion - return immediately
+                                    true,  // Wait for completion - sequential per-source generation
                                     dryRun
                                 );
 
