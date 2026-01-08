@@ -455,7 +455,7 @@ export class NotebookLMClient {
                     await this.selectSources(sources);
                 }
 
-                // Check for generating status - look for "Generování" text in Studio panel
+                // Check for generating status - if something is already generating, wait for it first
                 await this.maximizeStudio();
                 await this.humanDelay(500);
 
@@ -464,17 +464,13 @@ export class NotebookLMClient {
                 const isGenerating = /Generování|Generating/i.test(pageText);
 
                 if (isGenerating) {
-                    console.log('[DEBUG] Audio generation already in progress.');
-                    if (waitForCompletion) {
-                        await this.waitForGeneration(notebookTitle);
-                        const newTitles = await this.getAudioArtifactTitles();
-                        const diff = newTitles.filter(t => !existingAudioTitles.includes(t));
-                        return { success: true, artifactTitle: diff[0] };
-                    }
-                    return { success: true };
+                    console.log('[DEBUG] Previous audio generation in progress, waiting for it to complete first...');
+                    await this.waitForGeneration(notebookTitle);
+                    console.log('[DEBUG] Previous generation finished. Now triggering new generation for selected sources.');
+                    await this.humanDelay(1000);
                 }
 
-                // Ensure Studio is open
+                // Re-open studio after waiting (page state may have changed)
                 await this.maximizeStudio();
 
                 // Trigger Generation (click Generate or Customize -> Generate)
