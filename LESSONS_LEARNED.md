@@ -182,3 +182,8 @@ When wrapping browser automation as OpenAI-compatible API:
 
 - **Implicit Configuration Expectations**: Users may request to "use" a configuration that doesn't strictly exist as a file but is implied by the project structure. In such cases, filling the gap by creating the missing standard component (e.g., a new Ansible role) is often the correct interpretation of "using the config" (i.e., extending the existing system).
 
+- **Per-Source Audio Generation**: When generating audio for multiple sources in a single notebook, NotebookLM's source selection UI allows programmatic selection of specific sources before generation. This enables creating focused audio overviews for individual sources rather than always generating for all sources at once.
+- **Custom Prompts with Templates**: A simple template system (e.g., `{title}` placeholder) is sufficient for per-source custom prompts. This allows dynamic prompt generation without complex prompt engineering infrastructure.
+- **Rate Limiting Between Generations**: When generating multiple audio overviews in sequence, adding a 10-second delay between generations prevents rate limit issues and provides more reliable results than rapid-fire generation.
+- **Profile Management for Multi-Account**: The profile system (`~/.rsrch/profiles/{profileId}/`) enables clean separation of different Google accounts (work, personal) without authentication conflicts. Each profile maintains its own browser state and auth.json independently.
+- **Dry Run for Quota Protection**: Implementing dry-run mode for expensive operations (like NotebookLM audio generation) allows full  workflow testing without consuming quotas. This is essential when working with rate-limited APIs.
