@@ -675,8 +675,15 @@ export class NotebookLMClient {
                     console.warn('[DEBUG] Customize dialog textarea not found');
                 }
 
-                // Click Generate button in dialog
-                const generateBtn = this.page.locator('button').filter({ hasText: /^Vygenerovat$|^Generate$/i }).first();
+                // Click Generate button in dialog - wait for it to appear
+                await this.humanDelay(500); // Let dialog fully render
+
+                // Try multiple selectors for the generate button
+                let generateBtn = this.page.locator('button:has-text("Vygenerovat")').first();
+                if (await generateBtn.count() === 0) {
+                    generateBtn = this.page.locator('button:has-text("Generate")').first();
+                }
+
                 if (await generateBtn.count() > 0 && await generateBtn.isVisible()) {
                     console.log('[DEBUG] Clicking Generate button in customize dialog...');
                     await generateBtn.click();
