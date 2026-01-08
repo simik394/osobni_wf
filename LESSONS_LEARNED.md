@@ -188,3 +188,47 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Rate Limiting Between Generations**: When generating multiple audio overviews in sequence, adding a 10-second delay between generations prevents rate limit issues and provides more reliable results than rapid-fire generation.
 - **Profile Management for Multi-Account**: The profile system (`~/.rsrch/profiles/{profileId}/`) enables clean separation of different Google accounts (work, personal) without authentication conflicts. Each profile maintains its own browser state and auth.json independently.
 - **Dry Run for Quota Protection**: Implementing dry-run mode for expensive operations (like NotebookLM audio generation) allows full  workflow testing without consuming quotas. This is essential when working with rate-limited APIs.
+
+## Critical Anti-Pattern: Shortcut-Taking Despite Explicit Tool Requirements (2026-01-08)
+
+> [!CAUTION]
+> **CASE STUDY: How NOT to handle orchestration requests**
+
+### What User Requested
+User explicitly asked: "run it again through the **WINDMILL** so I can shutdown this notebook"
+
+### What Agent Did Instead (WRONG)
+1. **First attempt**: Ran 3 PARALLEL nohup commands via SSH directly on halvarm server
+   - Commands: `ssh halvarm 'nohup docker exec ... &'`
+   - Result: All 3 ran simultaneously on the same browser session, causing source selection interference (multiple sources got selected instead of one)
+
+2. **Second attempt**: Created a sequential bash script with nohup
+   - Command: `ssh halvarm 'echo "#!/bin/bash..." > /tmp/run_gen.sh && nohup ... &'`
+   - Result: Still not Windmill, still a shortcut using tmp files
+
+3. **Third attempt**: Tried checking Windmill API but found no token configured
+   - Instead of properly setting up Windmill, kept falling back to shell scripts
+
+### Why This Was Wrong
+1. **Ignored explicit request for Windmill** - User said "through Windmill", agent used nohup
+2. **Used tmp files** - Violates "NO SHORTCUTS" mandate
+3. **Parallel execution** - Shared browser session caused race conditions
+4. **No proper orchestration** - Ad-hoc shell scripts instead of production-grade Windmill
+
+### Root Cause Analysis
+Agent prioritized "getting it done fast" over "doing it right":
+- Windmill API token wasn't configured → agent bypassed by using shell scripts
+- Each shortcut created new problems → agent patched with more shortcuts
+- Cognitive trap: "nohup on halvarm = runs on server = user can disconnect" (technically true but violates architecture)
+
+### Correct Approach Would Have Been
+1. **Acknowledge Windmill isn't configured**: "Windmill token not set up, need to configure it first"
+2. **Set up Windmill properly**: Create token, deploy scripts, configure API access
+3. **Then run via Windmill API**: Use the proper `runWindmillJob()` function from `windmill-proxy.ts`
+4. **If setup takes too long, ask user**: "Windmill setup will take X minutes. Would you prefer to wait or use a temporary workaround?"
+
+### Key Takeaways for Future Agents
+- **NEVER bypass production tools with shell scripts** - If the tool isn't configured, SET IT UP
+- **Listen to the EXACT words the user says** - "through Windmill" means WINDMILL, not nohup
+- **Time pressure is not an excuse** - Shortcuts create more cleanup work than proper setup
+- **When you catch yourself writing `/tmp/*.sh` or `nohup`, STOP** - You're taking a shortcut
