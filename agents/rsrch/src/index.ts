@@ -242,19 +242,27 @@ async function main() {
             }
 
         } else if (subArg1 === 'generate-audio' || subArg1 === 'audio') {
+            // Atomic command: generate audio for specific sources with optional prompt
+            // Usage: rsrch notebook generate-audio --notebook "Title" --source "A" --source "B" [--prompt "..."] [--wet] [--force]
             let notebookTitle = undefined;
             let sources: string[] = [];
             let customPrompt: string | undefined = undefined;
             let wetRun = false;
+            let forceRegenerate = false;
 
             for (let i = 2; i < args.length; i++) {
                 if (args[i] === '--notebook') {
                     notebookTitle = args[i + 1];
                     i++;
+                } else if (args[i] === '--source') {
+                    // Support multiple --source flags
+                    sources.push(args[i + 1]);
+                    i++;
                 } else if (args[i] === '--sources') {
+                    // Legacy: comma-separated sources
                     const rawSources = args[i + 1];
                     if (rawSources) {
-                        sources = rawSources.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                        sources = sources.concat(rawSources.split(',').map(s => s.trim()).filter(s => s.length > 0));
                     }
                     i++;
                 } else if (args[i] === '--prompt') {
@@ -264,6 +272,8 @@ async function main() {
                     // Consume --local flag
                 } else if (args[i] === '--wet') {
                     wetRun = true;
+                } else if (args[i] === '--force') {
+                    forceRegenerate = true;
                 }
             }
 
@@ -278,6 +288,17 @@ async function main() {
                 console.log('   Audio WILL be generated. Quota will be consumed.\n');
             }
 
+            if (sources.length > 0) {
+                console.log(`📝 Selected sources (${sources.length}):`);
+                sources.forEach((s, i) => console.log(`   ${i + 1}. ${s}`));
+            }
+            if (customPrompt) {
+                console.log(`💬 Custom prompt: "${customPrompt}"`);
+            }
+            if (forceRegenerate) {
+                console.log('⚡ Force mode: will regenerate even if audio already exists');
+            }
+
             if (isLocalExecution()) {
                 // Import graph store for syncing
                 const { getGraphStore } = await import('./graph-store');
@@ -285,6 +306,22 @@ async function main() {
                 const graphHost = process.env.FALKORDB_HOST || 'localhost';
 
                 await runLocalNotebookAction({}, async (client, notebook) => {
+                    // Check for existing audio if not forcing
+                    if (!forceRegenerate && sources.length > 0) {
+                        const status = await notebook.checkAudioStatus(notebookTitle);
+                        const existingForSource = sources.filter(s => {
+                            const prefix = s.substring(0, 20).toLowerCase();
+                            return status.artifactTitles.some((t: string) => t.toLowerCase().includes(prefix));
+                        });
+
+                        if (existingForSource.length > 0) {
+                            console.log(`\n⚠️  DUPLICATE DETECTED: Audio already exists for:`);
+                            existingForSource.forEach(s => console.log(`   - ${s}`));
+                            console.log(`   Use --force to regenerate with a different prompt.`);
+                            return;
+                        }
+                    }
+
                     // 1. Generate Audio
                     const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, false, dryRun);
 
