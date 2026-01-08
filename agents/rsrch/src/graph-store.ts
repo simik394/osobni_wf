@@ -123,6 +123,14 @@ export class GraphStore {
     }
 
     /**
+     * Execute a raw Cypher query (public for CLI use)
+     */
+    async executeQuery(query: string): Promise<{ data?: Record<string, unknown>[] }> {
+        if (!this.graph) throw new Error('Not connected');
+        return this.graph.query(query);
+    }
+
+    /**
      * Initialize graph schema (indexes)
      */
     private async initSchema(): Promise<void> {

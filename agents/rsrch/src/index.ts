@@ -340,10 +340,52 @@ async function main() {
                         }
                     }
 
+                    // Connect to FalkorDB early for state tracking
+                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+
+                    // Get notebook ID from FalkorDB for state tracking
+                    let notebookId: string | undefined;
+                    if (notebookTitle) {
+                        const nbResult = await store.executeQuery(
+                            `MATCH (n:Notebook) WHERE n.title CONTAINS "${notebookTitle.substring(0, 30)}" RETURN n.id as id LIMIT 1`
+                        );
+                        if (nbResult.data && nbResult.data.length > 0) {
+                            notebookId = (nbResult.data[0] as { id: string }).id;
+                        }
+                    }
+
+                    // Create PendingAudio in FalkorDB BEFORE triggering generation
+                    const pendingAudioId = `pending_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                    const startTime = Date.now();
+
+                    if (notebookId && sources.length > 0 && !dryRun) {
+                        console.log('[FalkorDB] Creating PendingAudio state...');
+                        await store.executeQuery(`
+                            CREATE (pa:PendingAudio {
+                                id: "${pendingAudioId}",
+                                notebookId: "${notebookId}",
+                                sources: "${sources.join(', ')}",
+                                status: "generating",
+                                startedAt: ${startTime},
+                                customPrompt: "${(customPrompt || '').replace(/"/g, '\\"').substring(0, 200)}"
+                            })
+                        `);
+                        console.log('[FalkorDB] PendingAudio created:', pendingAudioId);
+                    }
+
                     // 1. Generate Audio (wait for completion)
                     const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
 
-                    if (dryRun) return;
+                    // Delete PendingAudio after completion
+                    if (!dryRun) {
+                        await store.executeQuery(`MATCH (pa:PendingAudio {id: "${pendingAudioId}"}) DETACH DELETE pa`);
+                        console.log('[FalkorDB] PendingAudio deleted (generation complete)');
+                    }
+
+                    if (dryRun) {
+                        await store.disconnect();
+                        return;
+                    }
 
                     if (result.success && result.artifactTitle) {
                         console.log(`\n[Audio] Generation successful. New artifact: "${result.artifactTitle}"`);
