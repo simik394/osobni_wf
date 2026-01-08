@@ -520,29 +520,44 @@ export class NotebookLMClient {
         await this.maximizeStudio();
         await this.humanDelay(500);
 
-        const titles: string[] = [];
+        const results: string[] = [];
 
-        // Look for items in Studio panel that look like audio artifacts
-        // Based on screenshot: items contain source names like "Architektura Proxmox..."
-        // Try multiple selector strategies
-        const studioPanel = this.page.locator('div:has-text("Studio")').first();
-
-        // Find all clickable items that could be audio artifacts (exclude the main "Audio přehled" button)
-        // Audio artifacts typically have the source document title in them
-        const potentialItems = this.page.locator('button, [role="button"], div[aria-label]')
-            .filter({ hasText: /Architektura|Analýza|Destilace|Filesystém|Hookmark|Moderní|Notebook/i });
-
-        const count = await potentialItems.count();
-        console.log(`[DEBUG] Found ${count} potential audio artifact items`);
+        // From DOM inspection: audio artifacts are button.artifact-button-content
+        // containing mat-icon with text 'audio_magic_eraser'
+        const artifactButtons = this.page.locator('button.artifact-button-content');
+        const count = await artifactButtons.count();
+        console.log(`[DEBUG] Found ${count} artifact buttons in Studio`);
 
         for (let i = 0; i < count; i++) {
-            const text = await potentialItems.nth(i).innerText().catch(() => '');
-            if (text && text.length > 5 && !text.includes('Přidat') && !text.includes('zdroj')) {
-                titles.push(text.substring(0, 80));
+            const button = artifactButtons.nth(i);
+
+            // Check if this is an audio artifact (has mat-icon with audio_magic_eraser)
+            const icon = await button.locator('mat-icon').first().innerText().catch(() => '');
+            const iconTrimmed = icon.trim().toLowerCase();
+            console.log(`[DEBUG] Button ${i}: icon="${iconTrimmed}"`);
+
+            // Match audio by icon (audio_magic_eraser) or if icon contains 'audio'
+            if (!iconTrimmed.includes('audio')) {
+                continue; // Skip non-audio artifacts
+            }
+
+            // Extract title - first div > span
+            const titleSpan = button.locator('div span').first();
+            const title = await titleSpan.innerText().catch(() => '');
+
+            // Extract metadata (source count) - look for "X zdroj" 
+            const fullText = await button.innerText().catch(() => '');
+            const sourceMatch = fullText.match(/(\d+)\s*zdroj/);
+            const sourceCount = sourceMatch ? parseInt(sourceMatch[1]) : 0;
+
+            if (title && title.length > 3) {
+                results.push(`${title.substring(0, 80).trim()}|${sourceCount}`);
+                console.log(`[DEBUG] Audio: "${title.substring(0, 40)}..." (${sourceCount} sources)`);
             }
         }
 
-        return [...new Set(titles)]; // Remove duplicates
+        console.log(`[DEBUG] Found ${results.length} audio artifacts`);
+        return results;
     }
 
     async checkAudioStatus(notebookTitle?: string): Promise<{ generating: boolean; artifactTitles: string[] }> {
