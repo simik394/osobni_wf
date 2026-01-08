@@ -8,6 +8,19 @@ test
 - **Docker > Local Installation**: Prefer running tools via Docker containers over installing packages locally (pip, npm, etc.). This keeps the system clean and dependencies isolated.
 - **Scripts over Ad-hoc Fixes**: For repeatable tasks (like file renaming, postprocessing), always create a reusable script rather than doing one-time manual fixes. This ensures the solution is persistent and can be integrated into automation pipelines.
 
+> [!CAUTION]
+> **NO SHORTCUTS - PRODUCTION-GRADE ONLY**
+> 
+> NEVER take shortcuts like ad-hoc shell scripts, nohup commands, or tmp files when production-grade tools exist.
+> 
+> **ALWAYS use:**
+> - Windmill for job orchestration (NOT nohup/screen/tmux)
+> - Proper deployment pipelines (NOT docker cp)
+> - Configured APIs with auth (NOT curl hacks)
+> - Documented tools and workflows (NOT one-off scripts)
+> 
+> If a tool isn't configured yet, SET IT UP PROPERLY first. Don't bypass with shortcuts.
+
 ## ⚠️ CRITICAL: Non-Blocking Audio Generation Architecture
 
 > [!CAUTION]
