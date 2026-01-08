@@ -147,6 +147,7 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Verification via Subagent**: When a CLI/Agent environment lacks authentication (e.g. fresh `default` profile), use a `browser_subagent` to verify UI state and content. It acts as a "live observer" that can bridge the authentication gap during development and verification.
 - **Artifact Identification**: In NotebookLM, identifying newly generated artifacts is most robust by "snapshotting" the titles before generation and comparing them after completion, followed by immediate renaming to a unique timestamped title.
 - **Google Auth Stealth**: Google login via Playwright requires `slowMo` (e.g. 100ms) and `StealthPlugin` with `AutomationControlled` disabled (`--disable-blink-features=AutomationControlled` and `ignoreDefaultArgs: ['--enable-automation']`) to avoid "Not secure" blocks.
+- **Browser Subagent Caching**: When using browser subagent to discover DOM selectors, capture ALL needed information in ONE session. DO NOT repeatedly open browser to re-discover the same selectors. Save selector info and reuse it - avoid redundant browser opens.
 
 ## CopyQ Integration & CLI Scripting
 
