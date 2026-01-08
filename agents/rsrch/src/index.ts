@@ -828,6 +828,22 @@ async function main() {
 
                         console.log(`\n\n🎉 Completed processing ${sources.length} sources!`);
 
+                        // Quick notebook stats at the end
+                        console.log('\n📊 Notebook Summary:');
+                        const finalData = await notebook.scrapeNotebook(notebookTitle, false);
+                        console.log(`   Sources: ${finalData.sources.length}`);
+                        console.log(`   Messages: ${finalData.messages.length}`);
+
+                        // Group artifacts by type
+                        const artifactsByType = new Map<string, number>();
+                        for (const art of finalData.artifacts) {
+                            artifactsByType.set(art.type, (artifactsByType.get(art.type) || 0) + 1);
+                        }
+                        console.log(`   Studio Artifacts:`);
+                        for (const [type, count] of artifactsByType) {
+                            console.log(`     - ${type}: ${count}`);
+                        }
+
                         if (dryRun) {
                             console.log('\n💡 This was a DRY RUN. To actually generate audio, add --wet flag');
                         }

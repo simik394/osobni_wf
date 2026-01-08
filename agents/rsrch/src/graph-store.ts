@@ -1241,6 +1241,56 @@ export class GraphStore {
     }
 
     /**
+     * Get audio for a ResearchDoc (stub for server.ts compatibility)
+     */
+    async getAudioForResearchDoc(researchDocId: string): Promise<Audio | null> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (d:ResearchDoc {id: '${escapeString(researchDocId)}'})-[:CONVERTED_TO]->(a:Audio)
+            RETURN a LIMIT 1
+        `);
+
+        if (result.data && result.data.length > 0) {
+            const row = result.data[0] as any;
+            const props = row.a?.properties || row.a;
+            return {
+                id: props.id,
+                path: props.path,
+                duration: props.duration,
+                createdAt: props.createdAt
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Create audio from ResearchDoc and link them (stub for server.ts compatibility)
+     */
+    async createResearchAudio(data: { researchDocId: string; path: string; filename: string; duration: number }): Promise<Audio> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const audioId = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const createdAt = Date.now();
+
+        // Create audio node and link to ResearchDoc
+        await this.graph.query(`
+            MATCH (d:ResearchDoc {id: '${escapeString(data.researchDocId)}'})
+            CREATE (a:Audio {
+                id: '${audioId}',
+                path: '${escapeString(data.path)}',
+                filename: '${escapeString(data.filename)}',
+                duration: ${data.duration || 0},
+                createdAt: ${createdAt}
+            })
+            CREATE (d)-[:CONVERTED_TO]->(a)
+        `);
+
+        console.log(`[GraphStore] ResearchAudio created: ${audioId} for doc ${data.researchDocId}`);
+        return { id: audioId, path: data.path, duration: data.duration, createdAt };
+    }
+
+    /**
      * Link job to session (Job -[:STARTED]-> Session)
      */
     async linkJobToSession(jobId: string, sessionId: string): Promise<void> {
