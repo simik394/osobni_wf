@@ -5,6 +5,34 @@ This project automates querying Perplexity.ai using Playwright in a Dockerized e
 
 ## Critical Design Decisions
 
+### ⚠️ 0. NON-BLOCKING AUDIO GENERATION (MANDATORY)
+
+> [!CAUTION]
+> **THIS ARCHITECTURE IS MANDATORY. DO NOT CHANGE WITHOUT EXPLICIT USER REQUEST.**
+
+NotebookLM processes audio generation on cloud servers in PARALLEL. Multiple generations can run simultaneously.
+
+**Architecture:**
+```
+Click Script → Trigger gen → Set watcher → RETURN IMMEDIATELY
+                                    ↓
+Watcher (background) → Monitor page → Call webhook on complete
+                                    ↓
+Webhook → FalkorDB update → ntfy notification
+                                    ↓
+Queue → Next click job runs (parallel with previous)
+```
+
+**FORBIDDEN:**
+- `await waitForGeneration()` - NEVER block
+- `while (generating) { sleep }` - NEVER poll
+- Assuming sequential generation - IT'S PARALLEL
+
+**REQUIRED:**
+- Trigger and return immediately
+- Reuse existing browser tab when possible
+- Multiple generations run in parallel
+
 ### 1. Persistent Browser Context (Not Storage State)
 **Decision:** Use `launchPersistentContext()` instead of `storageState` saving/loading.
 
