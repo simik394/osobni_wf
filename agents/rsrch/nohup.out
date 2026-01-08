@@ -1,0 +1,125 @@
+
+> rsrch@1.0.29 serve
+> ts-node src/server.ts
+
+Initializing Perplexity client (browser connection)...
+[Client] Using profile: default
+Launching browser (Local Mode, profile: default)...
+Headless: true
+Launching persistent context from: /home/sim/.rsrch/profiles/default/state
+Browser ready
+[Server] Browser connected successfully.
+[Server] Connecting to FalkorDB...
+[GraphStore] Connected to FalkorDB at localhost:6379, graph: rsrch
+[GraphStore] Schema initialized
+[Server] FalkorDB connected successfully.
+Error: listen EADDRINUSE: address already in use :::3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at Function.listen (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/node_modules/express/lib/application.js:635:24)
+    at startServer (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:1416:13)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3001
+}
+
+> rsrch@1.0.29 serve
+> ts-node src/server.ts
+
+Initializing Perplexity client (browser connection)...
+[Client] Using profile: default
+Launching browser (Local Mode, profile: default)...
+Headless: true
+Launching persistent context from: /home/sim/.rsrch/profiles/default/state
+Browser ready
+[Server] Browser connected successfully.
+[Server] Connecting to FalkorDB...
+[GraphStore] Connected to FalkorDB at localhost:6379, graph: rsrch
+[GraphStore] Schema initialized
+[Server] FalkorDB connected successfully.
+
+✓ Perplexity Researcher server running on http://localhost:3001
+
+Endpoints:
+  GET  /health             - Health check
+  POST /query              - Submit a query
+
+OpenAI-Compatible API:
+  GET  /v1/models          - List models (gemini-rsrch, perplexity)
+  POST /v1/chat/completions - Chat completions
+
+Example usage:
+  curl -X POST http://localhost:3001/v1/chat/completions \
+       -H "Content-Type: application/json" \
+       -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'
+
+[Server] Converting ResearchDoc to Audio: Test Research (61 chars)
+Opening notebook: Audio Test 001
+Failed to open notebook page.waitForSelector: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for locator('project-button, mat-card') to be visible[22m
+
+    at NotebookLMClient.openNotebook (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:117:29)
+    at async NotebookLMClient.addSourceText (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:221:13)
+    at async /home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:345:13 {
+  name: 'TimeoutError'
+}
+[Server] Create audio from doc failed: page.waitForSelector: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for locator('project-button, mat-card') to be visible[22m
+
+    at NotebookLMClient.openNotebook (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:117:29)
+    at async NotebookLMClient.addSourceText (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:221:13)
+    at async /home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:345:13 {
+  name: 'TimeoutError'
+}
+[Server] Converting ResearchDoc to Audio: Technická analýza a implementační strategie Neuro-symbolických architektur v ekosystému Julia (21639 chars)
+Opening notebook: Research Audio: 2026-01-06
+Failed to open notebook page.waitForSelector: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for locator('project-button, mat-card') to be visible[22m
+
+    at NotebookLMClient.openNotebook (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:117:29)
+    at async NotebookLMClient.addSourceText (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:221:13)
+    at async /home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:345:13 {
+  name: 'TimeoutError'
+}
+[Server] Create audio from doc failed: page.waitForSelector: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for locator('project-button, mat-card') to be visible[22m
+
+    at NotebookLMClient.openNotebook (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:117:29)
+    at async NotebookLMClient.addSourceText (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:221:13)
+    at async /home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:345:13 {
+  name: 'TimeoutError'
+}
+[Server] Converting ResearchDoc to Audio: Test Research (61 chars)
+Opening notebook: Research Audio: 2026-01-06
+Failed to open notebook page.waitForSelector: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for locator('project-button, mat-card') to be visible[22m
+
+    at NotebookLMClient.openNotebook (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:117:29)
+    at async NotebookLMClient.addSourceText (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:221:13)
+    at async /home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:345:13 {
+  name: 'TimeoutError'
+}
+[Server] Create audio from doc failed: page.waitForSelector: Timeout 20000ms exceeded.
+Call log:
+[2m  - waiting for locator('project-button, mat-card') to be visible[22m
+
+    at NotebookLMClient.openNotebook (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:117:29)
+    at async NotebookLMClient.addSourceText (/home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/notebooklm-client.ts:221:13)
+    at async /home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts:345:13 {
+  name: 'TimeoutError'
+}
+[Server] Dumping state...
+[NotebookLM] Dumping state to /home/sim/Obsi/Prods/01-pwf/agents/rsrch/data/manual_dump_1767704966321.html / /home/sim/Obsi/Prods/01-pwf/agents/rsrch/data/manual_dump_1767704966321.png
+[Server] Dumping state...
+[NotebookLM] Dumping state to /home/sim/Obsi/Prods/01-pwf/agents/rsrch/data/manual_dump_1767705355590.html / /home/sim/Obsi/Prods/01-pwf/agents/rsrch/data/manual_dump_1767705355590.png
+SIGTERM received, closing browser...
+Browser closed

@@ -41,6 +41,7 @@ job "rsrch" {
       # Inject secrets from Vault as environment variables
       template {
         data = <<EOF
+{% raw %}
 {{- with secret "secret/data/agents/windmill" }}
 WINDMILL_TOKEN={{ .Data.data.token }}
 WINDMILL_URL=http://localhost:8000
@@ -51,6 +52,7 @@ LANGFUSE_PUBLIC_KEY={{ .Data.data.public_key }}
 LANGFUSE_SECRET_KEY={{ .Data.data.secret_key }}
 LANGFUSE_HOST=http://localhost:3200
 {{- end }}
+{% endraw %}
 EOF
         destination = "secrets/vault.env"
         env         = true

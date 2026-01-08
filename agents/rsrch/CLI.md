@@ -113,6 +113,7 @@ rsrch notebook messages "Title" [--local]
 ### Audio
 ```bash
 rsrch notebook audio --notebook "Title" [--dry-run|--wet]
+rsrch notebook download-all-audio "Title" ./output --limit=5 --local
 rsrch notebook artifacts "Title" [--local]
 ```
 
@@ -228,11 +229,20 @@ rsrch notebook audio --notebook "AI Healthcare Research" --wet
 # 1. Create custom assistant
 rsrch gemini create-gem "Research Helper" \
   --instructions "You are a research assistant specializing in technology trends" \
-  --file ./context.pdf \
+  --config ./gem_config.yaml \
   --local
 
 # 2. Chat with gem
 rsrch gemini chat-gem "Research Helper" "What are the latest AI developments?" --local
+
+# 3. Deep Research with Gem
+rsrch gemini deep-research "Quantum Computing" --gem "Research Helper" --local
+```
+
+### Repo Upload
+```bash
+# Upload a git repository context to a session (or new session)
+rsrch gemini upload-repo https://github.com/example/repo --branch=main --local
 ```
 
 ### Graph Export

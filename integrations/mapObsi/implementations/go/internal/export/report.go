@@ -3,13 +3,45 @@ package export
 import (
 	"bytes"
 	"compress/flate"
+	_ "embed"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
+
+//go:embed report.html
+var reportTemplate string
+
+// Structs for template data
+type ReportData struct {
+	GeneratedAt               string
+	MermaidStructure          string
+	MermaidStructureTruncated string
+	MermaidClasses            string
+	MermaidClassesTruncated   string
+	MermaidPackages           []PackageSection
+	AlgoMermaid               string
+	PlantUMLDiagrams          []PlantUMLDiagram
+}
+
+type PackageSection struct {
+	Name             string
+	Content          string
+	ContentTruncated string
+}
+
+type PlantUMLDiagram struct {
+	Filename         string
+	BrowserLink      string
+	URLWarning       template.HTML
+	IsTooLarge       bool
+	Content          string
+	ContentTruncated string
+}
 
 // GenerateReport creates an HTML report with embedded diagrams
 func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructure, mermaidClasses string, mermaidPackages map[string]string, algoMermaid string) error {
@@ -18,8 +50,39 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 	}
 	indexFile := filepath.Join(outputDir, "index.html")
 
-	// 1. Process PlantUML Map
-	var pumlSections string
+	// Parse template
+	tmpl, err := template.New("report").Parse(reportTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse report template: %w", err)
+	}
+
+	// Prepare data
+	data := ReportData{
+		GeneratedAt:               time.Now().Format(time.RFC1123),
+		MermaidStructure:          mermaidStructure,
+		MermaidStructureTruncated: truncateForHTML(mermaidStructure, 5000),
+		MermaidClasses:            mermaidClasses,
+		MermaidClassesTruncated:   truncateForHTML(mermaidClasses, 1000),
+		AlgoMermaid:               algoMermaid,
+	}
+
+	// Process Mermaid Packages
+	pkgKeys := make([]string, 0, len(mermaidPackages))
+	for k := range mermaidPackages {
+		pkgKeys = append(pkgKeys, k)
+	}
+	sort.Strings(pkgKeys)
+
+	for _, name := range pkgKeys {
+		content := mermaidPackages[name]
+		data.MermaidPackages = append(data.MermaidPackages, PackageSection{
+			Name:             name,
+			Content:          content,
+			ContentTruncated: truncateForHTML(content, 5000),
+		})
+	}
+
+	// Process PlantUML
 	pumlKeys := make([]string, 0, len(pumlMap))
 	for k := range pumlMap {
 		pumlKeys = append(pumlKeys, k)
@@ -29,130 +92,36 @@ func GenerateReport(outputDir string, pumlMap map[string]string, mermaidStructur
 	for _, filename := range pumlKeys {
 		content := pumlMap[filename]
 		// Write the actual file to disk for manual use
-		os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644)
+		if err := os.WriteFile(filepath.Join(outputDir, filename), []byte(content), 0644); err != nil {
+			return err
+		}
 		isTooLarge := len(content) > 4000
-
-		var diagramHTML string
-		var urlWarning string
-
 		encoded, _ := deflateAndEncode(content)
 		browserLink := "http://www.plantuml.com/plantuml/svg/" + encoded
 
+		var urlWarning template.HTML
 		if isTooLarge {
-			urlWarning = " <span style='color:orange; font-weight:bold;' title='Diagram too complex for public server rendering'>(Too Large)</span>"
-			diagramHTML = `<div style="padding:20px; border:1px dashed #ccc; background:#fff3e0; text-align:center;">
-				<strong>Diagram too large for public renderer</strong><br>
-				Please copy the source below or <a href="http://www.plantuml.com/plantuml/uml" target="_blank">use the online editor</a> manually.
-			</div>`
-		} else {
-			diagramHTML = fmt.Sprintf(`<img src="%s" alt="%s" style="max-width:100%%; height:auto;">`, browserLink, filename)
+			urlWarning = template.HTML(" <span style='color:orange; font-weight:bold;' title='Diagram too complex for public server rendering'>(Too Large)</span>")
 		}
 
-		pumlSections += fmt.Sprintf(`
-		<div class="card">
-			<h3>%s</h3>
-			<div class="controls">
-				<a href="%s" target="_blank">View in PlantUML Server</a>%s | 
-				<button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>alert('Copied!'))">Copy Source</button>
-				<span style="display:none;">%s</span> |
-				<a href="%s" target="_blank">Raw Source</a>
-			</div>
-			%s
-			<details><summary>Show PlantUML Source</summary><pre>%s</pre></details>
-		</div>`, filename, browserLink, urlWarning, content, filename, diagramHTML, truncateForHTML(content, 1000000))
+		data.PlantUMLDiagrams = append(data.PlantUMLDiagrams, PlantUMLDiagram{
+			Filename:         filename,
+			BrowserLink:      browserLink,
+			URLWarning:       urlWarning,
+			IsTooLarge:       isTooLarge,
+			Content:          content,
+			ContentTruncated: truncateForHTML(content, 1000000),
+		})
 	}
 
-	// 2. Process Mermaid Packages Map
-	var pkgSections string
-	pkgKeys := make([]string, 0, len(mermaidPackages))
-	for k := range mermaidPackages {
-		pkgKeys = append(pkgKeys, k)
+	// Execute template
+	f, err := os.Create(indexFile)
+	if err != nil {
+		return err
 	}
-	sort.Strings(pkgKeys)
+	defer f.Close()
 
-	for _, name := range pkgKeys {
-		content := mermaidPackages[name]
-		pkgSections += fmt.Sprintf(`
-		<div class="card">
-			<h3>Package Dependencies: %s</h3>
-			<div class="mermaid">
-%s
-			</div>
-			<details><summary>Show Source</summary><pre>%s</pre></details>
-		</div>`, name, content, truncateForHTML(content, 5000))
-	}
-
-	// 3. Prepare HTML
-	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-	<title>Codebase Visualization Report</title>
-	<meta charset="utf-8">
-	<style>
-		body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
-		h1, h2, h3 { color: #2c3e50; }
-		.card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; padding: 20px; }
-		pre { background: #f4f4f4; padding: 10px; overflow-x: auto; border-radius: 4px; max-height: 300px; }
-		.mermaid { background: white; padding: 10px; border-radius: 4px; overflow-x: auto; }
-		details { margin-top: 10px; }
-		a { color: #0366d6; text-decoration: none; }
-		a:hover { text-decoration: underline; }
-		.controls { margin-bottom: 10px; font-size: 0.9em; }
-		button { cursor: pointer; color: #0366d6; background: none; border: none; text-decoration: underline; padding: 0; font: inherit; }
-	</style>
-	<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-	<script>mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'default' });</script>
-</head>
-<body>
-	<h1>Codebase Visualization Report</h1>
-	<p>Generated at %s</p>
-
-	<h2>Module Structure</h2>
-	
-	<div class="card">
-		<h3>Internal File Structure</h3>
-		<p>Defined classes and definitions.</p>
-		<div class="mermaid">
-%s
-		</div>
-		<details><summary>Show Source</summary><pre>%s</pre></details>
-	</div>
-
-	<div class="card">
-		<h3>Class Definitions</h3>
-		<div class="mermaid">
-%s
-		</div>
-		<details><summary>Show Source</summary><pre>%s</pre></details>
-	</div>
-	
-	<h2>Package Dependencies</h2>
-	%s
-	
-	<div class="card">
-		<h3>Clustering Algorithm Logic (Meta)</h3>
-		<p>How the PlantUML diagrams below were generated.</p>
-		<div class="mermaid">
-%s
-		</div>
-	</div>
-
-	<h2>Architecture Diagrams (PlantUML)</h2>
-	<div class="card">
-		<p>Note: Graphviz (dot) layout engine is required for best results. If 'too large', use the local source.</p>
-	</div>
-	
-	%s
-
-</body>
-</html>`, time.Now().Format(time.RFC1123),
-		mermaidStructure, truncateForHTML(mermaidStructure, 5000),
-		mermaidClasses, truncateForHTML(mermaidClasses, 1000),
-		pkgSections,
-		algoMermaid,
-		pumlSections)
-
-	return os.WriteFile(indexFile, []byte(htmlContent), 0644)
+	return tmpl.Execute(f, data)
 }
 
 // GenerateMarkdownReport generates a markdown version of the report

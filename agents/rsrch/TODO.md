@@ -13,7 +13,7 @@ notebooklm
 - [x] add option to give a custom prompt into the audio generation. there is builtin text filed for it. just use it.
 - [x] add option to load sources from google drive. there is dedicated button for it with popup file picker. identify the documents by name or if possible by uid of the gdocs.
 - [x] add the ability to download the audio file from the browser.
-- improve the download audio function so i do not have to download all the audio every time. usually i will need only few of the last ones.
+- [x] improve the download audio function so i do not have to download all the audio every time. usually i will need only few of the last ones.
 
 
 
@@ -32,11 +32,11 @@ gemini.google
   - ✅ CLI: `rsrch gemini export-to-docs [sessionId] --local --headed`
   - ✅ Enable to get title and first heading lvl 1 from the deep research answered analysis report document (Done via `rsrch gemini get-research-info`)
   - ✅ Endpoint that will list all the documents created by the gemini deep research as an answers. Includes Title and first heading lvl 1. (Available via CLI `rsrch gemini list-research-docs` and POST `/gemini/list-research-docs`)
-  - enable file upload to chat session like pdfs and pictures with upload local files option.
-  - enable to import code from git repositories via the built-in file upload option.
-  - enable the use of gemini gems. thet mean the customized chats with specific system prompt and files uploaded to the chat. 
-  - enable creation and configuration of gemini gems. configuration meaning the system prompt and files uploaded to the chat. the config should be stored in a yaml file and should be configurable via cli.
-  - enable to run a deep rsearch with gemini gem.
+  - [x] enable file upload to chat session like pdfs and pictures with upload local files option.
+  - [x] enable to import code from git repositories via the built-in file upload option.
+  - [x] enable the use of gemini gems. thet mean the customized chats with specific system prompt and files uploaded to the chat. 
+  - [x] enable creation and configuration of gemini gems. configuration meaning the system prompt and files uploaded to the chat. the config should be stored in a yaml file and should be configurable via cli.
+  - [x] enable to run a deep rsearch with gemini gem.
   
 
 perplexity
