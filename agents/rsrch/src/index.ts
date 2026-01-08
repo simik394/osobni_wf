@@ -130,7 +130,7 @@ async function main() {
                 console.log('Available profiles:');
                 for (const p of profiles) {
                     const authStatus = p.hasAuth ? '✓ authenticated' : '✗ no auth';
-                    const indicator = p.id === globalProfileId ? ' (current)' : '';
+                    const indicator = p.id === globalProfileId ? ' (CLI default)' : '';
                     console.log(`  ${p.id}${indicator}: ${authStatus}`);
                 }
             }
@@ -286,7 +286,7 @@ async function main() {
 
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     // 1. Generate Audio
-                    const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
+                    const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, false, dryRun);
 
                     if (dryRun) return;
 
@@ -781,7 +781,7 @@ async function main() {
                                     notebookTitle,
                                     [source.title],  // Select only this source
                                     customPrompt,
-                                    true,  // Wait for completion
+                                    false,  // Do NOT wait for completion - return immediately
                                     dryRun
                                 );
 

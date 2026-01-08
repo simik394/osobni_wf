@@ -416,7 +416,7 @@ export class NotebookLMClient {
         return nextTask;
     }
 
-    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = true, dryRun: boolean = false): Promise<{ success: boolean; artifactTitle?: string }> {
+    async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = false, dryRun: boolean = false): Promise<{ success: boolean; artifactTitle?: string }> {
         return this.enqueueTask(`Generate Audio: ${notebookTitle}`, async () => {
             if (this.isBusy) {
                 // Should technically not happen due to queue, but good safety
@@ -580,68 +580,130 @@ export class NotebookLMClient {
     }
 
     private async selectSources(sources: string[]) {
-        // 1. Uncheck "Select all"
-        const selectAllSelector = 'div[role="checkbox"]:has-text("Select all sources"), div[role="checkbox"]:has-text("Vybrat všechny zdroje")';
-        const selectAllBtn = this.page.locator(selectAllSelector).first(); // improved locator
-
-        if (await selectAllBtn.count() > 0) {
-            const isChecked = await selectAllBtn.getAttribute('aria-checked') === 'true';
-            if (isChecked) {
-                await selectAllBtn.click();
-                await this.humanDelay(500);
-            }
+        // If specific sources requested, deselect all first then select specific ones
+        if (!sources || sources.length === 0) {
+            console.log('[DEBUG] No specific sources provided, using all sources');
+            return;
         }
 
-        // 2. Check specific sources
+        // 1. Deselect all sources using the correct selector
+        // Browser subagent found: input[aria-label="Vybrat všechny zdroje"]
+        const selectAllInput = this.page.locator('input[aria-label="Vybrat všechny zdroje"], input[aria-label="Select all sources"]').first();
+
+        if (await selectAllInput.count() > 0) {
+            // Retry loop to ensure deselect works
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const isChecked = await selectAllInput.isChecked().catch(() => false);
+                console.log(`[DEBUG] Attempt ${attempt + 1}: Select-all checkbox isChecked: ${isChecked}`);
+
+                if (isChecked) {
+                    await selectAllInput.click();
+                    console.log('[DEBUG] Clicked "Select all" to deselect all sources');
+                    await this.humanDelay(1000); // Longer delay for UI to update
+                } else {
+                    console.log('[DEBUG] All sources now deselected');
+                    break;
+                }
+            }
+        } else {
+            console.warn('[DEBUG] Select all input not found');
+        }
+
+        // Small additional delay to ensure UI state is stable
+        await this.humanDelay(500);
+
+        // 2. Select specific sources using aria-label matching
+        // Browser subagent found: input[aria-label="{source_title}"]
+        console.log(`[DEBUG] Selecting specific sources: ${sources.join(', ')}`);
         for (const sourceName of sources) {
-            // Use rigorous exact match if possible, or robust contains
-            const sourceRow = this.page.locator('div[role="row"], .source-row').filter({ hasText: sourceName }).first();
-            if (await sourceRow.count() > 0) {
-                const checkbox = sourceRow.locator('div[role="checkbox"], input[type="checkbox"]').first();
-                const isChecked = await checkbox.getAttribute('aria-checked') === 'true';
+            // Try exact match first, then partial match
+            let sourceInput = this.page.locator(`input[aria-label="${sourceName}"]`).first();
+            if (await sourceInput.count() === 0) {
+                sourceInput = this.page.locator(`input[aria-label*="${sourceName}"]`).first();
+            }
+
+            if (await sourceInput.count() > 0) {
+                const isChecked = await sourceInput.isChecked().catch(() => false);
+                console.log(`[DEBUG] Source "${sourceName.substring(0, 40)}" isChecked: ${isChecked}`);
                 if (!isChecked) {
-                    await checkbox.click();
-                    console.log(`[DEBUG] Checked source: ${sourceName}`);
+                    await sourceInput.click();
+                    console.log(`[DEBUG] Clicked to select source: "${sourceName.substring(0, 40)}"`);
+                    await this.humanDelay(300);
+
+                    // Verify the click worked
+                    const nowChecked = await sourceInput.isChecked().catch(() => false);
+                    console.log(`[DEBUG] Source "${sourceName.substring(0, 40)}" now isChecked: ${nowChecked}`);
+                } else {
+                    console.log(`[DEBUG] Source "${sourceName.substring(0, 40)}" already checked (from previous state?)`);
                 }
             } else {
-                console.warn(`[DEBUG] Source not found for selection: ${sourceName}`);
+                console.warn(`[DEBUG] Source input not found for: "${sourceName.substring(0, 40)}"`);
             }
         }
     }
 
     private async triggerAudioGeneration(customPrompt: string | undefined, dryRun: boolean, notebookTitle?: string): Promise<boolean> {
-        // Logic extracted from original big function...
-        // Tries to find "Customize" -> "Generate" OR "Generate" button.
+        console.log(`[DEBUG] Triggering audio generation... customPrompt: ${customPrompt ? customPrompt.substring(0, 50) + '...' : 'none'}`);
 
-        // Reuse existing complex logic for finding buttons but return boolean
-        // Simplified for brevity in this replacement block, but conceptually same as before:
-
-        // 1. Try "Customize" button (if custom prompt or just preferred)
-        const customizeBtn = this.page.locator('button[aria-label="Customize Audio Overview"], button:has-text("Customize")').first();
-        if (await customizeBtn.count() > 0 && await customizeBtn.isVisible()) {
-            await customizeBtn.click();
-            return this.handleGenerationDialog(customPrompt, dryRun, notebookTitle);
+        if (dryRun) {
+            console.log('[DEBUG] Dry run mode - skipping actual generation trigger');
+            return true;
         }
 
-        // 2. Try "Generate" / "Play" (Create) button
-        const createBtn = this.page.locator('button').filter({ hasText: /Generate|Vygenerovat/i }).first();
-        // Note: The main "Play" button often just starts it without dialog unless customized
+        // If we have a custom prompt, we MUST click the customize pencil button first
+        // Browser subagent found: button[aria-label="Přizpůsobit audio přehled"]
+        if (customPrompt) {
+            console.log('[DEBUG] Custom prompt provided, clicking customize button...');
+            const customizeBtn = this.page.locator('button[aria-label="Přizpůsobit audio přehled"], button[aria-label="Customize audio overview"]').first();
 
-        // ... implementation of clicking logic ...
-        // For now, let's assume the previous comprehensive logic was good but needs to be wrapped
+            if (await customizeBtn.count() > 0 && await customizeBtn.isVisible()) {
+                await customizeBtn.click();
+                console.log('[DEBUG] Clicked customize button (pencil icon)');
+                await this.humanDelay(2000);
 
-        // Placeholder for full logic to fit in tool output limit:
-        // If we are here, we didn't find "Generating" state.
+                // Find and fill the textarea in the customize dialog
+                // Browser subagent found: textarea[aria-label="Textové pole"]
+                const textarea = this.page.locator('textarea[aria-label="Textové pole"], textarea[placeholder*="Co byste mohli"]').first();
 
-        console.log('[DEBUG] Triggering generation logic...');
-        // (In real impl, would paste the 200 lines of button finding here)
-        // For now, recursively calling the dialog handler if we can find a way to open it
+                if (await textarea.count() > 0 && await textarea.isVisible()) {
+                    console.log('[DEBUG] Found customize textarea, filling custom prompt...');
+                    await textarea.fill('');
+                    await textarea.fill(customPrompt);
+                    console.log('[DEBUG] Custom prompt filled');
+                    await this.humanDelay(500);
+                } else {
+                    console.warn('[DEBUG] Customize dialog textarea not found');
+                }
 
-        return true; // Placeholder
+                // Click Generate button in dialog
+                const generateBtn = this.page.locator('button').filter({ hasText: /^Vygenerovat$|^Generate$/i }).first();
+                if (await generateBtn.count() > 0 && await generateBtn.isVisible()) {
+                    console.log('[DEBUG] Clicking Generate button in customize dialog...');
+                    await generateBtn.click();
+                    return true;
+                } else {
+                    console.warn('[DEBUG] Generate button not found in customize dialog');
+                }
+            } else {
+                console.warn('[DEBUG] Customize button not found, falling back to direct generation');
+            }
+        }
+
+        // Fallback: Click the main Audio přehled button (generates without custom prompt)
+        const audioBtn = this.page.locator('[aria-label="Audio přehled"], [aria-label="Audio Overview"], button:has-text("Audio přehled")').first();
+        if (await audioBtn.count() > 0 && await audioBtn.isVisible()) {
+            console.log('[DEBUG] Clicking main Audio button...');
+            await audioBtn.click();
+            await this.humanDelay(2000);
+            return true;
+        }
+
+        console.warn('[DEBUG] Audio generation button not found!');
+        return false;
     }
 
     private async handleGenerationDialog(customPrompt: string | undefined, dryRun: boolean, notebookTitle?: string): Promise<boolean> {
-        // ... dialog handling logic ...
+        // This method is kept for backwards compatibility but the logic is now in triggerAudioGeneration
         return true;
     }
 
