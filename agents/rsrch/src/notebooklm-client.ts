@@ -635,25 +635,31 @@ export class NotebookLMClient {
             return;
         }
 
-        // 1. Deselect all sources using the correct selector
-        // Browser subagent found: input[aria-label="Vybrat všechny zdroje"]
+        // 1. Deselect all sources - click Select-all twice to ensure clean slate
+        // When checkbox is "unchecked" it just means not ALL are selected, some may still be checked!
         const selectAllInput = this.page.locator('input[aria-label="Vybrat všechny zdroje"], input[aria-label="Select all sources"]').first();
 
         if (await selectAllInput.count() > 0) {
-            // Retry loop to ensure deselect works
-            for (let attempt = 0; attempt < 3; attempt++) {
-                const isChecked = await selectAllInput.isChecked().catch(() => false);
-                console.log(`[DEBUG] Attempt ${attempt + 1}: Select-all checkbox isChecked: ${isChecked}`);
+            const initialState = await selectAllInput.isChecked().catch(() => false);
+            console.log(`[DEBUG] Select-all initial state: ${initialState}`);
 
-                if (isChecked) {
-                    await selectAllInput.click();
-                    console.log('[DEBUG] Clicked "Select all" to deselect all sources');
-                    await this.humanDelay(1000); // Longer delay for UI to update
-                } else {
-                    console.log('[DEBUG] All sources now deselected');
-                    break;
-                }
+            // Strategy: Click to SELECT ALL first, then click again to DESELECT ALL
+            // This ensures a clean slate regardless of initial state
+            if (!initialState) {
+                // Not all selected -> click to select all
+                await selectAllInput.click();
+                console.log('[DEBUG] Clicked to SELECT ALL first');
+                await this.humanDelay(500);
             }
+
+            // Now all should be checked, click to uncheck all
+            await selectAllInput.click();
+            console.log('[DEBUG] Clicked to DESELECT ALL');
+            await this.humanDelay(500);
+
+            // Verify
+            const finalState = await selectAllInput.isChecked().catch(() => false);
+            console.log(`[DEBUG] Select-all final state: ${finalState} (should be false)`);
         } else {
             console.warn('[DEBUG] Select all input not found');
         }
