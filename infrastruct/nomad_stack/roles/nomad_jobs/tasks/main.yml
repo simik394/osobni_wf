@@ -124,6 +124,18 @@
     group: 999
     mode: "0750"
 
+- name: Create Neo4j data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 7474
+    group: 7474
+    mode: "0750"
+  loop:
+    - /opt/neo4j/data
+    - /opt/neo4j/import
+    - /opt/neo4j/plugins
+
 - name: Copy Nomad job templates
   ansible.builtin.template:
     src: "{{ item }}"
@@ -139,6 +151,7 @@
     - rsrch.nomad.hcl.j2
     - falkor.nomad.hcl.j2
     - goose.nomad.hcl.j2
+    - neo4j.nomad.hcl.j2
 
 - name: Run Traefik
   ansible.builtin.command: nomad job run /opt/nomad/jobs/traefik.nomad.hcl
@@ -178,6 +191,12 @@
 
 - name: Run Goose
   ansible.builtin.command: nomad job run /opt/nomad/jobs/goose.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run Neo4j
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/neo4j.nomad.hcl
   environment:
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false

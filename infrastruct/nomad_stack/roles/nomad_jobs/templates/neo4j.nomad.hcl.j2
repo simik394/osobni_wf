@@ -1,0 +1,81 @@
+job "neo4j" {
+  datacenters = ["{{ nomad_datacenter | default("oci-eu") }}"]
+  type        = "service"
+
+  group "neo4j" {
+    count = 1
+
+    network {
+      mode = "bridge"
+      port "http" {
+        static = 7474
+        to     = 7474
+      }
+      port "bolt" {
+        static = 7687
+        to     = 7687
+      }
+    }
+
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
+    }
+
+    task "neo4j" {
+      driver = "docker"
+
+      config {
+        image = "neo4j:5.25.1-enterprise"
+        ports = ["http", "bolt"]
+        volumes = [
+          "/opt/neo4j/data:/data",
+          "/opt/neo4j/import:/import",
+          "/opt/neo4j/plugins:/plugins"
+        ]
+      }
+
+      env {
+        NEO4J_AUTH                              = "neo4j/hesloheslo"
+        NEO4J_ACCEPT_LICENSE_AGREEMENT          = "yes"
+        NEO4J_apoc_import_file_enabled          = "true"
+        NEO4J_apoc_export_file_enabled          = "true"
+        NEO4J_apoc_import_file_use__neo4j__config = "true"
+        NEO4JLABS_PLUGINS                       = "[\"apoc\"]"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 2048
+      }
+
+      service {
+        name = "neo4j-bolt"
+        port = "bolt"
+        check {
+          name     = "bolt-alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+
+      service {
+        name = "neo4j-http"
+        port = "http"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.neo4j.rule=Host(`neo4j.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
+          "traefik.http.routers.neo4j.entrypoints=web"
+        ]
+        check {
+          name     = "http-alive"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}
