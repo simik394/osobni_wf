@@ -1091,6 +1091,20 @@ export class GraphStore {
                         art.updatedAt = ${capturedAt}
                     MERGE (n)-[:HAS_ARTIFACT]->(art)
                 `);
+
+                // Also create AudioOverview node for audio artifacts (for linking)
+                if (artifact.type === 'audio') {
+                    await this.graph.query(`
+                        MATCH (n:Notebook {id: '${id}'})
+                        MERGE (ao:AudioOverview {notebookId: '${id}', title: '${escapeString(artifact.title)}'})
+                        ON CREATE SET 
+                            ao.id = 'audio_${id}_${Math.random().toString(36).substring(2, 8)}',
+                            ao.createdAt = ${capturedAt}
+                        SET ao.updatedAt = ${capturedAt}
+                        MERGE (n)-[:HAS_AUDIO]->(ao)
+                    `);
+                }
+
                 artifactsCount++;
             }
         }
