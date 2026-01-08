@@ -702,10 +702,11 @@ async function main() {
             }
 
         } else if (subArg1 === 'generate-audio-per-source') {
-            // rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "..."] [--wet] [--local]
+            // rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "..."] [--wet] [--force] [--local]
             let notebookTitle: string | undefined = undefined;
             let promptTemplate = 'Provide a detailed analysis focusing specifically on: {title}';
             let wetRun = false;
+            let forceRegenerate = false;
 
             for (let i = 2; i < args.length; i++) {
                 if (args[i] === '--notebook') {
@@ -716,6 +717,8 @@ async function main() {
                     i++;
                 } else if (args[i] === '--wet') {
                     wetRun = true;
+                } else if (args[i] === '--force') {
+                    forceRegenerate = true;
                 }
             }
 
@@ -766,10 +769,30 @@ async function main() {
                         // Generate audio for each source
                         console.log(`\n🎵 Generating audio for each source...\n`);
 
+                        // Get existing audio artifact titles ONCE at the start
+                        const existingAudios = await notebook.checkAudioStatus(notebookTitle);
+                        console.log(`[DEDUP] Found ${existingAudios.artifactTitles.length} existing audio artifacts`);
+
+                        // Helper to check if source already has audio
+                        const hasAudioForSource = (sourceTitle: string) => {
+                            // Check if any existing audio title contains the source name
+                            const sourcePrefix = sourceTitle.substring(0, 20).toLowerCase();
+                            return existingAudios.artifactTitles.some((audioTitle: string) =>
+                                audioTitle.toLowerCase().includes(sourcePrefix)
+                            );
+                        };
+
                         for (let i = 0; i < sources.length; i++) {
                             const source = sources[i];
                             console.log(`\n[${i + 1}/${sources.length}] Processing: "${source.title}"`);
                             console.log(`   Type: ${source.type}`);
+
+                            // DEDUPLICATION: Skip if audio already exists for this source (unless --force)
+                            if (!forceRegenerate && hasAudioForSource(source.title)) {
+                                console.log(`   ⏭️  SKIPPING: Audio already exists for this source`);
+                                console.log(`   (Use --force to regenerate with a different prompt)`);
+                                continue;
+                            }
 
                             // Create custom prompt for this source
                             const customPrompt = promptTemplate.replace(/{title}/g, source.title);
