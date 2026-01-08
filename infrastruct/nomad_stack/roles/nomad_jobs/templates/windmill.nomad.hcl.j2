@@ -6,30 +6,30 @@ job "windmill" {
     count = 1
 
     network {
-      mode = "bridge"
+      mode = "host"
       port "http" {
-        to = 8000
+        static = 8000
       }
       port "lsp" {
-        to = 3001
+        static = 3001
       }
       port "db" {
-        to = 5432
+        static = 5432
       }
+    }
+
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
     }
 
     # Database Task (Postgres)
     task "db" {
       driver = "docker"
 
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "postgres:14"
-        ports = ["db"]
+        network_mode = "host"
         volumes = [
           "/opt/windmill/db:/var/lib/postgresql/data"
         ]
@@ -39,6 +39,7 @@ job "windmill" {
         POSTGRES_PASSWORD = "changeme"
         POSTGRES_DB       = "windmill"
         POSTGRES_USER     = "windmill"
+        PGPORT            = "5432"
       }
 
       resources {
@@ -62,19 +63,15 @@ job "windmill" {
     task "server" {
       driver = "docker"
 
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "ghcr.io/windmill-labs/windmill:latest"
-        ports = ["http"]
+        network_mode = "host"
       }
 
       env {
         DATABASE_URL = "postgres://windmill:changeme@localhost:5432/windmill?sslmode=disable"
         MODE         = "server"
+        PORT         = "8000"
         BASE_URL     = "http://windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
       }
 
@@ -89,7 +86,9 @@ job "windmill" {
         tags = [
           "traefik.enable=true",
           "traefik.http.routers.windmill.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
-          "traefik.http.routers.windmill.entrypoints=web"
+          "traefik.http.routers.windmill.entrypoints=web,websecure",
+          "traefik.http.routers.windmill.tls=true",
+          "traefik.http.services.windmill.loadbalancer.server.port=8000"
         ]
         check {
           name     = "alive"
@@ -105,13 +104,9 @@ job "windmill" {
     task "worker" {
       driver = "docker"
 
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "ghcr.io/windmill-labs/windmill:latest"
+        network_mode = "host"
         volumes = [
           "/var/run/docker.sock:/var/run/docker.sock",
           "/opt/windmill/worker_cache:/tmp/windmill/cache"
@@ -135,13 +130,9 @@ job "windmill" {
     task "worker_native" {
       driver = "docker"
 
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "ghcr.io/windmill-labs/windmill:latest"
+        network_mode = "host"
       }
 
       env {
@@ -161,17 +152,16 @@ job "windmill" {
     task "lsp" {
       driver = "docker"
 
-      constraint {
-        attribute = "${node.class}"
-        value     = "cloud"
-      }
-
       config {
         image = "ghcr.io/windmill-labs/windmill-lsp:latest"
-        ports = ["lsp"]
+        network_mode = "host"
         volumes = [
            "/opt/windmill/lsp_cache:/root/.cache"
         ]
+      }
+
+      env {
+        PORT = "3001"
       }
 
       resources {
@@ -185,7 +175,9 @@ job "windmill" {
         tags = [
           "traefik.enable=true",
           "traefik.http.routers.windmill-lsp.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) && PathPrefix(`/ws/`)",
-          "traefik.http.routers.windmill-lsp.entrypoints=web"
+          "traefik.http.routers.windmill-lsp.entrypoints=web,websecure",
+          "traefik.http.routers.windmill-lsp.tls=true",
+          "traefik.http.services.windmill-lsp.loadbalancer.server.port=3001"
         ]
       }
     }

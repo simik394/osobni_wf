@@ -28,3 +28,13 @@
   roles:
     - role: nomad_jobs
       tags: [nomad_jobs]
+
+# Local-only services (Memgraph on ntb)
+- name: Deploy Local Services
+  hosts: local
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  roles:
+    - role: local_memgraph
+      tags: [local_memgraph]

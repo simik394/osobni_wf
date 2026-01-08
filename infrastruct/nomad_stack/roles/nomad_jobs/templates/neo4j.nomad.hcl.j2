@@ -6,14 +6,12 @@ job "neo4j" {
     count = 1
 
     network {
-      mode = "bridge"
+      mode = "host"
       port "http" {
         static = 7474
-        to     = 7474
       }
       port "bolt" {
         static = 7687
-        to     = 7687
       }
     }
 
@@ -27,7 +25,7 @@ job "neo4j" {
 
       config {
         image = "neo4j:5.25.1-enterprise"
-        ports = ["http", "bolt"]
+        network_mode = "host"
         volumes = [
           "/opt/neo4j/data:/data",
           "/opt/neo4j/import:/import",
@@ -66,7 +64,8 @@ job "neo4j" {
         tags = [
           "traefik.enable=true",
           "traefik.http.routers.neo4j.rule=Host(`neo4j.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
-          "traefik.http.routers.neo4j.entrypoints=web"
+          "traefik.http.routers.neo4j.entrypoints=websecure",
+          "traefik.http.routers.neo4j.tls.certresolver=letsencrypt"
         ]
         check {
           name     = "http-alive"

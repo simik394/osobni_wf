@@ -1,5 +1,5 @@
 job "rsrch-browser" {
-  datacenters = ["{{ nomad_datacenter | default("dc1") }}"]
+  datacenters = ["oci-eu"]
   type        = "service"
 
   # Browser container with VNC + CDP access for Playwright automation
@@ -46,8 +46,8 @@ job "rsrch-browser" {
       }
 
       resources {
-        cpu    = 500
-        memory = 4096
+        cpu    = 250
+        memory = 2048
       }
 
       service {
