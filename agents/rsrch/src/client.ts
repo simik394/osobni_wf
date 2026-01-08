@@ -3,12 +3,13 @@ import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'playwright';
 // import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
 
-// Add stealth plugin
+// Add stealth plugin - DISABLED for debugging browser closure issue
 // chromium.use(StealthPlugin());
 
 interface Session {
@@ -299,9 +300,12 @@ export class PerplexityClient extends BaseClient {
                     '--disable-accelerated-2d-canvas',
                     '--no-first-run',
                     '--no-zygote',
-                    '--disable-gpu'
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-blink-features=AutomationControlled'
                 ],
-                viewport: { width: 1280, height: 800 }
+                viewport: { width: 1280, height: 800 },
+                slowMo: 100
             });
 
             // Get or create page
@@ -695,6 +699,19 @@ export class PerplexityClient extends BaseClient {
 
     async createNotebookClient(): Promise<NotebookLMClient> {
         if (!this.context) throw new Error('Context not initialized');
+
+        // Check if there's already a NotebookLM page we can reuse
+        const existingPages = this.context.pages();
+        for (const page of existingPages) {
+            const url = page.url();
+            if (url.includes('notebooklm.google.com')) {
+                console.log('[Client] Reusing existing NotebookLM page');
+                return new NotebookLMClient(page);
+            }
+        }
+
+        // No existing page, create new one
+        console.log('[Client] Creating new NotebookLM page');
         const page = await this.context.newPage();
         return new NotebookLMClient(page);
     }

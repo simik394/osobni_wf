@@ -916,13 +916,52 @@ async function main() {
                 process.exit(1);
             }
 
+        } else if (subArg1 === 'sources-without-audio') {
+            // Query FalkorDB for sources that don't have audio yet
+            // Usage: rsrch notebook sources-without-audio --notebook "Title"
+            let notebookPlatformId: string | undefined = undefined;
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook' || args[i] === '--id') {
+                    notebookPlatformId = args[i + 1];
+                    i++;
+                }
+            }
+
+            if (!notebookPlatformId) {
+                console.error('Usage: rsrch notebook sources-without-audio --notebook "PLATFORM_ID"');
+                console.error('  Note: Use the platformId (from notebook URL), not the title');
+                process.exit(1);
+            }
+
+            const { getGraphStore } = await import('./graph-store');
+            const store = getGraphStore();
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+            try {
+                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                const sources = await store.getSourcesWithoutAudio(notebookPlatformId);
+
+                if (sources.length === 0) {
+                    console.log('✅ All sources have audio generated!');
+                } else {
+                    console.log(`\n📋 Sources without audio (${sources.length}):\n`);
+                    sources.forEach((s, i) => {
+                        console.log(`   ${i + 1}. ${s.title} [${s.type}]`);
+                    });
+                }
+            } finally {
+                await store.disconnect();
+            }
+
         } else {
             console.log('NotebookLM commands:');
             console.log('  rsrch notebook create "Title" [--local]');
             console.log('  rsrch notebook add-source "URL" --notebook "Title" [--local]');
             console.log('  rsrch notebook add-drive-source "Doc Name" --notebook "Title" [--local]');
-            console.log('  rsrch notebook generate-audio --notebook "Title" [--sources "A,B"] [--prompt "Prompt"] [--wet] [--local]');
-            console.log('  rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "Focus on: {title}"] [--wet] [--local]');
+            console.log('  rsrch notebook generate-audio --notebook "Title" --source "A" --source "B" [--prompt "..."] [--wet] [--force] [--local]');
+            console.log('  rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "..."] [--wet] [--force] [--local]');
+            console.log('  rsrch notebook sources-without-audio --notebook "PLATFORM_ID"');
             console.log('  rsrch notebook download-audio [path] --notebook "Title" [--latest] [--pattern "regex"] [--local]');
             console.log('  rsrch notebook download-all-audio [dir] --notebook "Title" [--limit N] [--local]');
             console.log('  rsrch notebook download-batch-audio --titles "A,B" --output [dir] [--local]');

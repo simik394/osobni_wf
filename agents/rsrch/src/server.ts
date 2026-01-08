@@ -347,6 +347,13 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
         console.log(`[Server] Converting ResearchDoc to Audio: ${title} (${content.length} chars)`);
 
         if (!notebookClient) {
+            // Lazy init: ensure browser is initialized before creating client
+            try {
+                await client.init({ local: true });
+            } catch (initErr: any) {
+                console.warn(`[Server] Browser lazy init failed: ${initErr.message}`);
+                return res.status(503).json({ error: 'Browser not available', details: initErr.message });
+            }
             notebookClient = await client.createNotebookClient();
         }
 
@@ -355,14 +362,27 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
         // Let's use a "Research Audio" notebook default if not provided
         const targetNotebook = notebookTitle || `Research Audio: ${new Date().toISOString().split('T')[0]}`;
 
-        // 4. Add Source
+        // 4. Try to open notebook, create if not exists
+        try {
+            await notebookClient.openNotebook(targetNotebook);
+            console.log(`[Server] Opened existing notebook: ${targetNotebook}`);
+        } catch (openErr: any) {
+            if (openErr.message?.includes('not found')) {
+                console.log(`[Server] Notebook not found, creating: ${targetNotebook}`);
+                await notebookClient.createNotebook(targetNotebook);
+            } else {
+                throw openErr;
+            }
+        }
+
+        // 5. Add Source
         // If content is available, paste it. If only URL (legacy), add URL.
         if (content) {
             // We prepend title to content to give context
             const fullText = `# ${title}\n\n${content}`;
-            await notebookClient.addSourceText(fullText, title, targetNotebook);
+            // Don't pass notebookTitle since we already opened it
+            await notebookClient.addSourceText(fullText, title);
         } else if (docNode.url) {
-            await notebookClient.openNotebook(targetNotebook);
             await notebookClient.addSourceUrl(docNode.url);
         }
 

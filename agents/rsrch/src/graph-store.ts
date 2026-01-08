@@ -1144,6 +1144,25 @@ export class GraphStore {
     }
 
     /**
+     * Get sources without audio for a notebook (sources that have no GENERATED_FROM relationship)
+     */
+    async getSourcesWithoutAudio(notebookPlatformId: string): Promise<Array<{ title: string; type: string }>> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (n:Notebook {platformId: '${escapeString(notebookPlatformId)}'})-[:HAS_SOURCE]->(s:Source)
+            WHERE NOT EXISTS { (ao:Artifact)-[:GENERATED_FROM]->(s) WHERE ao.type = 'audio' }
+            AND NOT EXISTS { (ao:AudioOverview)-[:GENERATED_FROM]->(s) }
+            RETURN s.title as title, s.type as type
+        `);
+
+        return (result.data || []).map((row: any) => ({
+            title: row.title,
+            type: row.type || 'unknown'
+        }));
+    }
+
+    /**
      * Get all notebooks
      */
     async getNotebooks(limit = 50): Promise<Array<{

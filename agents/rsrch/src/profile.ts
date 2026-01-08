@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const PROFILES_BASE_DIR = process.env.PROFILES_DIR || '/opt/rsrch/profiles';
+const isRoot = process.getuid && process.getuid() === 0;
+const PROFILES_BASE_DIR = process.env.PROFILES_DIR || (isRoot ? '/opt/rsrch/profiles' : path.join(process.env.HOME || '/tmp', '.rsrch', 'profiles'));
 
 export interface ProfileInfo {
     id: string;
