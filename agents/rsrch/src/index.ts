@@ -89,7 +89,9 @@ async function main() {
     const subArg2 = args[2];
 
     if (command === 'auth') {
-        await login();
+        const { getStateDir } = await import('./profile');
+        const userDataDir = getStateDir(globalProfileId || 'default');
+        await login(userDataDir);
     } else if (command === 'login') {
         const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
         await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
@@ -699,12 +701,152 @@ async function main() {
                 await sendServerRequest('/notebook/audio-status', { notebookTitle });
             }
 
+        } else if (subArg1 === 'generate-audio-per-source') {
+            // rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "..."] [--wet] [--local]
+            let notebookTitle: string | undefined = undefined;
+            let promptTemplate = 'Provide a detailed analysis focusing specifically on: {title}';
+            let wetRun = false;
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                } else if (args[i] === '--prompt-template') {
+                    promptTemplate = args[i + 1];
+                    i++;
+                } else if (args[i] === '--wet') {
+                    wetRun = true;
+                }
+            }
+
+            if (!notebookTitle) {
+                console.error('Usage: rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "Focus on: {title}"] [--wet] [--local]');
+                process.exit(1);
+            }
+
+            const dryRun = !wetRun;
+
+            if (dryRun) {
+                console.log('\n🧪 DRY RUN MODE ACTIVE');
+                console.log('   Audio generation will be simulated for each source.');
+                console.log('   To actually generate audio, use the --wet flag.\n');
+            } else {
+                console.log('\n🌊 WET RUN ACTIVE');
+                console.log('   Audio WILL be generated for EACH source. Quota will be consumed.\n');
+            }
+
+            if (isLocalExecution()) {
+                const { getGraphStore } = await import('./graph-store');
+                const store = getGraphStore();
+                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    // Open the notebook
+                    console.log(`\n[Notebook] Opening: "${notebookTitle}"...`);
+                    await notebook.openNotebook(notebookTitle);
+
+                    // Get all sources
+                    console.log('[Sources] Fetching sources list...');
+                    const sources = await notebook.getSources();
+
+                    if (sources.length === 0) {
+                        console.log('⚠️  No sources found in this notebook.');
+                        return;
+                    }
+
+                    console.log(`\n✅ Found ${sources.length} sources:\n`);
+                    sources.forEach((source: { type: string; title: string; url?: string }, index: number) => {
+                        console.log(`  ${index + 1}. [${source.type}] ${source.title}`);
+                    });
+
+                    // Connect to graph for syncing
+                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+
+                    try {
+                        // Generate audio for each source
+                        console.log(`\n🎵 Generating audio for each source...\n`);
+
+                        for (let i = 0; i < sources.length; i++) {
+                            const source = sources[i];
+                            console.log(`\n[${i + 1}/${sources.length}] Processing: "${source.title}"`);
+                            console.log(`   Type: ${source.type}`);
+
+                            // Create custom prompt for this source
+                            const customPrompt = promptTemplate.replace(/{title}/g, source.title);
+                            console.log(`   Prompt: "${customPrompt}"`);
+
+                            try {
+                                // Generate audio for this specific source
+                                const result = await notebook.generateAudioOverview(
+                                    notebookTitle,
+                                    [source.title],  // Select only this source
+                                    customPrompt,
+                                    true,  // Wait for completion
+                                    dryRun
+                                );
+
+                                if (result.success) {
+                                    if (dryRun) {
+                                        console.log(`   ✅ [DRY RUN] Audio generation simulated successfully`);
+                                    } else {
+                                        console.log(`   ✅ Audio generated: "${result.artifactTitle}"`);
+
+                                        // Sync to graph
+                                        try {
+                                            console.log(`   [Graph] Syncing notebook state...`);
+                                            const data = await notebook.scrapeNotebook(notebookTitle, false);
+                                            const syncResult = await store.syncNotebook(data);
+
+                                            // Link audio to this specific source
+                                            if (result.artifactTitle) {
+                                                await store.linkAudioToSources(
+                                                    syncResult.id.replace('nb_', ''),
+                                                    result.artifactTitle,
+                                                    [source.title]
+                                                );
+                                                console.log(`   [Graph] Linked audio to source in graph`);
+                                            }
+                                        } catch (e: any) {
+                                            console.error(`   ⚠️  Failed to sync to graph: ${e.message}`);
+                                        }
+                                    }
+                                } else {
+                                    console.error(`   ❌ Failed to generate audio`);
+                                }
+
+                                // Wait between generations to avoid rate limits
+                                if (!dryRun && i < sources.length - 1) {
+                                    console.log(`   ⏸  Waiting 10 seconds before next generation...`);
+                                    await new Promise(resolve => setTimeout(resolve, 10000));
+                                }
+
+                            } catch (err: any) {
+                                console.error(`   ❌ Error: ${err.message}`);
+                                // Continue with next source even if one fails
+                            }
+                        }
+
+                        console.log(`\n\n🎉 Completed processing ${sources.length} sources!`);
+
+                        if (dryRun) {
+                            console.log('\n💡 This was a DRY RUN. To actually generate audio, add --wet flag');
+                        }
+                    } finally {
+                        await store.disconnect();
+                    }
+                });
+            } else {
+                console.error('Server mode for generate-audio-per-source not yet implemented. Use --local.');
+                process.exit(1);
+            }
+
         } else {
             console.log('NotebookLM commands:');
             console.log('  rsrch notebook create "Title" [--local]');
             console.log('  rsrch notebook add-source "URL" --notebook "Title" [--local]');
             console.log('  rsrch notebook add-drive-source "Doc Name" --notebook "Title" [--local]');
             console.log('  rsrch notebook generate-audio --notebook "Title" [--sources "A,B"] [--prompt "Prompt"] [--wet] [--local]');
+            console.log('  rsrch notebook generate-audio-per-source --notebook "Title" [--prompt-template "Focus on: {title}"] [--wet] [--local]');
             console.log('  rsrch notebook download-audio [path] --notebook "Title" [--latest] [--pattern "regex"] [--local]');
             console.log('  rsrch notebook download-all-audio [dir] --notebook "Title" [--limit N] [--local]');
             console.log('  rsrch notebook download-batch-audio --titles "A,B" --output [dir] [--local]');
