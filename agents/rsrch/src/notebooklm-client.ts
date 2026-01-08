@@ -110,12 +110,26 @@ export class NotebookLMClient {
         // Check if we're already on a notebook page - avoid unnecessary navigation
         const currentUrl = this.page.url();
         if (currentUrl.includes('/notebook/')) {
-            // Already on a notebook - check if it's the right one by looking at page title
+            // Already on a notebook - check if it's the right one
+            // First try page title, but also consider URL-based check
             const pageTitle = await this.page.title().catch(() => '');
-            if (pageTitle.includes(title) || title.length > 30 && pageTitle.includes(title.substring(0, 25))) {
+
+            // If page title matches, we're definitely on the right notebook
+            if (pageTitle && (pageTitle.includes(title) || (title.length > 30 && pageTitle.includes(title.substring(0, 25))))) {
                 console.log(`[DEBUG] Already on notebook: ${title}, skipping navigation`);
                 return;
             }
+
+            // If URL contains /notebook/ and we just need to confirm, wait a bit for title
+            if (pageTitle === '' || pageTitle === 'NotebookLM') {
+                await this.page.waitForTimeout(1500);
+                const retryTitle = await this.page.title().catch(() => '');
+                if (retryTitle.includes(title) || (title.length > 30 && retryTitle.includes(title.substring(0, 25)))) {
+                    console.log(`[DEBUG] Already on notebook (after title load): ${title}, skipping navigation`);
+                    return;
+                }
+            }
+
             console.log(`[DEBUG] On different notebook (${pageTitle}), navigating to home first...`);
         }
 
