@@ -106,6 +106,19 @@ export class NotebookLMClient {
 
     async openNotebook(title: string) {
         console.log(`Opening notebook: ${title}`);
+
+        // Check if we're already on a notebook page - avoid unnecessary navigation
+        const currentUrl = this.page.url();
+        if (currentUrl.includes('/notebook/')) {
+            // Already on a notebook - check if it's the right one by looking at page title
+            const pageTitle = await this.page.title().catch(() => '');
+            if (pageTitle.includes(title) || title.length > 30 && pageTitle.includes(title.substring(0, 25))) {
+                console.log(`[DEBUG] Already on notebook: ${title}, skipping navigation`);
+                return;
+            }
+            console.log(`[DEBUG] On different notebook (${pageTitle}), navigating to home first...`);
+        }
+
         await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
 
         // Network idle is too slow (background polling). 
