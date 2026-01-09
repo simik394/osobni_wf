@@ -1,0 +1,52 @@
+---
+# Ansible role for configuring Gemini CLI telemetry with Langfuse
+# This role sets up ~/.gemini/settings.json with OTEL authentication
+
+- name: Ensure .gemini directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.gemini"
+    state: directory
+    mode: "0755"
+
+- name: Generate Langfuse auth string
+  ansible.builtin.set_fact:
+    langfuse_auth_base64: "{{ (langfuse_public_key + ':' + langfuse_secret_key) | b64encode }}"
+
+- name: Check if settings.json exists
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/.gemini/settings.json"
+  register: gemini_settings_file
+
+- name: Read existing settings.json
+  ansible.builtin.slurp:
+    src: "{{ ansible_env.HOME }}/.gemini/settings.json"
+  register: existing_settings
+  when: gemini_settings_file.stat.exists
+
+- name: Parse existing settings
+  ansible.builtin.set_fact:
+    gemini_settings: "{{ existing_settings.content | b64decode | from_json }}"
+  when: gemini_settings_file.stat.exists
+
+- name: Initialize empty settings if file doesn't exist
+  ansible.builtin.set_fact:
+    gemini_settings: {}
+  when: not gemini_settings_file.stat.exists
+
+- name: Merge telemetry configuration
+  ansible.builtin.set_fact:
+    gemini_settings: "{{ gemini_settings | combine({'telemetry': telemetry_config}, recursive=True) }}"
+  vars:
+    telemetry_config:
+      enabled: true
+      target: local
+      otlpProtocol: http
+      otlpEndpoint: "{{ langfuse_otel_endpoint }}"
+      otlpHeaders:
+        Authorization: "Basic {{ langfuse_auth_base64 }}"
+
+- name: Write settings.json
+  ansible.builtin.copy:
+    content: "{{ gemini_settings | to_nice_json }}"
+    dest: "{{ ansible_env.HOME }}/.gemini/settings.json"
+    mode: "0600"

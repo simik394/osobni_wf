@@ -38,3 +38,13 @@
   roles:
     - role: local_memgraph
       tags: [local_memgraph]
+
+# Local user configuration (no sudo needed)
+- name: Configure Local User Tools
+  hosts: local
+  become: false
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  roles:
+    - role: gemini_cli
+      tags: [gemini_cli]

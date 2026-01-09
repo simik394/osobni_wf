@@ -1,0 +1,9 @@
+# Default variables for gemini_cli role
+# Override these in group_vars or host_vars
+
+# Langfuse OTEL endpoint (self-hosted)
+langfuse_otel_endpoint: "http://halvarm.tail288db.ts.net:3000/api/public/otel/v1/traces"
+
+# Langfuse API keys (should be overridden in group_vars or fetched from Vault)
+langfuse_public_key: ""
+langfuse_secret_key: ""

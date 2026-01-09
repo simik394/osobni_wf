@@ -1,0 +1,7 @@
+# Local machine variables
+ansible_connection: local
+ansible_python_interpreter: /usr/bin/python3
+
+# Langfuse credentials for Gemini CLI telemetry
+langfuse_public_key: "pk-lf-ce2c027a-96a0-49ea-ae5c-baa714b53aa4"
+langfuse_secret_key: "sk-lf-825cd051-6ed4-4bb1-8cb2-3576be4d48a2"
