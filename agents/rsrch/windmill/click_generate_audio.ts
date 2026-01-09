@@ -26,9 +26,39 @@ interface AudioGenerationResult {
 export async function main(args: AudioGenerationRequest): Promise<AudioGenerationResult> {
     const startTime = Date.now();
     const rsrchUrl = Deno.env.get("RSRCH_SERVER_URL") || "http://localhost:3080";
+    const pendingAudioId = `pending_audio_${startTime}_${Math.random().toString(36).substring(2, 8)}`;
+    let notebookId = "unknown";
 
     try {
-        // 1. Call rsrch server to trigger generation (non-blocking)
+        // 1. Create PendingAudio with "queued" status
+        const falkorCreateResponse = await fetch(`${rsrchUrl}/graph/execute`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                query: `
+          MATCH (n:Notebook)-[:HAS_SOURCE]->(s:Source {title: "${args.source_title}"})
+          WHERE n.title CONTAINS "${args.notebook_title.substring(0, 30)}"
+          CREATE (pa:PendingAudio {
+            id: "${pendingAudioId}",
+            notebookId: n.id,
+            sourceTitle: "${args.source_title}",
+            status: "queued",
+            createdAt: ${startTime},
+            customPrompt: "${args.custom_prompt || ""}"
+          })
+          CREATE (s)-[:GENERATING]->(pa)
+          RETURN n.id as notebookId
+        `
+            })
+        });
+
+        if (!falkorCreateResponse.ok) {
+            throw new Error(`FalkorDB create failed: ${falkorCreateResponse.status}`);
+        }
+        const graphData = await falkorCreateResponse.json().catch(() => ({ notebookId: "unknown" }));
+        notebookId = graphData.notebookId || "unknown";
+
+        // 2. Call rsrch server to trigger generation (non-blocking)
         const response = await fetch(`${rsrchUrl}/notebooklm/generate-audio`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -44,36 +74,21 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         if (!response.ok) {
             throw new Error(`rsrch server responded with ${response.status}`);
         }
-
         const data = await response.json();
 
-        // 2. Update FalkorDB with pending audio state
-        const pendingAudioId = `pending_audio_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
-        const falkorResponse = await fetch(`${rsrchUrl}/graph/execute`, {
+        // 3. Update FalkorDB status to "generating"
+        await fetch(`${rsrchUrl}/graph/execute`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 query: `
-          MATCH (n:Notebook)-[:HAS_SOURCE]->(s:Source {title: "${args.source_title}"})
-          WHERE n.title CONTAINS "${args.notebook_title.substring(0, 30)}"
-          CREATE (pa:PendingAudio {
-            id: "${pendingAudioId}",
-            notebookId: n.id,
-            sourceTitle: "${args.source_title}",
-            status: "generating",
-            startedAt: ${startTime},
-            customPrompt: "${args.custom_prompt || ""}"
-          })
-          CREATE (s)-[:GENERATING]->(pa)
-          RETURN n.id as notebookId
+          MATCH (pa:PendingAudio {id: "${pendingAudioId}"})
+          SET pa.status = "generating", pa.startedAt = ${Date.now()}
         `
             })
         });
 
-        const graphData = await falkorResponse.json().catch(() => ({ notebookId: "unknown" }));
-
-        // 3. Send start notification
+        // 4. Send start notification
         const ntfyTopic = Deno.env.get("NTFY_TOPIC") || "rsrch-audio";
         const ntfyServer = Deno.env.get("NTFY_SERVER") || "https://ntfy.sh";
 
