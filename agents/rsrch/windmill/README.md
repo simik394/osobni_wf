@@ -48,3 +48,15 @@ In Windmill UI:
 - `POST /gemini/sync-graph` - Sync Gemini to FalkorDB
 - `POST /notebook/list` - List NotebookLM notebooks
 - `POST /notebook/sync-graph` - Sync notebook to FalkorDB
+
+## Flow Templates
+
+This directory contains templates for common Windmill flow patterns. These are designed to be adapted for specific use cases.
+
+| Template | Purpose |
+|----------|---------|
+| [`batch_processing.ts`](./templates/batch_processing.ts) | A robust pattern for processing large datasets in paginated batches. |
+| [`error_handling_retry.ts`](./templates/error_handling_retry.ts) | Implements exponential backoff with jitter for handling transient failures in tasks. |
+| [`falkordb_state_sync.ts`](./templates/falkordb_state_sync.ts) | Demonstrates stateful synchronization with FalkorDB for incremental updates. |
+
+To use a template, copy it to a new file and customize the placeholder sections as described in the file's comments.
