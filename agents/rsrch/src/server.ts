@@ -253,40 +253,52 @@ app.post('/notebook/generate-audio', async (req, res) => {
     try {
         const { notebookTitle, sources, customPrompt, dryRun } = req.body;
 
-        if (!notebookClient) {
-            notebookClient = await client.createNotebookClient();
-        }
+        // Import WindmillClient for job queuing
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
 
-        // Check if busy
-        if (notebookClient?.isBusy) {
-            return res.status(409).json({ success: false, error: 'NotebookLM client is busy with another task.' });
-        }
-
-        // Create Job using centralized queue
-        const job = await graphStore.addJob('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
-
-        // Start background processing
-        console.log(`[Server] Starting async job ${job.id}: Audio Generation (DryRun: ${dryRun})`);
-
-        (async () => {
-            try {
-                await graphStore.updateJobStatus(job.id, 'running');
-                await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
-                await graphStore.updateJobStatus(job.id, 'completed', { result: { message: 'Audio generated' } });
-                console.log(`[Server] Job ${job.id} completed.`);
-                notifyJobCompleted(job.id, 'Audio Generation', notebookTitle || 'default', true, 'Audio overview generated');
-            } catch (err: any) {
-                console.error(`[Server] Job ${job.id} failed:`, err);
-                await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
-                notifyJobCompleted(job.id, 'Audio Generation', notebookTitle || 'default', false, err.message);
+        // Check if Windmill is configured
+        if (!windmill.isConfigured()) {
+            console.warn('[Server] Windmill not configured, falling back to local execution');
+            // Fallback to local execution (legacy)
+            if (!notebookClient) {
+                notebookClient = await client.createNotebookClient();
             }
-        })();
+            if (notebookClient?.isBusy) {
+                return res.status(409).json({ success: false, error: 'NotebookLM client is busy. Use Windmill for queued execution.' });
+            }
+            const job = await graphStore.addJob('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
+            (async () => {
+                try {
+                    await graphStore.updateJobStatus(job.id, 'running');
+                    await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
+                    await graphStore.updateJobStatus(job.id, 'completed', { result: { message: 'Audio generated' } });
+                } catch (err: any) {
+                    await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
+                }
+            })();
+            return res.status(202).json({ success: true, message: 'Audio generation started (local fallback)', jobId: job.id });
+        }
+
+        // Route through Windmill for proper queuing (prevents race conditions)
+        console.log(`[Server] Queueing ${sources?.length || 0} audio generation(s) via Windmill...`);
+
+        const sourceList = sources || [];
+        const { queued, failed } = await windmill.queueAudioGenerations(
+            notebookTitle || 'default',
+            sourceList,
+            customPrompt
+        );
+
+        if (failed.length > 0) {
+            console.warn(`[Server] ${failed.length} job(s) failed to queue:`, failed.map(f => f.error));
+        }
 
         res.status(202).json({
-            success: true,
-            message: 'Audio generation started',
-            jobId: job.id,
-            statusUrl: `/jobs/${job.id}`
+            success: queued.length > 0,
+            message: `Queued ${queued.length} audio generation(s) via Windmill`,
+            jobs: queued.map(j => ({ jobId: j.jobId, source: j.error })),
+            failed: failed.length > 0 ? failed : undefined
         });
 
     } catch (e: any) {
@@ -294,6 +306,7 @@ app.post('/notebook/generate-audio', async (req, res) => {
         res.status(500).json({ success: false, error: e.message });
     }
 });
+
 
 app.post('/notebook/audio-status', async (req, res) => {
     try {

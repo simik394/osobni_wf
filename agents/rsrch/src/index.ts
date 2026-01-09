@@ -317,116 +317,19 @@ async function main() {
                 console.log('⚡ Force mode: will regenerate even if audio already exists');
             }
 
-            if (isLocalExecution()) {
-                // Import graph store for syncing
-                const { getGraphStore } = await import('./graph-store');
-                const store = getGraphStore();
-                const graphHost = process.env.FALKORDB_HOST || 'localhost';
-
-                await runLocalNotebookAction({}, async (client, notebook) => {
-                    // Check for existing audio if not forcing
-                    if (!forceRegenerate && sources.length > 0) {
-                        const status = await notebook.checkAudioStatus(notebookTitle);
-                        const existingForSource = sources.filter(s => {
-                            const prefix = s.substring(0, 20).toLowerCase();
-                            return status.artifactTitles.some((t: string) => t.toLowerCase().includes(prefix));
-                        });
-
-                        if (existingForSource.length > 0) {
-                            console.log(`\n⚠️  DUPLICATE DETECTED: Audio already exists for:`);
-                            existingForSource.forEach(s => console.log(`   - ${s}`));
-                            console.log(`   Use --force to regenerate with a different prompt.`);
-                            return;
-                        }
-                    }
-
-                    // Connect to FalkorDB early for state tracking
-                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
-
-                    // Get notebook ID from FalkorDB for state tracking
-                    let notebookId: string | undefined;
-                    if (notebookTitle) {
-                        const nbResult = await store.executeQuery(
-                            `MATCH (n:Notebook) WHERE n.title CONTAINS "${notebookTitle.substring(0, 30)}" RETURN n.id as id LIMIT 1`
-                        );
-                        if (nbResult.data && nbResult.data.length > 0) {
-                            notebookId = (nbResult.data[0] as { id: string }).id;
-                        }
-                    }
-
-                    // Create PendingAudio in FalkorDB BEFORE triggering generation
-                    const pendingAudioId = `pending_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-                    const startTime = Date.now();
-
-                    if (notebookId && sources.length > 0 && !dryRun) {
-                        console.log('[FalkorDB] Creating PendingAudio state...');
-                        await store.executeQuery(`
-                            CREATE (pa:PendingAudio {
-                                id: "${pendingAudioId}",
-                                notebookId: "${notebookId}",
-                                sources: "${sources.join(', ')}",
-                                status: "generating",
-                                startedAt: ${startTime},
-                                customPrompt: "${(customPrompt || '').replace(/"/g, '\\"').substring(0, 200)}"
-                            })
-                        `);
-                        console.log('[FalkorDB] PendingAudio created:', pendingAudioId);
-                    }
-
-                    // 1. Generate Audio (wait for completion)
-                    const result = await notebook.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
-
-                    // Delete PendingAudio after completion
-                    if (!dryRun) {
-                        await store.executeQuery(`MATCH (pa:PendingAudio {id: "${pendingAudioId}"}) DETACH DELETE pa`);
-                        console.log('[FalkorDB] PendingAudio deleted (generation complete)');
-                    }
-
-                    if (dryRun) {
-                        await store.disconnect();
-                        return;
-                    }
-
-                    if (result.success && result.artifactTitle) {
-                        console.log(`\n[Audio] Generation successful. New artifact: "${result.artifactTitle}"`);
-
-                        // 2. Scrape & Sync to persist new audio node
-                        // We need the platformId (notebook ID) to link
-                        // If notebookTitle was passed, we might need to find the ID. 
-                        // Scrape returns platformId.
-                        try {
-                            if (notebookTitle) {
-                                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
-                                console.log('[Audio] Syncing notebook state to graph...');
-                                const data = await notebook.scrapeNotebook(notebookTitle, false);
-                                const syncResult = await store.syncNotebook(data);
-
-                                // 3. Link Sources
-                                if (sources.length > 0) {
-                                    console.log('[Audio] Linking audio to sources in graph...');
-                                    await store.linkAudioToSources(syncResult.id.replace('nb_', ''), result.artifactTitle, sources);
-                                    console.log('[Audio] Lineage recorded.');
-                                }
-                            } else {
-                                console.warn('[Audio] No notebook title provided, skipping graph sync/link. (Cannot reliably determine notebook context without title)');
-                            }
-                        } catch (e: any) {
-                            console.error('[Audio] Failed to sync graph:', e.message);
-                        } finally {
-                            await store.disconnect();
-                        }
-
-                    } else if (result.success) {
-                        console.log('\n[Audio] Generation successful (or existing), but no new unique artifact identified (or no wait).');
-                        // We could still sync here just in case
-                    } else {
-                        console.error('\n[Audio] Generation failed.');
-                        process.exit(1);
-                    }
-                });
-            } else {
-                await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt, dryRun });
+            // DEPRECATED: --local flag causes race conditions with multiple simultaneous commands
+            if (args.includes('--local')) {
+                console.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
+                console.warn('   Routing through server -> Windmill to prevent race conditions.');
+                console.warn('   Remove --local flag - it will be ignored.\n');
             }
+
+            // Always route through server for proper Windmill queuing
+            console.log('📤 Queueing via Windmill (prevents race conditions)...\n');
+            await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt, dryRun });
+            console.log('\n✅ Audio generation queued. Check ntfy or Windmill UI for status.');
+
+
         } else if (subArg1 === 'download-audio') {
             // formula: notebook download-audio [output_path] --notebook <Title> [--local] [--latest] [--pattern "regex"]
 
