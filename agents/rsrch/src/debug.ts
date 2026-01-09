@@ -21,10 +21,6 @@ async function debug() {
         console.log(`Navigating to ${config.url}...`);
         await page.goto(config.url);
 
-        // console.log('Taking screenshot...');
-        // await page.screenshot({ path: 'data/debug-screenshot.png', fullPage: true });
-        // console.log('Screenshot saved to data/debug-screenshot.png');
-
         // Dump HTML
         const html = await page.content();
         console.log('HTML Content:');
