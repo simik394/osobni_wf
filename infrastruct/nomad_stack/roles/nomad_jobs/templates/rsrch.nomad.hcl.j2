@@ -33,23 +33,25 @@ job "rsrch" {
         ]
       }
 
-      # Vault integration for secrets (DISABLED: Nomad 1.10.5 Workload Identity issues)
-      # TODO: Re-enable when Nomad/Vault WI is properly configured
-      # vault {
-      #   policies = ["agents"]
-      # }
-      #
-      # template {
-      #   data = <<EOF
-      # {% raw %}
-      # {{- with secret "secret/data/agents/windmill" }}
-      # WINDMILL_TOKEN={{ .Data.data.token }}
-      # ...
-      # {% endraw %}
-      # EOF
-      #   destination = "secrets/vault.env"
-      #   env         = true
-      # }
+      # Vault integration for secrets (JWT auth via jwt-nomad)
+      vault {
+        policies = ["agents"]
+      }
+
+      # Inject secrets from Vault as environment variables
+      template {
+        data = <<EOF
+{% raw %}
+{{- with secret "secret/data/agents/windmill" }}
+WINDMILL_TOKEN={{ .Data.data.token }}
+WINDMILL_URL=http://localhost:8000
+WINDMILL_WORKSPACE=knowlage
+{{- end }}
+{% endraw %}
+EOF
+        destination = "secrets/vault.env"
+        env         = true
+      }
 
       env {
         PORT = "3030"
@@ -59,11 +61,8 @@ job "rsrch" {
         DEBUG = "rsrch:*"
         FALKORDB_HOST = "localhost"
         FALKORDB_PORT = "6379"
-        # Windmill token from Vault - temporarily hardcoded until WI issues resolved
-        WINDMILL_TOKEN = "{{ windmill_token | default('') }}"
-        WINDMILL_URL = "http://localhost:8000"
-        WINDMILL_WORKSPACE = "knowlage"
       }
+
 
 
 

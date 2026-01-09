@@ -6,14 +6,6 @@
 // 1. Click to generate → Update FalkorDB with pending audio → Return immediately
 // 2. Watcher (separate) monitors completion → Webhook updates FalkorDB + ntfy
 
-import * as wmill from "windmill-client";
-
-interface AudioGenerationRequest {
-    notebook_title: string;
-    source_title: string;
-    custom_prompt?: string;
-}
-
 interface AudioGenerationResult {
     success: boolean;
     notebook_id: string;
@@ -23,9 +15,13 @@ interface AudioGenerationResult {
     error?: string;
 }
 
-export async function main(args: AudioGenerationRequest): Promise<AudioGenerationResult> {
+export async function main(
+    notebook_title: string,
+    source_title: string,
+    custom_prompt?: string
+): Promise<AudioGenerationResult> {
     const startTime = Date.now();
-    const rsrchUrl = Deno.env.get("RSRCH_SERVER_URL") || "http://localhost:3080";
+    const rsrchUrl = process.env.RSRCH_SERVER_URL || "http://localhost:3030";
 
     try {
         // 1. Call rsrch server to trigger generation (non-blocking)
@@ -33,9 +29,9 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                notebookTitle: args.notebook_title,
-                sources: [args.source_title],
-                customPrompt: args.custom_prompt,
+                notebookTitle: notebook_title,
+                sources: [source_title],
+                customPrompt: custom_prompt,
                 waitForCompletion: false, // NON-BLOCKING!
                 dryRun: false
             }),
@@ -55,15 +51,15 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 query: `
-          MATCH (n:Notebook)-[:HAS_SOURCE]->(s:Source {title: "${args.source_title}"})
-          WHERE n.title CONTAINS "${args.notebook_title.substring(0, 30)}"
+          MATCH (n:Notebook)-[:HAS_SOURCE]->(s:Source {title: "${source_title}"})
+          WHERE n.title CONTAINS "${notebook_title.substring(0, 30)}"
           CREATE (pa:PendingAudio {
             id: "${pendingAudioId}",
             notebookId: n.id,
-            sourceTitle: "${args.source_title}",
+            sourceTitle: "${source_title}",
             status: "generating",
             startedAt: ${startTime},
-            customPrompt: "${args.custom_prompt || ""}"
+            customPrompt: "${custom_prompt || ""}"
           })
           CREATE (s)-[:GENERATING]->(pa)
           RETURN n.id as notebookId
@@ -74,23 +70,23 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         const graphData = await falkorResponse.json().catch(() => ({ notebookId: "unknown" }));
 
         // 3. Send start notification
-        const ntfyTopic = Deno.env.get("NTFY_TOPIC") || "rsrch-audio";
-        const ntfyServer = Deno.env.get("NTFY_SERVER") || "https://ntfy.sh";
+        const ntfyTopic = process.env.NTFY_TOPIC || "rsrch-audio";
+        const ntfyServer = process.env.NTFY_SERVER || "https://ntfy.sh";
 
         await fetch(`${ntfyServer}/${ntfyTopic}`, {
             method: "POST",
             headers: {
-                "Title": `🎵 Started: ${args.source_title.substring(0, 40)}`,
+                "Title": `🎵 Started: ${source_title.substring(0, 40)}`,
                 "Tags": "hourglass_flowing_sand,audio"
             },
-            body: `Generating audio for: ${args.source_title}\nNotebook: ${args.notebook_title}`
+            body: `Generating audio for: ${source_title}\nNotebook: ${notebook_title}`
         }).catch(e => console.error("ntfy failed:", e));
 
         // 4. Return immediately (non-blocking)
         return {
             success: true,
             notebook_id: graphData.notebookId || "unknown",
-            source_title: args.source_title,
+            source_title: source_title,
             pending_audio_id: pendingAudioId,
             started_at: startTime
         };
@@ -99,7 +95,7 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         return {
             success: false,
             notebook_id: "unknown",
-            source_title: args.source_title,
+            source_title: source_title,
             pending_audio_id: "",
             started_at: startTime,
             error: String(error)
