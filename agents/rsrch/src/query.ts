@@ -16,7 +16,7 @@ export async function runQuery(queryText: string) {
     }
 
     let browser;
-    if (process.env.BROWSER_WS_ENDPOINT) {
+    if (config.browserWsEndpoint) {
         console.log(`Connecting to browser service at ${config.browserWsEndpoint}...`);
         browser = await chromium.connect(config.browserWsEndpoint);
     } else {

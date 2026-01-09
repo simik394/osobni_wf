@@ -8,6 +8,9 @@ async function debug() {
     console.log('Connecting to browser service...');
     console.log(`Endpoint: ${config.browserWsEndpoint}`);
 
+    if (!config.browserWsEndpoint) {
+        throw new Error('BROWSER_WS_ENDPOINT not set in config');
+    }
     const browser = await chromium.connect(config.browserWsEndpoint);
 
     // Create context with auth state if available

@@ -29,8 +29,8 @@ const globalCdpEndpoint = getGlobalFlag('--cdp');
 
 // ntfy notification helper
 async function notifyNtfy(title: string, message: string, tags?: string[]) {
-    const ntfyTopic = process.env.NTFY_TOPIC || 'rsrch-audio';
-    const ntfyServer = process.env.NTFY_SERVER || 'https://ntfy.sh';
+    const ntfyTopic = config.notifications.ntfy?.topic || 'rsrch-audio';
+    const ntfyServer = config.notifications.ntfy?.server || 'https://ntfy.sh';
     try {
         await fetch(`${ntfyServer}/${ntfyTopic}`, {
             method: 'POST',
@@ -441,8 +441,8 @@ async function main() {
             if (isLocalExecution()) {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
-                const graphHost = process.env.FALKORDB_HOST || 'localhost';
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                const graphHost = config.falkor.host;
+                await store.connect(graphHost, config.falkor.port);
 
                 try {
                     await runLocalNotebookAction({}, async (client, notebook) => {
@@ -721,10 +721,10 @@ async function main() {
 
             const { getGraphStore } = await import('./graph-store');
             const store = getGraphStore();
-            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            const graphHost = config.falkor.host;
 
             try {
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                await store.connect(graphHost, config.falkor.port);
 
                 // Look up notebook by title to get platformId
                 const notebooks = await store.getNotebooks(100);
@@ -783,10 +783,10 @@ async function main() {
 
             const { getGraphStore } = await import('./graph-store');
             const store = getGraphStore();
-            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            const graphHost = config.falkor.host;
 
             try {
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                await store.connect(graphHost, config.falkor.port);
                 const notebooks = await store.getNotebooks(limit);
 
                 console.log(`\n === Synced Notebooks(${notebooks.length}) ===\n`);
@@ -810,9 +810,9 @@ async function main() {
             if (isLocalExecution) {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
-                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                const graphHost = config.falkor.host;
                 try {
-                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                    await store.connect(graphHost, config.falkor.port);
                     console.log('✅ FalkorDB connection: OK');
                     const jobs = await store.listJobs();
                     const queued = jobs.filter(j => j.status === 'queued').length;
@@ -837,9 +837,9 @@ async function main() {
             if (isLocalExecution) {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
-                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                const graphHost = config.falkor.host;
                 try {
-                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                    await store.connect(graphHost, config.falkor.port);
                     const jobs = status && !status.startsWith('--') ? await store.listJobs(status) : await store.listJobs();
                     console.log(`\nJobs (${jobs.length}):`);
                     for (const job of jobs) {
@@ -865,7 +865,7 @@ async function main() {
             if (isLocalExecution) {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
-                await store.connect(process.env.FALKORDB_HOST || 'localhost', parseInt(process.env.FALKORDB_PORT || '6379'));
+                await store.connect(config.falkor.host, config.falkor.port);
                 try {
                     // const lineage = await store.getArtifactLineage(artifactId);
                     // console.log(JSON.stringify(lineage, null, 2));
@@ -884,10 +884,10 @@ async function main() {
             if (isLocalExecution) {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
-                const graphHost = process.env.FALKORDB_HOST || 'localhost';
+                const graphHost = config.falkor.host;
 
                 try {
-                    await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                    await store.connect(graphHost, config.falkor.port);
                     // We need to implement getConversations in graph-store first or use getConversationsByPlatform
                     // For now, let's just list Gemini conversations as default orall
 
@@ -983,10 +983,10 @@ async function main() {
 
             const { getGraphStore } = await import('./graph-store');
             const store = getGraphStore();
-            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            const graphHost = config.falkor.host;
 
             try {
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                await store.connect(graphHost, config.falkor.port);
                 const citations = await store.getCitations({ domain, limit });
                 console.log(`\n=== Citations (${citations.length}) ===\n`);
                 console.table(citations.map(c => ({
@@ -1008,10 +1008,10 @@ async function main() {
 
             const { getGraphStore } = await import('./graph-store');
             const store = getGraphStore();
-            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            const graphHost = config.falkor.host;
 
             try {
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                await store.connect(graphHost, config.falkor.port);
                 const usage = await store.getCitationUsage(url);
                 if (usage.length === 0) {
                     console.log(`No usage found for: ${url}`);
@@ -1032,10 +1032,10 @@ async function main() {
             // rsrch graph migrate-citations
             const { getGraphStore } = await import('./graph-store');
             const store = getGraphStore();
-            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            const graphHost = config.falkor.host;
 
             try {
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                await store.connect(graphHost, config.falkor.port);
                 console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
                 const result = await store.migrateCitations();
                 console.log(`\n=== Migration Complete ===`);
@@ -1057,7 +1057,7 @@ async function main() {
     } else if (command === 'gemini') {
         const subArg1 = args[1]; // e.g. research
         const hasLocalFlag = args.includes('--local');
-        const isLocalExecution = hasLocalFlag || !!process.env.BROWSER_CDP_ENDPOINT || !!process.env.BROWSER_WS_ENDPOINT;
+        const isLocalExecution = hasLocalFlag || !!config.browserWsEndpoint || !!config.browserCdpEndpoint;
 
         // Helper for local execution
         const runLocalGeminiAction = async (action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string) => {
@@ -1451,8 +1451,8 @@ async function main() {
             if (isLocalExecution) {
                 const { getGraphStore } = await import('./graph-store');
                 const store = getGraphStore();
-                const graphHost = process.env.FALKORDB_HOST || 'localhost';
-                await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+                const graphHost = config.falkor.host;
+                await store.connect(graphHost, config.falkor.port);
 
                 try {
                     await runLocalGeminiAction(async (client, gemini) => {
@@ -1919,8 +1919,8 @@ async function main() {
         const store = getGraphStore();
 
         try {
-            const graphHost = process.env.FALKORDB_HOST || 'localhost';
-            await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
+            const graphHost = config.falkor.host;
+            await store.connect(graphHost, config.falkor.port);
 
             if (graphArg1 === 'status') {
                 console.log('✅ FalkorDB connection: OK');
