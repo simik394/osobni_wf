@@ -421,7 +421,7 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
         const safeFilename = audioName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
 
         // Define local output directory
-        const outputDir = process.env.AUDIO_OUTPUT_DIR || '/home/sim/Obsi/Audio';
+        const outputDir = config.paths.resultsDir;
         const fs = require('fs');
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
@@ -674,7 +674,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         const request = req.body as ChatCompletionRequest;
 
         // Windmill proxy check - route through Windmill unless bypassed
-        if (proxyChatCompletion && process.env.WINDMILL_TOKEN && !shouldBypass(req.headers)) {
+        if (proxyChatCompletion && config.windmill?.token && !shouldBypass(req.headers)) {
             console.log('[Server] Routing through Windmill proxy...');
             try {
                 const result = await proxyChatCompletion('rsrch', request);
@@ -1456,8 +1456,8 @@ export async function startServer() {
 
         // Connect to graph store (optional - can run without it)
         console.log('[Server] Connecting to FalkorDB...');
-        const graphHost = process.env.FALKORDB_HOST || 'localhost';
-        const graphPort = parseInt(process.env.FALKORDB_PORT || '6379');
+        const graphHost = config.falkor.host;
+        const graphPort = config.falkor.port;
         try {
             await graphStore.connect(graphHost, graphPort);
             console.log('[Server] FalkorDB connected successfully.');
