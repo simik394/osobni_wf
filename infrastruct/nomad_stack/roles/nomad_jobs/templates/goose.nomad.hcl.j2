@@ -68,8 +68,9 @@ job "goose" {
           "goose",
           "ai-agent",
           "traefik.enable=true",
-          "traefik.http.routers.goose.rule=Host(`goose.{{ traefik_domain | default('100.73.45.27.nip.io') }}`)",
-          "traefik.http.routers.goose.entrypoints=web",
+          "traefik.http.routers.goose.rule=Host(`goose.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
+          "traefik.http.routers.goose.entrypoints=websecure",
+          "traefik.http.routers.goose.tls.certresolver=letsencrypt",
           "traefik.http.services.goose.loadbalancer.server.port=3099"
         ]
         

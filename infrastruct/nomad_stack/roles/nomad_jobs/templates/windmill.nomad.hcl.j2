@@ -86,8 +86,8 @@ job "windmill" {
         tags = [
           "traefik.enable=true",
           "traefik.http.routers.windmill.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
-          "traefik.http.routers.windmill.entrypoints=web,websecure",
-          "traefik.http.routers.windmill.tls=true",
+          "traefik.http.routers.windmill.entrypoints=websecure",
+          "traefik.http.routers.windmill.tls.certresolver=letsencrypt",
           "traefik.http.services.windmill.loadbalancer.server.port=8000"
         ]
         check {
@@ -175,8 +175,8 @@ job "windmill" {
         tags = [
           "traefik.enable=true",
           "traefik.http.routers.windmill-lsp.rule=Host(`windmill.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) && PathPrefix(`/ws/`)",
-          "traefik.http.routers.windmill-lsp.entrypoints=web,websecure",
-          "traefik.http.routers.windmill-lsp.tls=true",
+          "traefik.http.routers.windmill-lsp.entrypoints=websecure",
+          "traefik.http.routers.windmill-lsp.tls.certresolver=letsencrypt",
           "traefik.http.services.windmill-lsp.loadbalancer.server.port=3001"
         ]
       }

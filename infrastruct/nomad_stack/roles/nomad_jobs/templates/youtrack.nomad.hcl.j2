@@ -46,9 +46,9 @@ job "youtrack" {
         port = "http"
         tags = [
           "traefik.enable=true",
-          "traefik.http.routers.youtrack.rule=Host(`youtrack.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) || PathPrefix(`/youtrack`)",
-          # Assuming nip.io for easy access if no domain. Or user can override.
-          "traefik.http.routers.youtrack.entrypoints=web"
+          "traefik.http.routers.youtrack.rule=Host(`youtrack.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
+          "traefik.http.routers.youtrack.entrypoints=websecure",
+          "traefik.http.routers.youtrack.tls.certresolver=letsencrypt"
         ]
         check {
           name     = "alive"
