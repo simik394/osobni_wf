@@ -38,9 +38,8 @@ job "obsidian-remote" {
         port = "http"
         tags = [
           "traefik.enable=true",
-          "traefik.http.routers.obsidian.rule=Host(`obsidian.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
-          "traefik.http.routers.obsidian.entrypoints=websecure",
-          "traefik.http.routers.obsidian.tls.certresolver=letsencrypt",
+          "traefik.http.routers.obsidian.rule=Host(`obsidian.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`) || PathPrefix(`/obsidian`)",
+          "traefik.http.routers.obsidian.entrypoints=web",
           "traefik.http.routers.obsidian.middlewares=obsidian-auth",
           "traefik.http.middlewares.obsidian-auth.basicauth.users=admin:$apr1$Mi4gkYqu$FiYyqRFQ/8aSMSkZqHMgr/"
         ]
