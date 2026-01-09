@@ -8,6 +8,20 @@ test
 - **Docker > Local Installation**: Prefer running tools via Docker containers over installing packages locally (pip, npm, etc.). This keeps the system clean and dependencies isolated.
 - **Scripts over Ad-hoc Fixes**: For repeatable tasks (like file renaming, postprocessing), always create a reusable script rather than doing one-time manual fixes. This ensures the solution is persistent and can be integrated into automation pipelines.
 
+## Context Window Monitoring
+
+**Rule**: Report context window usage to the user proactively:
+
+| Condition | Action |
+|-----------|--------|
+| Every 2-5 responses | Report: "📊 Context: ~XK tokens remaining (Y% used)" |
+| After heavy tool usage (5+ calls) | Report immediately before next response |
+| Context drops below 50K tokens | Warn: "⚠️ Context getting full, consider new session" |
+| Context drops below 25K tokens | Alert: "🔴 Context critical - recommend new session soon" |
+
+**Format**: Brief inline status at start of response, e.g.:
+> 📊 Context: ~78K tokens (~49% used)
+
 > [!CAUTION]
 > **NO SHORTCUTS - PRODUCTION-GRADE ONLY**
 > 

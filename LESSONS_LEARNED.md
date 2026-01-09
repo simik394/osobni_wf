@@ -315,3 +315,130 @@ I never gave them this choice.
 
 6. **After first failure, step back and re-read the original request** - Don't double-down on the wrong approach.
 
+---
+
+## 2026-01-09: Playwright Version Mismatch Debugging (Post-Mortem)
+
+### Problem
+Playwright version mismatch: Docker base image v1.57.0, npm dependency v1.41.2.
+
+### Actual Time: ~2 hours
+### Should Have Taken: 15-20 minutes
+
+---
+
+### Root Cause of Slow Resolution
+
+**1. Wrong Initial Approach (Option 2 First)**
+
+I tried updating npm deps first instead of fixing the Dockerfile because:
+- **Internal motivation**: I assumed updating npm was "simpler" than rebuilding Docker images
+- **Wrong assumption**: Thought pushing to GHCR would "just work"
+- **Reality**: GHCR auth had expired - I hadn't checked this first
+
+**Lesson**: Always verify external service authentication BEFORE starting work that depends on it.
+
+---
+
+**2. Not Understanding Nomad's Docker Pull Behavior**
+
+I spent 30+ minutes fighting Nomad's `force_pull=false` which was being ignored. My assumptions were wrong:
+
+- **Wrong assumption**: `force_pull=false` would make Nomad use local images
+- **Reality**: Nomad Docker driver ALWAYS tries to pull when image doesn't exist in local cache with exact tag
+- **Internal motivation**: I kept trying variations (image ID, docker.io/library/ prefix) hoping one would work
+
+**Lesson**: When the first two attempts at the same approach fail, STOP and research the actual behavior instead of trying variations.
+
+---
+
+**3. Delayed Local Registry Solution**
+
+I eventually solved it with a local Docker registry, but this should have been my FIRST approach after GHCR auth failed:
+
+- **Internal motivation**: I was trying to avoid "complex" infrastructure changes
+- **Wrong assumption**: There must be a simpler way to make Nomad use local images
+- **Reality**: The "simple" way wasted 1+ hour; the registry took 5 minutes
+
+**Lesson**: Building proper infrastructure is faster than hacking around its absence.
+
+---
+
+**4. Version Alignment Confusion**
+
+Even after setting up the registry, I had the versions backwards:
+- First built with v1.41.2 base + v1.41.2 npm → Nomad cached old image
+- Rebuilt with v1.57.0 base + v1.57.0 npm → but Nomad still used cached image
+- Had to force_pull to get the new image
+
+**Internal motivation**: I was rushing to "fix it" without fully understanding the Nomad caching behavior.
+
+**Lesson**: After rebuilding images, always verify the running container uses the new image (check image SHA, logs, etc).
+
+---
+
+**5. Failure to Read Error Messages Carefully**
+
+The Playwright error message explicitly said:
+```
+- current: mcr.microsoft.com/playwright:v1.57.0-jammy
+- required: mcr.microsoft.com/playwright:v1.41.2-jammy
+```
+
+This told me exactly what version mismatch existed. I should have immediately:
+1. Checked package.json version
+2. Checked Dockerfile base version  
+3. Aligned them
+4. Rebuilt
+
+Instead, I made assumptions about which way the mismatch went.
+
+**Lesson**: Read error messages literally. They often contain the exact solution.
+
+---
+
+### What I Should Have Done
+
+**Optimal path (15 min):**
+1. Read error message carefully (current v1.57.0, required v1.41.2)
+2. `grep playwright package.json` → see it's v1.41.2
+3. `grep playwright Dockerfile` → see base is v1.57.0  
+4. Decision: Downgrade Dockerfile OR upgrade npm (pick one)
+5. Check GHCR auth → expired
+6. Immediately set up local registry (5 min)
+7. Rebuild with aligned versions
+8. Push to local registry
+9. Deploy with force_pull
+10. Test
+
+---
+
+### Process Failures
+
+| Failure | Root Cause | Fix |
+|---------|------------|-----|
+| Tried npm update first | Wrong mental model of "simpler" | Always fix infrastructure at the source |
+| Fight with force_pull | Assuming tool behavior without verifying | RTFM or test in isolation first |
+| Delayed registry setup | Aversion to "complex" solutions | Simple hacks cost more time than proper infra |
+| Cached image issue | Not verifying deployment | Always verify final state with fresh check |
+
+---
+
+### Agent Decision-Making Failures
+
+1. **Sunk cost fallacy**: After 20 minutes on force_pull, I should have abandoned that approach. Instead, I kept trying variations.
+
+2. **Premature optimization**: I tried to avoid registry because it seemed "heavy". User explicitly said "build on server in CI" - I should have immediately pivoted to local registry.
+
+3. **Not asking for clarification**: When force_pull wasn't working, I could have asked the user if they had preference on registry vs other solutions.
+
+4. **Linear thinking**: I kept trying sequential fixes instead of stepping back to analyze the whole system.
+
+---
+
+### Infrastructure Documentation Needed
+
+This incident revealed missing documentation:
+- [ ] How Nomad Docker driver pull behavior works
+- [ ] How to deploy new rsrch images (canonical workflow)
+- [ ] Local registry setup on halvarm (now exists but undocumented)
