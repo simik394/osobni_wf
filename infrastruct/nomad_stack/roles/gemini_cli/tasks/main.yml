@@ -42,11 +42,17 @@
       target: local
       otlpProtocol: http
       otlpEndpoint: "{{ langfuse_otel_endpoint }}"
-      otlpHeaders:
-        Authorization: "Basic {{ langfuse_auth_base64 }}"
 
 - name: Write settings.json
   ansible.builtin.copy:
     content: "{{ gemini_settings | to_nice_json }}"
     dest: "{{ ansible_env.HOME }}/.gemini/settings.json"
     mode: "0600"
+
+- name: Add OTEL headers to .zshrc
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    regexp: "^export OTEL_EXPORTER_OTLP_HEADERS="
+    line: 'export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic {{ langfuse_auth_base64 }}"'
+    create: yes
+    mode: "0644"
