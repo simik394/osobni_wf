@@ -186,7 +186,8 @@ async function main() {
     } else if (command === 'notebook') {
         // notebook audio [--notebook "Title"] [--sources "a,b"] [--prompt "..."]
 
-        const isLocalExecution = (argv?: any) => args.includes('--local');
+        // Always use local execution - --local flag deprecated
+        const isLocalExecution = () => true;
 
         const runLocalNotebookAction = async (argv: any, action: (client: PerplexityClient, notebook: any) => Promise<void>) => {
             console.log(`Running in LOCAL mode (profile: ${globalProfileId})...`);
@@ -1056,8 +1057,9 @@ async function main() {
 
     } else if (command === 'gemini') {
         const subArg1 = args[1]; // e.g. research
-        const hasLocalFlag = args.includes('--local');
-        const isLocalExecution = hasLocalFlag || !!process.env.BROWSER_CDP_ENDPOINT || !!process.env.BROWSER_WS_ENDPOINT;
+        // Always use local execution - --local flag deprecated
+        const hasLocalFlag = true; // Default to local mode
+        const isLocalExecution = true;
 
         // Helper for local execution
         const runLocalGeminiAction = async (action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string) => {
