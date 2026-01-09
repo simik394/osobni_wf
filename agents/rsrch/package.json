@@ -27,7 +27,7 @@
     "falkordb": "^6.4.0",
     "js-yaml": "^4.1.1",
     "langfuse": "^3.38.6",
-    "playwright": "1.41.2",
+    "playwright": "^1.57.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-core": "^21.5.0",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
