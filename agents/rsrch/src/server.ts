@@ -1076,6 +1076,20 @@ app.get('/gemini/sessions', async (req, res) => {
         }
 
         const sessions = await geminiClient.listSessions(limit, offset);
+
+        // Sync to graph in the background
+        if (sessions.length > 0) {
+            console.log(`[Server] Syncing ${sessions.length} Gemini sessions to FalkorDB...`);
+            (async () => {
+                for (const session of sessions) {
+                    await graphStore.createOrUpdateGeminiSession(session);
+                }
+                console.log('[Server] Gemini session sync complete.');
+            })().catch(err => {
+                console.error('[Server] Background Gemini session sync failed:', err);
+            });
+        }
+
         res.json({ success: true, data: sessions });
     } catch (e: any) {
         console.error('[Server] Gemini list sessions failed:', e);
