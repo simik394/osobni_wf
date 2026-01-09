@@ -3,6 +3,7 @@
  */
 import { config } from './config';
 import { sendNotification, loadConfigFromEnv } from './notify';
+import logger from './logger';
 
 // Load ntfy/discord config from env on module load
 loadConfigFromEnv();
@@ -15,7 +16,7 @@ export async function sendDiscordNotification(message: string, embed?: {
 }) {
     const webhookUrl = config.notifications.discordWebhookUrl;
     if (!webhookUrl) {
-        console.log('[Discord] No webhook URL configured, skipping notification');
+        logger.info('[Discord] No webhook URL configured, skipping notification');
         return;
     }
 
@@ -41,12 +42,12 @@ export async function sendDiscordNotification(message: string, embed?: {
         });
 
         if (!response.ok) {
-            console.error(`[Discord] Webhook failed: ${response.status} ${await response.text()}`);
+            logger.error(`[Discord] Webhook failed: ${response.status} ${await response.text()}`);
         } else {
-            console.log('[Discord] Notification sent');
+            logger.info('[Discord] Notification sent');
         }
     } catch (e: any) {
-        console.error('[Discord] Failed to send notification:', e.message);
+        logger.error('[Discord] Failed to send notification:', e.message);
     }
 }
 
@@ -71,6 +72,6 @@ export function notifyJobCompleted(jobId: string, type: string, query: string, s
     sendNotification(ntfyMessage, {
         title: `rsrch: ${type}`,
         priority: priority as any
-    }).catch(e => console.error('[Notify] Failed:', e.message));
+    }).catch(e => logger.error('[Notify] Failed:', e.message));
 }
 

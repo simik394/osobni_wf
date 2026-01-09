@@ -10,6 +10,7 @@
 import { FalkorDB } from 'falkordb';
 import type Graph from 'falkordb/dist/src/graph';
 import { createHash } from 'crypto';
+import logger from './logger';
 
 export interface GraphJob {
     id: string;
@@ -129,12 +130,12 @@ export class GraphStore {
             this.client = await FalkorDB.connect({ socket: { host, port } });
             this.graph = this.client.selectGraph(this.graphName);
             this.isConnected = true;
-            console.log(`[GraphStore] Connected to FalkorDB at ${host}:${port}, graph: ${this.graphName}`);
+            logger.info(`[GraphStore] Connected to FalkorDB at ${host}:${port}, graph: ${this.graphName}`);
 
             // Initialize schema
             await this.initSchema();
         } catch (e: any) {
-            console.error('[GraphStore] Connection failed:', e.message);
+            logger.error('[GraphStore] Connection failed:', e.message);
             throw e;
         }
     }
@@ -160,9 +161,9 @@ export class GraphStore {
             await this.graph.createNodeRangeIndex('Entity', 'id').catch(() => { });
             await this.graph.createNodeRangeIndex('Entity', 'type').catch(() => { });
             await this.graph.createNodeRangeIndex('Agent', 'id').catch(() => { });
-            console.log('[GraphStore] Schema initialized');
+            logger.info('[GraphStore] Schema initialized');
         } catch (e: any) {
-            console.warn('[GraphStore] Schema init warning:', e.message);
+            logger.warn('[GraphStore] Schema init warning:', e.message);
         }
     }
 
@@ -200,7 +201,7 @@ export class GraphStore {
             })
         `);
 
-        console.log(`[GraphStore] Job added: ${id} (${type})`);
+        logger.info(`[GraphStore] Job added: ${id} (${type})`);
         return job;
     }
 
@@ -265,7 +266,7 @@ export class GraphStore {
             SET ${setClause}
         `);
 
-        console.log(`[GraphStore] Job ${id} → ${status}`);
+        logger.info(`[GraphStore] Job ${id} → ${status}`);
     }
 
     /**
@@ -317,7 +318,7 @@ export class GraphStore {
             })
         `);
 
-        console.log(`[GraphStore] PendingAudio ${id} created (queued)`);
+        logger.info(`[GraphStore] PendingAudio ${id} created (queued)`);
 
         return {
             id,
@@ -363,7 +364,7 @@ export class GraphStore {
             SET ${setClause}
         `);
 
-        console.log(`[GraphStore] PendingAudio ${id} → ${status}`);
+        logger.info(`[GraphStore] PendingAudio ${id} → ${status}`);
     }
 
     /**
@@ -442,7 +443,7 @@ export class GraphStore {
             DETACH DELETE pa
         `);
 
-        console.log(`[GraphStore] PendingAudio ${id} deleted`);
+        logger.info(`[GraphStore] PendingAudio ${id} deleted`);
     }
 
     /**
@@ -462,7 +463,7 @@ export class GraphStore {
 
         const deleted = (result.data?.[0] as any)?.deleted || 0;
         if (deleted > 0) {
-            console.log(`[GraphStore] Cleaned up ${deleted} stale PendingAudio nodes`);
+            logger.info(`[GraphStore] Cleaned up ${deleted} stale PendingAudio nodes`);
         }
         return deleted;
     }
@@ -488,7 +489,7 @@ export class GraphStore {
             })
         `);
 
-        console.log(`[GraphStore] Entity added: ${entity.type}:${entity.name}`);
+        logger.info(`[GraphStore] Entity added: ${entity.type}:${entity.name}`);
     }
 
     /**
@@ -503,7 +504,7 @@ export class GraphStore {
             CREATE (a)-[:${rel.type} {properties: '${propsJson}', createdAt: ${Date.now()}}]->(b)
         `);
 
-        console.log(`[GraphStore] Relationship added: ${rel.from} -[${rel.type}]-> ${rel.to}`);
+        logger.info(`[GraphStore] Relationship added: ${rel.from} -[${rel.type}]-> ${rel.to}`);
     }
 
     /**
@@ -601,7 +602,7 @@ export class GraphStore {
             CREATE (a)-[:HAD]->(c)
         `);
 
-        console.log(`[GraphStore] Conversation started: ${id} for agent ${agentId}`);
+        logger.info(`[GraphStore] Conversation started: ${id} for agent ${agentId}`);
         return { id, agentId, createdAt };
     }
 
@@ -741,7 +742,7 @@ export class GraphStore {
                 await this.insertResearchDocs(id, data.researchDocs, capturedAt);
             }
 
-            console.log(`[GraphStore] Synced new conversation: ${id} (${data.turns.length} turns)`);
+            logger.info(`[GraphStore] Synced new conversation: ${id} (${data.turns.length} turns)`);
             return { id, isNew: true };
         } else {
             // Smart merge: check if turns changed
@@ -763,7 +764,7 @@ export class GraphStore {
                     SET c.capturedAt = ${capturedAt}, c.title = '${escapeString(data.title)}'
                 `);
 
-                console.log(`[GraphStore] Updated conversation: ${id} (${existingTurnCount} → ${newTurnCount} turns)`);
+                logger.info(`[GraphStore] Updated conversation: ${id} (${existingTurnCount} → ${newTurnCount} turns)`);
                 return { id, isNew: false, turnsUpdated: true };
             } else {
                 // Just update capturedAt
@@ -771,7 +772,7 @@ export class GraphStore {
                     MATCH (c:Conversation {id: '${id}'})
                     SET c.capturedAt = ${capturedAt}
                 `);
-                console.log(`[GraphStore] Touched conversation: ${id} (${existingTurnCount} turns unchanged)`);
+                logger.info(`[GraphStore] Touched conversation: ${id} (${existingTurnCount} turns unchanged)`);
                 return { id, isNew: false, turnsUpdated: false };
             }
         }
@@ -1078,7 +1079,7 @@ export class GraphStore {
             processed++;
         }
 
-        console.log(`[GraphStore] Migration complete: ${processed} docs, ${citationsCreated} new citations`);
+        logger.info(`[GraphStore] Migration complete: ${processed} docs, ${citationsCreated} new citations`);
         return { processed, citations: citationsCreated };
     }
 
@@ -1335,7 +1336,7 @@ export class GraphStore {
             }
         }
 
-        console.log(`[GraphStore] ${isNew ? 'Created' : 'Updated'} notebook: ${id} (${sourcesCount} sources, ${artifactsCount} artifacts, ${messagesCount} messages)`);
+        logger.info(`[GraphStore] ${isNew ? 'Created' : 'Updated'} notebook: ${id} (${sourcesCount} sources, ${artifactsCount} artifacts, ${messagesCount} messages)`);
         return { id, isNew, sourcesCount, artifactsCount, messagesCount };
     }
 
@@ -1348,7 +1349,7 @@ export class GraphStore {
         // This assumes the AudioOverview and Sources already exist (e.g. via syncNotebook or added previously)
         // We match by title within the scope of the notebook
 
-        console.log(`[GraphStore] Linking audio "${audioTitle}" to ${sourceTitles.length} sources in notebook "${notebookPlatformId}"`);
+        logger.info(`[GraphStore] Linking audio "${audioTitle}" to ${sourceTitles.length} sources in notebook "${notebookPlatformId}"`);
 
         // Create relationship to each source
         for (const sourceTitle of sourceTitles) {
@@ -1432,7 +1433,7 @@ export class GraphStore {
             })
         `);
 
-        console.log(`[GraphStore] Session created: ${session.id} (${session.platform})`);
+        logger.info(`[GraphStore] Session created: ${session.id} (${session.platform})`);
         return { ...session, createdAt };
     }
 
@@ -1453,7 +1454,7 @@ export class GraphStore {
             })
         `);
 
-        console.log(`[GraphStore] Document created: ${doc.id}`);
+        logger.info(`[GraphStore] Document created: ${doc.id}`);
         return { ...doc, createdAt };
     }
 
@@ -1473,7 +1474,7 @@ export class GraphStore {
             })
         `);
 
-        console.log(`[GraphStore] Audio created: ${audio.id}`);
+        logger.info(`[GraphStore] Audio created: ${audio.id}`);
         return { ...audio, createdAt };
     }
 
@@ -1523,7 +1524,7 @@ export class GraphStore {
             CREATE (d)-[:CONVERTED_TO]->(a)
         `);
 
-        console.log(`[GraphStore] ResearchAudio created: ${audioId} for doc ${data.researchDocId}`);
+        logger.info(`[GraphStore] ResearchAudio created: ${audioId} for doc ${data.researchDocId}`);
         return { id: audioId, path: data.path, duration: data.duration, createdAt };
     }
 
@@ -1538,7 +1539,7 @@ export class GraphStore {
             CREATE (j)-[:STARTED {createdAt: ${Date.now()}}]->(s)
         `);
 
-        console.log(`[GraphStore] Linked: Job ${jobId} -> Session ${sessionId}`);
+        logger.info(`[GraphStore] Linked: Job ${jobId} -> Session ${sessionId}`);
     }
 
     /**
@@ -1552,7 +1553,7 @@ export class GraphStore {
             CREATE (s)-[:EXPORTED_TO {createdAt: ${Date.now()}}]->(d)
         `);
 
-        console.log(`[GraphStore] Linked: Session ${sessionId} -> Document ${documentId}`);
+        logger.info(`[GraphStore] Linked: Session ${sessionId} -> Document ${documentId}`);
     }
 
     /**
@@ -1566,7 +1567,7 @@ export class GraphStore {
             CREATE (d)-[:CONVERTED_TO {createdAt: ${Date.now()}}]->(a)
         `);
 
-        console.log(`[GraphStore] Linked: Document ${documentId} -> Audio ${audioId}`);
+        logger.info(`[GraphStore] Linked: Document ${documentId} -> Audio ${audioId}`);
     }
 
     /**
@@ -1700,7 +1701,7 @@ export class GraphStore {
             this.client = null;
             this.graph = null;
             this.isConnected = false;
-            console.log('[GraphStore] Disconnected');
+            logger.info('[GraphStore] Disconnected');
         }
     }
 }

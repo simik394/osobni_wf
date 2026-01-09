@@ -3,14 +3,15 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
+import logger from './logger';
 
 // Add stealth plugin
 chromium.use(StealthPlugin());
 
 export async function login(userDataDir?: string) {
     const finalDir = userDataDir || config.auth.userDataDir;
-    console.log(`Launching browser with persistent profile at: ${finalDir}`);
-    console.log('This browser will remember your login for future runs.');
+    logger.info(`Launching browser with persistent profile at: ${finalDir}`);
+    logger.info('This browser will remember your login for future runs.');
 
     // Ensure profile dir exists
     if (!fs.existsSync(finalDir)) {
@@ -33,11 +34,11 @@ export async function login(userDataDir?: string) {
     const page = context.pages()[0] || await context.newPage();
 
     try {
-        console.log(`Navigating to ${config.url} ...`);
+        logger.info(`Navigating to ${config.url} ...`);
         await page.goto(config.url);
 
         // Also open NotebookLM in a new tab
-        console.log('Opening NotebookLM in a new tab...');
+        logger.info('Opening NotebookLM in a new tab...');
         const page2 = await context.newPage();
         await page2.goto('https://notebooklm.google.com/');
 
@@ -49,7 +50,7 @@ export async function login(userDataDir?: string) {
         console.log('====================\n');
 
         // Wait for user to close the browser or for a very long time
-        console.log('Waiting for you to close the browser after logging in...');
+        logger.info('Waiting for you to close the browser after logging in...');
 
         // We'll just wait for the context to be closed
         await new Promise((resolve) => {
@@ -61,11 +62,11 @@ export async function login(userDataDir?: string) {
         const authFile = path.join(path.dirname(finalDir), 'auth.json');
         fs.writeFileSync(authFile, JSON.stringify(state, null, 2));
 
-        console.log(`Login state has been saved to ${finalDir} and ${authFile}`);
+        logger.info(`Login state has been saved to ${finalDir} and ${authFile}`);
         process.exit(0);
 
     } catch (error) {
-        console.error('Authentication process error:', error);
+        logger.error('Authentication process error:', error);
         process.exit(1);
     }
 }

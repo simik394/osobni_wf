@@ -1,12 +1,13 @@
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
+import logger from './logger';
 
 chromium.use(StealthPlugin());
 
 async function debug() {
-    console.log('Connecting to browser service...');
-    console.log(`Endpoint: ${config.browserWsEndpoint}`);
+    logger.info('Connecting to browser service...');
+    logger.info(`Endpoint: ${config.browserWsEndpoint}`);
 
     const browser = await chromium.connect(config.browserWsEndpoint);
 
@@ -18,20 +19,20 @@ async function debug() {
     const page = await context.newPage();
 
     try {
-        console.log(`Navigating to ${config.url}...`);
+        logger.info(`Navigating to ${config.url}...`);
         await page.goto(config.url);
 
-        // console.log('Taking screenshot...');
+        // logger.info('Taking screenshot...');
         // await page.screenshot({ path: 'data/debug-screenshot.png', fullPage: true });
-        // console.log('Screenshot saved to data/debug-screenshot.png');
+        // logger.info('Screenshot saved to data/debug-screenshot.png');
 
         // Dump HTML
         const html = await page.content();
-        console.log('HTML Content:');
-        console.log(html);
+        logger.info('HTML Content:');
+        logger.info(html);
 
     } catch (error) {
-        console.error('Debug failed:', error);
+        logger.error('Debug failed:', error);
     } finally {
         await context.close();
         await browser.close();

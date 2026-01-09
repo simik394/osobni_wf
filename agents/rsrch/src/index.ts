@@ -7,6 +7,7 @@ import { config } from './config';
 import * as path from 'path';
 import { GeminiClient, ResearchInfo } from './gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
+import logger from './logger';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -41,7 +42,7 @@ async function notifyNtfy(title: string, message: string, tags?: string[]) {
             body: message
         });
     } catch (e) {
-        console.error(`[ntfy] Failed to send notification: ${e}`);
+        logger.error(`[ntfy] Failed to send notification: ${e}`);
     }
 }
 
@@ -62,10 +63,10 @@ async function sendServerRequest(path: string, body: any = {}) {
         }
 
         const data = await response.json();
-        console.log(JSON.stringify(data, null, 2));
+        logger.info(JSON.stringify(data, null, 2));
     } catch (e: any) {
-        console.error(`Failed to communicate with server at port ${port}. Is it running?`);
-        console.error(e.message);
+        logger.error(`Failed to communicate with server at port ${port}. Is it running?`);
+        logger.error(e.message);
         process.exit(1);
     }
 }
@@ -114,11 +115,11 @@ async function main() {
         const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
         await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
 
-        console.log('Opening Perplexity for interactive login...');
+        logger.info('Opening Perplexity for interactive login...');
         const ppUrl = 'https://www.perplexity.ai';
         await client.openPage(ppUrl);
 
-        console.log('Opening NotebookLM for interactive login...');
+        logger.info('Opening NotebookLM for interactive login...');
         await client.openPage('https://notebooklm.google.com/');
 
         console.log('\nPLEASE LOG IN TO BOTH SERVICES VIA VNC (localhost:5900).');
@@ -129,7 +130,7 @@ async function main() {
         await new Promise(resolve => process.stdin.once('data', resolve));
 
         await client.saveAuth();
-        console.log('Session saved! You can now use "query" or "batch".');
+        logger.info('Session saved! You can now use "query" or "batch".');
         process.exit(0);
     } else if (command === 'serve') {
         await startServer();
@@ -143,7 +144,7 @@ async function main() {
         if (subCmd === 'list') {
             const profiles = listProfiles();
             if (profiles.length === 0) {
-                console.log('No profiles found.');
+                logger.info('No profiles found.');
             } else {
                 console.log('Available profiles:');
                 for (const p of profiles) {
@@ -155,19 +156,19 @@ async function main() {
         } else if (subCmd === 'info') {
             const profileId = args[2] || globalProfileId;
             const info = getProfileInfo(profileId);
-            console.log(`Profile: ${info.id}`);
-            console.log(`  Auth file: ${info.authFile}`);
-            console.log(`  State dir: ${info.stateDir}`);
-            console.log(`  Exists: ${info.exists}`);
-            console.log(`  Has auth: ${info.hasAuth}`);
+            logger.info(`Profile: ${info.id}`);
+            logger.info(`  Auth file: ${info.authFile}`);
+            logger.info(`  State dir: ${info.stateDir}`);
+            logger.info(`  Exists: ${info.exists}`);
+            logger.info(`  Has auth: ${info.hasAuth}`);
         } else if (subCmd === 'delete') {
             const profileId = args[2];
             if (!profileId) {
-                console.error('Usage: rsrch profile delete <profileId>');
+                logger.error('Usage: rsrch profile delete <profileId>');
                 process.exit(1);
             }
             if (deleteProfile(profileId)) {
-                console.log(`Profile '${profileId}' deleted.`);
+                logger.info(`Profile '${profileId}' deleted.`);
             }
         } else {
             console.log('Profile commands:');
@@ -189,7 +190,7 @@ async function main() {
         const isLocalExecution = (argv?: any) => args.includes('--local');
 
         const runLocalNotebookAction = async (argv: any, action: (client: PerplexityClient, notebook: any) => Promise<void>) => {
-            console.log(`Running in LOCAL mode (profile: ${globalProfileId})...`);
+            logger.info(`Running in LOCAL mode (profile: ${globalProfileId})...`);
             const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             const notebook = await client.createNotebookClient();
@@ -202,7 +203,7 @@ async function main() {
 
         if (subArg1 === 'create') {
             const title = subArg2;
-            if (!title) { console.error('Usage: rsrch notebook create "Title"'); process.exit(1); }
+            if (!title) { logger.error('Usage: rsrch notebook create "Title"'); process.exit(1); }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
@@ -217,7 +218,7 @@ async function main() {
             let notebookTitle = undefined;
             if (args[3] === '--notebook') notebookTitle = args[4];
 
-            if (!url) { console.error('Usage: rsrch notebook add-source "URL" [--notebook "Title"]'); process.exit(1); }
+            if (!url) { logger.error('Usage: rsrch notebook add-source "URL" [--notebook "Title"]'); process.exit(1); }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
@@ -247,7 +248,7 @@ async function main() {
             }
 
             if (docNames.length === 0) {
-                console.error('Usage: rsrch notebook add-drive-source "Doc1,Doc2" [--notebook "Title"]');
+                logger.error('Usage: rsrch notebook add-drive-source "Doc1,Doc2" [--notebook "Title"]');
                 process.exit(1);
             }
 
@@ -298,36 +299,36 @@ async function main() {
             const dryRun = !wetRun; // Default to dryRun unless --wet is passed
 
             if (dryRun) {
-                console.log('\n🧪 DRY RUN MODE ACTIVE');
-                console.log('   Audio generation will be simulated correctly, but the final "Generate" click will be SKIPPED.');
-                console.log('   To actually generate audio (and consume quota), use the --wet flag.\n');
+                logger.info('\n🧪 DRY RUN MODE ACTIVE');
+                logger.info('   Audio generation will be simulated correctly, but the final "Generate" click will be SKIPPED.');
+                logger.info('   To actually generate audio (and consume quota), use the --wet flag.\n');
             } else {
-                console.log('\n🌊 WET RUN ACTIVE');
-                console.log('   Audio WILL be generated. Quota will be consumed.\n');
+                logger.info('\n🌊 WET RUN ACTIVE');
+                logger.info('   Audio WILL be generated. Quota will be consumed.\n');
             }
 
             if (sources.length > 0) {
-                console.log(`📝 Selected sources (${sources.length}):`);
-                sources.forEach((s, i) => console.log(`   ${i + 1}. ${s}`));
+                logger.info(`📝 Selected sources (${sources.length}):`);
+                sources.forEach((s, i) => logger.info(`   ${i + 1}. ${s}`));
             }
             if (customPrompt) {
-                console.log(`💬 Custom prompt: "${customPrompt}"`);
+                logger.info(`💬 Custom prompt: "${customPrompt}"`);
             }
             if (forceRegenerate) {
-                console.log('⚡ Force mode: will regenerate even if audio already exists');
+                logger.info('⚡ Force mode: will regenerate even if audio already exists');
             }
 
             // DEPRECATED: --local flag causes race conditions with multiple simultaneous commands
             if (args.includes('--local')) {
-                console.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
-                console.warn('   Routing through server -> Windmill to prevent race conditions.');
-                console.warn('   Remove --local flag - it will be ignored.\n');
+                logger.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
+                logger.warn('   Routing through server -> Windmill to prevent race conditions.');
+                logger.warn('   Remove --local flag - it will be ignored.\n');
             }
 
             // Always route through server for proper Windmill queuing
-            console.log('📤 Queueing via Windmill (prevents race conditions)...\n');
+            logger.info('📤 Queueing via Windmill (prevents race conditions)...\n');
             await sendServerRequest('/notebook/generate-audio', { notebookTitle, sources, customPrompt, dryRun });
-            console.log('\n✅ Audio generation queued. Check ntfy or Windmill UI for status.');
+            logger.info('\n✅ Audio generation queued. Check ntfy or Windmill UI for status.');
 
 
         } else if (subArg1 === 'download-audio') {
@@ -362,16 +363,16 @@ async function main() {
             }
 
             if (!notebookTitle) {
-                console.error('Usage: rsrch notebook download-audio [output_path] --notebook "Title" [--local] [--latest] [--pattern "Regex"]');
+                logger.error('Usage: rsrch notebook download-audio [output_path] --notebook "Title" [--local] [--latest] [--pattern "Regex"]');
                 process.exit(1);
             }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const resolvedOutputPath = path.resolve(process.cwd(), outputPath);
-                    console.log(`[CLI] Downloading audio... Output: ${resolvedOutputPath}`);
-                    if (latestOnly) console.log(`[CLI] Mode: Latest audio only.`);
-                    if (audioTitlePattern) console.log(`[CLI] Mode: Filtering by pattern "${audioTitlePattern}".`);
+                    logger.info(`[CLI] Downloading audio... Output: ${resolvedOutputPath}`);
+                    if (latestOnly) logger.info(`[CLI] Mode: Latest audio only.`);
+                    if (audioTitlePattern) logger.info(`[CLI] Mode: Filtering by pattern "${audioTitlePattern}".`);
 
                     await notebook.downloadAudio(notebookTitle as string, resolvedOutputPath, {
                         latestOnly,
@@ -379,7 +380,7 @@ async function main() {
                     });
                 });
             } else {
-                console.log('Server implementation for download-audio not yet available. Use --local.');
+                logger.info('Server implementation for download-audio not yet available. Use --local.');
             }
 
         } else if (subArg1 === 'download-all-audio') {
@@ -409,19 +410,19 @@ async function main() {
             }
 
             if (!notebookTitle) {
-                console.error('Usage: rsrch notebook download-all-audio [output_dir] --notebook "Title" [--local] [--limit=N]');
+                logger.error('Usage: rsrch notebook download-all-audio [output_dir] --notebook "Title" [--local] [--limit=N]');
                 process.exit(1);
             }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const resolvedOutputDir = path.resolve(process.cwd(), outputDir);
-                    console.log(`[CLI] Downloading ${limit ? 'top ' + limit : 'ALL'} audio... Output: ${resolvedOutputDir}`);
+                    logger.info(`[CLI] Downloading ${limit ? 'top ' + limit : 'ALL'} audio... Output: ${resolvedOutputDir}`);
 
                     await notebook.downloadAllAudio(notebookTitle as string, resolvedOutputDir, { limit });
                 });
             } else {
-                console.log('Server mode for download-all-audio not yet implemented. Use --local.');
+                logger.info('Server mode for download-all-audio not yet implemented. Use --local.');
             }
 
         } else if (subArg1 === 'sync') {
@@ -448,18 +449,18 @@ async function main() {
                     await runLocalNotebookAction({}, async (client, notebook) => {
                         if (title) {
                             // Sync single notebook
-                            console.log(`\n[Sync] Scraping notebook: "${title}"...`);
-                            if (downloadAudio) console.log('[Sync] Audio download enabled (-a)');
+                            logger.info(`\n[Sync] Scraping notebook: "${title}"...`);
+                            if (downloadAudio) logger.info('[Sync] Audio download enabled (-a)');
 
                             const data = await notebook.scrapeNotebook(title, downloadAudio);
                             const result = await store.syncNotebook(data);
-                            console.log(`\n[Sync] Result: ${result.isNew ? 'New' : 'Updated'} notebook ${result.id}\n`);
+                            logger.info(`\n[Sync] Result: ${result.isNew ? 'New' : 'Updated'} notebook ${result.id}\n`);
                         } else {
                             // Sync all notebooks (listing only currently, full scrape needs iteration)
-                            console.log('\n[Sync] Listing all notebooks...');
+                            logger.info('\n[Sync] Listing all notebooks...');
                             const notebooks = await notebook.listNotebooks();
 
-                            console.log(`\n[Sync] Found ${notebooks.length} notebooks. Syncing metadata...`);
+                            logger.info(`\n[Sync] Found ${notebooks.length} notebooks. Syncing metadata...`);
 
                             for (const nb of notebooks) {
                                 // For listing, we don't open each one so we don't have sources/audio yet
@@ -470,16 +471,16 @@ async function main() {
                                     sources: [], // No details in list view
                                     audioOverviews: [] // No details in list view
                                 });
-                                console.log(`  - ${nb.title} (${result.id}) [${nb.sourceCount} sources]`);
+                                logger.info(`  - ${nb.title} (${result.id}) [${nb.sourceCount} sources]`);
                             }
-                            console.log('\n[Sync] Metadata sync complete. To scrape contents, use: rsrch notebook sync --title "Name"\n');
+                            logger.info('\n[Sync] Metadata sync complete. To scrape contents, use: rsrch notebook sync --title "Name"\n');
                         }
                     });
                 } finally {
                     await store.disconnect();
                 }
             } else {
-                console.log('Server mode for notebook sync not yet implemented. Use --local.');
+                logger.info('Server mode for notebook sync not yet implemented. Use --local.');
             }
 
         } else if (subArg1 === 'list') {
@@ -487,7 +488,7 @@ async function main() {
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const notebooks = await notebook.listNotebooks();
-                    console.log(JSON.stringify(notebooks, null, 2));
+                    logger.info(JSON.stringify(notebooks, null, 2));
                 });
             } else {
                 await sendServerRequest('/notebook/list');
@@ -497,13 +498,13 @@ async function main() {
             // rsrch notebook stats "Title" [--local]
             const title = subArg2;
             if (!title) {
-                console.error('Usage: rsrch notebook stats "Notebook Title" [--local]');
+                logger.error('Usage: rsrch notebook stats "Notebook Title" [--local]');
                 process.exit(1);
             }
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const stats = await notebook.getNotebookStats(title);
-                    console.log(JSON.stringify(stats, null, 2));
+                    logger.info(JSON.stringify(stats, null, 2));
                 });
             } else {
                 await sendServerRequest('/notebook/stats', { title });
@@ -513,14 +514,14 @@ async function main() {
             // rsrch notebook sources "Title" [--local]
             const title = subArg2;
             if (!title) {
-                console.error('Usage: rsrch notebook sources "Notebook Title" [--local]');
+                logger.error('Usage: rsrch notebook sources "Notebook Title" [--local]');
                 process.exit(1);
             }
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     await notebook.openNotebook(title);
                     const sources = await notebook.getSources();
-                    console.log(JSON.stringify(sources, null, 2));
+                    logger.info(JSON.stringify(sources, null, 2));
                 });
             } else {
                 await sendServerRequest('/notebook/sources', { title });
@@ -530,14 +531,14 @@ async function main() {
             // rsrch notebook messages "Title" [--local]
             const title = subArg2;
             if (!title) {
-                console.error('Usage: rsrch notebook messages "Notebook Title" [--local]');
+                logger.error('Usage: rsrch notebook messages "Notebook Title" [--local]');
                 process.exit(1);
             }
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     await notebook.openNotebook(title);
                     const messages = await notebook.getChatMessages();
-                    console.log(JSON.stringify(messages, null, 2));
+                    logger.info(JSON.stringify(messages, null, 2));
                 });
             } else {
                 await sendServerRequest('/notebook/messages', { title });
@@ -560,9 +561,9 @@ async function main() {
             }
 
             if (!notebookTitle || !textContent) {
-                console.error('Usage: rsrch notebook add-text "Notebook Title" "Text content" [--source-title "Title"] [--local]');
-                console.error('       rsrch notebook add-text "Notebook Title" @file.md [--source-title "Title"] [--local]');
-                console.error('       You can also pipe content: cat file.md | rsrch notebook add-text "Notebook Title" - [--local]');
+                logger.error('Usage: rsrch notebook add-text "Notebook Title" "Text content" [--source-title "Title"] [--local]');
+                logger.error('       rsrch notebook add-text "Notebook Title" @file.md [--source-title "Title"] [--local]');
+                logger.error('       You can also pipe content: cat file.md | rsrch notebook add-text "Notebook Title" - [--local]');
                 process.exit(1);
             }
 
@@ -571,11 +572,11 @@ async function main() {
                 const filePath = textContent.slice(1);
                 const fs = await import('fs');
                 if (!fs.existsSync(filePath)) {
-                    console.error(`File not found: ${filePath}`);
+                    logger.error(`File not found: ${filePath}`);
                     process.exit(1);
                 }
                 textContent = fs.readFileSync(filePath, 'utf-8');
-                console.log(`[CLI] Loaded ${textContent.length} chars from ${filePath}`);
+                logger.info(`[CLI] Loaded ${textContent.length} chars from ${filePath}`);
             } else if (textContent === '-') {
                 // Read from stdin
                 const readline = await import('readline');
@@ -585,17 +586,17 @@ async function main() {
                     lines.push(line);
                 }
                 textContent = lines.join('\n');
-                console.log(`[CLI] Read ${textContent.length} chars from stdin`);
+                logger.info(`[CLI] Read ${textContent.length} chars from stdin`);
             }
 
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     await notebook.addSourceText(textContent, sourceTitle, notebookTitle);
-                    console.log(`\n✓ Added text source to notebook "${notebookTitle}"`);
+                    logger.info(`\n✓ Added text source to notebook "${notebookTitle}"`);
                     if (sourceTitle) {
-                        console.log(`  Source title: ${sourceTitle}`);
+                        logger.info(`  Source title: ${sourceTitle}`);
                     }
-                    console.log(`  Content length: ${textContent.length} chars\n`);
+                    logger.info(`  Content length: ${textContent.length} chars\n`);
                 });
             } else {
                 await sendServerRequest('/notebook/add-text', {
@@ -619,8 +620,8 @@ async function main() {
             const outputDir = values.output;
 
             if (!titlesArg || !outputDir) {
-                console.error('Usage: rsrch notebook download-audio --titles "Notebook1,Notebook2" --output "/path/to/dir" [--local]');
-                console.error('       Use --titles "all" to download from all notebooks');
+                logger.error('Usage: rsrch notebook download-audio --titles "Notebook1,Notebook2" --output "/path/to/dir" [--local]');
+                logger.error('       Use --titles "all" to download from all notebooks');
                 process.exit(1);
             }
 
@@ -629,16 +630,16 @@ async function main() {
                     let notebooksToProcess: string[] = [];
 
                     if (titlesArg === 'all' || titlesArg === '*') {
-                        console.log('[Batch] Fetching all notebooks...');
+                        logger.info('[Batch] Fetching all notebooks...');
                         const allNotebooks = await notebook.listNotebooks();
                         notebooksToProcess = allNotebooks.map((n: { title: string }) => n.title);
-                        console.log(`[Batch] Found ${notebooksToProcess.length} notebooks.`);
+                        logger.info(`[Batch] Found ${notebooksToProcess.length} notebooks.`);
                     } else {
                         notebooksToProcess = (titlesArg as string).split(',').map((t: string) => t.trim());
                     }
 
                     for (const title of notebooksToProcess) {
-                        console.log(`[Batch] Processing "${title}"...`);
+                        logger.info(`[Batch] Processing "${title}"...`);
                         try {
                             // Scrape and download with custom output directory
                             const result = await notebook.scrapeNotebook(title, true, {
@@ -649,18 +650,18 @@ async function main() {
 
                             const audioCount = result.audioOverviews.length;
                             if (audioCount > 0) {
-                                console.log(`[Batch] ✅ Downloaded audio for "${title}"`);
+                                logger.info(`[Batch] ✅ Downloaded audio for "${title}"`);
                             } else {
-                                console.log(`[Batch] ⚠️ No audio found for "${title}"`);
+                                logger.warn(`[Batch] ⚠️ No audio found for "${title}"`);
                             }
                         } catch (e: any) {
-                            console.error(`[Batch] ❌ Error processing "${title}": `, e.message);
+                            logger.error(`[Batch] ❌ Error processing "${title}": `, e.message);
                         }
                     }
                 });
             } else {
                 // Server-side implementation would go here (omitted for now as requested user only asked for CLI)
-                console.error('Batch download currently only supported in --local mode.');
+                logger.error('Batch download currently only supported in --local mode.');
                 process.exit(1);
             }
 
@@ -668,14 +669,14 @@ async function main() {
             // rsrch notebook artifacts "Title" [--local]
             const title = subArg2;
             if (!title) {
-                console.error('Usage: rsrch notebook artifacts "Notebook Title" [--local]');
+                logger.error('Usage: rsrch notebook artifacts "Notebook Title" [--local]');
                 process.exit(1);
             }
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     await notebook.openNotebook(title);
                     const artifacts = await notebook.getStudioArtifacts();
-                    console.log(JSON.stringify(artifacts, null, 2));
+                    logger.info(JSON.stringify(artifacts, null, 2));
                 });
             } else {
                 await sendServerRequest('/notebook/artifacts', { title });
@@ -695,7 +696,7 @@ async function main() {
             if (isLocalExecution()) {
                 await runLocalNotebookAction({}, async (client, notebook) => {
                     const status = await notebook.checkAudioStatus(notebookTitle);
-                    console.log(JSON.stringify(status, null, 2));
+                    logger.info(JSON.stringify(status, null, 2));
                 });
             } else {
                 await sendServerRequest('/notebook/audio-status', { notebookTitle });
@@ -715,7 +716,7 @@ async function main() {
             }
 
             if (!notebookTitle) {
-                console.error('Usage: rsrch notebook sources-without-audio --notebook "Notebook Title"');
+                logger.error('Usage: rsrch notebook sources-without-audio --notebook "Notebook Title"');
                 process.exit(1);
             }
 
@@ -731,23 +732,23 @@ async function main() {
                 const notebook = notebooks.find(n => n.title.includes(notebookTitle!) || notebookTitle!.includes(n.title));
 
                 if (!notebook) {
-                    console.error(`❌ Notebook "${notebookTitle}" not found in FalkorDB`);
-                    console.error('   Make sure to sync the notebook first: rsrch notebook sync --title "..." --local');
+                    logger.error(`❌ Notebook "${notebookTitle}" not found in FalkorDB`);
+                    logger.error('   Make sure to sync the notebook first: rsrch notebook sync --title "..." --local');
                     process.exit(1);
                 }
 
                 // Extract platformId from notebook id (format: nb_PLATFORM_ID)
                 const platformId = notebook.id.replace('nb_', '');
-                console.log(`📓 Notebook: ${notebook.title} (${platformId})`);
+                logger.info(`📓 Notebook: ${notebook.title} (${platformId})`);
 
                 const sources = await store.getSourcesWithoutAudio(platformId);
 
                 if (sources.length === 0) {
-                    console.log('✅ All sources have audio generated!');
+                    logger.info('✅ All sources have audio generated!');
                 } else {
-                    console.log(`\n📋 Sources without audio (${sources.length}):\n`);
+                    logger.info(`\n📋 Sources without audio (${sources.length}):\n`);
                     sources.forEach((s, i) => {
-                        console.log(`   ${i + 1}. ${s.title} [${s.type}]`);
+                        logger.info(`   ${i + 1}. ${s.title} [${s.type}]`);
                     });
                 }
             } finally {
@@ -789,9 +790,9 @@ async function main() {
                 await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 const notebooks = await store.getNotebooks(limit);
 
-                console.log(`\n === Synced Notebooks(${notebooks.length}) ===\n`);
+                logger.info(`\n === Synced Notebooks(${notebooks.length}) ===\n`);
                 if (notebooks.length === 0) {
-                    console.log('No notebooks found. Run "rsrch notebook sync" first.\n');
+                    logger.info('No notebooks found. Run "rsrch notebook sync" first.\n');
                 } else {
                     console.table(notebooks.map(n => ({
                         ID: n.id,
@@ -813,17 +814,17 @@ async function main() {
                 const graphHost = process.env.FALKORDB_HOST || 'localhost';
                 try {
                     await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
-                    console.log('✅ FalkorDB connection: OK');
+                    logger.info('✅ FalkorDB connection: OK');
                     const jobs = await store.listJobs();
                     const queued = jobs.filter(j => j.status === 'queued').length;
                     const running = jobs.filter(j => j.status === 'running').length;
                     const completed = jobs.filter(j => j.status === 'completed').length;
                     const failed = jobs.filter(j => j.status === 'failed').length;
-                    console.log(`\nJobs: ${jobs.length} total`);
-                    console.log(`  Queued: ${queued}`);
-                    console.log(`  Running: ${running}`);
-                    console.log(`  Completed: ${completed}`);
-                    console.log(`  Failed: ${failed}`);
+                    logger.info(`\nJobs: ${jobs.length} total`);
+                    logger.info(`  Queued: ${queued}`);
+                    logger.info(`  Running: ${running}`);
+                    logger.info(`  Completed: ${completed}`);
+                    logger.info(`  Failed: ${failed}`);
                 } finally {
                     await store.disconnect();
                 }
@@ -841,10 +842,10 @@ async function main() {
                 try {
                     await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                     const jobs = status && !status.startsWith('--') ? await store.listJobs(status) : await store.listJobs();
-                    console.log(`\nJobs (${jobs.length}):`);
+                    logger.info(`\nJobs (${jobs.length}):`);
                     for (const job of jobs) {
                         const time = new Date(job.createdAt).toISOString();
-                        console.log(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
+                        logger.info(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
                     }
                 } finally {
                     await store.disconnect();
@@ -859,7 +860,7 @@ async function main() {
         } else if (subArg === 'lineage') {
             const artifactId = args[2];
             if (!artifactId) {
-                console.error('Usage: rsrch graph lineage <artifact-id>');
+                logger.error('Usage: rsrch graph lineage <artifact-id>');
                 process.exit(1);
             }
             if (isLocalExecution) {
@@ -868,13 +869,13 @@ async function main() {
                 await store.connect(process.env.FALKORDB_HOST || 'localhost', parseInt(process.env.FALKORDB_PORT || '6379'));
                 try {
                     // const lineage = await store.getArtifactLineage(artifactId);
-                    // console.log(JSON.stringify(lineage, null, 2));
-                    console.log('Lineage not implemented in current GraphStore version');
+                    // logger.info(JSON.stringify(lineage, null, 2));
+                    logger.info('Lineage not implemented in current GraphStore version');
                 } finally {
                     await store.disconnect();
                 }
             } else {
-                console.log('Server mode for lineage not implemented');
+                logger.info('Server mode for lineage not implemented');
             }
 
         } else if (subArg === 'conversations') {
@@ -896,7 +897,7 @@ async function main() {
 
                     const conversations = await store.getConversationsByPlatform('gemini', limit);
 
-                    console.log(`\n === Synced Conversations(${conversations.length}) ===\n`);
+                    logger.info(`\n === Synced Conversations(${conversations.length}) ===\n`);
                     console.table(conversations.map((c: any) => ({
                         ID: c.id,
                         Title: c.title,
@@ -940,11 +941,11 @@ async function main() {
                 }
             }
 
-            console.log(`\n[Export] Platform: ${platform}, Format: ${format}, Output: ${outputDir} `);
+            logger.info(`\n[Export] Platform: ${platform}, Format: ${format}, Output: ${outputDir} `);
             if (since) {
-                console.log(`[Export] Since: ${new Date(since).toISOString()} `);
+                logger.info(`[Export] Since: ${new Date(since).toISOString()} `);
             }
-            console.log(`[Export] Limit: ${limit} \n`);
+            logger.info(`[Export] Limit: ${limit} \n`);
 
             const { exportBulk } = await import('./exporter');
 
@@ -958,14 +959,14 @@ async function main() {
                     includeThinking: true
                 });
 
-                console.log(`\n === Export Complete === `);
-                console.log(`Exported ${results.length} conversations`);
+                logger.info(`\n === Export Complete === `);
+                logger.info(`Exported ${results.length} conversations`);
                 results.forEach(r => {
-                    console.log(`  ✓ ${r.path} `);
+                    logger.info(`  ✓ ${r.path} `);
                 });
-                console.log('');
+                logger.info('');
             } catch (error: any) {
-                console.error(`Export failed: ${error.message} `);
+                logger.error(`Export failed: ${error.message} `);
                 process.exit(1);
             }
         } else if (subArg === 'citations') {
@@ -988,7 +989,7 @@ async function main() {
             try {
                 await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 const citations = await store.getCitations({ domain, limit });
-                console.log(`\n=== Citations (${citations.length}) ===\n`);
+                logger.info(`\n=== Citations (${citations.length}) ===\n`);
                 console.table(citations.map(c => ({
                     ID: c.id,
                     Domain: c.domain,
@@ -1002,7 +1003,7 @@ async function main() {
             // rsrch graph citation-usage <url>
             const url = args[2];
             if (!url) {
-                console.error('Usage: rsrch graph citation-usage <url>');
+                logger.error('Usage: rsrch graph citation-usage <url>');
                 process.exit(1);
             }
 
@@ -1014,14 +1015,14 @@ async function main() {
                 await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
                 const usage = await store.getCitationUsage(url);
                 if (usage.length === 0) {
-                    console.log(`No usage found for: ${url}`);
+                    logger.info(`No usage found for: ${url}`);
                 } else {
-                    console.log(`\n=== Citation Usage (${usage.length}) ===\n`);
+                    logger.info(`\n=== Citation Usage (${usage.length}) ===\n`);
                     for (const item of usage) {
                         if (item.type === 'ResearchDoc') {
-                            console.log(`  📄 ResearchDoc: ${item.id} - "${item.title || 'Untitled'}"`);
+                            logger.info(`  📄 ResearchDoc: ${item.id} - "${item.title || 'Untitled'}"`);
                         } else {
-                            console.log(`  💬 Turn: ${item.id}`);
+                            logger.info(`  💬 Turn: ${item.id}`);
                         }
                     }
                 }
@@ -1036,11 +1037,11 @@ async function main() {
 
             try {
                 await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
-                console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
+                logger.info('\n[Migration] Extracting citations from existing ResearchDocs...\n');
                 const result = await store.migrateCitations();
-                console.log(`\n=== Migration Complete ===`);
-                console.log(`  Processed: ${result.processed} documents`);
-                console.log(`  Created:   ${result.citations} new citation links\n`);
+                logger.info(`\n=== Migration Complete ===`);
+                logger.info(`  Processed: ${result.processed} documents`);
+                logger.info(`  Created:   ${result.citations} new citation links\n`);
             } finally {
                 await store.disconnect();
             }
@@ -1061,7 +1062,7 @@ async function main() {
 
         // Helper for local execution
         const runLocalGeminiAction = async (action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string) => {
-            console.log(`Running Gemini in ${hasLocalFlag ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
+            logger.info(`Running Gemini in ${hasLocalFlag ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
             const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             await client.init({ local: hasLocalFlag, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
             const gemini = await client.createGeminiClient();
@@ -1085,16 +1086,16 @@ async function main() {
             }
 
             if (!query) {
-                console.error('Usage: rsrch gemini research "Query" [--local]');
+                logger.error('Usage: rsrch gemini research "Query" [--local]');
                 process.exit(1);
             }
 
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const response = await gemini.research(query);
-                    console.log('\n--- Gemini Response ---\n');
-                    console.log(response);
-                    console.log('\n-----------------------\n');
+                    logger.info('\n--- Gemini Response ---\n');
+                    logger.info(response);
+                    logger.info('\n-----------------------\n');
                 });
             } else {
                 await sendServerRequest('/gemini/research', { query });
@@ -1117,32 +1118,32 @@ async function main() {
             }
 
             if (!query) {
-                console.error('Usage: rsrch gemini deep-research "Query" [--gem "GemName"] [--local] [--headed]');
+                logger.error('Usage: rsrch gemini deep-research "Query" [--gem "GemName"] [--local] [--headed]');
                 process.exit(1);
             }
 
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
-                    console.log('\n[Deep Research] Starting...');
-                    if (gemName) console.log(`[Deep Research] Using Gem: ${gemName}`);
-                    console.log('[Deep Research] This may take several minutes.');
-                    console.log('[Deep Research] The research plan will be automatically confirmed.\n');
+                    logger.info('\n[Deep Research] Starting...');
+                    if (gemName) logger.info(`[Deep Research] Using Gem: ${gemName}`);
+                    logger.info('[Deep Research] This may take several minutes.');
+                    logger.info('[Deep Research] The research plan will be automatically confirmed.\n');
 
                     const result = await gemini.startDeepResearch(query, gemName);
 
-                    console.log('\n--- Deep Research Result ---');
-                    console.log(`Status: ${result.status} `);
+                    logger.info('\n--- Deep Research Result ---');
+                    logger.info(`Status: ${result.status} `);
                     if (result.googleDocId) {
-                        console.log(`Google Doc ID: ${result.googleDocId} `);
-                        console.log(`Google Doc URL: ${result.googleDocUrl} `);
+                        logger.info(`Google Doc ID: ${result.googleDocId} `);
+                        logger.info(`Google Doc URL: ${result.googleDocUrl} `);
                     }
                     if (result.error) {
-                        console.log(`Error: ${result.error} `);
+                        logger.info(`Error: ${result.error} `);
                     }
-                    console.log('----------------------------\n');
+                    logger.info('----------------------------\n');
                 });
             } else {
-                console.log('Server mode for deep-research not yet implemented. Use --local.');
+                logger.info('Server mode for deep-research not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'open-session') {
             // gemini open-session "Session ID or Name" [--local]
@@ -1155,7 +1156,7 @@ async function main() {
             }
 
             if (!identifier) {
-                console.error('Usage: rsrch gemini open-session "SessionID or Name" [--local] [--headed]');
+                logger.error('Usage: rsrch gemini open-session "SessionID or Name" [--local] [--headed]');
                 process.exit(1);
             }
 
@@ -1164,14 +1165,14 @@ async function main() {
                     const success = await gemini.openSession(identifier);
                     if (success) {
                         const sessionId = gemini.getCurrentSessionId();
-                        console.log(`\nSession opened: ${sessionId} `);
-                        console.log(`URL: https://gemini.google.com/app/${sessionId}\n`);
+                        logger.info(`\nSession opened: ${sessionId} `);
+                        logger.info(`URL: https://gemini.google.com/app/${sessionId}\n`);
                     } else {
-                        console.error(`Failed to open session: ${identifier}`);
+                        logger.error(`Failed to open session: ${identifier}`);
                     }
                 });
             } else {
-                console.log('Server mode for open-session not yet implemented. Use --local.');
+                logger.info('Server mode for open-session not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'export-to-docs') {
             // gemini export-to-docs [SessionID] [--local]
@@ -1186,20 +1187,20 @@ async function main() {
 
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
-                    console.log('\nExporting to Google Docs...');
+                    logger.info('\nExporting to Google Docs...');
                     const result = await gemini.exportCurrentToGoogleDocs();
 
-                    console.log('\n--- Export Result ---');
+                    logger.info('\n--- Export Result ---');
                     if (result.docId) {
-                        console.log(`Google Doc ID: ${result.docId}`);
-                        console.log(`Google Doc URL: ${result.docUrl}`);
+                        logger.info(`Google Doc ID: ${result.docId}`);
+                        logger.info(`Google Doc URL: ${result.docUrl}`);
                     } else {
-                        console.log('Export failed - no document created');
+                        logger.info('Export failed - no document created');
                     }
-                    console.log('---------------------\n');
+                    logger.info('---------------------\n');
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for export-to-docs not yet implemented. Use --local.');
+                logger.info('Server mode for export-to-docs not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'list-sessions') {
             // gemini list-sessions [--local]
@@ -1207,18 +1208,18 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const sessions = await gemini.listSessions();
 
-                    console.log('\n--- Gemini Sessions ---');
+                    logger.info('\n--- Gemini Sessions ---');
                     if (sessions.length === 0) {
-                        console.log('No sessions found in sidebar');
+                        logger.info('No sessions found in sidebar');
                     } else {
                         sessions.forEach((s: { name: string, id: string | null }, i: number) => {
-                            console.log(`${i + 1}. ${s.name}${s.id ? ` (ID: ${s.id})` : ''}`);
+                            logger.info(`${i + 1}. ${s.name}${s.id ? ` (ID: ${s.id})` : ''}`);
                         });
                     }
-                    console.log('-----------------------\n');
+                    logger.info('-----------------------\n');
                 });
             } else {
-                console.log('Server mode for list-sessions not yet implemented. Use --local.');
+                logger.info('Server mode for list-sessions not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'send-message') {
             // gemini send-message [SessionID] "Message" [--local]
@@ -1241,7 +1242,7 @@ async function main() {
             }
 
             if (!message) {
-                console.error('Usage: rsrch gemini send-message [SessionID] "Message" [--local] [--headed]');
+                logger.error('Usage: rsrch gemini send-message [SessionID] "Message" [--local] [--headed]');
                 process.exit(1);
             }
 
@@ -1249,22 +1250,22 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const response = await gemini.sendMessage(message);
 
-                    console.log('\n--- Response ---');
+                    logger.info('\n--- Response ---');
                     if (response) {
-                        console.log(response);
+                        logger.info(response);
                     } else {
-                        console.log('No response received');
+                        logger.info('No response received');
                     }
-                    console.log('----------------\n');
+                    logger.info('----------------\n');
 
                     // Show session ID for reference
                     const currentId = gemini.getCurrentSessionId();
                     if (currentId) {
-                        console.log(`Session: ${currentId}`);
+                        logger.info(`Session: ${currentId}`);
                     }
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for send-message not yet implemented. Use --local.');
+                logger.info('Server mode for send-message not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'get-response') {
             // gemini get-response [SessionID] [Index] [--local]
@@ -1296,16 +1297,16 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const response = await gemini.getResponse(index);
 
-                    console.log(`\n--- Response (index: ${index}) ---`);
+                    logger.info(`\n--- Response (index: ${index}) ---`);
                     if (response) {
-                        console.log(response);
+                        logger.info(response);
                     } else {
-                        console.log('No response found at that index');
+                        logger.info('No response found at that index');
                     }
-                    console.log('----------------------------------\n');
+                    logger.info('----------------------------------\n');
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for get-response not yet implemented. Use --local.');
+                logger.info('Server mode for get-response not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'get-responses') {
             // gemini get-responses [SessionID] [--local]
@@ -1321,19 +1322,19 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const responses = await gemini.getResponses();
 
-                    console.log('\n--- All Responses ---');
+                    logger.info('\n--- All Responses ---');
                     if (responses.length === 0) {
-                        console.log('No responses found');
+                        logger.info('No responses found');
                     } else {
                         responses.forEach((r: string, i: number) => {
-                            console.log(`\n[Response ${i + 1}]`);
-                            console.log(r.substring(0, 500) + (r.length > 500 ? '...' : ''));
+                            logger.info(`\n[Response ${i + 1}]`);
+                            logger.info(r.substring(0, 500) + (r.length > 500 ? '...' : ''));
                         });
                     }
-                    console.log('---------------------\n');
+                    logger.info('---------------------\n');
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for get-responses not yet implemented. Use --local.');
+                logger.info('Server mode for get-responses not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'get-research-info') {
             // gemini get-research-info [SessionID] [--local]
@@ -1349,17 +1350,17 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const info = await gemini.getResearchInfo();
 
-                    console.log('\n--- Research Info ---');
-                    console.log(`Session ID: ${info.sessionId || 'N/A'}`);
-                    console.log(`Title: ${info.title || 'Not found'}`);
-                    console.log(`First Heading: ${info.firstHeading || 'Not found'}`);
-                    console.log('---------------------\n');
+                    logger.info('\n--- Research Info ---');
+                    logger.info(`Session ID: ${info.sessionId || 'N/A'}`);
+                    logger.info(`Title: ${info.title || 'Not found'}`);
+                    logger.info(`First Heading: ${info.firstHeading || 'Not found'}`);
+                    logger.info('---------------------\n');
 
                     // Output as JSON for easy parsing
-                    console.log('JSON:', JSON.stringify(info, null, 2));
+                    logger.info('JSON:', JSON.stringify(info, null, 2));
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for get-research-info not yet implemented. Use --local.');
+                logger.info('Server mode for get-research-info not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'list-sessions') {
             // gemini list-sessions [Limit] [Offset] [--local]
@@ -1374,12 +1375,12 @@ async function main() {
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const sessions = await gemini.listSessions(limit, offset);
-                    console.log(`\n--- Recent Sessions (Limit: ${limit}, Offset: ${offset}) ---`);
-                    sessions.forEach((s: { name: string; id: string | null }) => console.log(`- ${s.name} (ID: ${s.id || 'N/A'})`));
-                    console.log('JSON:', JSON.stringify(sessions));
+                    logger.info(`\n--- Recent Sessions (Limit: ${limit}, Offset: ${offset}) ---`);
+                    sessions.forEach((s: { name: string; id: string | null }) => logger.info(`- ${s.name} (ID: ${s.id || 'N/A'})`));
+                    logger.info('JSON:', JSON.stringify(sessions));
                 });
             } else {
-                console.log('Server mode for list-sessions not yet implemented. Use --local.');
+                logger.info('Server mode for list-sessions not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'list-research-docs') {
             // gemini list-research-docs [Limit | SessionID] [--local]
@@ -1401,7 +1402,7 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     let docs: ResearchInfo[] = [];
                     if (sessionId) {
-                        console.log(`[CLI] Listing research docs for session: ${sessionId}`);
+                        logger.info(`[CLI] Listing research docs for session: ${sessionId}`);
                         // runLocalGeminiAction already handles navigation if sessionId is passed to it,
                         // but here we are inside the callback.
                         // However, runLocalGeminiAction takes sessionId as 2nd arg.
@@ -1417,23 +1418,23 @@ async function main() {
                         docs = await gemini.listDeepResearchDocuments(limit);
                     }
 
-                    console.log('\n--- Deep Research Documents ---');
+                    logger.info('\n--- Deep Research Documents ---');
                     if (docs.length === 0) {
-                        console.log('No Deep Research documents found.');
+                        logger.info('No Deep Research documents found.');
                     } else {
                         docs.forEach((doc: ResearchInfo, idx: number) => {
-                            console.log(`\n[Document ${idx + 1}]`);
-                            console.log(`Title: ${doc.title}`);
-                            console.log(`First Heading: ${doc.firstHeading}`);
-                            console.log(`Session ID: ${doc.sessionId}`);
+                            logger.info(`\n[Document ${idx + 1}]`);
+                            logger.info(`Title: ${doc.title}`);
+                            logger.info(`First Heading: ${doc.firstHeading}`);
+                            logger.info(`Session ID: ${doc.sessionId}`);
                         });
                     }
-                    console.log('-------------------------------\n');
-                    console.log('JSON:', JSON.stringify(docs, null, 2));
+                    logger.info('-------------------------------\n');
+                    logger.info('JSON:', JSON.stringify(docs, null, 2));
 
                 }); // Note: we are NOT passing sessionId to runLocalGeminiAction because we handle it manually if needed, or we want 'fresh' start if crawling.
             } else {
-                console.log('Server mode for list-research-docs not yet implemented. Use --local.');
+                logger.info('Server mode for list-research-docs not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'sync-conversations') {
             // gemini sync-conversations [--limit=N] [--offset=M] [--local] [--headed]
@@ -1456,11 +1457,11 @@ async function main() {
 
                 try {
                     await runLocalGeminiAction(async (client, gemini) => {
-                        console.log(`\n[Sync] Scraping Gemini conversations (limit: ${limit}, offset: ${offset})...\n`);
+                        logger.info(`\n[Sync] Scraping Gemini conversations (limit: ${limit}, offset: ${offset})...\n`);
 
                         const conversations = await gemini.scrapeConversations(limit, offset);
 
-                        console.log(`\n[Sync] Found ${conversations.length} conversations`);
+                        logger.info(`\n[Sync] Found ${conversations.length} conversations`);
 
                         let synced = 0;
                         let updated = 0;
@@ -1477,13 +1478,13 @@ async function main() {
                             else updated++;
                         }
 
-                        console.log(`\n[Sync] Complete: ${synced} new, ${updated} updated\n`);
+                        logger.info(`\n[Sync] Complete: ${synced} new, ${updated} updated\n`);
                     });
                 } finally {
                     await store.disconnect();
                 }
             } else {
-                console.log('Server mode for sync-conversations not yet implemented. Use --local.');
+                logger.info('Server mode for sync-conversations not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'upload-file') {
             // gemini upload-file [SessionID] "/path/to/file" [--local]
@@ -1505,7 +1506,7 @@ async function main() {
             }
 
             if (!filePath) {
-                console.error('Usage: rsrch gemini upload-file [SessionID] "/path/to/file" [--local] [--headed]');
+                logger.error('Usage: rsrch gemini upload-file [SessionID] "/path/to/file" [--local] [--headed]');
                 process.exit(1);
             }
 
@@ -1514,18 +1515,18 @@ async function main() {
                     const success = await gemini.uploadFile(filePath);
 
                     if (success) {
-                        console.log(`\n✅ File uploaded: ${filePath}`);
+                        logger.info(`\n✅ File uploaded: ${filePath}`);
                     } else {
-                        console.log(`\n❌ File upload failed: ${filePath}`);
+                        logger.info(`\n❌ File upload failed: ${filePath}`);
                     }
 
                     const currentId = gemini.getCurrentSessionId();
                     if (currentId) {
-                        console.log(`Session: ${currentId}`);
+                        logger.info(`Session: ${currentId}`);
                     }
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for upload-file not yet implemented. Use --local.');
+                logger.info('Server mode for upload-file not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'upload-files') {
             // gemini upload-files [SessionID] "/path/to/file1" "/path/to/file2" ... [--local]
@@ -1551,7 +1552,7 @@ async function main() {
             }
 
             if (filePaths.length === 0) {
-                console.error('Usage: rsrch gemini upload-files [SessionID] "/path/to/file1" "/path/to/file2" ... [--local]');
+                logger.error('Usage: rsrch gemini upload-files [SessionID] "/path/to/file1" "/path/to/file2" ... [--local]');
                 process.exit(1);
             }
 
@@ -1559,15 +1560,15 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const count = await gemini.uploadFiles(filePaths);
 
-                    console.log(`\n✅ Uploaded ${count}/${filePaths.length} files`);
+                    logger.info(`\n✅ Uploaded ${count}/${filePaths.length} files`);
 
                     const currentId = gemini.getCurrentSessionId();
                     if (currentId) {
-                        console.log(`Session: ${currentId}`);
+                        logger.info(`Session: ${currentId}`);
                     }
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for upload-files not yet implemented. Use --local.');
+                logger.info('Server mode for upload-files not yet implemented. Use --local.');
             }
 
         } else if (subArg1 === 'upload-repo') {
@@ -1593,7 +1594,7 @@ async function main() {
             }
 
             if (!repoUrl) {
-                console.error('Usage: rsrch gemini upload-repo <RepoURL> [SessionID] [--local] [--branch=main]');
+                logger.error('Usage: rsrch gemini upload-repo <RepoURL> [SessionID] [--local] [--branch=main]');
                 process.exit(1);
             }
 
@@ -1603,27 +1604,27 @@ async function main() {
                     const loader = new RepoLoader();
 
                     try {
-                        console.log(`\n[Repo] Processing repository: ${repoUrl}`);
+                        logger.info(`\n[Repo] Processing repository: ${repoUrl}`);
                         const contextFile = await loader.loadRepoAsFile(repoUrl, { branch });
-                        console.log(`\n[Repo] Context file created at: ${contextFile}`);
+                        logger.info(`\n[Repo] Context file created at: ${contextFile}`);
 
-                        console.log(`[Repo] Uploading to Gemini...`);
+                        logger.info(`[Repo] Uploading to Gemini...`);
                         const success = await gemini.uploadFile(contextFile);
 
                         if (success) {
-                            console.log(`\n✅ Repository context uploaded successfully!`);
+                            logger.info(`\n✅ Repository context uploaded successfully!`);
                         } else {
-                            console.log(`\n❌ Failed to upload repository context.`);
+                            logger.info(`\n❌ Failed to upload repository context.`);
                         }
                     } catch (e: any) {
-                        console.error(`\n❌ Error processing repository: ${e.message}`);
+                        logger.error(`\n❌ Error processing repository: ${e.message}`);
                     } finally {
-                        console.log(`[Repo] Temporary files kept in temp dir for reference.`);
+                        logger.info(`[Repo] Temporary files kept in temp dir for reference.`);
                     }
 
                 }, sessionId || undefined);
             } else {
-                console.log('Server mode for upload-repo not yet implemented. Use --local.');
+                logger.info('Server mode for upload-repo not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'list-gems') {
             // gemini list-gems [--local]
@@ -1631,19 +1632,19 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const gems = await gemini.listGems();
 
-                    console.log('\n--- Available Gems ---');
+                    logger.info('\n--- Available Gems ---');
                     if (gems.length === 0) {
-                        console.log('No gems found.');
+                        logger.info('No gems found.');
                     } else {
                         gems.forEach((g: { name: string; id: string | null }, i: number) => {
-                            console.log(`${i + 1}. ${g.name}${g.id ? ` (ID: ${g.id})` : ''}`);
+                            logger.info(`${i + 1}. ${g.name}${g.id ? ` (ID: ${g.id})` : ''}`);
                         });
                     }
-                    console.log('----------------------\n');
-                    console.log('JSON:', JSON.stringify(gems, null, 2));
+                    logger.info('----------------------\n');
+                    logger.info('JSON:', JSON.stringify(gems, null, 2));
                 });
             } else {
-                console.log('Server mode for list-gems not yet implemented. Use --local.');
+                logger.info('Server mode for list-gems not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'open-gem') {
             // gemini open-gem "GemNameOrID" [--local]
@@ -1656,7 +1657,7 @@ async function main() {
             }
 
             if (!gemNameOrId) {
-                console.error('Usage: rsrch gemini open-gem "GemNameOrID" [--local] [--headed]');
+                logger.error('Usage: rsrch gemini open-gem "GemNameOrID" [--local] [--headed]');
                 process.exit(1);
             }
 
@@ -1664,13 +1665,13 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const success = await gemini.openGem(gemNameOrId);
                     if (success) {
-                        console.log(`\n✅ Opened gem: ${gemNameOrId}`);
+                        logger.info(`\n✅ Opened gem: ${gemNameOrId}`);
                     } else {
-                        console.log(`\n❌ Failed to open gem: ${gemNameOrId}`);
+                        logger.info(`\n❌ Failed to open gem: ${gemNameOrId}`);
                     }
                 });
             } else {
-                console.log('Server mode for open-gem not yet implemented. Use --local.');
+                logger.info('Server mode for open-gem not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'create-gem') {
             // gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--config gem.yaml] [--local]
@@ -1702,15 +1703,15 @@ async function main() {
                     if (!gemName) gemName = config.name;
                     if (!instructions) instructions = config.instructions;
                     if (config.files) files.push(...config.files);
-                    console.log(`[Gemini] Loaded config from ${configPath}`);
+                    logger.info(`[Gemini] Loaded config from ${configPath}`);
                 } catch (e: any) {
-                    console.error(`Error loading config: ${e.message}`);
+                    logger.error(`Error loading config: ${e.message}`);
                     process.exit(1);
                 }
             }
 
             if (!gemName || !instructions) {
-                console.error('Usage: rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--config gem.yaml] [--local]');
+                logger.error('Usage: rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path/to/file] [--config gem.yaml] [--local]');
                 process.exit(1);
             }
 
@@ -1723,13 +1724,13 @@ async function main() {
                     });
 
                     if (gemId) {
-                        console.log(`\n✅ Created gem: ${gemName} (ID: ${gemId})`);
+                        logger.info(`\n✅ Created gem: ${gemName} (ID: ${gemId})`);
                     } else {
-                        console.log(`\n⚠️ Gem created but ID unknown: ${gemName}`);
+                        logger.warn(`\n⚠️ Gem created but ID unknown: ${gemName}`);
                     }
                 });
             } else {
-                console.log('Server mode for create-gem not yet implemented. Use --local.');
+                logger.info('Server mode for create-gem not yet implemented. Use --local.');
             }
         } else if (subArg1 === 'chat-gem') {
             // gemini chat-gem "GemNameOrID" "Message" [--local]
@@ -1749,7 +1750,7 @@ async function main() {
             }
 
             if (!gemNameOrId || !message) {
-                console.error('Usage: rsrch gemini chat-gem "GemNameOrID" "Message" [--local] [--headed]');
+                logger.error('Usage: rsrch gemini chat-gem "GemNameOrID" "Message" [--local] [--headed]');
                 process.exit(1);
             }
 
@@ -1757,16 +1758,16 @@ async function main() {
                 await runLocalGeminiAction(async (client, gemini) => {
                     const response = await gemini.chatWithGem(gemNameOrId, message);
 
-                    console.log('\n--- Response ---');
+                    logger.info('\n--- Response ---');
                     if (response) {
-                        console.log(response);
+                        logger.info(response);
                     } else {
-                        console.log('No response received');
+                        logger.info('No response received');
                     }
-                    console.log('----------------\n');
+                    logger.info('----------------\n');
                 });
             } else {
-                console.log('Server mode for chat-gem not yet implemented. Use --local.');
+                logger.info('Server mode for chat-gem not yet implemented. Use --local.');
             }
         } else {
             console.log('Gemini commands:');
@@ -1809,7 +1810,7 @@ async function main() {
                 return execSync(`jq '${filter}' "${registryFile}"`, { encoding: 'utf-8' }).trim();
             } catch (e: any) {
                 if (e.message?.includes('No such file')) {
-                    console.log('No registry file found. Run a research workflow first to create artifacts.');
+                    logger.info('No registry file found. Run a research workflow first to create artifacts.');
                     return '';
                 }
                 throw e;
@@ -1827,25 +1828,25 @@ async function main() {
 
             if (typeFilter) {
                 const result = runJq(`.artifacts | to_entries[] | select(.value.type=="${typeFilter}") | .key`);
-                if (result) console.log(result);
+                if (result) logger.info(result);
             } else {
                 const result = runJq('.artifacts | keys[]');
-                if (result) console.log(result);
+                if (result) logger.info(result);
             }
 
         } else if (subArg1 === 'show') {
             const id = subArg2;
             if (!id) {
-                console.error('Usage: rsrch registry show <ID>');
+                logger.error('Usage: rsrch registry show <ID>');
                 process.exit(1);
             }
             const result = runJq(`.artifacts["${id}"]`);
-            console.log(result || 'Not found');
+            logger.info(result || 'Not found');
 
         } else if (subArg1 === 'lineage') {
             const id = subArg2;
             if (!id) {
-                console.error('Usage: rsrch registry lineage <ID>');
+                logger.error('Usage: rsrch registry lineage <ID>');
                 process.exit(1);
             }
 
@@ -1855,12 +1856,12 @@ async function main() {
             const lineage = registry.getLineage(id);
 
             if (lineage.length === 0) {
-                console.log('Not found');
+                logger.info('Not found');
             } else {
-                console.log('Lineage (child → parent):');
+                logger.info('Lineage (child → parent):');
                 lineage.forEach((entry: any, idx: number) => {
                     const indent = '  '.repeat(idx);
-                    console.log(`${indent}${entry.type}: ${entry.currentTitle || entry.query || entry.geminiSessionId || 'N/A'}`);
+                    logger.info(`${indent}${entry.type}: ${entry.currentTitle || entry.query || entry.geminiSessionId || 'N/A'}`);
                 });
             }
 
@@ -1891,7 +1892,7 @@ async function main() {
         // rsrch unified "Query string" [--prompt "custom prompt"] [--dry-run]
         const query = args[1];
         if (!query || query.startsWith('--')) {
-            console.error('Usage: rsrch unified "Query" [--prompt "..."] [--dry-run]');
+            logger.error('Usage: rsrch unified "Query" [--prompt "..."] [--dry-run]');
             process.exit(1);
         }
 
@@ -1908,8 +1909,8 @@ async function main() {
         }
 
         await sendServerRequest('/research-to-podcast', { query, customPrompt, dryRun });
-        console.log("\nUnified flow started! 🚀");
-        console.log("Check server logs or Discord for progress updates.");
+        logger.info("\nUnified flow started! 🚀");
+        logger.info("Check server logs or Discord for progress updates.");
 
     } else if (command === 'graph') {
         // Graph database commands
@@ -1923,39 +1924,39 @@ async function main() {
             await store.connect(graphHost, parseInt(process.env.FALKORDB_PORT || '6379'));
 
             if (graphArg1 === 'status') {
-                console.log('✅ FalkorDB connection: OK');
+                logger.info('✅ FalkorDB connection: OK');
                 const jobs = await store.listJobs();
                 const queued = jobs.filter(j => j.status === 'queued').length;
                 const running = jobs.filter(j => j.status === 'running').length;
                 const completed = jobs.filter(j => j.status === 'completed').length;
                 const failed = jobs.filter(j => j.status === 'failed').length;
-                console.log(`\nJobs: ${jobs.length} total`);
-                console.log(`  Queued: ${queued}`);
-                console.log(`  Running: ${running}`);
-                console.log(`  Completed: ${completed}`);
-                console.log(`  Failed: ${failed}`);
+                logger.info(`\nJobs: ${jobs.length} total`);
+                logger.info(`  Queued: ${queued}`);
+                logger.info(`  Running: ${running}`);
+                logger.info(`  Completed: ${completed}`);
+                logger.info(`  Failed: ${failed}`);
             } else if (graphArg1 === 'jobs') {
                 const status = graphArg2 as any;
                 const jobs = status ? await store.listJobs(status) : await store.listJobs();
-                console.log(`\nJobs (${jobs.length}):`);
+                logger.info(`\nJobs (${jobs.length}):`);
                 for (const job of jobs) {
                     const time = new Date(job.createdAt).toISOString();
-                    console.log(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
+                    logger.info(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
                 }
             } else if (graphArg1 === 'lineage') {
                 if (!graphArg2) {
-                    console.error('Usage: rsrch graph lineage <artifact-id>');
+                    logger.error('Usage: rsrch graph lineage <artifact-id>');
                     process.exit(1);
                 }
                 const chain = await store.getLineageChain(graphArg2);
                 if (!chain.job && !chain.session && !chain.document && !chain.audio) {
-                    console.log(`No lineage found for: ${graphArg2}`);
+                    logger.info(`No lineage found for: ${graphArg2}`);
                 } else {
-                    console.log('\nLineage Chain:');
-                    if (chain.job) console.log(`  Job: ${chain.job.id} (${chain.job.type}) - "${chain.job.query.substring(0, 40)}..."`);
-                    if (chain.session) console.log(`  Session: ${chain.session.id} (${chain.session.platform})`);
-                    if (chain.document) console.log(`  Document: ${chain.document.id} - "${chain.document.title}"`);
-                    if (chain.audio) console.log(`  Audio: ${chain.audio.id} - ${chain.audio.path}`);
+                    logger.info('\nLineage Chain:');
+                    if (chain.job) logger.info(`  Job: ${chain.job.id} (${chain.job.type}) - "${chain.job.query.substring(0, 40)}..."`);
+                    if (chain.session) logger.info(`  Session: ${chain.session.id} (${chain.session.platform})`);
+                    if (chain.document) logger.info(`  Document: ${chain.document.id} - "${chain.document.title}"`);
+                    if (chain.audio) logger.info(`  Audio: ${chain.audio.id} - ${chain.audio.path}`);
                 }
             } else if (graphArg1 === 'conversations') {
                 // graph conversations [--platform=gemini|perplexity] [--limit=N]
@@ -1971,16 +1972,16 @@ async function main() {
                 }
 
                 const conversations = await store.getConversationsByPlatform(platform, limit);
-                console.log(`\n${platform.toUpperCase()} Conversations (${conversations.length}):`);
+                logger.info(`\n${platform.toUpperCase()} Conversations (${conversations.length}):`);
                 for (const conv of conversations) {
                     const captured = new Date(conv.capturedAt).toISOString().split('T')[0];
                     const typeTag = conv.type === 'deep-research' ? ' [DR]' : '';
-                    console.log(`  ${conv.id}${typeTag} - "${conv.title.substring(0, 40)}..." (${conv.turnCount} turns, synced: ${captured})`);
+                    logger.info(`  ${conv.id}${typeTag} - "${conv.title.substring(0, 40)}..." (${conv.turnCount} turns, synced: ${captured})`);
                 }
             } else if (graphArg1 === 'conversation') {
                 // graph conversation <id> [--questions-only] [--answers-only] [--research-docs]
                 if (!graphArg2) {
-                    console.error('Usage: rsrch graph conversation <id> [--questions-only] [--answers-only] [--research-docs]');
+                    logger.error('Usage: rsrch graph conversation <id> [--questions-only] [--answers-only] [--research-docs]');
                     process.exit(1);
                 }
 
@@ -1995,25 +1996,25 @@ async function main() {
                 });
 
                 if (!data.conversation) {
-                    console.log(`Conversation not found: ${graphArg2}`);
+                    logger.info(`Conversation not found: ${graphArg2}`);
                 } else {
-                    console.log(`\n=== ${data.conversation.title} ===`);
-                    console.log(`Platform: ${data.conversation.platform} | Type: ${data.conversation.type}`);
-                    console.log(`Synced: ${new Date(data.conversation.capturedAt).toISOString()}\n`);
+                    logger.info(`\n=== ${data.conversation.title} ===`);
+                    logger.info(`Platform: ${data.conversation.platform} | Type: ${data.conversation.type}`);
+                    logger.info(`Synced: ${new Date(data.conversation.capturedAt).toISOString()}\n`);
 
                     for (const turn of data.turns) {
                         const roleLabel = turn.role === 'user' ? '👤 User' : '🤖 Assistant';
-                        console.log(`${roleLabel}:`);
-                        console.log(turn.content.substring(0, 500) + (turn.content.length > 500 ? '...' : ''));
-                        console.log('');
+                        logger.info(`${roleLabel}:`);
+                        logger.info(turn.content.substring(0, 500) + (turn.content.length > 500 ? '...' : ''));
+                        logger.info('');
                     }
 
                     if (data.researchDocs && data.researchDocs.length > 0) {
-                        console.log('\n--- Research Documents ---');
+                        logger.info('\n--- Research Documents ---');
                         for (const doc of data.researchDocs) {
-                            console.log(`\n📄 ${doc.title}`);
-                            console.log(`Sources: ${doc.sources.length}`);
-                            console.log(doc.content.substring(0, 300) + '...');
+                            logger.info(`\n📄 ${doc.title}`);
+                            logger.info(`Sources: ${doc.sources.length}`);
+                            logger.info(doc.content.substring(0, 300) + '...');
                         }
                     }
                 }
@@ -2031,7 +2032,7 @@ async function main() {
                 }
 
                 const citations = await store.getCitations({ domain, limit });
-                console.log(`\n=== Citations (${citations.length}) ===\n`);
+                logger.info(`\n=== Citations (${citations.length}) ===\n`);
                 console.table(citations.map(c => ({
                     ID: c.id,
                     Domain: c.domain,
@@ -2041,30 +2042,30 @@ async function main() {
             } else if (graphArg1 === 'citation-usage') {
                 // graph citation-usage <url>
                 if (!graphArg2) {
-                    console.error('Usage: rsrch graph citation-usage <url>');
+                    logger.error('Usage: rsrch graph citation-usage <url>');
                     process.exit(1);
                 }
 
                 const usage = await store.getCitationUsage(graphArg2);
                 if (usage.length === 0) {
-                    console.log(`No usage found for: ${graphArg2}`);
+                    logger.info(`No usage found for: ${graphArg2}`);
                 } else {
-                    console.log(`\n=== Citation Usage (${usage.length}) ===\n`);
+                    logger.info(`\n=== Citation Usage (${usage.length}) ===\n`);
                     for (const item of usage) {
                         if (item.type === 'ResearchDoc') {
-                            console.log(`  📄 ResearchDoc: ${item.id} - "${item.title || 'Untitled'}"`);
+                            logger.info(`  📄 ResearchDoc: ${item.id} - "${item.title || 'Untitled'}"`);
                         } else {
-                            console.log(`  💬 Turn: ${item.id}`);
+                            logger.info(`  💬 Turn: ${item.id}`);
                         }
                     }
                 }
             } else if (graphArg1 === 'migrate-citations') {
                 // graph migrate-citations
-                console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
+                logger.info('\n[Migration] Extracting citations from existing ResearchDocs...\n');
                 const result = await store.migrateCitations();
-                console.log(`\n=== Migration Complete ===`);
-                console.log(`  Processed: ${result.processed} documents`);
-                console.log(`  Created:   ${result.citations} new citation links\n`);
+                logger.info(`\n=== Migration Complete ===`);
+                logger.info(`  Processed: ${result.processed} documents`);
+                logger.info(`  Created:   ${result.citations} new citation links\n`);
             } else {
                 console.log('Graph Database Commands:');
                 console.log('  rsrch graph status                - Show connection status and job counts');
@@ -2077,8 +2078,8 @@ async function main() {
                 console.log('  rsrch graph migrate-citations     - Migrate existing ResearchDoc sources to Citation nodes');
             }
         } catch (e: any) {
-            console.error('FalkorDB connection failed:', e.message);
-            console.error('Make sure FalkorDB is running: docker compose up falkordb -d');
+            logger.error('FalkorDB connection failed:', e.message);
+            logger.error('Make sure FalkorDB is running: docker compose up falkordb -d');
             process.exit(1);
         } finally {
             await store.disconnect();
@@ -2148,9 +2149,9 @@ async function main() {
 
         loadConfigFromEnv();
 
-        console.log(`📬 Sending notification: "${message}"`);
+        logger.info(`📬 Sending notification: "${message}"`);
         const results = await sendNotification(message, { title, priority });
-        console.log('Results:', results);
+        logger.info('Results:', results);
 
     } else {
         console.log('Usage:');
@@ -2178,12 +2179,12 @@ async function runLegacyMode() {
     if (command === 'batch') {
         const batchFile = args[1];
         if (!batchFile) {
-            console.error('Please provide a batch file: rsrch batch queries.txt');
+            logger.error('Please provide a batch file: rsrch batch queries.txt');
             process.exit(1);
         }
 
         if (!fs.existsSync(batchFile)) {
-            console.error(`Batch file not found: ${batchFile}`);
+            logger.error(`Batch file not found: ${batchFile}`);
             process.exit(1);
         }
 
@@ -2191,11 +2192,11 @@ async function runLegacyMode() {
         const queries = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
 
         if (queries.length === 0) {
-            console.error('Batch file is empty.');
+            logger.error('Batch file is empty.');
             process.exit(1);
         }
 
-        console.log(`Found ${queries.length} queries in batch file.`);
+        logger.info(`Found ${queries.length} queries in batch file.`);
 
         const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
         await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
@@ -2203,19 +2204,19 @@ async function runLegacyMode() {
         try {
             for (let i = 0; i < queries.length; i++) {
                 const q = queries[i];
-                console.log(`\n[Batch ${i + 1}/${queries.length}] Processing: "${q}"`);
+                logger.info(`\n[Batch ${i + 1}/${queries.length}] Processing: "${q}"`);
                 await client.query(q, { sessionName: 'new-cli-session' });
             }
         } catch (error) {
-            console.error('Batch processing failed:', error);
+            logger.error('Batch processing failed:', error);
         } finally {
-            console.log('\nBatch complete. Press Ctrl+C to exit and close browser.');
+            logger.info('\nBatch complete. Press Ctrl+C to exit and close browser.');
         }
     } else if (command === 'query') {
         // This part handles the case where 'query' is called without a direct query string,
         // implying a fallback to queries.json
         if (fs.existsSync(config.paths.queriesFile)) {
-            console.log('No query argument provided. Reading from queries.json...');
+            logger.info('No query argument provided. Reading from queries.json...');
             const queries = JSON.parse(fs.readFileSync(config.paths.queriesFile, 'utf-8'));
             if (Array.isArray(queries)) {
                 const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
@@ -2228,12 +2229,12 @@ async function runLegacyMode() {
                     await client.close();
                 }
             } else {
-                console.error('queries.json should be an array of strings.');
+                logger.error('queries.json should be an array of strings.');
             }
         } else {
-            console.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
+            logger.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
         }
     }
 }
 
-main().catch(console.error);
+main().catch(logger.error);
