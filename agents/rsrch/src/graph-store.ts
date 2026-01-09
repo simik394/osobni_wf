@@ -160,6 +160,11 @@ export class GraphStore {
             await this.graph.createNodeRangeIndex('Entity', 'id').catch(() => { });
             await this.graph.createNodeRangeIndex('Entity', 'type').catch(() => { });
             await this.graph.createNodeRangeIndex('Agent', 'id').catch(() => { });
+
+            // Index for Gemini Sessions
+            await this.graph.createNodeRangeIndex('GeminiSession', 'sessionId').catch(() => {});
+            await this.graph.createNodeRangeIndex('GeminiSession', 'title').catch(() => {});
+
             console.log('[GraphStore] Schema initialized');
         } catch (e: any) {
             console.warn('[GraphStore] Schema init warning:', e.message);
@@ -896,7 +901,6 @@ export class GraphStore {
         citations: Array<{ url: string; text: string; domain: string }>
     ): Promise<Map<string, string>> {
         if (!this.graph || citations.length === 0) return new Map();
-        const now = Date.now();
 
         // Prepare citation data with computed IDs and domains
         const citationData = citations.map(c => {
@@ -906,23 +910,29 @@ export class GraphStore {
                 try { domain = new URL(c.url).hostname; } catch { domain = 'unknown'; }
             }
             return {
-                url: escapeString(c.url),
+                url: c.url,
                 id,
-                domain: escapeString(domain),
-                text: escapeString((c.text || '').substring(0, 500))
+                domain: domain,
+                text: (c.text || '').substring(0, 500)
             };
         });
 
-        // Build UNWIND query with JSON array literal (FalkorDB compatible)
-        const citationsJson = JSON.stringify(citationData);
+        // Use parameterized query
         await this.graph.query(`
-            UNWIND ${citationsJson} AS cit
+            UNWIND $citations AS cit
             MERGE (c:Citation {url: cit.url})
-            ON CREATE SET c.id = cit.id, c.domain = cit.domain, c.text = cit.text, c.firstSeenAt = ${now}
-        `);
+            ON CREATE SET c.id = cit.id, c.domain = cit.domain, c.text = cit.text, c.firstSeenAt = $now
+        `, {
+            params: {
+                citations: citationData,
+                now: Date.now()
+            }
+        });
 
         // Return url -> id mapping
-        return new Map(citationData.map(c => [c.url, c.id]));
+        const urlToIdMap = new Map<string, string>();
+        citationData.forEach(c => urlToIdMap.set(c.url, c.id));
+        return urlToIdMap;
     }
 
     /**
@@ -930,12 +940,16 @@ export class GraphStore {
      */
     private async linkCitationsToDoc(docId: string, urls: string[]): Promise<void> {
         if (!this.graph || urls.length === 0) return;
-        const urlsJson = JSON.stringify(urls.map(u => escapeString(u)));
         await this.graph.query(`
-            UNWIND ${urlsJson} AS url
-            MATCH (d:ResearchDoc {id: '${docId}'}), (c:Citation {url: url})
+            UNWIND $urls AS url
+            MATCH (d:ResearchDoc {id: $docId}), (c:Citation {url: url})
             MERGE (d)-[:CITES]->(c)
-        `);
+        `, {
+            params: {
+                urls: urls,
+                docId: docId
+            }
+        });
     }
 
     /**
@@ -943,12 +957,16 @@ export class GraphStore {
      */
     private async linkCitationsToTurn(turnId: string, urls: string[]): Promise<void> {
         if (!this.graph || urls.length === 0) return;
-        const urlsJson = JSON.stringify(urls.map(u => escapeString(u)));
         await this.graph.query(`
-            UNWIND ${urlsJson} AS url
-            MATCH (t:Turn {id: '${turnId}'}), (c:Citation {url: url})
+            UNWIND $urls AS url
+            MATCH (t:Turn {id: $turnId}), (c:Citation {url: url})
             MERGE (t)-[:MENTIONS]->(c)
-        `);
+        `, {
+            params: {
+                urls: urls,
+                turnId: turnId
+            }
+        });
     }
 
     /**
@@ -1218,6 +1236,47 @@ export class GraphStore {
 
         return { conversation, turns, researchDocs };
     }
+
+    // =========================
+    // PLATFORM SYNC (SPECIFIC)
+    // =========================
+
+    /**
+     * Create or update a Gemini session node from scraping.
+     * Uses MERGE on sessionId if available, otherwise on title.
+     * @param data Object with `id` (sessionId) and `name` (title)
+     */
+    async createOrUpdateGeminiSession(data: { id: string | null; name: string }): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const { id: sessionId, name: title } = data;
+
+        const query = sessionId
+            ? `
+                MERGE (gs:GeminiSession { sessionId: $sessionId })
+                ON CREATE SET gs.title = $title, gs.createdAt = $now, gs.lastSeenAt = $now
+                ON MATCH SET gs.lastSeenAt = $now
+            `
+            : `
+                MERGE (gs:GeminiSession { title: $title })
+                ON CREATE SET gs.createdAt = $now, gs.lastSeenAt = $now
+                ON MATCH SET gs.lastSeenAt = $now
+            `;
+
+        try {
+            await this.graph.query(query, {
+                params: {
+                    sessionId: sessionId,
+                    title: title,
+                    now: Date.now(),
+                }
+            });
+            console.log(`[GraphStore] Synced GeminiSession: ${title} (${sessionId || 'no-id'})`);
+        } catch (e: any) {
+            console.error(`[GraphStore] Failed to sync GeminiSession "${title}":`, e.message);
+        }
+    }
+
 
     // ====================
     // NOTEBOOKLM SCRAPING
