@@ -61,6 +61,23 @@ export interface Audio {
     createdAt: number;
 }
 
+// PendingAudio tracks audio generation state in real-time
+export type PendingAudioStatus = 'queued' | 'started' | 'generating' | 'completed' | 'failed';
+
+export interface PendingAudio {
+    id: string;
+    notebookTitle: string;
+    sources: string[];
+    status: PendingAudioStatus;
+    windmillJobId?: string;
+    customPrompt?: string;
+    createdAt: number;
+    startedAt?: number;
+    completedAt?: number;
+    error?: string;
+    resultAudioId?: string;
+}
+
 export interface Conversation {
     id: string;
     agentId: string;
@@ -269,6 +286,185 @@ export class GraphStore {
             return this.nodeToJob(row.j);
         }
         return null;
+    }
+
+    // ============================================================
+    // PendingAudio State Management (Real-time state sync)
+    // ============================================================
+
+    /**
+     * Create a PendingAudio node when audio generation is queued
+     */
+    async createPendingAudio(
+        notebookTitle: string,
+        sources: string[],
+        options?: { windmillJobId?: string; customPrompt?: string }
+    ): Promise<PendingAudio> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const id = `pa_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const now = Date.now();
+
+        await this.graph.query(`
+            CREATE (pa:PendingAudio {
+                id: '${escapeString(id)}',
+                notebookTitle: '${escapeString(notebookTitle)}',
+                sources: '${escapeString(JSON.stringify(sources))}',
+                status: 'queued',
+                windmillJobId: '${escapeString(options?.windmillJobId || '')}',
+                customPrompt: '${escapeString(options?.customPrompt || '')}',
+                createdAt: ${now}
+            })
+        `);
+
+        console.log(`[GraphStore] PendingAudio ${id} created (queued)`);
+
+        return {
+            id,
+            notebookTitle,
+            sources,
+            status: 'queued',
+            windmillJobId: options?.windmillJobId,
+            customPrompt: options?.customPrompt,
+            createdAt: now
+        };
+    }
+
+    /**
+     * Update PendingAudio status
+     */
+    async updatePendingAudioStatus(
+        id: string,
+        status: PendingAudioStatus,
+        extra?: { error?: string; resultAudioId?: string; windmillJobId?: string }
+    ): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        let setClause = `pa.status = '${status}'`;
+
+        if (status === 'started' || status === 'generating') {
+            setClause += `, pa.startedAt = ${Date.now()}`;
+        } else if (status === 'completed' || status === 'failed') {
+            setClause += `, pa.completedAt = ${Date.now()}`;
+        }
+
+        if (extra?.error) {
+            setClause += `, pa.error = '${escapeString(extra.error)}'`;
+        }
+        if (extra?.resultAudioId) {
+            setClause += `, pa.resultAudioId = '${escapeString(extra.resultAudioId)}'`;
+        }
+        if (extra?.windmillJobId) {
+            setClause += `, pa.windmillJobId = '${escapeString(extra.windmillJobId)}'`;
+        }
+
+        await this.graph.query(`
+            MATCH (pa:PendingAudio {id: '${escapeString(id)}'})
+            SET ${setClause}
+        `);
+
+        console.log(`[GraphStore] PendingAudio ${id} → ${status}`);
+    }
+
+    /**
+     * Get a PendingAudio by ID
+     */
+    async getPendingAudio(id: string): Promise<PendingAudio | null> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (pa:PendingAudio {id: '${escapeString(id)}'})
+            RETURN pa
+        `);
+
+        if (result.data && result.data.length > 0) {
+            const node = (result.data[0] as any).pa;
+            return {
+                id: node.id,
+                notebookTitle: node.notebookTitle,
+                sources: JSON.parse(node.sources || '[]'),
+                status: node.status,
+                windmillJobId: node.windmillJobId || undefined,
+                customPrompt: node.customPrompt || undefined,
+                createdAt: node.createdAt,
+                startedAt: node.startedAt,
+                completedAt: node.completedAt,
+                error: node.error,
+                resultAudioId: node.resultAudioId
+            };
+        }
+        return null;
+    }
+
+    /**
+     * List all pending audios
+     */
+    async listPendingAudios(status?: PendingAudioStatus): Promise<PendingAudio[]> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const whereClause = status ? `WHERE pa.status = '${status}'` : '';
+        const result = await this.graph.query<any[]>(`
+            MATCH (pa:PendingAudio)
+            ${whereClause}
+            RETURN pa
+            ORDER BY pa.createdAt DESC
+            LIMIT 50
+        `);
+
+        if (!result.data) return [];
+
+        return result.data.map((row: any) => {
+            const node = row.pa;
+            return {
+                id: node.id,
+                notebookTitle: node.notebookTitle,
+                sources: JSON.parse(node.sources || '[]'),
+                status: node.status,
+                windmillJobId: node.windmillJobId || undefined,
+                customPrompt: node.customPrompt || undefined,
+                createdAt: node.createdAt,
+                startedAt: node.startedAt,
+                completedAt: node.completedAt,
+                error: node.error,
+                resultAudioId: node.resultAudioId
+            };
+        });
+    }
+
+    /**
+     * Delete a PendingAudio
+     */
+    async deletePendingAudio(id: string): Promise<void> {
+        if (!this.graph) throw new Error('Not connected');
+
+        await this.graph.query(`
+            MATCH (pa:PendingAudio {id: '${escapeString(id)}'})
+            DETACH DELETE pa
+        `);
+
+        console.log(`[GraphStore] PendingAudio ${id} deleted`);
+    }
+
+    /**
+     * Clean up stale PendingAudios (older than 1 hour)
+     */
+    async cleanupStalePendingAudios(maxAgeMs = 60 * 60 * 1000): Promise<number> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const cutoff = Date.now() - maxAgeMs;
+        const result = await this.graph.query<any[]>(`
+            MATCH (pa:PendingAudio)
+            WHERE pa.createdAt < ${cutoff} AND pa.status IN ['queued', 'started', 'generating']
+            WITH pa, pa.id as id
+            DETACH DELETE pa
+            RETURN count(*) as deleted
+        `);
+
+        const deleted = (result.data?.[0] as any)?.deleted || 0;
+        if (deleted > 0) {
+            console.log(`[GraphStore] Cleaned up ${deleted} stale PendingAudio nodes`);
+        }
+        return deleted;
     }
 
     // =========================

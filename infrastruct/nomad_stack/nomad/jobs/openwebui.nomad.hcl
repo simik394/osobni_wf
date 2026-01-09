@@ -60,7 +60,9 @@ job "openwebui" {
           "ai",
           "chat",
           "traefik.enable=true",
-          "traefik.http.routers.openwebui.rule=Host(`chat.100.73.45.27.nip.io`)",
+          "traefik.http.routers.openwebui.rule=Host(`chat.130.61.225.114.nip.io`)",
+          "traefik.http.routers.openwebui.entrypoints=websecure",
+          "traefik.http.routers.openwebui.tls.certresolver=letsencrypt",
           "traefik.http.services.openwebui.loadbalancer.server.port=3080"
         ]
         

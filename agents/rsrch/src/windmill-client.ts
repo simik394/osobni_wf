@@ -3,10 +3,16 @@
  * 
  * This centralizes all Windmill API calls to prevent race conditions
  * by routing audio generation through Windmill's job queue.
+ * 
+ * IMPORTANT: Every job trigger creates a PendingAudio in FalkorDB
+ * for real-time state tracking (per GEMINI.md mandate).
  */
+
+import { getGraphStore, type PendingAudio } from './graph-store';
 
 export interface WindmillJobResult {
     jobId: string;
+    pendingAudioId?: string;  // FalkorDB tracking ID
     success: boolean;
     error?: string;
 }
@@ -85,32 +91,96 @@ export class WindmillClient {
     }
 
     /**
-     * Queue multiple audio generations
+     * Queue multiple audio generations with FalkorDB state tracking
      * Each source gets its own Windmill job for parallel execution
+     * 
+     * IMPORTANT: Creates PendingAudio in FalkorDB BEFORE triggering Windmill
+     * This ensures state is tracked from the moment user requests generation
      */
     async queueAudioGenerations(
         notebookTitle: string,
         sources: string[],
-        customPrompt?: string
-    ): Promise<{ queued: WindmillJobResult[]; failed: WindmillJobResult[] }> {
+        customPrompt?: string,
+        options?: { graphStore?: ReturnType<typeof getGraphStore> }
+    ): Promise<{ queued: WindmillJobResult[]; failed: WindmillJobResult[]; pendingAudios: PendingAudio[] }> {
         const queued: WindmillJobResult[] = [];
         const failed: WindmillJobResult[] = [];
+        const pendingAudios: PendingAudio[] = [];
+
+        // Get or use provided graph store
+        const store = options?.graphStore || getGraphStore();
+        let isConnected = false;
+
+        try {
+            // Connect to FalkorDB for state tracking
+            const graphHost = process.env.FALKORDB_HOST || 'localhost';
+            const graphPort = parseInt(process.env.FALKORDB_PORT || '6379');
+            await store.connect(graphHost, graphPort);
+            isConnected = true;
+        } catch (e: any) {
+            console.warn(`[WindmillClient] FalkorDB not available: ${e.message}`);
+            // Continue without state tracking if FalkorDB unavailable
+        }
 
         for (const source of sources) {
+            let pendingAudio: PendingAudio | undefined;
+
+            // Step 1: Create PendingAudio BEFORE triggering Windmill
+            if (isConnected) {
+                try {
+                    pendingAudio = await store.createPendingAudio(
+                        notebookTitle,
+                        [source],
+                        { customPrompt }
+                    );
+                    pendingAudios.push(pendingAudio);
+                } catch (e: any) {
+                    console.error(`[WindmillClient] Failed to create PendingAudio: ${e.message}`);
+                }
+            }
+
+            // Step 2: Trigger Windmill job
             const result = await this.triggerAudioGeneration({
                 notebookTitle,
                 sourceTitle: source,
                 customPrompt
             });
 
+            // Step 3: Update PendingAudio with Windmill job ID
+            if (pendingAudio && isConnected) {
+                try {
+                    if (result.success) {
+                        await store.updatePendingAudioStatus(pendingAudio.id, 'started', {
+                            windmillJobId: result.jobId
+                        });
+                    } else {
+                        await store.updatePendingAudioStatus(pendingAudio.id, 'failed', {
+                            error: result.error || 'Windmill job trigger failed'
+                        });
+                    }
+                } catch (e: any) {
+                    console.error(`[WindmillClient] Failed to update PendingAudio: ${e.message}`);
+                }
+            }
+
             if (result.success) {
-                queued.push({ ...result, error: source }); // Reuse error field for source name
+                queued.push({
+                    ...result,
+                    pendingAudioId: pendingAudio?.id,
+                    error: source  // Reuse for source name
+                });
             } else {
-                failed.push({ ...result, error: `${source}: ${result.error}` });
+                failed.push({
+                    ...result,
+                    pendingAudioId: pendingAudio?.id,
+                    error: `${source}: ${result.error}`
+                });
             }
         }
 
-        return { queued, failed };
+        // Don't disconnect - let caller manage connection
+
+        return { queued, failed, pendingAudios };
     }
 
     /**
