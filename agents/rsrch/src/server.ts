@@ -818,27 +818,6 @@ app.post('/v1/chat/completions', async (req, res) => {
         // Get last user message for logging
         const lastMessage = request.messages.filter(m => m.role === 'user').pop();
 
-        /*
-        const falkor = getFalkorClient();
-        // Log query
-        if (request.session && lastMessage) {
-            console.log(`[FalkorDB] Logging query for session: ${request.session}`);
-            try {
-                // Resolve session name to ID if needed
-                const sessionNode = await falkor.findSession(request.session);
-
-                if (sessionNode) {
-                    await falkor.logInteraction(sessionNode.id, 'user', 'query', lastMessage.content);
-                    console.log(`[FalkorDB] Query logged successfully to session ${sessionNode.id}`);
-                } else {
-                    console.warn(`[FalkorDB] Session '${request.session}' not found, skipping log`);
-                }
-            } catch (e: any) {
-                console.error('[FalkorDB] Failed to log query:', e);
-            }
-        }
-        */
-
         // Start observability trace
         const traceCtx = startChatCompletionTrace(request);
 

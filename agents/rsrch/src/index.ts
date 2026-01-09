@@ -27,24 +27,6 @@ function getGlobalFlag(flag: string): string | undefined {
 const globalProfileId = getGlobalFlag('--profile') || 'default';
 const globalCdpEndpoint = getGlobalFlag('--cdp');
 
-// ntfy notification helper
-async function notifyNtfy(title: string, message: string, tags?: string[]) {
-    const ntfyTopic = process.env.NTFY_TOPIC || 'rsrch-audio';
-    const ntfyServer = process.env.NTFY_SERVER || 'https://ntfy.sh';
-    try {
-        await fetch(`${ntfyServer}/${ntfyTopic}`, {
-            method: 'POST',
-            headers: {
-                'Title': title,
-                'Tags': (tags || ['audio']).join(',')
-            },
-            body: message
-        });
-    } catch (e) {
-        console.error(`[ntfy] Failed to send notification: ${e}`);
-    }
-}
-
 // Helper to send request to server
 async function sendServerRequest(path: string, body: any = {}) {
     const port = config.port;
