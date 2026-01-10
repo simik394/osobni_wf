@@ -3,7 +3,7 @@
  * Tests for FalkorDB-based graph store
  */
 
-import { GraphStore } from '../src/graph-store';
+import { GraphStore } from '../src/shared/graph-store';
 
 async function runTests() {
     console.log('=== Graph Store Tests ===\n');
@@ -51,7 +51,7 @@ async function runTests() {
         await store.updateJobStatus(job.id, 'completed', { result: { answer: 'AI is...' } });
         updated = await store.getJob(job.id);
         console.assert(updated?.status === 'completed', 'Status should be completed');
-        console.assert(updated?.result?.answer === 'AI is...', 'Result should be stored');
+        console.assert((updated?.result as any)?.answer === 'AI is...', 'Result should be stored');
         console.log(`✅ Job completed with result\n`);
 
         // Test 7: Get Next Queued Job

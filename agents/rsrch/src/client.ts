@@ -1,10 +1,9 @@
 import { chromium } from 'playwright-extra';
-import { NotebookLMClient } from './notebooklm-client';
-import { GeminiClient } from './gemini-client';
+import { NotebookLMClient, GeminiClient } from './shared';
 import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'playwright';
 // import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { config } from './config';
+import { config } from './shared/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';

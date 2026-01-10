@@ -1,7 +1,7 @@
 // Script to link existing audio artifacts to sources in FalkorDB
 // Run: node dist/link-audios-to-sources.js
 
-const { getGraphStore } = require('./graph-store');
+const { getGraphStore } = require('./shared/graph-store');
 
 async function main() {
     const store = getGraphStore();

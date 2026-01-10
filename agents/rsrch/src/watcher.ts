@@ -11,8 +11,7 @@
  */
 
 import { PerplexityClient } from './client';
-import { GeminiClient, ResearchInfo } from './gemini-client';
-import { NotebookLMClient } from './notebooklm-client';
+import { GeminiClient, ResearchInfo, NotebookLMClient } from './shared';
 import { notifyResearchComplete, loadConfigFromEnv } from './notify';
 import * as path from 'path';
 import * as fs from 'fs';

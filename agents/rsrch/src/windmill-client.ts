@@ -8,8 +8,8 @@
  * for real-time state tracking (per GEMINI.md mandate).
  */
 
-import { getGraphStore, type PendingAudio } from './graph-store';
-import { ApiError, AuthError, NetworkError } from './errors';
+import { getGraphStore, type PendingAudio } from './shared/graph-store';
+import { ApiError, AuthError, NetworkError } from './shared/errors';
 
 export interface WindmillJobResult {
     jobId: string;

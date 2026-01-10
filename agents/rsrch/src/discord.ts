@@ -1,7 +1,7 @@
 /**
  * Discord notification helper
  */
-import { config } from './config';
+import { config } from './shared/config';
 import { sendNotification, loadConfigFromEnv } from './notify';
 
 // Load ntfy/discord config from env on module load

@@ -28,13 +28,14 @@ export interface NotificationConfig {
     };
 }
 
-let config: NotificationConfig = {};
+// Local config for notify module
+let notifyConfig: NotificationConfig = {};
 
 /**
  * Initialize notification service with config.
  */
 export function configureNotifications(cfg: NotificationConfig): void {
-    config = cfg;
+    notifyConfig = cfg;
     console.log('📬 Notification service configured');
     if (cfg.ntfy) console.log(`   ntfy: ${cfg.ntfy.server}/${cfg.ntfy.topic}`);
     if (cfg.discord) console.log('   Discord: webhook configured');
@@ -50,10 +51,10 @@ export function loadConfigFromEnv(): void {
     const discordWebhook = process.env.DISCORD_WEBHOOK;
 
     if (ntfyTopic) {
-        config.ntfy = { server: ntfyServer, topic: ntfyTopic, token: ntfyToken };
+        notifyConfig.ntfy = { server: ntfyServer, topic: ntfyTopic, token: ntfyToken };
     }
     if (discordWebhook) {
-        config.discord = { webhookUrl: discordWebhook };
+        notifyConfig.discord = { webhookUrl: discordWebhook };
     }
 }
 
@@ -66,14 +67,14 @@ export async function sendNotification(
 ): Promise<{ ntfy?: boolean; discord?: boolean }> {
     const results: { ntfy?: boolean; discord?: boolean } = {};
 
-    if (config.ntfy) {
+    if (notifyConfig.ntfy) {
         results.ntfy = await sendNtfy(message, options);
     }
-    if (config.discord) {
+    if (notifyConfig.discord) {
         results.discord = await sendDiscord(message, options);
     }
 
-    if (!config.ntfy && !config.discord) {
+    if (!notifyConfig.ntfy && !notifyConfig.discord) {
         console.warn('⚠️ No notification channels configured');
     }
 
@@ -88,7 +89,7 @@ async function sendNtfy(
     options: NotificationOptions
 ): Promise<boolean> {
     try {
-        const { server, topic, token } = config.ntfy!;
+        const { server, topic, token } = notifyConfig.ntfy!;
         const url = `${server}/${topic}`;
 
         const headers: Record<string, string> = {};
@@ -125,7 +126,7 @@ async function sendDiscord(
     options: NotificationOptions
 ): Promise<boolean> {
     try {
-        const { webhookUrl } = config.discord!;
+        const { webhookUrl } = notifyConfig.discord!;
 
         // Build Discord embed
         const embed: Record<string, any> = {

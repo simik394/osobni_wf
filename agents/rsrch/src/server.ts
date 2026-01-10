@@ -1,13 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import { PerplexityClient } from './client';
-import { config } from './config';
+import { config } from './shared/config';
 
-import { NotebookLMClient } from './notebooklm-client';
-import { GeminiClient } from './gemini-client';
-import { getGraphStore, GraphJob } from './graph-store';
+import {
+    NotebookLMClient,
+    GeminiClient,
+    getGraphStore,
+    GraphJob,
+    getRegistry,
+    syncGeminiToGraph
+} from './shared';
 import { notifyJobCompleted } from './discord';
-import { getRegistry } from './artifact-registry';
 
 // Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
@@ -1165,50 +1169,11 @@ app.post('/gemini/sync-graph', async (req, res) => {
             await geminiClient.init();
         }
 
-        console.log(`[Server] Syncing Gemini research docs to FalkorDB (limit: ${limit})...`);
-
-        // List research docs from Gemini
-        const docs = await geminiClient.listDeepResearchDocuments(limit);
-        console.log(`[Server] Found ${docs.length} research documents`);
-
-        let synced = 0;
-        const syncedIds: string[] = [];
-
-        for (const doc of docs) {
-            try {
-                const docId = doc.sessionId || '';
-                if (!docId) {
-                    console.log(`[Sync] Skipping doc without sessionId: ${doc.title}`);
-                    continue;
-                }
-
-                // Create session in FalkorDB (duplicates will fail silently)
-                const sessionId = `gemini-${docId}`;
-                await graphStore.createSession({
-                    id: sessionId,
-                    platform: 'gemini',
-                    externalId: docId,
-                    query: doc.title || doc.firstHeading || ''
-                });
-
-                syncedIds.push(docId);
-                synced++;
-                console.log(`[Sync] Synced: ${doc.title || docId}`);
-            } catch (e: any) {
-                // Duplicate constraint errors are expected for already-synced docs
-                if (e.message?.includes('duplicate') || e.message?.includes('already exists')) {
-                    console.log(`[Sync] Already synced: ${doc.sessionId}`);
-                } else {
-                    console.warn(`[Sync] Failed to sync ${doc.sessionId}: ${e.message}`);
-                }
-            }
-        }
+        const result = await syncGeminiToGraph(geminiClient, graphStore, limit);
 
         res.json({
             success: true,
-            synced,
-            total: docs.length,
-            syncedIds
+            ...result
         });
     } catch (e: any) {
         console.error('[Server] Gemini sync-graph failed:', e);

@@ -3,9 +3,9 @@ import { login } from './auth';
 import { PerplexityClient } from './client';
 import { startServer } from './server';
 import * as fs from 'fs';
-import { config } from './config';
+import { config } from './shared/config';
 import * as path from 'path';
-import { GeminiClient, ResearchInfo } from './gemini-client';
+import { GeminiClient, ResearchInfo } from './shared/gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 
 const args = process.argv.slice(2);
@@ -440,7 +440,7 @@ export async function main() {
             }
 
             if (isLocalExecution()) {
-                const { getGraphStore } = await import('./graph-store');
+                const { getGraphStore } = await import('./shared/graph-store');
                 const store = getGraphStore();
                 const graphHost = config.falkor.host;
                 await store.connect(graphHost, config.falkor.port);
@@ -720,7 +720,7 @@ export async function main() {
                 process.exit(1);
             }
 
-            const { getGraphStore } = await import('./graph-store');
+            const { getGraphStore } = await import('./shared/graph-store');
             const store = getGraphStore();
             const graphHost = config.falkor.host;
 
@@ -782,7 +782,7 @@ export async function main() {
             // rsrch graph notebooks [--limit=N]
             const limit = parseInt(args[2]?.replace('--limit=', '') || '50');
 
-            const { getGraphStore } = await import('./graph-store');
+            const { getGraphStore } = await import('./shared/graph-store');
             const store = getGraphStore();
             const graphHost = config.falkor.host;
 
@@ -809,7 +809,7 @@ export async function main() {
         } else if (subArg === 'status') {
             // rsrch graph status [--local]
             if (isLocalExecution) {
-                const { getGraphStore } = await import('./graph-store');
+                const { getGraphStore } = await import('./shared/graph-store');
                 const store = getGraphStore();
                 const graphHost = config.falkor.host;
                 try {
@@ -836,7 +836,7 @@ export async function main() {
             // rsrch graph jobs [status] [--local]
             const status = args[2] as any; // naive check
             if (isLocalExecution) {
-                const { getGraphStore } = await import('./graph-store');
+                const { getGraphStore } = await import('./shared/graph-store');
                 const store = getGraphStore();
                 const graphHost = config.falkor.host;
                 try {
@@ -864,7 +864,7 @@ export async function main() {
                 process.exit(1);
             }
             if (isLocalExecution) {
-                const { getGraphStore } = await import('./graph-store');
+                const { getGraphStore } = await import('./shared/graph-store');
                 const store = getGraphStore();
                 await store.connect(config.falkor.host, config.falkor.port);
                 try {
@@ -883,7 +883,7 @@ export async function main() {
             const limit = parseInt(args[2]?.replace('--limit=', '') || '50');
 
             if (isLocalExecution) {
-                const { getGraphStore } = await import('./graph-store');
+                const { getGraphStore } = await import('./shared/graph-store');
                 const store = getGraphStore();
                 const graphHost = config.falkor.host;
 
@@ -982,7 +982,7 @@ export async function main() {
                 }
             }
 
-            const { getGraphStore } = await import('./graph-store');
+            const { getGraphStore } = await import('./shared/graph-store');
             const store = getGraphStore();
             const graphHost = config.falkor.host;
 
@@ -1007,7 +1007,7 @@ export async function main() {
                 process.exit(1);
             }
 
-            const { getGraphStore } = await import('./graph-store');
+            const { getGraphStore } = await import('./shared/graph-store');
             const store = getGraphStore();
             const graphHost = config.falkor.host;
 
@@ -1031,7 +1031,7 @@ export async function main() {
             }
         } else if (subArg === 'migrate-citations') {
             // rsrch graph migrate-citations
-            const { getGraphStore } = await import('./graph-store');
+            const { getGraphStore } = await import('./shared/graph-store');
             const store = getGraphStore();
             const graphHost = config.falkor.host;
 
@@ -1851,7 +1851,7 @@ export async function main() {
             }
 
             // Recursive lineage via Node.js (jq doesn't do recursion easily)
-            const { getRegistry } = require('./artifact-registry');
+            const { getRegistry } = require('./shared/artifact-registry');
             const registry = getRegistry();
             const lineage = registry.getLineage(id);
 
@@ -1916,7 +1916,7 @@ export async function main() {
         // Graph database commands
         const graphArg1 = args[1]; // e.g. status, jobs, lineage
         const graphArg2 = args[2]; // e.g. job ID, status filter
-        const { getGraphStore } = await import('./graph-store');
+        const { getGraphStore } = await import('./shared/graph-store');
         const store = getGraphStore();
 
         try {
