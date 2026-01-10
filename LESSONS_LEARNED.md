@@ -94,6 +94,51 @@ When wrapping browser automation as OpenAI-compatible API:
 - **Stealth Plugin Dependencies**: `puppeteer-extra-plugin-stealth` can fail with "dependency not found (stealth/evasions/chrome.app)" in some persistent environments or when bundled. If this blocks execution, disabling the plugin is a valid temporary workaround for local tools, provided you don't aggressively scrape.
 - **Binary vs Source Execution**: When debugging CLI tools (like `rsrch`), always verify if the global command is an alias to a stale binary (`pkg` snapshot) or the actual local code. Prefer running `node dist/index.js` or `ts-node src/index.ts` directly during development to ensure you are testing the latest changes.
 
+## Browser Subagent Best Practices (2026-01-10)
+
+> [!IMPORTANT]
+> **browser_subagent should analyze context and respond intelligently, NOT blindly say "proceed".**
+
+### Anti-Pattern: Mindless "Yes, proceed"
+When Jules asks a question or presents options, the browser_subagent must:
+1. **Read the actual question** - What is Jules asking?
+2. **Analyze the context** - What are the options? What are the trade-offs?
+3. **Provide appropriate response** - Answer the question, pick the better option, or request clarification if unclear
+
+### Correct Subagent Prompting
+
+❌ **WRONG: Prescribing the response**
+```
+Go to the session. If Jules asks anything, say "Yes, proceed".
+```
+
+✅ **CORRECT: Delegate decision-making to subagent**
+```
+Go to the session and analyze Jules' current state.
+
+Read what Jules is asking or presenting, then decide the appropriate response:
+- If presenting options: Evaluate trade-offs and pick the better option
+- If asking technical question: Provide specific guidance based on context
+- If blocked on environment issue: Suggest workaround if obvious, otherwise escalate
+- If unclear what's needed: Request clarification from Jules
+
+Make your own judgment about the best response. Return:
+1. What Jules was asking
+2. What response you provided and why
+3. Whether user should be notified for review
+```
+
+### Session State Refresh Issue
+Jules sessions sometimes show stale state. If the UI shows "Session is inactive - chat to resume" but seems frozen:
+- Reload the page before taking action
+- Previous responses may have registered but UI didn't update
+
+### When to Escalate to User
+- Architectural decisions (which approach to use)
+- Breaking changes or risky operations
+- Unclear requirements that need human judgment
+- Anything that could affect data integrity
+
 ## Infrastructure & Remote Browsers
 - **Host Networking & Zombies**: Running Docker containers with `network_mode: "host"` binds process ports directly to the host interface. If the container or entrypoint crashes (e.g. `socat`), the process may become a zombie or stay detached, holding the port and preventing restart. ALWAYS automate cleanup (e.g., `killall socat`, `docker rm -f`) in restart scripts or playbooks.
 - **Port Conflict Management**: When running multiple browser instances (e.g. `rsrch` + `angrav`), strictly assign distinct ports for VNC and CDP. Relying on "random selection" or defaults (5900, 9222) guarantees collisions.
