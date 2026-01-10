@@ -35,6 +35,18 @@ test
 > 
 > If a tool isn't configured yet, SET IT UP PROPERLY first. Don't bypass with shortcuts.
 
+## Jules Interaction: CLI First, Browser Fallback
+
+> [!IMPORTANT]
+> **Tool Precedence for Jules Operations**
+> 
+> 1. **`jules-cli` (PRIMARY)**: Use for list, get, status, retry - fast, no memory overhead
+> 2. **`browser_subagent` (FALLBACK)**: Use ONLY for operations not in CLI (approvals, PR publishing, responding to questions)
+> 
+> **When using browser_subagent**: Delegate decision-making to the subagent. Don't prescribe responses like "say proceed" - let the subagent analyze context and decide.
+> 
+> See: `agents/jules-go/README.md` and `flows/autonomous-pm-framework.md` section 2.2-2.3
+
 ## ⚠️ CRITICAL: Non-Blocking Audio Generation Architecture
 
 > [!CAUTION]
@@ -69,3 +81,5 @@ test
 - ✅ Queue multiple generations - they run in parallel on cloud
 - ✅ Notifications via webhook/watcher, not by blocking
 - ✅ **Every browser action updates FalkorDB state**
+
+@flows/autonomous-pm-framework.md
