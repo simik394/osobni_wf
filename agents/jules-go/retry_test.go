@@ -146,3 +146,70 @@ func TestRetrySessionWithPolicy_ContextCancellation(t *testing.T) {
 		t.Error("expected cancelled context")
 	}
 }
+
+// RetryBudget tests
+
+func TestNewRetryBudget(t *testing.T) {
+	rb := NewRetryBudget(5, time.Second)
+
+	if rb == nil {
+		t.Fatal("expected non-nil budget")
+	}
+	if rb.maxTokens != 5 {
+		t.Errorf("expected maxTokens=5, got %d", rb.maxTokens)
+	}
+	if rb.tokens != 5 {
+		t.Errorf("expected tokens=5, got %d", rb.tokens)
+	}
+}
+
+func TestDefaultRetryBudget(t *testing.T) {
+	rb := DefaultRetryBudget()
+
+	if rb.maxTokens != 10 {
+		t.Errorf("expected maxTokens=10, got %d", rb.maxTokens)
+	}
+	if rb.refillRate != time.Minute {
+		t.Errorf("expected refillRate=1m, got %v", rb.refillRate)
+	}
+}
+
+func TestRetryBudget_Consume(t *testing.T) {
+	rb := NewRetryBudget(3, time.Minute)
+
+	// Should succeed 3 times
+	for i := 0; i < 3; i++ {
+		if !rb.Consume() {
+			t.Errorf("expected Consume to succeed on attempt %d", i+1)
+		}
+	}
+
+	// Should fail when exhausted
+	if rb.Consume() {
+		t.Error("expected Consume to fail when budget exhausted")
+	}
+}
+
+func TestRetryBudget_Available(t *testing.T) {
+	rb := NewRetryBudget(5, time.Minute)
+
+	if rb.Available() != 5 {
+		t.Errorf("expected Available=5, got %d", rb.Available())
+	}
+
+	rb.Consume()
+	rb.Consume()
+
+	if rb.Available() != 3 {
+		t.Errorf("expected Available=3, got %d", rb.Available())
+	}
+}
+
+func TestErrBudgetExhausted(t *testing.T) {
+	if ErrBudgetExhausted == nil {
+		t.Error("ErrBudgetExhausted should not be nil")
+	}
+	if ErrBudgetExhausted.Error() != "retry budget exhausted" {
+		t.Errorf("unexpected error message: %s", ErrBudgetExhausted.Error())
+	}
+}

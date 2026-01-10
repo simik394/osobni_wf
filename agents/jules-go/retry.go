@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"jules-go/internal/logging"
@@ -16,7 +17,70 @@ import (
 var (
 	ErrMaxRetriesExceeded = errors.New("maximum retries exceeded")
 	ErrNonRetriable       = errors.New("non-retriable error")
+	ErrBudgetExhausted    = errors.New("retry budget exhausted")
 )
+
+// RetryBudget implements a token bucket for controlling retry rate.
+// Prevents "thundering herd" issues when many retries fail simultaneously.
+type RetryBudget struct {
+	tokens     int
+	maxTokens  int
+	refillRate time.Duration
+	lastRefill time.Time
+	mu         sync.Mutex
+}
+
+// NewRetryBudget creates a new retry budget with the given capacity.
+func NewRetryBudget(maxTokens int, refillRate time.Duration) *RetryBudget {
+	return &RetryBudget{
+		tokens:     maxTokens,
+		maxTokens:  maxTokens,
+		refillRate: refillRate,
+		lastRefill: time.Now(),
+	}
+}
+
+// DefaultRetryBudget returns a budget with sensible defaults.
+func DefaultRetryBudget() *RetryBudget {
+	return NewRetryBudget(10, time.Minute)
+}
+
+// Consume attempts to consume a token. Returns true if successful.
+func (rb *RetryBudget) Consume() bool {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	rb.refill()
+
+	if rb.tokens <= 0 {
+		return false // Budget exhausted
+	}
+	rb.tokens--
+	return true
+}
+
+// Available returns the current number of available tokens.
+func (rb *RetryBudget) Available() int {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	rb.refill()
+	return rb.tokens
+}
+
+// refill adds tokens based on elapsed time (must hold lock).
+func (rb *RetryBudget) refill() {
+	now := time.Now()
+	elapsed := now.Sub(rb.lastRefill)
+	tokensToAdd := int(elapsed / rb.refillRate)
+
+	if tokensToAdd > 0 {
+		rb.tokens += tokensToAdd
+		if rb.tokens > rb.maxTokens {
+			rb.tokens = rb.maxTokens
+		}
+		rb.lastRefill = now
+	}
+}
 
 // RetryPolicy configures retry behavior with exponential backoff.
 type RetryPolicy struct {
