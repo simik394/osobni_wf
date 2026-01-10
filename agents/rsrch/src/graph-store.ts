@@ -1,3 +1,4 @@
+export * from './types/graph-store';
 /**
  * Graph Store - FalkorDB-based storage for jobs and knowledge
  * 
@@ -11,98 +12,19 @@ import { FalkorDB } from 'falkordb';
 import type Graph from 'falkordb/dist/src/graph';
 import { createHash } from 'crypto';
 
-export interface GraphJob {
-    id: string;
-    type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast';
-    status: 'queued' | 'running' | 'completed' | 'failed';
-    query: string;
-    options?: Record<string, any>;
-    result?: any;
-    error?: string;
-    createdAt: number;
-    startedAt?: number;
-    completedAt?: number;
-}
-
-export interface Entity {
-    id: string;
-    type: string;
-    name: string;
-    properties: Record<string, any>;
-}
-
-export interface Relationship {
-    from: string;
-    to: string;
-    type: string;
-    properties?: Record<string, any>;
-}
-
-// Lineage node types
-export interface Session {
-    id: string;
-    platform: 'gemini' | 'perplexity' | 'notebooklm';
-    externalId: string;
-    query: string;
-    createdAt: number;
-}
-
-export interface Document {
-    id: string;
-    title: string;
-    url?: string;
-    createdAt: number;
-}
-
-export interface Audio {
-    id: string;
-    path: string;
-    duration?: number;
-    createdAt: number;
-}
-
-// PendingAudio tracks audio generation state in real-time
-export type PendingAudioStatus = 'queued' | 'started' | 'generating' | 'completed' | 'failed';
-
-export interface PendingAudio {
-    id: string;
-    notebookTitle: string;
-    sources: string[];
-    status: PendingAudioStatus;
-    windmillJobId?: string;
-    customPrompt?: string;
-    createdAt: number;
-    startedAt?: number;
-    completedAt?: number;
-    error?: string;
-    resultAudioId?: string;
-}
-
-export interface Conversation {
-    id: string;
-    agentId: string;
-    platform?: 'gemini' | 'perplexity' | 'notebooklm';
-    platformId?: string;
-    title?: string;
-    type?: 'regular' | 'deep-research';
-    capturedAt?: number;
-    createdAt: number;
-    turnCount?: number;
-}
-
-export interface Turn {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-    timestamp: number;
-}
-
-export interface Citation {
-    id: string;
-    url: string;
-    domain: string;
-    text: string;
-    firstSeenAt: number;
-}
+import {
+    GraphJob,
+    Entity,
+    Relationship,
+    Session,
+    Document,
+    Audio,
+    PendingAudioStatus,
+    PendingAudio,
+    Conversation,
+    Turn,
+    Citation,
+} from './types/graph-store';
 
 // Helper to escape strings for Cypher queries
 function escapeString(str: string): string {
