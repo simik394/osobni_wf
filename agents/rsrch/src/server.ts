@@ -42,7 +42,7 @@ import {
 // Initialize graph store
 const graphStore = getGraphStore();
 
-const app = express();
+export const app = express();
 const PORT = config.port;
 
 // Middleware
@@ -1470,7 +1470,7 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-export async function startServer() {
+export async function startServer(port: number = PORT) {
     try {
         // Try to connect browser, but don't fail startup if unavailable
         console.log('Initializing Perplexity client (browser connection)...');
@@ -1506,8 +1506,8 @@ export async function startServer() {
             console.warn('[Server] Job queue and graph features will be disabled.');
         }
 
-        app.listen(PORT, () => {
-            console.log(`\n✓ Perplexity Researcher server running on http://localhost:${PORT}`);
+        const server = app.listen(port, () => {
+            console.log(`\n✓ Perplexity Researcher server running on http://localhost:${port}`);
             console.log(`\nEndpoints:`);
             console.log(`  GET  /health             - Health check`);
             console.log(`  POST /query              - Submit a query`);
@@ -1515,11 +1515,13 @@ export async function startServer() {
             console.log(`  GET  /v1/models          - List models (gemini-rsrch, perplexity)`);
             console.log(`  POST /v1/chat/completions - Chat completions`);
             console.log(`\nExample usage:`);
-            console.log(`  curl -X POST http://localhost:${PORT}/v1/chat/completions \\`);
+            console.log(`  curl -X POST http://localhost:${port}/v1/chat/completions \\`);
             console.log(`       -H "Content-Type: application/json" \\`);
             console.log(`       -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'`);
             console.log();
         });
+
+        return server;
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
