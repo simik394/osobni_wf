@@ -73,8 +73,18 @@ read -p "Press Enter after logging in via VNC..."
 echo ""
 echo "💾 Saving browser state to profile: ${PROFILE_NAME}..."
 
+# Find the container ID on the remote host
+echo "🔍 Finding rsrch-server container..."
+RSRCH_CONTAINER=$(ssh ${REMOTE_HOST} "docker ps -qf name=rsrch-server | head -n 1")
+
+if [ -z "$RSRCH_CONTAINER" ]; then
+    echo "   ❌ Could not find a running rsrch-server container on ${REMOTE_HOST}"
+    exit 1
+fi
+echo "   ✅ Found container: ${RSRCH_CONTAINER}"
+
 # Use the rsrch server to save auth state
-SAVE_CMD="docker exec rsrch-server-f0c3c02c-b28a-1efb-acda-49c9e3125c15 \
+SAVE_CMD="docker exec ${RSRCH_CONTAINER} \
   node -e \"
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -101,7 +111,7 @@ echo ""
 echo "✅ Profile authentication saved!"
 echo ""
 echo "📋 Profile status:"
-ssh ${REMOTE_HOST} "docker exec rsrch-server-f0c3c02c-b28a-1efb-acda-49c9e3125c15 node dist/index.js profile list"
+ssh ${REMOTE_HOST} "docker exec ${RSRCH_CONTAINER} node dist/index.js profile list"
 
 echo ""
 echo "🎉 Done!"
