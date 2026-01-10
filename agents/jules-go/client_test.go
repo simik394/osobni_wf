@@ -4,43 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMain(m *testing.M) {
-	// Set the JULES_API_KEY for the tests
-	os.Setenv("JULES_API_KEY", "test-api-key")
-	code := m.Run()
-	os.Unsetenv("JULES_API_KEY")
-	os.Exit(code)
+func newTestClient(t *testing.T) *Client {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	client, err := NewClient("test-api-key", logger)
+	if err != nil {
+		t.Fatalf("failed to create test client: %v", err)
+	}
+	return client
 }
 
 func TestNewClient(t *testing.T) {
 	t.Run("with API key", func(t *testing.T) {
-		// Rely on TestMain to set the API key
-		client, err := NewClient()
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		client, err := NewClient("test-api-key", logger)
 		assert.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "test-api-key", client.apiKey)
 	})
 
 	t.Run("without API key", func(t *testing.T) {
-		originalAPIKey, isSet := os.LookupEnv("JULES_API_KEY")
-		os.Unsetenv("JULES_API_KEY")
-		if isSet {
-			defer os.Setenv("JULES_API_KEY", originalAPIKey)
-		}
-
-
-		client, err := NewClient()
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		client, err := NewClient("", logger)
 		assert.Error(t, err)
 		assert.Nil(t, client)
-		assert.Equal(t, "JULES_API_KEY environment variable not set", err.Error())
+		assert.Contains(t, err.Error(), "JULES_API_KEY is required")
 	})
 }
 
@@ -57,11 +54,9 @@ func TestListSessions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient()
-	assert.NoError(t, err)
+	client := newTestClient(t)
 	client.httpClient = server.Client()
 	client.baseURL = server.URL
-
 
 	sessions, err := client.ListSessions(context.Background())
 	assert.NoError(t, err)
@@ -71,7 +66,6 @@ func TestListSessions(t *testing.T) {
 	assert.Equal(t, "session-2", sessions[1].ID)
 	assert.Equal(t, "Session 2", sessions[1].Name)
 }
-
 
 func TestCreateSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -86,8 +80,7 @@ func TestCreateSession(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient()
-	assert.NoError(t, err)
+	client := newTestClient(t)
 	client.httpClient = server.Client()
 	client.baseURL = server.URL
 
@@ -112,8 +105,7 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client, err := NewClient()
-		assert.NoError(t, err)
+		client := newTestClient(t)
 		client.httpClient = server.Client()
 		client.baseURL = server.URL
 
@@ -132,8 +124,7 @@ func TestGetSession(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client, err := NewClient()
-		assert.NoError(t, err)
+		client := newTestClient(t)
 		client.httpClient = server.Client()
 		client.baseURL = server.URL
 
@@ -158,12 +149,11 @@ func TestApprovePlan(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient()
-	assert.NoError(t, err)
+	client := newTestClient(t)
 	client.httpClient = server.Client()
 	client.baseURL = server.URL
 
 	plan := Plan{}
-	err = client.ApprovePlan(context.Background(), "session-123", plan)
+	err := client.ApprovePlan(context.Background(), "session-123", plan)
 	assert.NoError(t, err)
 }

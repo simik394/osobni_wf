@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"time"
 
+	"jules-go/internal/db"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"jules-go/internal/db"
 )
 
 // TaskQueue is a persistent task queue backed by FalkorDB.
@@ -81,7 +82,7 @@ func (q *TaskQueue) Enqueue(ctx context.Context, task *Task) error {
 	createParams := map[string]interface{}{
 		"id":         task.ID,
 		"issue_id":   task.IssueID,
-		"priority":   task.Priority,
+		"priority":   int(task.Priority),
 		"status":     string(task.Status),
 		"payload":    task.Payload,
 		"created_at": task.CreatedAt.Unix(),
