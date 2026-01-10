@@ -16,7 +16,7 @@ const configSchema = z.object({
     submitButton: z.string().default('button[aria-label="Submit"]'),
     answerContainer: z.string().default('.prose'),
     followUpInput: z.string().default('textarea[placeholder*="Ask follow-up"]'),
-  }),
+  }).default({}),
   auth: z.object({
     userDataDir: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'user-data')),
     authFile: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'auth.json')),
