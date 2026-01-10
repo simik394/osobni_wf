@@ -16,18 +16,31 @@ type JulesEvent struct {
 }
 
 // StartServer initializes and starts the HTTP server.
-func StartServer() {
+func StartServer(errChan chan<- error) *http.Server {
 	listenAddr := ":8090"
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	http.HandleFunc("/webhook/jules", handleWebhook)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/webhook/jules", handleWebhook)
 
-	slog.Info("server starting", "port", 8090)
-	if err := http.ListenAndServe(listenAddr, nil); err != nil {
-		slog.Error("server failed to start", "err", err)
+	server := &http.Server{
+		Addr:    listenAddr,
+		Handler: mux,
 	}
+
+	go func() {
+		slog.Info("server starting", "port", 8090)
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("server failed to start", "err", err)
+			errChan <- err
+		}
+		close(errChan)
+	}()
+
+	return server
 }
 
 // handleWebhook processes incoming POST requests to the /webhook/jules endpoint.
