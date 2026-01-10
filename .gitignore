@@ -30,3 +30,4 @@ lmstudio_dump.html
 history_dump/
 cdp_targets*.json
 infrastruct/utils/libs/
+exp/
