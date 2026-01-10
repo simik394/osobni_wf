@@ -101,3 +101,9 @@ export interface Citation {
     text: string;
     firstSeenAt: number;
 }
+
+export interface ResearchInfo {
+    title: string | null;        // Session title (short name)
+    firstHeading: string | null; // First heading in the document
+    sessionId: string | null;
+}
