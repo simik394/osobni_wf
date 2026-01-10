@@ -1,0 +1,132 @@
+package session
+
+import (
+	"fmt"
+	"sync"
+	"testing"
+)
+
+func TestNewManager(t *testing.T) {
+	m := NewManager()
+	if m == nil {
+		t.Fatal("NewManager returned nil")
+	}
+	if m.sessions == nil {
+		t.Error("NewManager did not initialize sessions map")
+	}
+}
+
+func TestCreateSession(t *testing.T) {
+	m := NewManager()
+	task := "test_task"
+
+	session, err := m.CreateSession(task)
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	if session.Task != task {
+		t.Errorf("expected task %q, got %q", task, session.Task)
+	}
+	if session.Status != StatusActive {
+		t.Errorf("expected status %q, got %q", StatusActive, session.Status)
+	}
+	if m.GetSession(session.ID) == nil {
+		t.Error("session not found in manager after creation")
+	}
+}
+
+func TestGetSession(t *testing.T) {
+	m := NewManager()
+	task := "test_task"
+
+	session, _ := m.CreateSession(task)
+	retrievedSession := m.GetSession(session.ID)
+
+	if retrievedSession == nil {
+		t.Fatal("GetSession returned nil for existing session")
+	}
+	if retrievedSession.ID != session.ID {
+		t.Errorf("retrieved session ID does not match original")
+	}
+}
+
+func TestDeleteSession(t *testing.T) {
+	m := NewManager()
+	task := "test_task"
+
+	session, _ := m.CreateSession(task)
+	m.DeleteSession(session.ID)
+
+	if m.GetSession(session.ID) != nil {
+		t.Error("session found in manager after deletion")
+	}
+}
+
+func TestListSessions(t *testing.T) {
+	m := NewManager()
+	task1 := "task1"
+	task2 := "task2"
+
+	m.CreateSession(task1)
+	m.CreateSession(task2)
+
+	sessions := m.ListSessions()
+	if len(sessions) != 2 {
+		t.Errorf("expected 2 sessions, got %d", len(sessions))
+	}
+}
+
+func TestUpdateSessionStatus(t *testing.T) {
+	m := NewManager()
+	task := "test_task"
+
+	session, _ := m.CreateSession(task)
+	err := m.UpdateSessionStatus(session.ID, StatusCompleted)
+	if err != nil {
+		t.Fatalf("UpdateSessionStatus failed: %v", err)
+	}
+
+	updatedSession := m.GetSession(session.ID)
+	if updatedSession.Status != StatusCompleted {
+		t.Errorf("expected status %q, got %q", StatusCompleted, updatedSession.Status)
+	}
+}
+
+func TestConcurrencyLimit(t *testing.T) {
+	m := NewManager()
+	for i := 0; i < concurrencyLimit; i++ {
+		_, err := m.CreateSession(fmt.Sprintf("task-%d", i))
+		if err != nil {
+			t.Fatalf("failed to create session %d: %v", i, err)
+		}
+	}
+
+	_, err := m.CreateSession("overflow_task")
+	if err == nil {
+		t.Error("expected error when creating session beyond concurrency limit, but got nil")
+	}
+}
+
+func TestThreadSafety(t *testing.T) {
+	m := NewManager()
+	var wg sync.WaitGroup
+	numRoutines := 50
+
+	// Create sessions concurrently
+	for i := 0; i < numRoutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			m.CreateSession("some_task")
+		}()
+	}
+
+	wg.Wait()
+
+	// Validate that the number of created sessions does not exceed the limit
+	sessions := m.ListSessions()
+	if len(sessions) > concurrencyLimit {
+		t.Errorf("expected at most %d sessions, got %d", concurrencyLimit, len(sessions))
+	}
+}
