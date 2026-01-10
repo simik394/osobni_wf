@@ -1,0 +1,129 @@
+# NotebookLM DOM Selector Configuration
+#
+# This file externalizes hardcoded selectors from notebooklm-client.ts
+# to make them easier to update when the UI changes.
+#
+# Usage: Import selectors in TypeScript:
+#   import { selectors } from './selectors';
+#   await page.click(selectors.NOTEBOOK_CREATE_BTN);
+#
+# Version: 1.0.0
+# Last Updated: 2026-01-10
+
+# ============================================================
+# HOME PAGE / NOTEBOOK LIST
+# ============================================================
+home:
+  # Create new notebook button
+  createNewButton: ".create-new-button"
+  # Project/notebook cards container
+  projectButton: "project-button"
+  projectButtonTitle: ".project-button-title"
+  projectCard: "mat-card"
+  primaryActionButton: ".primary-action-button"
+
+# ============================================================
+# NOTEBOOK PAGE
+# ============================================================
+notebook:
+  # Title input for new notebook
+  titleInput: "input.title-input"
+  # URL pattern for notebook pages
+  urlPattern: "**/notebook/**"
+
+# ============================================================
+# SOURCES TAB
+# ============================================================
+sources:
+  # Tab selector (multi-language support)
+  tab: 'div[role="tab"]'
+  tabTextPattern: "Zdroje|Sources"
+
+  # Add sources button
+  addSourcesButton: "Přidat zdroje|Add sources"
+
+  # Source type buttons in dialog
+  dropZoneButton: "button.drop-zone-icon-button"
+  webSourcePattern: "web|link|site"
+  pasteTextPattern: "Pasted text|Vložený text|Copied text|Zkopírovaný text|Text"
+  drivePattern: "Disk|Drive"
+
+  # Dialog elements
+  urlInputTextarea: "mat-dialog-container textarea"
+  submitButton: "mat-dialog-container button.mat-primary"
+  dialogContainer: "mat-dialog-container"
+
+  # Select all sources checkbox
+  selectAllInputEn: 'input[aria-label="Select all sources"]'
+  selectAllInputCs: 'input[aria-label="Vybrat všechny zdroje"]'
+
+  # Drive picker iframe
+  drivePickerFrame: "iframe"
+  driveSearchInput: 'input[type="text"]'
+  driveFileRow: 'div[role="option"], div[role="row"]'
+  driveSelectButton: "Vybrat|Select"
+
+# ============================================================
+# STUDIO / AUDIO OVERVIEW PANEL
+# ============================================================
+studio:
+  # Maximize studio panel
+  maximizeButton: 'button[aria-label="Maximalizovat"]'
+
+  # Artifact elements
+  artifactButton: "button.artifact-button-content"
+  artifactLibraryItem: "artifact-library-item"
+  artifactTitle: ".artifact-title"
+
+  # Audio specific
+  audioIcon: "audio_magic_eraser"
+  audioIconPattern: "audio"
+
+  # Menu actions
+  moreMenuButton: 'button[aria-label*="More"], button[aria-label*="Další"]'
+  moreMenuIcon: 'button mat-icon:has-text("more_vert")'
+  menuItem: 'button[role="menuitem"]'
+  renameOption: "Rename|Přejmenovat"
+  downloadOption: "Stáhnout|Download"
+
+  # Rename dialog
+  renameInput: 'input[type="text"].rename-input, mat-dialog-container input'
+
+# ============================================================
+# AUDIO GENERATION
+# ============================================================
+audio:
+  # Customize audio button (pencil icon)
+  customizeButtonEn: 'button[aria-label="Customize audio overview"]'
+  customizeButtonCs: 'button[aria-label="Přizpůsobit audio přehled"]'
+
+  # Customize dialog
+  customizeTextareaCs: 'textarea[aria-label="Textové pole"]'
+  customizeTextareaPlaceholder: 'textarea[placeholder*="Co byste mohli"]'
+
+  # Generate button
+  generateButtonCs: 'button:has-text("Vygenerovat")'
+  generateButtonEn: 'button:has-text("Generate")'
+
+  # Main audio overview button
+  audioOverviewButtonCs: '[aria-label="Audio přehled"]'
+  audioOverviewButtonEn: '[aria-label="Audio Overview"]'
+  audioOverviewButtonText: 'button:has-text("Audio přehled")'
+
+  # Generation status
+  generatingIndicatorCs: "Generování"
+  generatingIndicatorEn: "Generating"
+
+# ============================================================
+# DOWNLOAD
+# ============================================================
+download:
+  # Menu in artifacts list
+  moreButton: 'button mat-icon:has-text("more_vert")'
+
+  # Download option in menu
+  downloadMenuItemCs: "Stáhnout"
+  downloadMenuItemEn: "Download"
+
+  # Visibility states
+  menuVisible: '[role="menu"]'
