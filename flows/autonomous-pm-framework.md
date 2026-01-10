@@ -78,7 +78,55 @@ stateDiagram-v2
     Merged --> [*]
 ```
 
-### 2.2 Dispatch Decision Matrix
+### 2.2 Primary Tool: jules-cli
+
+> [!TIP]
+> **Use `jules-cli` for ALL Jules operations where possible.**
+> 
+> Browser automation is resource-intensive. Use CLI first, browser only as fallback.
+
+**Setup:**
+```bash
+# Load API key from Vault
+export VAULT_ADDR="http://100.73.45.27:8200"
+export JULES_API_KEY=$(vault kv get -field=api_key secret/jules)
+
+# Or add to shell profile for persistence
+echo 'export JULES_API_KEY="<key>"' >> ~/.bashrc
+```
+
+**Available Commands:**
+
+| Command | Purpose | Example |
+|---------|---------|--------|
+| `list` | List all sessions with ID, STATE, TITLE | `./jules-cli-bin list` |
+| `list --format json` | JSON output for scripting | `./jules-cli-bin list --format json \| jq '.[]'` |
+| `get <id>` | Get session details | `./jules-cli-bin get 11119854993266554089` |
+| `retry <id>` | Retry failed session | `./jules-cli-bin retry 12345 --max 3` |
+| `status` | Show system status | `./jules-cli-bin status` |
+
+**Quick Status Check:**
+```bash
+cd /home/sim/Obsi/Prods/01-pwf/agents/jules-go
+./jules-cli-bin list 2>&1 | grep -E "IN_PROGRESS|AWAITING|PLANNING"
+```
+
+### 2.3 Fallback: Browser Automation
+
+> [!WARNING]
+> **Only use `browser_subagent` when CLI cannot perform the operation.**
+
+| Operation | Tool | Notes |
+|-----------|------|-------|
+| List sessions | `jules-cli list` | ✅ Primary |
+| Get session status | `jules-cli get` | ✅ Primary |
+| Retry failed | `jules-cli retry` | ✅ Primary |
+| **Approve plan** | `browser_subagent` | ⚠️ Not in CLI yet |
+| **Publish PR** | `browser_subagent` | ⚠️ Not in CLI yet |
+| **Answer clarification** | `browser_subagent` | ⚠️ Not in CLI yet |
+| **Create new session** | `browser_subagent` | ⚠️ Not in CLI yet |
+
+### 2.4 Dispatch Decision Matrix
 
 | Condition | Action |
 |-----------|--------|
@@ -88,40 +136,27 @@ stateDiagram-v2
 | Session awaiting review | Approve/reject before dispatching new |
 | Session needs clarification | Respond immediately |
 
-### 2.3 API Authentication Status
-
-> [!TIP]
-> **jules-cli is now WORKING with the Jules API.**
-> 
-> - API key stored in Vault at `secret/jules`
-> - Uses `x-goog-api-key` header (not Bearer token)
-> - CLI commands: `list`, `get`, `retry`, `status`
-> 
-> **Preferred method:** `jules-cli` over browser_subagent for efficiency
-> **Fallback:** Browser automation for operations not yet in CLI (approvals, PR publishing)
-
-### 2.3 Monitoring Cadence
+### 2.5 Monitoring Cadence
 
 | Check Type | Frequency | Tool |
 |------------|-----------|------|
-| Session status | Every 5-10 minutes | `browser_subagent` to jules.google.com |
-| Parse PR status | On session complete | GitHub MCP |
+| Session status | Every 5-10 minutes | `jules-cli list` |
+| Parse PR status | On session complete | GitHub MCP / `gh pr list` |
 | Test status | Before merging | `run_command` with test suite |
 
-### 2.4 Session Approval Workflow
+### 2.6 Session Approval Workflow (Browser Fallback)
 
 ```
-1. Navigate to jules.google.com
-2. Find completed session (status: "Needs review")
-3. Review the code diff
-4. If acceptable:
-   a. Click "Publish PR"
-   b. Wait for PR creation
-   c. Copy PR link
-   d. Update YouTrack: State → Fixed, add PR link comment
-5. If needs changes:
-   a. Provide feedback in chat
-   b. Wait for Jules to iterate
+1. Check for sessions needing action: jules-cli list | grep AWAITING
+2. For AWAITING_USER_FEEDBACK or AWAITING_PLAN_APPROVAL:
+   a. Use browser_subagent to navigate to session URL
+   b. Review the plan or clarification
+   c. Click "Approve Plan" or type response
+3. For COMPLETED with no PR:
+   a. Navigate to session
+   b. Click "Publish PR"
+   c. Wait for PR creation
+4. Update YouTrack: State → Fixed, add PR link comment
 ```
 
 ---
