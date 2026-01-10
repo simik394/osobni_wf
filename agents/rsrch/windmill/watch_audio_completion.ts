@@ -21,6 +21,7 @@ interface PendingAudio {
     notebookId: string;
     sourceTitle: string;
     startedAt: number;
+    createdAt?: number;
 }
 
 interface WatchResult {
@@ -40,8 +41,9 @@ export async function main(): Promise<WatchResult> {
 
     try {
         // 1. Fetch all pending audio nodes from FalkorDB
+        // Query for status 'queued' or 'generating' to cover both states.
         const pendingNodes = await executeGraphQuery(
-            "MATCH (pa:PendingAudio) WHERE pa.status IS NULL RETURN pa.id, pa.notebookId, pa.sourceTitle, pa.startedAt"
+            "MATCH (pa:PendingAudio) WHERE pa.status IN ['queued', 'generating'] RETURN pa.id, pa.notebookId, pa.sourceTitle, pa.startedAt, pa.createdAt"
         );
 
         if (!pendingNodes || pendingNodes.length === 0) {
@@ -54,8 +56,9 @@ export async function main(): Promise<WatchResult> {
 
         // 2. Process each pending node
         for (const pending of pendingNodes) {
-            const [id, notebookId, sourceTitle, startedAt] = pending;
-            const pendingAudio: PendingAudio = { id, notebookId, sourceTitle, startedAt };
+            // Destructure with correct number of columns
+            const [id, notebookId, sourceTitle, startedAt, createdAt] = pending;
+            const pendingAudio: PendingAudio = { id, notebookId, sourceTitle, startedAt, createdAt };
 
             try {
                 const notebookRes = await fetch(`${RSRCH_URL}/notebook/list`, {
@@ -75,11 +78,14 @@ export async function main(): Promise<WatchResult> {
 
                 const audio = notebook.audioOverviews?.find(a => a.correlationId === pendingAudio.id);
 
+                // Determine reference start time for timeout (prefer startedAt, fallback to createdAt)
+                const refTime = pendingAudio.startedAt || pendingAudio.createdAt || Date.now();
+
                 if (audio) {
                     // Audio found - SUCCESS
                     await handleCompletion(pendingAudio, audio);
                     results.completed++;
-                } else if (Date.now() - pendingAudio.startedAt > GENERATION_TIMEOUT_MS) {
+                } else if (Date.now() - refTime > GENERATION_TIMEOUT_MS) {
                     // Timeout - FAILURE
                     await handleFailure(pendingAudio, "Timeout");
                     results.failed++;
@@ -87,9 +93,12 @@ export async function main(): Promise<WatchResult> {
 
             } catch (e) {
                 console.error(`Error processing pending audio ${pendingAudio.id}:`, e);
-                await handleFailure(pendingAudio, e.message);
+                // Don't mark as failed immediately on transient errors, unless it's a persistent issue?
+                // For now, let's just log it. If it times out, it will fail eventually.
+                // Or should we fail it? If the error is permanent (e.g. notebook deleted), we should fail.
+                // Assuming errors here might be network glitches, let's just log.
                 results.errors.push(e.message);
-                results.failed++;
+                // results.failed++; // Don't count as failed logic unless we actually fail the node
             }
         }
 
@@ -104,7 +113,8 @@ export async function main(): Promise<WatchResult> {
 
 async function handleCompletion(pending: PendingAudio, audio: any) {
     const endTime = Date.now();
-    const durationMs = endTime - pending.startedAt;
+    const startTime = pending.startedAt || pending.createdAt || endTime;
+    const durationMs = endTime - startTime;
     const durationStr = formatDuration(durationMs);
 
     // 1. Update FalkorDB
@@ -147,7 +157,8 @@ async function handleCompletion(pending: PendingAudio, audio: any) {
 
 async function handleFailure(pending: PendingAudio, reason: string) {
     const endTime = Date.now();
-    const durationMs = endTime - pending.startedAt;
+    const startTime = pending.startedAt || pending.createdAt || endTime;
+    const durationMs = endTime - startTime;
 
     // 1. Update FalkorDB
     await executeGraphQuery(
