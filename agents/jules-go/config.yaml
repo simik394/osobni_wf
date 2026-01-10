@@ -1,0 +1,21 @@
+# Jules Go Agent Configuration
+
+# The API key for the Jules API.
+# This is a required field and can also be set via the JULES_API_KEY environment variable.
+jules_api_key: ""
+
+# The path to the browser executable. If not set, go-rod will attempt to find a suitable browser.
+browser_path: ""
+
+# The URL for the FalkorDB instance.
+falkordb_url: "redis://localhost:6379"
+
+# The maximum number of concurrent browser sessions.
+max_concurrent_sessions: 15
+
+# The port for the webhook server to listen on.
+webhook_port: 8090
+
+# The log level for the application.
+# Supported values: "debug", "info", "warn", "error"
+log_level: "info"
