@@ -49,7 +49,9 @@ func TestCheckPRs(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(cr)
+		if err := json.NewEncoder(w).Encode(cr); err != nil {
+			t.Fatalf("json.NewEncoder.Encode returned an error: %v", err)
+		}
 	})
 
 	monitor := &Monitor{

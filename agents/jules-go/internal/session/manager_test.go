@@ -87,8 +87,12 @@ func TestListSessions(t *testing.T) {
 	task1 := "task1"
 	task2 := "task2"
 
-	m.CreateSession(task1)
-	m.CreateSession(task2)
+	if _, err := m.CreateSession(task1); err != nil {
+		t.Fatalf("CreateSession for task1 failed: %v", err)
+	}
+	if _, err := m.CreateSession(task2); err != nil {
+		t.Fatalf("CreateSession for task2 failed: %v", err)
+	}
 
 	sessions := m.ListSessions()
 	if len(sessions) != 2 {
@@ -154,7 +158,7 @@ func TestThreadSafety(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			m.CreateSession("some_task")
+			_, _ = m.CreateSession("some_task")
 		}()
 	}
 

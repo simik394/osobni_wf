@@ -70,9 +70,9 @@ func TestCRUDJulesSession(t *testing.T) {
 	if retrievedSession.Status != session.Status {
 		t.Errorf("expected Status %s, got %s", session.Status, retrievedSession.Status)
 	}
-    if !retrievedSession.CreatedAt.Equal(session.CreatedAt) {
-        t.Errorf("expected CreatedAt %v, got %v", session.CreatedAt, retrievedSession.CreatedAt)
-    }
+	if !retrievedSession.CreatedAt.Equal(session.CreatedAt) {
+		t.Errorf("expected CreatedAt %v, got %v", session.CreatedAt, retrievedSession.CreatedAt)
+	}
 
 	// Update
 	updatedAt := time.Now().UTC().Truncate(time.Second)
@@ -91,9 +91,9 @@ func TestCRUDJulesSession(t *testing.T) {
 	if retrievedSession.Status != "updated" {
 		t.Errorf("expected updated status, got %s", retrievedSession.Status)
 	}
-    if !retrievedSession.UpdatedAt.Equal(updatedAt) {
-        t.Errorf("expected UpdatedAt %v, got %v", updatedAt, retrievedSession.UpdatedAt)
-    }
+	if !retrievedSession.UpdatedAt.Equal(updatedAt) {
+		t.Errorf("expected UpdatedAt %v, got %v", updatedAt, retrievedSession.UpdatedAt)
+	}
 
 	// Delete
 	err = client.DeleteJulesSession(ctx, sessionID)
