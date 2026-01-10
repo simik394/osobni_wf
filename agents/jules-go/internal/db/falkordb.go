@@ -48,8 +48,8 @@ func (c *Client) Close() error {
 	return c.rdb.Close()
 }
 
-// buildParameterizedQuery safely constructs a parameterized Cypher query.
-func buildParameterizedQuery(query string, params map[string]interface{}) (string, error) {
+// BuildParameterizedQuery safely constructs a parameterized Cypher query.
+func BuildParameterizedQuery(query string, params map[string]interface{}) (string, error) {
 	if len(params) == 0 {
 		return query, nil
 	}
@@ -97,7 +97,7 @@ func (c *Client) CreateJulesSession(ctx context.Context, session *JulesSession) 
 		"updated_at": session.UpdatedAt.Unix(),
 	}
 
-	parameterizedQuery, err := buildParameterizedQuery(query, params)
+	parameterizedQuery, err := BuildParameterizedQuery(query, params)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (c *Client) GetJulesSession(ctx context.Context, id string) (*JulesSession,
 		"id": id,
 	}
 
-	parameterizedQuery, err := buildParameterizedQuery(query, params)
+	parameterizedQuery, err := BuildParameterizedQuery(query, params)
 	if err != nil {
 		return nil, err
 	}
@@ -187,13 +187,15 @@ func (c *Client) GetJulesSession(ctx context.Context, id string) (*JulesSession,
 	if !ok {
 		return nil, fmt.Errorf("invalid task format")
 	}
-	createdAtUnix, ok := row[colIndex["s.created_at"]].(int64)
-	if !ok {
-		return nil, fmt.Errorf("invalid created_at format")
+
+	createdAtUnix, err := SafeToInt64(row[colIndex["s.created_at"]])
+	if err != nil {
+		return nil, fmt.Errorf("invalid created_at format: %w", err)
 	}
-	updatedAtUnix, ok := row[colIndex["s.updated_at"]].(int64)
-	if !ok {
-		return nil, fmt.Errorf("invalid updated_at format")
+
+	updatedAtUnix, err := SafeToInt64(row[colIndex["s.updated_at"]])
+	if err != nil {
+		return nil, fmt.Errorf("invalid updated_at format: %w", err)
 	}
 
 	session := &JulesSession{
@@ -206,6 +208,20 @@ func (c *Client) GetJulesSession(ctx context.Context, id string) (*JulesSession,
 	}
 
 	return session, nil
+}
+
+// SafeToInt64 safely converts an interface{} to int64, handling various numeric types.
+func SafeToInt64(v interface{}) (int64, error) {
+	switch i := v.(type) {
+	case int64:
+		return i, nil
+	case int:
+		return int64(i), nil
+	case float64:
+		return int64(i), nil
+	default:
+		return 0, fmt.Errorf("unexpected type for integer conversion: %T", v)
+	}
 }
 
 // UpdateJulesSession updates an existing JulesSession node.
@@ -222,7 +238,7 @@ func (c *Client) UpdateJulesSession(ctx context.Context, session *JulesSession) 
 		"updated_at": session.UpdatedAt.Unix(),
 	}
 
-	parameterizedQuery, err := buildParameterizedQuery(query, params)
+	parameterizedQuery, err := BuildParameterizedQuery(query, params)
 	if err != nil {
 		return err
 	}
@@ -244,7 +260,7 @@ func (c *Client) DeleteJulesSession(ctx context.Context, id string) error {
 		"id": id,
 	}
 
-	parameterizedQuery, err := buildParameterizedQuery(query, params)
+	parameterizedQuery, err := BuildParameterizedQuery(query, params)
 	if err != nil {
 		return err
 	}
