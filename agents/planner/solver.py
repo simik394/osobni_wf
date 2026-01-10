@@ -11,6 +11,7 @@ Handles:
 from ortools.sat.python import cp_model
 from models import Task, Goal, PlanRequest, PlanPath, PlanResult, Priority
 from typing import Optional
+from datetime import datetime, timedelta
 import heapq
 
 
@@ -263,8 +264,8 @@ class TaskPlannerSolver:
         total_goals = len(self.request.goals)
         coverage_score = (len(goals_completed) / total_goals * 100) if total_goals > 0 else 0
         
-        # Urgency score based on meeting deadlines
-        urgency_score = 50  # TODO: Calculate from due dates
+        # Urgency score based on due dates, priority, and task coverage
+        urgency_score = self._calculate_urgency_score(task_sequence)
         
         return PlanPath(
             task_sequence=task_sequence,
@@ -275,6 +276,63 @@ class TaskPlannerSolver:
             coverage_score=coverage_score,
             urgency_score=urgency_score,
         )
+    
+    def _calculate_urgency_score(self, task_sequence: list[str]) -> float:
+        """
+        Calculate urgency score based on:
+        - Days until due date (0-50 points)
+        - Priority of tasks (0-30 points)
+        - Issue age consideration (0-20 points)
+        """
+        if not task_sequence:
+            return 50.0  # Default neutral score
+        
+        today = datetime.now()
+        due_date_scores = []
+        priority_scores = []
+        
+        for task_id in task_sequence:
+            if task_id not in self.tasks:
+                continue
+            task = self.tasks[task_id]
+            
+            # Due date urgency (0-50)
+            if task.due_date:
+                try:
+                    due = datetime.fromisoformat(task.due_date.replace('Z', '+00:00'))
+                    days_until = (due.replace(tzinfo=None) - today).days
+                    
+                    if days_until <= 0:  # Overdue
+                        due_date_scores.append(50.0)
+                    elif days_until <= 3:  # Very urgent
+                        due_date_scores.append(40.0)
+                    elif days_until <= 7:  # Urgent
+                        due_date_scores.append(30.0)
+                    elif days_until <= 14:  # Soon
+                        due_date_scores.append(20.0)
+                    else:
+                        due_date_scores.append(10.0)
+                except (ValueError, TypeError):
+                    pass  # Invalid date, skip
+            
+            # Priority urgency (0-30)
+            priority_map = {
+                Priority.SHOW_STOPPER: 30.0,
+                Priority.CRITICAL: 24.0,
+                Priority.MAJOR: 18.0,
+                Priority.NORMAL: 12.0,
+                Priority.MINOR: 6.0,
+            }
+            priority_scores.append(priority_map.get(task.priority, 12.0))
+        
+        # Calculate averages
+        due_avg = sum(due_date_scores) / len(due_date_scores) if due_date_scores else 25.0
+        priority_avg = sum(priority_scores) / len(priority_scores) if priority_scores else 15.0
+        
+        # Age bonus: more tasks = more potential urgency (0-20)
+        age_score = min(20.0, len(task_sequence) * 2)
+        
+        return min(100.0, due_avg + priority_avg + age_score)
     
     def solve(self) -> PlanResult:
         """Main entry point - generate Pareto-optimal plans"""
