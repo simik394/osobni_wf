@@ -1,12 +1,17 @@
 # Makefile for jules-go
 
-.PHONY: all build test test-coverage lint clean install docker help
+.PHONY: all build-server build-cli test test-coverage lint clean install docker help
 
-all: build
+all: build-server build-cli
 
-# Build the Go binary
-build:
-	@echo "Building jules-go..."
+# Build the Go server binary
+build-server:
+	@echo "Building jules-go server..."
+	@go build -o bin/jules-server ./cmd/jules-server
+
+# Build the Go CLI binary
+build-cli:
+	@echo "Building jules-go CLI..."
 	@go build -o bin/jules ./cmd/jules
 
 # Run tests

@@ -109,6 +109,98 @@ func (c *Client) CreateJulesSession(ctx context.Context, session *JulesSession) 
 	return nil
 }
 
+// ListJulesSessions retrieves all JulesSession nodes.
+func (c *Client) ListJulesSessions(ctx context.Context) ([]*JulesSession, error) {
+	query := `
+		MATCH (s:JulesSession)
+		RETURN s.id, s.status, s.repo, s.task, s.created_at, s.updated_at
+		ORDER BY s.created_at DESC
+	`
+
+	res, err := c.rdb.Do(ctx, "GRAPH.QUERY", GraphName, query).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	results, ok := res.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: expected top-level array")
+	}
+	if len(results) < 2 {
+		return []*JulesSession{}, nil // No sessions found
+	}
+
+	header, ok := results[0].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: header is not an array")
+	}
+	colIndex := make(map[string]int)
+	for i, col := range header {
+		colName, ok := col.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid response format: column name is not a string")
+		}
+		colIndex[colName] = i
+	}
+
+	requiredCols := []string{"s.id", "s.status", "s.repo", "s.task", "s.created_at", "s.updated_at"}
+	for _, col := range requiredCols {
+		if _, exists := colIndex[col]; !exists {
+			return nil, fmt.Errorf("missing required column in response: %s", col)
+		}
+	}
+
+	data, ok := results[1].([]interface{})
+	if !ok || len(data) == 0 {
+		return []*JulesSession{}, nil // No sessions found
+	}
+
+	var sessions []*JulesSession
+	for _, rawRow := range data {
+		row, ok := rawRow.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid row format: not an array")
+		}
+
+		sessionID, ok := row[colIndex["s.id"]].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid id format")
+		}
+		status, ok := row[colIndex["s.status"]].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid status format")
+		}
+		repo, ok := row[colIndex["s.repo"]].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid repo format")
+		}
+		task, ok := row[colIndex["s.task"]].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid task format")
+		}
+		createdAtUnix, err := SafeToInt64(row[colIndex["s.created_at"]])
+		if err != nil {
+			return nil, fmt.Errorf("invalid created_at format: %w", err)
+		}
+		updatedAtUnix, err := SafeToInt64(row[colIndex["s.updated_at"]])
+		if err != nil {
+			return nil, fmt.Errorf("invalid updated_at format: %w", err)
+		}
+
+		session := &JulesSession{
+			ID:        sessionID,
+			Status:    status,
+			Repo:      repo,
+			Task:      task,
+			CreatedAt: time.Unix(createdAtUnix, 0),
+			UpdatedAt: time.Unix(updatedAtUnix, 0),
+		}
+		sessions = append(sessions, session)
+	}
+
+	return sessions, nil
+}
+
 // GetJulesSession retrieves a JulesSession node by its ID.
 func (c *Client) GetJulesSession(ctx context.Context, id string) (*JulesSession, error) {
 	query := `

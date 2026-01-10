@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
@@ -26,6 +27,10 @@ type Config struct {
 	LogLevel              string     `yaml:"log_level"`
 	LogFormat             string     `yaml:"log_format"`
 	Ntfy                  NtfyConfig `yaml:"ntfy"`
+	ShutdownTimeout       time.Duration `yaml:"shutdown_timeout"`
+	FalkorDB              struct {
+		Addr string `yaml:"addr"`
+	} `yaml:"falkordb"`
 }
 
 // Load loads the configuration from a YAML file and environment variables.
