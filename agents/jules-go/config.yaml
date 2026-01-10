@@ -19,3 +19,7 @@ webhook_port: 8090
 # The log level for the application.
 # Supported values: "debug", "info", "warn", "error"
 log_level: "info"
+
+# The log format for the application.
+# Supported values: "text", "json"
+log_format: "text"
