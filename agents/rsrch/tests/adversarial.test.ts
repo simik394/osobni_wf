@@ -12,8 +12,12 @@
 import { describe, it, expect } from 'vitest';
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3001';
+const SKIP_INTEGRATION = !process.env.TEST_INTEGRATION;
 
-describe('Adversarial: TOOLS-32 Multi-turn Context', () => {
+// Note: These tests require a running server on port 3001
+// Run with TEST_INTEGRATION=1 npm test to enable them
+
+describe.skipIf(SKIP_INTEGRATION)('Adversarial: TOOLS-32 Multi-turn Context', () => {
 
     /**
      * BUG FOUND: After removing the "no user message" check,
@@ -136,7 +140,7 @@ describe('Adversarial: TOOLS-40 Streaming Loop Safety', () => {
     });
 });
 
-describe('Adversarial: TOOLS-39 CORS Middleware', () => {
+describe.skipIf(SKIP_INTEGRATION)('Adversarial: TOOLS-39 CORS Middleware', () => {
 
     /**
      * Test: OPTIONS preflight request
@@ -175,7 +179,7 @@ describe('Adversarial: TOOLS-39 CORS Middleware', () => {
     });
 });
 
-describe('Adversarial: Input Validation', () => {
+describe.skipIf(SKIP_INTEGRATION)('Adversarial: Input Validation', () => {
 
     /**
      * BUG POTENTIAL: Non-string content in messages
