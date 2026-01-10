@@ -153,10 +153,14 @@ func printSessions(sessions []*jules.Session, format string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME")
-	fmt.Fprintln(w, "--\t----")
+	fmt.Fprintln(w, "ID\tSTATE\tTITLE")
+	fmt.Fprintln(w, "--\t-----\t-----")
 	for _, s := range sessions {
-		fmt.Fprintf(w, "%s\t%s\n", s.ID, s.Name)
+		title := s.Title
+		if len(title) > 50 {
+			title = title[:47] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", s.ID, s.State, title)
 	}
 	w.Flush()
 }

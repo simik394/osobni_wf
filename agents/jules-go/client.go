@@ -42,9 +42,19 @@ func NewClient(apiKey string, logger *slog.Logger) (*Client, error) {
 
 // Session represents a Jules session.
 type Session struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	// Add other session fields as needed
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Title      string `json:"title"`
+	State      string `json:"state"`
+	Prompt     string `json:"prompt"`
+	URL        string `json:"url"`
+	CreateTime string `json:"createTime"`
+	UpdateTime string `json:"updateTime"`
+}
+
+// sessionsResponse wraps the sessions list from API
+type sessionsResponse struct {
+	Sessions []*Session `json:"sessions"`
 }
 
 // Activity represents a Jules activity.
@@ -97,12 +107,12 @@ func (c *Client) ListSessions(ctx context.Context) ([]*Session, error) {
 		return nil, err
 	}
 
-	var sessions []*Session
-	if _, err := c.do(req, &sessions); err != nil {
+	var resp sessionsResponse
+	if _, err := c.do(req, &resp); err != nil {
 		return nil, err
 	}
 
-	return sessions, nil
+	return resp.Sessions, nil
 }
 
 // ListActivities lists Jules activities for a session.
@@ -153,7 +163,7 @@ func (c *Client) newRequest(ctx context.Context, method, url string, body interf
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("x-goog-api-key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	return req, nil
