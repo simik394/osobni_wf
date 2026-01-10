@@ -21,12 +21,12 @@ func (m *mockNotifier) Send(ctx context.Context, title, message, priority string
 	return nil
 }
 
-func newTestManager() *Manager {
-	return NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), &mockNotifier{})
+func newTestManager(concurrencyLimit int64) *Manager {
+	return NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), &mockNotifier{}, concurrencyLimit)
 }
 
 func TestNewManager(t *testing.T) {
-	m := newTestManager()
+	m := newTestManager(5)
 	if m == nil {
 		t.Fatal("NewManager returned nil")
 	}
@@ -36,7 +36,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestCreateSession(t *testing.T) {
-	m := newTestManager()
+	m := newTestManager(5)
 	task := "test_task"
 
 	session, err := m.CreateSession(task)
@@ -56,7 +56,7 @@ func TestCreateSession(t *testing.T) {
 }
 
 func TestGetSession(t *testing.T) {
-	m := newTestManager()
+	m := newTestManager(5)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -71,7 +71,7 @@ func TestGetSession(t *testing.T) {
 }
 
 func TestDeleteSession(t *testing.T) {
-	m := newTestManager()
+	m := newTestManager(5)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -83,7 +83,7 @@ func TestDeleteSession(t *testing.T) {
 }
 
 func TestListSessions(t *testing.T) {
-	m := newTestManager()
+	m := newTestManager(5)
 	task1 := "task1"
 	task2 := "task2"
 
@@ -116,7 +116,7 @@ func TestUpdateSessionStatus(t *testing.T) {
 		},
 	}
 
-	m := NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), mockN)
+	m := NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), mockN, 5)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -134,8 +134,9 @@ func TestUpdateSessionStatus(t *testing.T) {
 }
 
 func TestConcurrencyLimit(t *testing.T) {
-	m := newTestManager()
-	for i := 0; i < concurrencyLimit; i++ {
+	concurrencyLimit := int64(5)
+	m := newTestManager(concurrencyLimit)
+	for i := 0; i < int(concurrencyLimit); i++ {
 		_, err := m.CreateSession(fmt.Sprintf("task-%d", i))
 		if err != nil {
 			t.Fatalf("failed to create session %d: %v", i, err)
@@ -149,7 +150,8 @@ func TestConcurrencyLimit(t *testing.T) {
 }
 
 func TestThreadSafety(t *testing.T) {
-	m := newTestManager()
+	concurrencyLimit := int64(15)
+	m := newTestManager(concurrencyLimit)
 	var wg sync.WaitGroup
 	numRoutines := 50
 
@@ -166,7 +168,7 @@ func TestThreadSafety(t *testing.T) {
 
 	// Validate that the number of created sessions does not exceed the limit
 	sessions := m.ListSessions()
-	if len(sessions) > concurrencyLimit {
+	if len(sessions) > int(concurrencyLimit) {
 		t.Errorf("expected at most %d sessions, got %d", concurrencyLimit, len(sessions))
 	}
 }
