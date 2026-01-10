@@ -112,6 +112,29 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         };
 
     } catch (error) {
+        // Update FalkorDB status to "failed" if we created the pending node
+        // We attempt this only if pendingAudioId exists (which it does, as it's defined at start)
+        // But we really only want to do this if Step 1 succeeded.
+        // However, if Step 1 failed, this MATCH will just match nothing and do nothing, so it's safe.
+        try {
+            const errorMsg = String(error);
+            // Escape for Cypher string: handle backslashes and quotes
+            const escapedError = JSON.stringify(errorMsg).slice(1, -1);
+
+            await fetch(`${rsrchUrl}/graph/execute`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    query: `
+                      MATCH (pa:PendingAudio {id: "${pendingAudioId}"})
+                      SET pa.status = "failed", pa.error = "${escapedError}", pa.failedAt = ${Date.now()}
+                    `
+                })
+            });
+        } catch (updateErr) {
+            console.error("Failed to update PendingAudio status to failed:", updateErr);
+        }
+
         return {
             success: false,
             notebook_id: "unknown",
