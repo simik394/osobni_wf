@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"jules-go/internal/metrics"
 )
 
 const (
@@ -159,6 +161,13 @@ func (m *Manager) UpdateSessionStatus(id, status string) error {
 
 	session.Status = status
 	m.logger.Info("session status updated", "session_id", id, "new_status", status)
+
+	// Track metrics for completed/failed sessions
+	if status == StatusCompleted || status == StatusFailed {
+		duration := time.Since(session.CreatedAt).Seconds()
+		metrics.SessionDurationSeconds.Observe(duration)
+		metrics.SessionsTotal.WithLabelValues(status, session.Task).Inc()
+	}
 
 	go func() {
 		if m.notifier != nil {

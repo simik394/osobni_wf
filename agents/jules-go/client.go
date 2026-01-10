@@ -9,6 +9,9 @@ import (
 	"jules-go/internal/logging"
 	"log/slog"
 	"net/http"
+	"time"
+
+	"jules-go/internal/metrics"
 )
 
 const (
@@ -163,6 +166,7 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 	)
 
 	logger.Info("sending API request")
+	startTime := time.Now()
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		logger.Error("API request failed", "err", err)
@@ -170,6 +174,8 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 	}
 	defer resp.Body.Close()
 
+	duration := time.Since(startTime).Seconds()
+	metrics.APIRequestDurationSeconds.Observe(duration)
 	logger = logger.With("status_code", resp.StatusCode)
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
