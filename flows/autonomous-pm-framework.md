@@ -90,14 +90,15 @@ stateDiagram-v2
 
 ### 2.3 API Authentication Status
 
-> [!WARNING]
-> **Jules REST API requires OAuth 2.0, not API key.**
+> [!TIP]
+> **jules-cli is now WORKING with the Jules API.**
 > 
-> The API key from `jules.google.com/settings/api` does NOT authorize REST API calls.
-> The API returns `API_KEY_SERVICE_BLOCKED` - it expects OAuth 2 access tokens.
+> - API key stored in Vault at `secret/jules`
+> - Uses `x-goog-api-key` header (not Bearer token)
+> - CLI commands: `list`, `get`, `retry`, `status`
 > 
-> **Current working method:** Browser automation (`browser_subagent`)
-> **Future:** Implement OAuth 2.0 flow in `jules-go` when documented by Google
+> **Preferred method:** `jules-cli` over browser_subagent for efficiency
+> **Fallback:** Browser automation for operations not yet in CLI (approvals, PR publishing)
 
 ### 2.3 Monitoring Cadence
 
