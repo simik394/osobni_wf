@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"jules-go/internal/db"
+	"jules-go/internal/config"
 	"jules-go/internal/shutdown"
 	"jules-go/internal/webhook"
 	"log/slog"
@@ -14,20 +14,21 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	shutdownManager := shutdown.NewManager(30 * time.Second)
-
-	dbClient, err := db.NewClient(context.Background(), "localhost:6379")
+	// Load configuration
+	cfg, err := config.Load("config.yaml")
 	if err != nil {
-		slog.Error("failed to connect to FalkorDB", "err", err)
+		slog.Error("failed to load configuration", "err", err)
 		os.Exit(1)
 	}
-	shutdownManager.Add(func(ctx context.Context) error {
-		slog.Info("closing FalkorDB connection")
-		return dbClient.Close()
-	})
+
+	shutdownManager := shutdown.NewManager(30 * time.Second)
 
 	errChan := make(chan error, 1)
-	server := webhook.StartServer(errChan)
+	server := webhook.StartServer(cfg, errChan)
+	if server == nil {
+		slog.Error("failed to start webhook server")
+		os.Exit(1)
+	}
 	shutdownManager.Add(func(ctx context.Context) error {
 		slog.Info("shutting down HTTP server")
 		return server.Shutdown(ctx)
@@ -40,7 +41,7 @@ func main() {
 
 	slog.Info("application started")
 
-	if err := <-errChan; err != nil {
+	if err, ok := <-errChan; ok && err != nil {
 		slog.Error("application error", "err", err)
 	}
 	slog.Info("application stopped")
