@@ -23,3 +23,8 @@ log_level: "info"
 # The log format for the application.
 # Supported values: "text", "json"
 log_format: "text"
+
+# ntfy configuration for sending notifications.
+ntfy:
+  server_url: "https://ntfy.sh"
+  topic: "jules-go-agent"
