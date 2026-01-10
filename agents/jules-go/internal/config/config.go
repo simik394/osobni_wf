@@ -18,6 +18,7 @@ type Config struct {
 	MaxConcurrentSessions int    `yaml:"max_concurrent_sessions"`
 	WebhookPort         int    `yaml:"webhook_port"`
 	LogLevel            string `yaml:"log_level"`
+	LogFormat           string `yaml:"log_format"`
 }
 
 // Load loads the configuration from a YAML file and environment variables.
@@ -67,6 +68,9 @@ func Load(path string) (*Config, error) {
 	}
 	if logLevel, exists := os.LookupEnv("LOG_LEVEL"); exists {
 		config.LogLevel = logLevel
+	}
+	if logFormat, exists := os.LookupEnv("LOG_FORMAT"); exists {
+		config.LogFormat = logFormat
 	}
 
 	// Validate required fields

@@ -2,12 +2,18 @@ package session
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log/slog"
 	"sync"
 	"testing"
 )
 
+func newTestManager() *Manager {
+	return NewManager(slog.New(slog.NewTextHandler(ioutil.Discard, nil)))
+}
+
 func TestNewManager(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	if m == nil {
 		t.Fatal("NewManager returned nil")
 	}
@@ -17,7 +23,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestCreateSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	task := "test_task"
 
 	session, err := m.CreateSession(task)
@@ -37,7 +43,7 @@ func TestCreateSession(t *testing.T) {
 }
 
 func TestGetSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -52,7 +58,7 @@ func TestGetSession(t *testing.T) {
 }
 
 func TestDeleteSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -64,7 +70,7 @@ func TestDeleteSession(t *testing.T) {
 }
 
 func TestListSessions(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	task1 := "task1"
 	task2 := "task2"
 
@@ -78,7 +84,7 @@ func TestListSessions(t *testing.T) {
 }
 
 func TestUpdateSessionStatus(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -94,7 +100,7 @@ func TestUpdateSessionStatus(t *testing.T) {
 }
 
 func TestConcurrencyLimit(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	for i := 0; i < concurrencyLimit; i++ {
 		_, err := m.CreateSession(fmt.Sprintf("task-%d", i))
 		if err != nil {
@@ -109,7 +115,7 @@ func TestConcurrencyLimit(t *testing.T) {
 }
 
 func TestThreadSafety(t *testing.T) {
-	m := NewManager()
+	m := newTestManager()
 	var wg sync.WaitGroup
 	numRoutines := 50
 
