@@ -1,6 +1,7 @@
 import { Page } from 'playwright';
 import * as path from 'path';
 import { config } from './config';
+import { selectors } from './selectors';
 
 
 export class NotebookLMClient {
@@ -39,14 +40,14 @@ export class NotebookLMClient {
             await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
 
             // Wait for "New Notebook" button
-            const createBtnSelector = '.create-new-button';
+            const createBtnSelector = selectors.home.createNewButton;
             await this.page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });
 
             // Click and wait for navigation
             await this.page.click(createBtnSelector);
 
             // Wait for title input
-            const titleInputSelector = 'input.title-input';
+            const titleInputSelector = selectors.notebook.titleInput;
             await this.page.waitForSelector(titleInputSelector, { state: 'visible', timeout: 15000 });
 
             // Set title
@@ -141,17 +142,17 @@ export class NotebookLMClient {
 
         try {
             // Wait for any project button to appear to ensure list is loaded
-            await this.page.waitForSelector('project-button, mat-card', { timeout: 20000 });
+            await this.page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: 20000 });
 
             console.log(`[DEBUG] Searching for notebook: ${title}`);
             // Use specific locator for the project card
             // We look for a project-button that contains the title element with exact text
-            const cardLocator = this.page.locator(`project-button`).filter({ has: this.page.locator(`.project-button-title`, { hasText: title }) }).first();
+            const cardLocator = this.page.locator(selectors.home.projectButton).filter({ has: this.page.locator(selectors.home.projectButtonTitle, { hasText: title }) }).first();
 
             // Fallback: loose text match if exact structure fails
             if (await cardLocator.count() === 0) {
                 console.log('[DEBUG] Exact locator failed, trying loose text match...');
-                const looseLocator = this.page.locator(`project-button, mat-card`).filter({ hasText: title }).first();
+                const looseLocator = this.page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`).filter({ hasText: title }).first();
                 if (await looseLocator.count() > 0) {
                     console.log('[DEBUG] Found via loose match. Clicking...');
                     await looseLocator.click();
@@ -160,7 +161,7 @@ export class NotebookLMClient {
                 }
             } else {
                 console.log('[DEBUG] Found notebook card. Clicking primary action button...');
-                const actionBtn = cardLocator.locator('.primary-action-button');
+                const actionBtn = cardLocator.locator(selectors.home.primaryActionButton);
                 if (await actionBtn.count() > 0 && await actionBtn.isVisible()) {
                     await actionBtn.click();
                 } else {
@@ -169,7 +170,7 @@ export class NotebookLMClient {
             }
 
             // Wait for navigation to notebook URL
-            await this.page.waitForURL('**/notebook/**', { timeout: 15000 });
+            await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 15000 });
             console.log('[DEBUG] Notebook opened successfully (URL match).');
 
         } catch (e) {
@@ -185,7 +186,7 @@ export class NotebookLMClient {
         console.log(`Adding source URL: ${url}`);
 
         // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        const sourcesTab = this.page.locator(selectors.sources.tab).filter({ hasText: new RegExp(selectors.sources.tabTextPattern, 'i') }).first();
         if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
             const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
             if (!isSelected) {
@@ -197,12 +198,18 @@ export class NotebookLMClient {
 
         // Find the "Web" or "Website" button. 
         // It captures "Weby", "Website", "Link", etc.
-        const sourceBtn = await this.page.evaluateHandle(() => {
-            const buttons = Array.from(document.querySelectorAll('button.drop-zone-icon-button'));
+        // We pass the selector strings into the evaluate function context
+        const sourceBtn = await this.page.evaluateHandle((args) => {
+            const { buttonSelector, pattern } = args;
+            const buttons = Array.from(document.querySelectorAll(buttonSelector));
+            const regex = new RegExp(pattern, 'i');
             return buttons.find(b => {
                 const text = b.textContent?.toLowerCase() || '';
-                return text.includes('web') || text.includes('link') || text.includes('site');
+                return regex.test(text);
             });
+        }, {
+            buttonSelector: selectors.sources.dropZoneButton,
+            pattern: selectors.sources.webSourcePattern
         });
 
         if (!sourceBtn) {
@@ -212,13 +219,13 @@ export class NotebookLMClient {
         await sourceBtn.asElement()?.click();
 
         // The dialog uses a textarea for URLs
-        const urlInputSelector = 'mat-dialog-container textarea';
+        const urlInputSelector = selectors.sources.urlInputTextarea;
         try {
             await this.page.waitForSelector(urlInputSelector, { timeout: 5000 });
             await this.page.fill(urlInputSelector, url);
 
             // Wait for the "Insert" button to become enabled (remove disabled class/attr)
-            const submitSelector = 'mat-dialog-container button.mat-primary';
+            const submitSelector = selectors.sources.submitButton;
             await this.page.waitForFunction((sel: string) => {
                 const btn = document.querySelector(sel);
                 return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
@@ -227,7 +234,7 @@ export class NotebookLMClient {
             await this.page.click(submitSelector);
 
             // Wait for dialog to close
-            await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 5000 });
+            await this.page.waitForSelector(selectors.sources.dialogContainer, { state: 'hidden', timeout: 5000 });
 
         } catch (e) {
             console.error('Failed to fill URL source dialog', e);
