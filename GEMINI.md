@@ -41,7 +41,11 @@ test
 > **Tool Precedence for Jules Operations**
 > 
 > 1. **`jules-cli` (PRIMARY)**: Use for list, get, status, retry - fast, no memory overhead
-> 2. **`browser_subagent` (FALLBACK)**: Use ONLY for operations not in CLI (approvals, PR publishing, responding to questions)
+> 2. **`browser_subagent` (TEMPORARY FALLBACK)**: Only until CLI gaps are closed:
+>    - `create` → TOOLS-113
+>    - `approve` → TOOLS-114  
+>    - `respond` → TOOLS-115
+>    - `publish` → TOOLS-116
 > 
 > **When using browser_subagent**: Delegate decision-making to the subagent. Don't prescribe responses like "say proceed" - let the subagent analyze context and decide.
 > 

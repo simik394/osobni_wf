@@ -97,11 +97,15 @@ When wrapping browser automation as OpenAI-compatible API:
 ## Browser Subagent Best Practices (2026-01-10)
 
 > [!IMPORTANT]
-> **Tool Precedence: `jules-cli` FIRST, `browser_subagent` as FALLBACK ONLY**
+> **Tool Precedence: `jules-cli` FIRST, `browser_subagent` as TEMPORARY FALLBACK**
 > 
 > - Use `jules-cli` for: list, get, status, retry (fast, no memory overhead)
-> - Use `browser_subagent` ONLY when CLI cannot perform the operation (approvals, PR publishing, responding to questions)
-> - See: `agents/jules-go/README.md` for CLI commands and `flows/autonomous-pm-framework.md` section 2.2-2.3
+> - Use `browser_subagent` ONLY until these CLI gaps are closed:
+>   - `create` → TOOLS-113
+>   - `approve` → TOOLS-114
+>   - `respond` → TOOLS-115
+>   - `publish` → TOOLS-116
+> - See: `agents/jules-go/README.md` and `flows/autonomous-pm-framework.md` section 2.2-2.3
 
 > [!TIP]
 > **When using browser_subagent, delegate decision-making to the subagent itself - don't prescribe responses.**
