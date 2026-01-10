@@ -146,6 +146,17 @@ Jules sessions sometimes show stale state. If the UI shows "Session is inactive 
 - Unclear requirements that need human judgment
 - Anything that could affect data integrity
 
+### Timeout Rule: 20 Second Maximum
+> [!WARNING]
+> **Browser subagent operations should NOT wait more than 20 seconds.**
+> 
+> If an operation is taking longer (page loading, Jules thinking, etc.):
+> 1. Return with current status and a handle for later follow-up
+> 2. Continue with other unblocked tasks
+> 3. Check back on the slow operation later
+> 
+> **Never block the entire workflow waiting for a slow browser operation.**
+
 ## Infrastructure & Remote Browsers
 - **Host Networking & Zombies**: Running Docker containers with `network_mode: "host"` binds process ports directly to the host interface. If the container or entrypoint crashes (e.g. `socat`), the process may become a zombie or stay detached, holding the port and preventing restart. ALWAYS automate cleanup (e.g., `killall socat`, `docker rm -f`) in restart scripts or playbooks.
 - **Port Conflict Management**: When running multiple browser instances (e.g. `rsrch` + `angrav`), strictly assign distinct ports for VNC and CDP. Relying on "random selection" or defaults (5900, 9222) guarantees collisions.
