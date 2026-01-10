@@ -101,7 +101,7 @@ function parseArgs(args: string[]) {
     };
 }
 
-async function main() {
+export async function main() {
     // Basic args parsing for subcommands
     const subArg1 = args[1]; // e.g. create, add-source
     const subArg2 = args[2];
@@ -2237,4 +2237,7 @@ async function runLegacyMode() {
     }
 }
 
-main().catch(console.error);
+// Execute main function if the script is run directly
+if (require.main === module) {
+    main().catch(console.error);
+}
