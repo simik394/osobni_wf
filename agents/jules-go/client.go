@@ -20,6 +20,7 @@ type Client struct {
 	apiKey     string
 	httpClient *http.Client
 	logger     *slog.Logger
+	baseURL    string
 }
 
 // NewClient creates a new Jules API client.
@@ -32,6 +33,7 @@ func NewClient(apiKey string, logger *slog.Logger) (*Client, error) {
 		apiKey:     apiKey,
 		httpClient: &http.Client{},
 		logger:     logger.With("component", "jules-client"),
+		baseURL:    apiBaseURL,
 	}, nil
 }
 
@@ -56,7 +58,7 @@ type Plan struct {
 
 // CreateSession creates a new Jules session.
 func (c *Client) CreateSession(ctx context.Context) (*Session, error) {
-	req, err := c.newRequest(ctx, "POST", apiBaseURL+"/sessions", nil)
+	req, err := c.newRequest(ctx, "POST", c.baseURL+"/sessions", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +73,7 @@ func (c *Client) CreateSession(ctx context.Context) (*Session, error) {
 
 // GetSession retrieves a Jules session.
 func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, error) {
-	url := fmt.Sprintf("%s/sessions/%s", apiBaseURL, sessionID)
+	url := fmt.Sprintf("%s/sessions/%s", c.baseURL, sessionID)
 	req, err := c.newRequest(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -87,7 +89,7 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 
 // ListSessions lists Jules sessions.
 func (c *Client) ListSessions(ctx context.Context) ([]*Session, error) {
-	req, err := c.newRequest(ctx, "GET", apiBaseURL+"/sessions", nil)
+	req, err := c.newRequest(ctx, "GET", c.baseURL+"/sessions", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +104,7 @@ func (c *Client) ListSessions(ctx context.Context) ([]*Session, error) {
 
 // ListActivities lists Jules activities for a session.
 func (c *Client) ListActivities(ctx context.Context, sessionID string) ([]*Activity, error) {
-	url := fmt.Sprintf("%s/sessions/%s/activities", apiBaseURL, sessionID)
+	url := fmt.Sprintf("%s/sessions/%s/activities", c.baseURL, sessionID)
 	req, err := c.newRequest(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -118,7 +120,7 @@ func (c *Client) ListActivities(ctx context.Context, sessionID string) ([]*Activ
 
 // ApprovePlan approves a plan for a session.
 func (c *Client) ApprovePlan(ctx context.Context, sessionID string, plan Plan) error {
-	url := fmt.Sprintf("%s/sessions/%s/plan:approve", apiBaseURL, sessionID)
+	url := fmt.Sprintf("%s/sessions/%s/plan:approve", c.baseURL, sessionID)
 	req, err := c.newRequest(ctx, "POST", url, plan)
 	if err != nil {
 		return err
