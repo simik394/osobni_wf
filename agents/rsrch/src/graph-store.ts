@@ -148,6 +148,13 @@ export class GraphStore {
     }
 
     /**
+     * Check if the graph store is connected to FalkorDB.
+     */
+    public getIsConnected(): boolean {
+        return this.isConnected;
+    }
+
+    /**
      * Initialize graph schema (indexes)
      */
     private async initSchema(): Promise<void> {

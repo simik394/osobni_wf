@@ -65,6 +65,10 @@ export abstract class BaseClient {
     getProfileId(): string {
         return this.profileId;
     }
+
+    isBrowserInitialized(): boolean {
+        return this.isInitialized;
+    }
 }
 
 export class PerplexityClient extends BaseClient {

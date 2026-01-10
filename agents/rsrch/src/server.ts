@@ -55,7 +55,35 @@ let notebookClient: NotebookLMClient | null = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
+    const health = {
+        status: 'ok',
+        uptime: process.uptime(),
+        version: require('../package.json').version,
+        dependencies: {
+            falkordb: 'unknown',
+            browser: 'unknown',
+        }
+    };
+
+    // Check FalkorDB
+    const falkorStatus = graphStore.getIsConnected();
+    health.dependencies.falkordb = falkorStatus ? 'ok' : 'error';
+
+    // Check Browser
+    const browserStatus = client.isBrowserInitialized();
+    health.dependencies.browser = browserStatus ? 'ok' : 'warn'; // Warn if not connected yet
+
+    // Determine overall status
+    if (!falkorStatus) {
+        health.status = 'error'; // Hard dependency failure
+    } else if (!browserStatus) {
+        health.status = 'warn'; // Soft dependency failure (can connect lazily)
+    }
+
+    if (health.status === 'error') {
+        return res.status(503).json(health);
+    }
+    res.json(health);
 });
 
 // Shutdown endpoint
