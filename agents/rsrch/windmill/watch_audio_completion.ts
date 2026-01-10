@@ -73,9 +73,7 @@ export async function main(): Promise<WatchResult> {
 
                 const notebook = notebookData.data[0];
 
-                // TODO: Fragile matching logic. This should be replaced with a unique correlation ID
-                // that is passed from the generation request through to the final artifact.
-                const audio = notebook.audioOverviews?.find(a => a.title.includes(pendingAudio.sourceTitle.substring(0, 20)));
+                const audio = notebook.audioOverviews?.find(a => a.correlationId === pendingAudio.id);
 
                 if (audio) {
                     // Audio found - SUCCESS
@@ -141,7 +139,7 @@ async function handleCompletion(pending: PendingAudio, audio: any) {
 
     // 2. Send notification
     await sendNtfy({
-        title: `✅ Complete: ${pending.sourceTitle.substring(0, 40)}`,
+        title: `Complete: ${pending.sourceTitle.substring(0, 40)}`,
         message: `Audio generated in ${durationStr}\nTitle: ${audio.title}`,
         tags: "white_check_mark,audio",
     });
@@ -166,7 +164,7 @@ async function handleFailure(pending: PendingAudio, reason: string) {
 
     // 2. Send notification
     await sendNtfy({
-        title: `❌ Failed: ${pending.sourceTitle.substring(0, 40)}`,
+        title: `Failed: ${pending.sourceTitle.substring(0, 40)}`,
         message: `Audio generation failed after ${formatDuration(durationMs)}\nReason: ${reason}`,
         tags: "x,warning",
     });

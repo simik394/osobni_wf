@@ -24,8 +24,8 @@ export async function main(args: {
     const durationStr = `${durationMin}m ${durationSecRemainder}s`;
 
     const title = success
-        ? `✅ Complete: ${source_title.substring(0, 40)}`
-        : `❌ Failed: ${source_title.substring(0, 40)}`;
+        ? `Complete: ${source_title.substring(0, 40)}`
+        : `Failed: ${source_title.substring(0, 40)}`;
 
     const message = success
         ? `Audio generated in ${durationStr}${source_index && total_sources ? `\nSource ${source_index}/${total_sources}` : ""}${artifact_title ? `\nArtifact: ${artifact_title}` : ""}`

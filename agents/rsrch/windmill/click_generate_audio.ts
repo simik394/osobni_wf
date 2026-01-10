@@ -67,7 +67,8 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
                 sources: [args.source_title],
                 customPrompt: args.custom_prompt,
                 waitForCompletion: false, // NON-BLOCKING!
-                dryRun: false
+                dryRun: false,
+                correlationId: pendingAudioId,
             }),
         });
 
@@ -95,7 +96,7 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         await fetch(`${ntfyServer}/${ntfyTopic}`, {
             method: "POST",
             headers: {
-                "Title": `🎵 Started: ${args.source_title.substring(0, 40)}`,
+                "Title": `Started: ${args.source_title.substring(0, 40)}`,
                 "Tags": "hourglass_flowing_sand,audio"
             },
             body: `Generating audio for: ${args.source_title}\nNotebook: ${args.notebook_title}`
