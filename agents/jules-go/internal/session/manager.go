@@ -1,9 +1,11 @@
 package session
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -16,9 +18,16 @@ const (
 	StatusCompleted = "completed"
 	// StatusFailed indicates that the session has failed.
 	StatusFailed = "failed"
+	// StatusMerged indicates that the PR has been merged.
+	StatusMerged = "merged"
 )
 
 const concurrencyLimit = 15
+
+// Notifier is an interface for sending notifications.
+type Notifier interface {
+	Send(ctx context.Context, title, message, priority string) error
+}
 
 // Session holds the metadata for a single session.
 type Session struct {
@@ -34,13 +43,15 @@ type Manager struct {
 	sessions map[string]*Session
 	mutex    sync.RWMutex
 	logger   *slog.Logger
+	notifier Notifier
 }
 
 // NewManager creates and returns a new session Manager.
-func NewManager(logger *slog.Logger) *Manager {
+func NewManager(logger *slog.Logger, notifier Notifier) *Manager {
 	return &Manager{
 		sessions: make(map[string]*Session),
 		logger:   logger.With("component", "session-manager"),
+		notifier: notifier,
 	}
 }
 
@@ -61,12 +72,14 @@ func (m *Manager) CreateSession(task string) (*Session, error) {
 
 	if len(m.sessions) >= concurrencyLimit {
 		m.logger.Warn("concurrency limit reached", "limit", concurrencyLimit)
+		m.notifyError("Session creation failed", errors.New("concurrency limit reached"))
 		return nil, errors.New("concurrency limit reached")
 	}
 
 	id, err := generateID()
 	if err != nil {
 		m.logger.Error("failed to generate session ID", "err", err)
+		m.notifyError("Session creation failed", err)
 		return nil, errors.New("failed to generate session ID")
 	}
 
@@ -79,6 +92,15 @@ func (m *Manager) CreateSession(task string) (*Session, error) {
 
 	m.sessions[id] = session
 	m.logger.Info("session created", "session_id", id, "task", task)
+
+	go func() {
+		if m.notifier != nil {
+			title := "New Session Created"
+			message := fmt.Sprintf("Session %s started for task: %s", session.ID, session.Task)
+			m.notifier.Send(context.Background(), title, message, "default")
+		}
+	}()
+
 	return session, nil
 }
 
@@ -113,6 +135,14 @@ func (m *Manager) DeleteSession(id string) {
 		delete(m.sessions, id)
 		m.logger.Info("session deleted", "session_id", id)
 	}
+
+	go func() {
+		if m.notifier != nil {
+			title := "Session Deleted"
+			message := fmt.Sprintf("Session %s has been deleted.", id)
+			m.notifier.Send(context.Background(), title, message, "low")
+		}
+	}()
 }
 
 // UpdateSessionStatus updates the status of a specific session.
@@ -129,5 +159,38 @@ func (m *Manager) UpdateSessionStatus(id, status string) error {
 
 	session.Status = status
 	m.logger.Info("session status updated", "session_id", id, "new_status", status)
+
+	go func() {
+		if m.notifier != nil {
+			var title, message, priority string
+			switch status {
+			case StatusCompleted:
+				title = "Session Completed"
+				message = fmt.Sprintf("Session %s completed successfully.", id)
+				priority = "high"
+			case StatusFailed:
+				title = "Session Failed"
+				message = fmt.Sprintf("Session %s failed.", id)
+				priority = "urgent"
+			case StatusMerged:
+				title = "PR Merged"
+				message = fmt.Sprintf("PR for session %s has been merged.", id)
+				priority = "high"
+			default:
+				return // Don't send a notification for other status updates
+			}
+			m.notifier.Send(context.Background(), title, message, priority)
+		}
+	}()
+
 	return nil
+}
+
+func (m *Manager) notifyError(title string, err error) {
+	go func() {
+		if m.notifier != nil {
+			message := fmt.Sprintf("An error occurred: %v", err)
+			m.notifier.Send(context.Background(), title, message, "urgent")
+		}
+	}()
 }

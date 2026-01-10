@@ -1,15 +1,28 @@
 package session
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log/slog"
 	"sync"
 	"testing"
 )
 
+// mockNotifier is a mock implementation of the Notifier interface for testing.
+type mockNotifier struct {
+	SendFunc func(ctx context.Context, title, message, priority string) error
+}
+
+func (m *mockNotifier) Send(ctx context.Context, title, message, priority string) error {
+	if m.SendFunc != nil {
+		return m.SendFunc(ctx, title, message, priority)
+	}
+	return nil
+}
+
 func newTestManager() *Manager {
-	return NewManager(slog.New(slog.NewTextHandler(ioutil.Discard, nil)))
+	return NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), &mockNotifier{})
 }
 
 func TestNewManager(t *testing.T) {
@@ -84,7 +97,22 @@ func TestListSessions(t *testing.T) {
 }
 
 func TestUpdateSessionStatus(t *testing.T) {
-	m := newTestManager()
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	mockN := &mockNotifier{
+		SendFunc: func(ctx context.Context, title, message, priority string) error {
+			if title == "Session Completed" {
+				defer wg.Done()
+				if priority != "high" {
+					t.Errorf("expected priority 'high', got '%s'", priority)
+				}
+			}
+			return nil
+		},
+	}
+
+	m := NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), mockN)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -97,6 +125,8 @@ func TestUpdateSessionStatus(t *testing.T) {
 	if updatedSession.Status != StatusCompleted {
 		t.Errorf("expected status %q, got %q", StatusCompleted, updatedSession.Status)
 	}
+
+	wg.Wait()
 }
 
 func TestConcurrencyLimit(t *testing.T) {
