@@ -112,8 +112,7 @@ func (m *Manager) GetSession(id string) *Session {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
-	session, _ := m.sessions[id]
-	return session
+	return m.sessions[id]
 }
 
 // ListSessions returns a slice of all current sessions.

@@ -1,27 +1,28 @@
-# Stage 1: Build the Go binary
-FROM golang:1.24 as builder
+# Dockerfile for jules-go
+
+# Build stage
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod and sum files
+# Copy go.mod and go.sum to download dependencies
 COPY go.mod go.sum ./
-# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
 RUN go mod download
 
-# Copy the source code
+# Copy the rest of the source code
 COPY . .
 
-# Build the Go app
-RUN CGO_ENABLED=0 GOOS=linux go build -o /jules .
+# Build the Go binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/jules ./cmd/jules
 
-# Stage 2: Create the final image
+# Final stage
 FROM gcr.io/distroless/base
 
 WORKDIR /
 
 # Copy the config file and the binary from the builder stage
 COPY --from=builder /app/config.yaml /config.yaml
-COPY --from=builder /jules /jules
+COPY --from=builder /app/jules /jules
 
 EXPOSE 8080
 

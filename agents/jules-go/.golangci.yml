@@ -1,0 +1,33 @@
+run:
+  timeout: 5m
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - deadcode
+    - dogsled
+    - errcheck
+    - goconst
+    - gocritic
+    - gofmt
+    - goimports
+    - golint
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - rowserrcheck
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+output:
+  format: colored-line-number

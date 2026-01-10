@@ -10,8 +10,8 @@ import (
 func TestHandleWebhook(t *testing.T) {
 	// Test case 1: Valid POST request
 	t.Run("ValidPOSTRequest", func(t *testing.T) {
-		validJson := `{"event_type": "test_event", "data": {"message": "hello world"}}`
-		req, err := http.NewRequest("POST", "/webhook/jules", bytes.NewBufferString(validJson))
+		validJSON := `{"event_type": "test_event", "data": {"message": "hello world"}}`
+		req, err := http.NewRequest("POST", "/webhook/jules", bytes.NewBufferString(validJSON))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,8 +53,8 @@ func TestHandleWebhook(t *testing.T) {
 
 	// Test case 3: Malformed JSON
 	t.Run("MalformedJSON", func(t *testing.T) {
-		malformedJson := `{"event_type": "test_event", "data":`
-		req, err := http.NewRequest("POST", "/webhook/jules", bytes.NewBufferString(malformedJson))
+		malformedJSON := `{"event_type": "test_event", "data":`
+		req, err := http.NewRequest("POST", "/webhook/jules", bytes.NewBufferString(malformedJSON))
 		if err != nil {
 			t.Fatal(err)
 		}

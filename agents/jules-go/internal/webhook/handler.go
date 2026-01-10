@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -30,8 +31,11 @@ func StartServer(errChan chan<- error) *http.Server {
 	mux.HandleFunc("/webhook/jules", handleWebhook)
 
 	server := &http.Server{
-		Addr:    listenAddr,
-		Handler: mux,
+		Addr:         listenAddr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
@@ -56,8 +60,11 @@ func StartMetricsServer(port int, errChan chan<- error) *http.Server {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
-		Addr:    listenAddr,
-		Handler: mux,
+		Addr:         listenAddr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
@@ -103,19 +110,21 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Webhook received successfully"))
+	if _, err := w.Write([]byte("Webhook received successfully")); err != nil {
+		slog.Error("failed to write response", "err", err)
+	}
 }
 
 // updateFalkorDB is a placeholder function for updating FalkorDB.
-func updateFalkorDB(event JulesEvent) error {
-	slog.Info("updating FalkorDB", "event_type", event.EventType)
+func updateFalkorDB(_ JulesEvent) error {
+	slog.Info("updating FalkorDB", "event_type", "placeholder")
 	// TODO: Implement actual FalkorDB update logic here.
 	return nil
 }
 
 // sendNtfyNotification is a placeholder function for sending ntfy notifications.
-func sendNtfyNotification(event JulesEvent) error {
-	slog.Info("sending ntfy notification", "event_type", event.EventType)
+func sendNtfyNotification(_ JulesEvent) error {
+	slog.Info("sending ntfy notification", "event_type", "placeholder")
 	// TODO: Implement actual ntfy notification logic here.
 	return nil
 }

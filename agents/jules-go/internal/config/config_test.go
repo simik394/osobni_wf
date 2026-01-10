@@ -1,4 +1,3 @@
-
 package config
 
 import (
@@ -21,7 +20,7 @@ max_concurrent_sessions: 20
 webhook_port: 9090
 log_level: "debug"
 `
-	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0600); err != nil {
 		t.Fatalf("failed to write test config file: %v", err)
 	}
 
