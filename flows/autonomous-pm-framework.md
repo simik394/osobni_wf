@@ -174,16 +174,25 @@ stateDiagram-v2
     Fixed --> Verified: Tests pass
 ```
 
-### 3.2 Required Updates
+### 3.2 Jules → YouTrack State Mapping
 
-| Event | YouTrack Action |
-|-------|-----------------|
-| Create Jules session | `State: Submitted`, add session link comment |
-| Jules starts working | `State: In Progress` |
-| PR published | Add PR link comment |
-| PR merged | `State: Fixed` |
-| Session failed | Add failure analysis comment |
-| Tests pass | `State: Verified` |
+| Jules State | YouTrack State | YouTrack Action |
+|-------------|----------------|-----------------|
+| Session created | `Submitted` | Add session link comment |
+| `PLANNING` / `IN_PROGRESS` | `In Progress` | - |
+| `AWAITING_PLAN_APPROVAL` | `In Progress` | Add comment: "Waiting for plan approval", tag: `blocked-on-human` |
+| `AWAITING_USER_FEEDBACK` | `In Progress` | Add comment: "Jules asking: [question]", tag: `blocked-on-human` |
+| `COMPLETED` (no PR yet) | `In Progress` | Add comment: "Completed, awaiting PR publish" |
+| PR published | `In Progress` | Add PR link comment |
+| PR merged | `Fixed` | - |
+| Session failed | `Open` | Add failure analysis comment, remove `jules-assigned` |
+| Tests pass | `Verified` | - |
+
+> [!TIP]
+> Use `blocked-on-human` tag to easily find all issues waiting for human action:
+> ```
+> tag: blocked-on-human State: {In Progress}
+> ```
 
 ### 3.3 Tagging Convention
 
