@@ -16,6 +16,9 @@ max_concurrent_sessions: 15
 # The port for the webhook server to listen on.
 webhook_port: 8090
 
+# The port for the metrics server to listen on.
+metrics_port: 9090
+
 # The log level for the application.
 # Supported values: "debug", "info", "warn", "error"
 log_level: "info"

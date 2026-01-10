@@ -2,9 +2,12 @@ package webhook
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // JulesEvent represents the structure of the incoming webhook event.
@@ -15,7 +18,8 @@ type JulesEvent struct {
 	} `json:"data"`
 }
 
-// StartServer initializes and starts the HTTP server.
+// StartServer initializes and starts the HTTP server for webhooks.
+// It supports graceful shutdown by returning the server instance.
 func StartServer(errChan chan<- error) *http.Server {
 	listenAddr := ":8090"
 
@@ -31,13 +35,38 @@ func StartServer(errChan chan<- error) *http.Server {
 	}
 
 	go func() {
-		slog.Info("server starting", "port", 8090)
+		slog.Info("webhook server starting", "port", 8090)
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			slog.Error("server failed to start", "err", err)
+			slog.Error("webhook server failed to start", "err", err)
 			errChan <- err
 		}
 		close(errChan)
+	}()
+
+	return server
+}
+
+// StartMetricsServer initializes and starts the HTTP server for Prometheus metrics.
+// It returns a server instance for graceful shutdown support.
+func StartMetricsServer(port int, errChan chan<- error) *http.Server {
+	listenAddr := fmt.Sprintf(":%d", port)
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
+	server := &http.Server{
+		Addr:    listenAddr,
+		Handler: mux,
+	}
+
+	go func() {
+		slog.Info("metrics server starting", "port", port)
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			slog.Error("metrics server failed to start", "err", err)
+			errChan <- err
+		}
 	}()
 
 	return server

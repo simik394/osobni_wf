@@ -22,6 +22,7 @@ type Config struct {
 	FalkorDBURL           string     `yaml:"falkordb_url"`
 	MaxConcurrentSessions int        `yaml:"max_concurrent_sessions"`
 	WebhookPort           int        `yaml:"webhook_port"`
+	MetricsPort           int        `yaml:"metrics_port"`
 	LogLevel              string     `yaml:"log_level"`
 	LogFormat             string     `yaml:"log_format"`
 	Ntfy                  NtfyConfig `yaml:"ntfy"`
@@ -35,6 +36,7 @@ func Load(path string) (*Config, error) {
 	config := &Config{
 		MaxConcurrentSessions: 15,
 		WebhookPort:           8090,
+		MetricsPort:           9090,
 	}
 
 	// Read the YAML file
@@ -70,6 +72,11 @@ func Load(path string) (*Config, error) {
 	if webhookPort, exists := os.LookupEnv("WEBHOOK_PORT"); exists {
 		if val, err := strconv.Atoi(webhookPort); err == nil {
 			config.WebhookPort = val
+		}
+	}
+	if metricsPort, exists := os.LookupEnv("METRICS_PORT"); exists {
+		if val, err := strconv.Atoi(metricsPort); err == nil {
+			config.MetricsPort = val
 		}
 	}
 	if logLevel, exists := os.LookupEnv("LOG_LEVEL"); exists {

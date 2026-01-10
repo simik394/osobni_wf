@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
+
+	"jules-go/internal/metrics"
 
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/oauth2"
@@ -11,9 +14,10 @@ import (
 
 // Monitor is a GitHub PR monitor.
 type Monitor struct {
-	client *github.Client
-	owner  string
-	repo   string
+	client    *github.Client
+	owner     string
+	repo      string
+	lastCheck time.Time
 }
 
 // NewMonitor creates a new GitHub PR monitor.
@@ -32,41 +36,33 @@ func NewMonitor(owner, repo string) (*Monitor, error) {
 	client := github.NewClient(tc)
 
 	return &Monitor{
-		client: client,
-		owner:  owner,
-		repo:   repo,
+		client:    client,
+		owner:     owner,
+		repo:      repo,
+		lastCheck: time.Now(),
 	}, nil
 }
 
 // CheckPRs checks the status of Jules-created PRs.
 func (m *Monitor) CheckPRs(ctx context.Context) error {
+	defer func() {
+		m.lastCheck = time.Now()
+	}()
+
 	prs, _, err := m.client.PullRequests.List(ctx, m.owner, m.repo, &github.PullRequestListOptions{
-		State: "open",
+		State:     "closed",
+		Sort:      "updated",
+		Direction: "desc",
 	})
 	if err != nil {
 		return fmt.Errorf("error fetching pull requests: %w", err)
 	}
 
 	for _, pr := range prs {
-		// In a real implementation, we'd filter for "Jules-created" PRs,
-		// but for now, we'll check all open PRs.
-		fmt.Printf("Checking PR #%d: %s\n", pr.GetNumber(), pr.GetTitle())
-
-		// Check the status of the PR
-		if pr.GetMerged() {
-			fmt.Printf("PR #%d is merged.\n", pr.GetNumber())
-			continue
-		}
-
-		// Get the checks for the PR
-		checks, _, err := m.client.Checks.ListCheckRunsForRef(ctx, m.owner, m.repo, pr.GetHead().GetSHA(), &github.ListCheckRunsOptions{})
-		if err != nil {
-			return fmt.Errorf("error fetching checks for PR #%d: %w", pr.GetNumber(), err)
-		}
-
-		fmt.Printf("Checks for PR #%d:\n", pr.GetNumber())
-		for _, check := range checks.CheckRuns {
-			fmt.Printf("- %s: %s\n", check.GetName(), check.GetStatus())
+		// In a real implementation, we'd filter for "Jules-created" PRs.
+		mergedAt := pr.GetMergedAt()
+		if !mergedAt.IsZero() && mergedAt.After(m.lastCheck) {
+			metrics.PRsMergedTotal.Inc()
 		}
 	}
 
