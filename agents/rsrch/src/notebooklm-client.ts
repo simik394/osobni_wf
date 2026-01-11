@@ -1729,5 +1729,79 @@ export class NotebookLMClient {
     async getSources(): Promise<Array<{ type: string; title: string; url?: string }>> {
         return this.extractSources();
     }
+
+    /**
+     * Monitor audio generation status and emit events.
+     * @param notebookTitle The notebook to monitor
+     * @param onUpdate Callback for status updates
+     * @param pollIntervalMs Interval between checks (default 3000ms)
+     * @param timeoutMs Max monitoring time (default 15 mins)
+     */
+    async monitorAudioGeneration(
+        notebookTitle: string | undefined,
+        onUpdate: (event: { status: 'generating' | 'completed' | 'failed'; artifact?: string; message?: string }) => void,
+        pollIntervalMs: number = 3000,
+        timeoutMs: number = 900000
+    ): Promise<void> {
+        return this.enqueueTask(`Monitor Audio: ${notebookTitle || 'Current'}`, async () => {
+             if (notebookTitle) {
+                 await this.openNotebook(notebookTitle);
+             }
+
+             await this.maximizeStudio();
+
+             // Initial snapshot of artifacts
+             const existingArtifacts = await this.getAudioArtifactTitles();
+             onUpdate({ status: 'generating', message: 'Monitoring started...' });
+
+             const startTime = Date.now();
+             let isGenerating = true;
+
+             while (isGenerating && (Date.now() - startTime < timeoutMs)) {
+                 await this.humanDelay(pollIntervalMs, 0.1);
+
+                 // Check for "Generating" text
+                 const pageText = await this.page.locator('body').innerText();
+                 const currentlyGenerating = /Generování|Generating/i.test(pageText);
+
+                 if (currentlyGenerating) {
+                     onUpdate({ status: 'generating', message: 'Audio is being generated...' });
+                 } else {
+                     // Check if it finished or failed
+                     // If not generating, check for new artifact
+                     const currentArtifacts = await this.getAudioArtifactTitles();
+                     const newArtifacts = currentArtifacts.filter(t => !existingArtifacts.includes(t));
+
+                     if (newArtifacts.length > 0) {
+                         onUpdate({ status: 'completed', artifact: newArtifacts[0], message: 'Generation complete' });
+                         return;
+                     } else {
+                         // It stopped generating but no new artifact found.
+                         // Could be failure or just a lag in list update.
+                         // Let's retry a few times to be sure
+                         let retries = 0;
+                         while (retries < 3) {
+                             await this.humanDelay(2000);
+                             const recheckArtifacts = await this.getAudioArtifactTitles();
+                             const recheckNew = recheckArtifacts.filter(t => !existingArtifacts.includes(t));
+                             if (recheckNew.length > 0) {
+                                 onUpdate({ status: 'completed', artifact: recheckNew[0], message: 'Generation complete' });
+                                 return;
+                             }
+                             retries++;
+                         }
+
+                         // If still nothing, it likely failed silently or we missed it
+                         onUpdate({ status: 'failed', message: 'Generation stopped but no new audio found' });
+                         return;
+                     }
+                 }
+             }
+
+             if (Date.now() - startTime >= timeoutMs) {
+                 onUpdate({ status: 'failed', message: 'Timeout waiting for generation' });
+             }
+        });
+    }
 }
 

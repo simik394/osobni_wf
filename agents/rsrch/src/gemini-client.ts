@@ -1768,6 +1768,9 @@ export class GeminiClient {
             let iterations = 0;
             const maxIterations = Math.ceil(timeoutMs / pollIntervalMs) + 10; // Safety margin
 
+            // Track detailed progress (planning steps)
+            let lastStepsCount = 0;
+
             while (iterations < maxIterations) {
                 iterations++;
 
@@ -1776,6 +1779,20 @@ export class GeminiClient {
                     console.warn(`[Gemini] Streaming timeout after ${iterations} iterations`);
                     onChunk({ content: '', isComplete: true });
                     throw new Error('Streaming timeout');
+                }
+
+                // Check for reasoning/planning steps updates
+                const thoughtEls = this.page.locator('.steps-container, .reasoning-step, .status-message, [class*="thinking"]');
+                const stepsCount = await thoughtEls.count();
+                if (stepsCount > lastStepsCount) {
+                     // Emit thought update
+                     // We just grab the last one
+                     const lastStep = thoughtEls.last();
+                     const stepText = await lastStep.innerText().catch(() => '');
+                     if (stepText) {
+                         onChunk({ content: `\n[Thinking: ${stepText.replace(/\n/g, ' ')}]\n`, isComplete: false });
+                     }
+                     lastStepsCount = stepsCount;
                 }
 
                 // Get current response text

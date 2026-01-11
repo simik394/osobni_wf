@@ -738,26 +738,15 @@ app.post('/v1/chat/completions', async (req, res) => {
 
         // SSE Streaming
         if (request.stream) {
-            // Only Gemini supports streaming for now
             const model = request.model || 'gemini-rsrch';
-            if (model === 'perplexity' || model.includes('perplexity')) {
-                return res.status(501).json({
-                    error: {
-                        message: 'Streaming is not supported for Perplexity model',
-                        type: 'not_implemented',
-                        code: 501
-                    }
-                });
-            }
+            const id = generateId();
+            const created = Math.floor(Date.now() / 1000);
 
             // Set up SSE headers
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
             res.setHeader('Connection', 'keep-alive');
             res.flushHeaders();
-
-            const id = generateId();
-            const created = Math.floor(Date.now() / 1000);
 
             const sendSSE = (data: ChatCompletionChunk | '[DONE]') => {
                 if (data === '[DONE]') {
@@ -767,19 +756,21 @@ app.post('/v1/chat/completions', async (req, res) => {
                 }
             };
 
-            try {
-                // Ensure Gemini client
-                if (!geminiClient) {
-                    console.log('[OpenAI API] Creating Gemini client for streaming...');
-                    geminiClient = await client.createGeminiClient();
-                    await geminiClient.init();
-                }
+            // Heartbeat
+            const heartbeat = setInterval(() => {
+                res.write(':\n\n');
+            }, 15000);
 
+            const cleanup = () => {
+                clearInterval(heartbeat);
+                res.end();
+            };
+
+            try {
                 // Extract prompt
                 const userMessages = request.messages.filter(m => m.role === 'user');
                 const prompt = userMessages[userMessages.length - 1]?.content || '';
-
-                console.log(`[OpenAI API] Streaming: "${prompt.substring(0, 50)}..."`);
+                console.log(`[OpenAI API] Streaming (${model}): "${prompt.substring(0, 50)}..."`);
 
                 // Send initial role chunk
                 sendSSE({
@@ -787,39 +778,71 @@ app.post('/v1/chat/completions', async (req, res) => {
                     object: 'chat.completion.chunk',
                     created,
                     model,
-                    choices: [{
-                        index: 0,
-                        delta: { role: 'assistant' },
-                        finish_reason: null
-                    }]
+                    choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }]
                 });
 
-                // Stream using Gemini client
-                await geminiClient.researchWithStreaming(
-                    prompt,
-                    (chunk) => {
-                        if (chunk.content) {
-                            sendSSE({
-                                id,
-                                object: 'chat.completion.chunk',
-                                created,
-                                model,
-                                choices: [{
-                                    index: 0,
-                                    delta: { content: chunk.content },
-                                    finish_reason: chunk.isComplete ? 'stop' : null
-                                }]
-                            });
+                if (model === 'perplexity' || model.includes('perplexity')) {
+                    // Perplexity Streaming
+                    await client.queryStream(
+                        prompt,
+                        (chunk) => {
+                            if (chunk.content || chunk.thoughts) {
+                                let content = chunk.content;
+                                if (chunk.thoughts) {
+                                    content = `\n[Thoughts: ${chunk.thoughts}]\n\n` + content;
+                                }
+                                sendSSE({
+                                    id,
+                                    object: 'chat.completion.chunk',
+                                    created,
+                                    model,
+                                    choices: [{
+                                        index: 0,
+                                        delta: { content },
+                                        finish_reason: chunk.isComplete ? 'stop' : null
+                                    }]
+                                });
+                            }
+                        },
+                        {
+                            sessionId: request.session_id,
+                            sessionName: request.session,
+                            deepResearch: false // Perplexity deep research not enabled via standard flag currently
                         }
-                        if (chunk.isComplete) {
-                            sendSSE('[DONE]');
-                        }
+                    );
+                } else {
+                    // Gemini Streaming
+                    if (!geminiClient) {
+                        geminiClient = await client.createGeminiClient();
+                        await geminiClient.init();
                     }
-                );
 
-                res.end();
+                    await geminiClient.researchWithStreaming(
+                        prompt,
+                        (chunk) => {
+                            if (chunk.content) {
+                                sendSSE({
+                                    id,
+                                    object: 'chat.completion.chunk',
+                                    created,
+                                    model,
+                                    choices: [{
+                                        index: 0,
+                                        delta: { content: chunk.content },
+                                        finish_reason: chunk.isComplete ? 'stop' : null
+                                    }]
+                                });
+                            }
+                        },
+                        {
+                            sessionId: request.session_id || request.session,
+                            deepResearch: model === 'gemini-deep-research'
+                        }
+                    );
+                }
+
+                sendSSE('[DONE]');
                 console.log('[OpenAI API] Streaming complete');
-
             } catch (error: any) {
                 console.error('[OpenAI API] Streaming failed:', error);
                 sendSSE({
@@ -834,7 +857,8 @@ app.post('/v1/chat/completions', async (req, res) => {
                     }]
                 });
                 sendSSE('[DONE]');
-                res.end();
+            } finally {
+                cleanup();
             }
 
             return;
@@ -1149,8 +1173,54 @@ app.get('/gemini/list-research-docs', async (req, res) => {
 
         res.json({ success: true, data: docs });
     } catch (e: any) {
-        console.error('[Server] Gemini list research docs failed:', e);
+        console.error('[Server] Audio status check failed:', e.message);
         res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// SSE endpoint for NotebookLM updates
+app.get('/notebook/updates', async (req, res) => {
+    const notebookTitle = req.query.notebookTitle as string;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendEvent = (type: string, data: any) => {
+        res.write(`event: ${type}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // Heartbeat
+    const heartbeat = setInterval(() => {
+        res.write(':\n\n');
+    }, 15000);
+
+    try {
+        if (!notebookClient) {
+            notebookClient = await client.createNotebookClient();
+        }
+
+        console.log(`[Server] Starting SSE for notebook: ${notebookTitle || 'Current'}`);
+
+        await notebookClient.monitorAudioGeneration(
+            notebookTitle,
+            (event) => {
+                sendEvent(event.status, event);
+                if (event.status === 'completed' || event.status === 'failed') {
+                    // Close connection after final state
+                    clearInterval(heartbeat);
+                    res.end();
+                }
+            }
+        );
+
+    } catch (e: any) {
+        console.error('[Server] SSE Error:', e);
+        sendEvent('error', { message: e.message });
+        clearInterval(heartbeat);
+        res.end();
     }
 });
 

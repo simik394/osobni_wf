@@ -696,6 +696,224 @@ export class PerplexityClient extends BaseClient {
         }
     }
 
+    async queryStream(
+        queryText: string,
+        onChunk: (chunk: { content: string; isComplete: boolean; thoughts?: string }) => void,
+        options: { sessionName?: string, sessionId?: string, deepResearch?: boolean } = {}
+    ): Promise<string> {
+        if (!this.isInitialized || !this.context) {
+            throw new Error('Client not initialized. Call init() first.');
+        }
+
+        console.log(`Streaming query: "${queryText}" (Deep Research: ${options.deepResearch || false})`);
+
+        // Resolve session
+        let session: Session;
+        if (options.sessionId && this.getSession(options.sessionId)) {
+            session = this.getSession(options.sessionId)!;
+            await session.page.bringToFront();
+        } else if (options.sessionName && this.getSession(options.sessionName)) {
+            session = this.getSession(options.sessionName)!;
+            await session.page.bringToFront();
+        } else {
+            session = await this.createSession(options.sessionName);
+        }
+
+        const { page } = session;
+        let finalContent = '';
+
+        try {
+            // Check if we are already on a search page
+            const currentUrl = page.url();
+            if (!currentUrl.includes('perplexity.ai/search/')) {
+                await page.goto(config.url);
+            }
+
+            // Wait for input
+            const selectors = Array.isArray(config.selectors.queryInput)
+                ? [...config.selectors.queryInput]
+                : [config.selectors.queryInput];
+            if (config.selectors.followUpInput) selectors.push(config.selectors.followUpInput);
+            selectors.push('textarea[placeholder*="Ask"]', 'div[contenteditable="true"]');
+
+            let inputSelector = '';
+            for (const selector of selectors) {
+                try {
+                    await page.waitForSelector(selector, { timeout: 2000 });
+                    inputSelector = selector;
+                    break;
+                } catch (e) { }
+            }
+
+            if (!inputSelector) {
+                if (currentUrl.includes('perplexity.ai/search/')) {
+                    await page.goto(config.url);
+                    for (const selector of selectors) {
+                        try {
+                            await page.waitForSelector(selector, { timeout: 2000 });
+                            inputSelector = selector;
+                            break;
+                        } catch (e) { }
+                    }
+                }
+            }
+
+            if (!inputSelector) throw new Error('Could not find query input field.');
+
+            // Capture initial answer count
+            const initialAnswerCount = await page.locator(config.selectors.answerContainer).count();
+
+            // Toggle Deep Research if requested
+            if (options.deepResearch) {
+                const deepButtonSelector = 'button[aria-label="Research"]';
+                if (await page.isVisible(deepButtonSelector)) {
+                    await page.click(deepButtonSelector);
+                    await page.waitForTimeout(1000);
+                }
+            }
+
+            // Setup streaming callback
+            const callbackName = `onStreamChunk_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+            await page.exposeFunction(callbackName, (data: { content: string; isComplete: boolean; thoughts?: string }) => {
+                onChunk(data);
+                if (data.isComplete) {
+                    finalContent = data.content;
+                }
+            });
+
+            await page.fill(inputSelector, queryText);
+            await page.keyboard.press('Enter');
+
+            // Wait for new answer container
+            let newAnswerIndex = initialAnswerCount;
+            let pollingAttempts = 0;
+            const maxPollingAttempts = 60;
+
+            while (pollingAttempts < maxPollingAttempts) {
+                const currentCount = await page.locator(config.selectors.answerContainer).count();
+                if (currentCount > initialAnswerCount) {
+                    newAnswerIndex = currentCount - 1;
+                    break;
+                }
+                await page.waitForTimeout(500);
+                pollingAttempts++;
+            }
+
+            if (pollingAttempts >= maxPollingAttempts) {
+                 // Fallback
+                 const currentCount = await page.locator(config.selectors.answerContainer).count();
+                 if (currentCount > 0) newAnswerIndex = currentCount - 1;
+            }
+
+            // Start observing the answer container
+            await page.evaluate(({ index, selector, callbackName }) => {
+                const containers = document.querySelectorAll(selector);
+                const container = containers[index];
+                if (!container) return;
+
+                let lastText = '';
+                let lastThoughts = '';
+
+                // Function to extract text and thoughts
+                const extract = () => {
+                    const text = (container as HTMLElement).innerText;
+
+                    // Try to extract thoughts
+                    const thoughtEls = document.querySelectorAll('.steps-container, .reasoning-step');
+                    let thoughts = '';
+                    thoughtEls.forEach((el: any) => {
+                         if (el.innerText) thoughts += el.innerText + '\n';
+                    });
+
+                    return { text, thoughts };
+                };
+
+                const observer = new MutationObserver(() => {
+                    const { text, thoughts } = extract();
+
+                    let contentDelta = '';
+                    let thoughtsDelta = '';
+
+                    // Calculate text delta
+                    if (text !== lastText) {
+                         if (text.startsWith(lastText)) {
+                             contentDelta = text.slice(lastText.length);
+                         } else {
+                             // Text rewrite detected, send full text?
+                             // For SSE, sending full text as delta is bad, but sending nothing is worse.
+                             // Ideally we shouldn't handle rewrites in simple append-only SSE.
+                             // We'll reset lastText to empty effectively if we can't match prefix?
+                             // No, that duplicates.
+                             // Let's assume append-only for now, but if length < lastLength, ignore?
+                             // If text changed but not append, we might miss it.
+                             // Safer: Just send the new part if it's longer.
+                             if (text.length > lastText.length) {
+                                 contentDelta = text.slice(lastText.length);
+                             }
+                         }
+                         lastText = text;
+                    }
+
+                    // Calculate thoughts delta
+                    if (thoughts !== lastThoughts) {
+                        if (thoughts.startsWith(lastThoughts)) {
+                            thoughtsDelta = thoughts.slice(lastThoughts.length);
+                        } else {
+                            // Similar logic for thoughts
+                            if (thoughts.length > lastThoughts.length) {
+                                thoughtsDelta = thoughts.slice(lastThoughts.length);
+                            }
+                        }
+                        lastThoughts = thoughts;
+                    }
+
+                    if (contentDelta || thoughtsDelta) {
+                         (window as any)[callbackName]({ content: contentDelta, isComplete: false, thoughts: thoughtsDelta });
+                    }
+                });
+
+                observer.observe(container, { childList: true, subtree: true, characterData: true });
+
+                // Initial check
+                const { text, thoughts } = extract();
+                if (text || thoughts) {
+                    lastText = text;
+                    lastThoughts = thoughts;
+                    (window as any)[callbackName]({ content: text, isComplete: false, thoughts });
+                }
+            }, { index: newAnswerIndex, selector: config.selectors.answerContainer, callbackName });
+
+            // Wait for stability using existing logic
+            const answerLocator = page.locator(config.selectors.answerContainer).nth(newAnswerIndex);
+            let lastText = '';
+            let stableCount = 0;
+            const stabilityThreshold = 5;
+
+            for (let i = 0; i < 240; i++) { // 2 minutes max
+                const currentText = await answerLocator.innerText().catch(() => '');
+                if (currentText && currentText.length > 0) {
+                    if (currentText === lastText) {
+                        stableCount++;
+                    } else {
+                        stableCount = 0;
+                        lastText = currentText;
+                    }
+                }
+                if (stableCount >= stabilityThreshold) break;
+                await page.waitForTimeout(500);
+            }
+
+            // Final update
+            onChunk({ content: '', isComplete: true });
+
+            return lastText;
+
+        } catch (error: any) {
+            console.error('Error in queryStream:', error);
+            throw error;
+        }
+    }
+
     async saveAuth() {
         if (!this.context) return;
         await saveStorageState(this.context, this.profileId);
