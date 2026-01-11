@@ -1391,10 +1391,30 @@ export class GeminiClient extends EventEmitter {
             await this.page.waitForTimeout(300);
 
             // Click Send button (Enter key doesn't work reliably in Docker/VNC)
-            const sendButton = this.page.locator('button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"]').first();
-            if (await sendButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await sendButton.click();
-            } else {
+            const sendButtonSelectors = [
+                'button[aria-label*="Send"]',
+                'button[aria-label*="Odeslat"]',
+                'button[data-testid="send-button"]',
+                'button[type="submit"]',
+                'button:has(svg[class*="send"])',
+                'button:has(path[d*="M2.01"])',
+                'div[contenteditable] ~ button',
+                'div[class*="input"] button:last-child',
+            ];
+
+            let sendClicked = false;
+            for (const selector of sendButtonSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.isVisible({ timeout: 500 }).catch(() => false)) {
+                    console.log(`[Gemini] Found Send button: ${selector}`);
+                    await btn.click();
+                    sendClicked = true;
+                    break;
+                }
+            }
+
+            if (!sendClicked) {
+                console.log('[Gemini] No Send button found, trying Enter key...');
                 await input.press('Enter');
             }
 
@@ -1681,11 +1701,35 @@ export class GeminiClient extends EventEmitter {
             await this.page.waitForTimeout(500);
 
             // Click Send button (Enter key doesn't work reliably in Docker/VNC)
-            const sendButton = this.page.locator('button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"]').first();
-            if (await sendButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await sendButton.click();
-            } else {
-                // Fallback to Enter key
+            // Try multiple selectors as the UI varies between normal and Deep Research mode
+            const sendButtonSelectors = [
+                'button[aria-label*="Send"]',
+                'button[aria-label*="Odeslat"]',
+                'button[data-testid="send-button"]',
+                // Generic submit button near input
+                'button[type="submit"]',
+                // Button with send/arrow icon (common pattern)
+                'button:has(svg[class*="send"])',
+                'button:has(path[d*="M2.01"])',  // Arrow path pattern
+                // The rightmost button in the input toolbar area
+                'div[contenteditable] ~ button',
+                'div[class*="input"] button:last-child',
+            ];
+
+            let sendClicked = false;
+            for (const selector of sendButtonSelectors) {
+                const btn = this.page.locator(selector).first();
+                if (await btn.isVisible({ timeout: 500 }).catch(() => false)) {
+                    console.log(`[Gemini] Found Send button with selector: ${selector}`);
+                    await btn.click();
+                    sendClicked = true;
+                    break;
+                }
+            }
+
+            if (!sendClicked) {
+                // Last resort: try to find any visible button near the input and click it
+                console.log('[Gemini] No Send button found, trying Enter key...');
                 await input.press('Enter');
             }
 
