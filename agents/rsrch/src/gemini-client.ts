@@ -1389,7 +1389,14 @@ export class GeminiClient extends EventEmitter {
 
             await input.fill(message);
             await this.page.waitForTimeout(300);
-            await input.press('Enter');
+
+            // Click Send button (Enter key doesn't work reliably in Docker/VNC)
+            const sendButton = this.page.locator('button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"]').first();
+            if (await sendButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await sendButton.click();
+            } else {
+                await input.press('Enter');
+            }
 
             if (!waitForResponse) {
                 telemetry.endGeneration(generation, 'No response awaited');
@@ -1672,7 +1679,15 @@ export class GeminiClient extends EventEmitter {
             await input.waitFor({ state: 'visible', timeout: 20000 });
             await input.fill(query);
             await this.page.waitForTimeout(500);
-            await input.press('Enter');
+
+            // Click Send button (Enter key doesn't work reliably in Docker/VNC)
+            const sendButton = this.page.locator('button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"]').first();
+            if (await sendButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await sendButton.click();
+            } else {
+                // Fallback to Enter key
+                await input.press('Enter');
+            }
 
             // Handle Deep Research Confirmation Flow
             if (options.deepResearch) {

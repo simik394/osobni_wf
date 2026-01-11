@@ -501,6 +501,95 @@ app.get('/jobs', async (req, res) => {
     res.json({ success: true, jobs });
 });
 
+// ============================================================================
+// Async Deep Research Endpoints
+// ============================================================================
+
+// Start async deep research - returns job ID immediately
+app.post('/deep-research/start', async (req, res) => {
+    try {
+        const { query, gem, sessionId } = req.body;
+
+        if (!query) {
+            return res.status(400).json({ success: false, error: 'Query is required' });
+        }
+
+        // Create job in FalkorDB
+        const job = await graphStore.addJob('deepResearch', query, { gem, sessionId });
+        console.log(`[Server] Deep research job created: ${job.id}`);
+
+        // Fire and forget - run deep research in background
+        (async () => {
+            try {
+                await graphStore.updateJobStatus(job.id, 'running');
+
+                // Initialize Gemini client if not already
+                if (!geminiClient) {
+                    geminiClient = await client.createGeminiClient();
+                    await geminiClient.init();
+                }
+
+                // Run deep research
+                const result = await geminiClient.startDeepResearch(query, gem);
+
+                // Update job with result
+                await graphStore.updateJobStatus(job.id, 'completed', { result });
+                console.log(`[Server] Deep research job ${job.id} completed`);
+            } catch (e: any) {
+                console.error(`[Server] Deep research job ${job.id} failed:`, e);
+                await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+            }
+        })();
+
+        res.json({ success: true, jobId: job.id, status: 'queued' });
+    } catch (e: any) {
+        console.error('[Server] Failed to start deep research:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Get deep research job status
+app.get('/deep-research/status/:id', async (req, res) => {
+    const job = await graphStore.getJob(req.params.id);
+
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
+    res.json({
+        success: true,
+        jobId: job.id,
+        status: job.status,
+        query: job.query,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        error: job.error
+    });
+});
+
+// Get deep research result (only when completed)
+app.get('/deep-research/result/:id', async (req, res) => {
+    const job = await graphStore.getJob(req.params.id);
+
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
+    if (job.status !== 'completed') {
+        return res.status(202).json({
+            success: false,
+            error: 'Job not completed yet',
+            status: job.status
+        });
+    }
+
+    res.json({
+        success: true,
+        jobId: job.id,
+        result: job.result
+    });
+});
 
 app.post('/notebook/dump', async (req, res) => {
     try {

@@ -722,6 +722,19 @@ export class PerplexityClient extends BaseClient {
 
     async createGeminiClient(): Promise<GeminiClient> {
         if (!this.context) throw new Error('Context not initialized');
+
+        // Check if there's already a Gemini page we can reuse
+        const existingPages = this.context.pages();
+        for (const page of existingPages) {
+            const url = page.url();
+            if (url.includes('gemini.google.com')) {
+                console.log('[Client] Reusing existing Gemini page');
+                return new GeminiClient(page);
+            }
+        }
+
+        // No existing page, create new one
+        console.log('[Client] Creating new Gemini page');
         const page = await this.context.newPage();
         return new GeminiClient(page);
     }

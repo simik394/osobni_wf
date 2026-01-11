@@ -986,7 +986,23 @@ gemini.command('deep-research <query>')
     .option('--gem <name>', 'Gem name')
     .option('--local', 'Use local execution', true)
     .option('--headed', 'Show browser', false)
+    .option('--async', 'Start async (returns job ID immediately)')
     .action(async (query, opts) => {
+        if (opts.async) {
+            // Async mode - use server endpoint
+            console.log('[Deep Research] Starting async job...');
+            const response = await sendServerRequest('/deep-research/start', {
+                query,
+                gem: opts.gem
+            });
+            console.log(`\n✓ Job created: ${response.jobId}`);
+            console.log(`  Status: ${response.status}`);
+            console.log(`\n  Check status: rsrch gemini job-status ${response.jobId}`);
+            console.log(`  Get result:   rsrch gemini job-result ${response.jobId}\n`);
+            return;
+        }
+
+        // Sync mode - run locally
         await runLocalGeminiAction(async (client, gemini) => {
             console.log('\n[Deep Research] Starting...');
             if (opts.gem) console.log(`[Deep Research] Using Gem: ${opts.gem}`);
@@ -1004,6 +1020,36 @@ gemini.command('deep-research <query>')
             console.log('----------------------------\n');
         });
     });
+
+gemini.command('job-status <jobId>')
+    .description('Get status of an async deep research job')
+    .action(async (jobId) => {
+        const response = await sendServerRequest(`deep-research/status/${jobId}`, {});
+        console.log(`\n--- Job Status ---`);
+        console.log(`ID:      ${response.jobId}`);
+        console.log(`Status:  ${response.status}`);
+        console.log(`Query:   ${response.query}`);
+        if (response.createdAt) console.log(`Created: ${new Date(response.createdAt).toISOString()}`);
+        if (response.startedAt) console.log(`Started: ${new Date(response.startedAt).toISOString()}`);
+        if (response.completedAt) console.log(`Completed: ${new Date(response.completedAt).toISOString()}`);
+        if (response.error) console.log(`Error: ${response.error}`);
+        console.log('------------------\n');
+    });
+
+gemini.command('job-result <jobId>')
+    .description('Get result of a completed async deep research job')
+    .action(async (jobId) => {
+        const response = await sendServerRequest(`deep-research/result/${jobId}`, {});
+        if (!response.success) {
+            console.log(`\n⏳ Job not completed yet. Status: ${response.status}`);
+            return;
+        }
+        console.log(`\n--- Job Result ---`);
+        console.log(`ID: ${response.jobId}`);
+        console.log(`Result:`, JSON.stringify(response.result, null, 2));
+        console.log('------------------\n');
+    });
+
 
 gemini.command('open-session <identifier>')
     .description('Open a session by ID or Name')
