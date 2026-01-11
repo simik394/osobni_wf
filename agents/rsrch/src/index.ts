@@ -37,8 +37,8 @@ async function notifyNtfy(title: string, message: string, tags?: string[]) {
     }
 }
 
-// Helper to send request to server
-async function sendServerRequest(path: string, body: any = {}) {
+// Helper to send request to server (returns data for programmatic use)
+async function sendServerRequest(path: string, body: any = {}): Promise<any> {
     const port = config.port;
     const url = `http://localhost:${port}${path}`;
     try {
@@ -55,6 +55,66 @@ async function sendServerRequest(path: string, body: any = {}) {
 
         const data = await response.json();
         console.log(JSON.stringify(data, null, 2));
+        return data;
+    } catch (e: any) {
+        console.error(`Failed to communicate with server at port ${port}. Is it running?`);
+        console.error(e.message);
+        process.exit(1);
+    }
+}
+
+// Helper to send request with SSE streaming (prints progress to console)
+async function sendServerRequestWithSSE(path: string, body: any = {}): Promise<any> {
+    const port = config.port;
+    const url = `http://localhost:${port}${path}`;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Server error: ${response.status} ${err}`);
+        }
+
+        // Parse SSE stream
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let result: any = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'log') {
+                            // Print progress message to console
+                            console.log(data.message);
+                        } else if (data.type === 'result') {
+                            // Final result
+                            result = data;
+                        }
+                    } catch (e) {
+                        // Ignore parse errors
+                    }
+                }
+            }
+        }
+
+        return result;
     } catch (e: any) {
         console.error(`Failed to communicate with server at port ${port}. Is it running?`);
         console.error(e.message);
@@ -162,13 +222,13 @@ program.command('stop')
 program.command('shutdown')
     .description('Force close persistent browser')
     .action(async () => {
-         // Assuming shutdown maps to stop/shutdown server request as in stop command or different logic if meant for browser?
-         // Original code mentions 'shutdown' in help but no explicit block other than 'stop'.
-         // Wait, original code: } else if (command === 'stop') { await sendServerRequest('/shutdown'); }
-         // And help says: rsrch shutdown - Force close persistent browser.
-         // But there is no 'shutdown' command block in original 'if/else'.
-         // I will make 'shutdown' an alias for 'stop' or same action.
-         await sendServerRequest('/shutdown');
+        // Assuming shutdown maps to stop/shutdown server request as in stop command or different logic if meant for browser?
+        // Original code mentions 'shutdown' in help but no explicit block other than 'stop'.
+        // Wait, original code: } else if (command === 'stop') { await sendServerRequest('/shutdown'); }
+        // And help says: rsrch shutdown - Force close persistent browser.
+        // But there is no 'shutdown' command block in original 'if/else'.
+        // I will make 'shutdown' an alias for 'stop' or same action.
+        await sendServerRequest('/shutdown');
     });
 
 // Profile
@@ -223,7 +283,7 @@ notebook.command('create <title>')
                 await notebook.createNotebook(title);
             });
         } else {
-             // Unreachable in original code logic for now
+            // Unreachable in original code logic for now
             await sendServerRequest('/notebook/create', { title });
         }
     });
@@ -303,9 +363,9 @@ notebook.command('generate-audio')
         }
 
         if (opts.local) {
-             console.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
-             console.warn('   Routing through server -> Windmill to prevent race conditions.');
-             console.warn('   Remove --local flag - it will be ignored.\n');
+            console.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
+            console.warn('   Routing through server -> Windmill to prevent race conditions.');
+            console.warn('   Remove --local flag - it will be ignored.\n');
         }
 
         console.log('📤 Queueing via Windmill (prevents race conditions)...\n');
@@ -703,9 +763,9 @@ graph.command('lineage <artifactId>')
         const store = getGraphStore();
         const graphHost = config.falkor.host;
         try {
-             await store.connect(graphHost, config.falkor.port);
-             const chain = await store.getLineageChain(artifactId);
-             if (!chain.job && !chain.session && !chain.document && !chain.audio) {
+            await store.connect(graphHost, config.falkor.port);
+            const chain = await store.getLineageChain(artifactId);
+            if (!chain.job && !chain.session && !chain.document && !chain.audio) {
                 console.log(`No lineage found for: ${artifactId}`);
             } else {
                 console.log('\nLineage Chain:');
@@ -909,7 +969,15 @@ gemini.command('research <query>')
                 console.log('\n-----------------------\n');
             }, undefined, hasLocalFlag);
         } else {
-            await sendServerRequest('/gemini/research', { query });
+            // Server mode with SSE streaming for progress updates
+            const result = await sendServerRequestWithSSE('/gemini/research', { query });
+            if (result?.success) {
+                console.log('\n--- Gemini Response ---\n');
+                console.log(result.data);
+                console.log('\n-----------------------\n');
+            } else {
+                console.error('Research failed:', result?.error || 'Unknown error');
+            }
         }
     });
 
@@ -1021,9 +1089,9 @@ gemini.command('get-response [sessionIdOrIndex] [index]')
             sessionId = arg1;
             idx = parseInt(arg2) || -1;
         } else if (arg1) {
-             const parsed = parseInt(arg1);
-             if (!isNaN(parsed)) idx = parsed;
-             else sessionId = arg1;
+            const parsed = parseInt(arg1);
+            if (!isNaN(parsed)) idx = parsed;
+            else sessionId = arg1;
         }
 
         await runLocalGeminiAction(async (client, gemini) => {
@@ -1147,8 +1215,8 @@ gemini.command('upload-file <path> [sessionId]')
     .description('Upload a file')
     .option('--local', 'Use local execution', true)
     .action(async (filePath, sessionId, opts) => {
-         // Commander might parse args differently if optional arg is in middle.
-         // Here path is required, sessionId optional.
+        // Commander might parse args differently if optional arg is in middle.
+        // Here path is required, sessionId optional.
         await runLocalGeminiAction(async (client, gemini) => {
             const success = await gemini.uploadFile(filePath);
             if (success) console.log(`\n✅ File uploaded: ${filePath}`);
@@ -1172,8 +1240,8 @@ gemini.command('upload-files <files...>')
         let filePaths = args;
 
         if (filePaths.length > 0 && !filePaths[0].includes('/') && !filePaths[0].includes('.') && !fs.existsSync(filePaths[0])) {
-             sessionId = filePaths[0];
-             filePaths = filePaths.slice(1);
+            sessionId = filePaths[0];
+            filePaths = filePaths.slice(1);
         }
 
         if (filePaths.length === 0) {

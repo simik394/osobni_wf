@@ -2,6 +2,7 @@
 import { Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import { getRegistry } from './artifact-registry';
 import { getRsrchTelemetry } from '@agents/shared';
 
@@ -99,11 +100,12 @@ export interface GemInfo {
     description?: string;
 }
 
-export class GeminiClient {
+export class GeminiClient extends EventEmitter {
     private verbose: boolean = false;
     private deepResearchEnabled = false;
 
     constructor(private page: Page, options: { verbose?: boolean } = {}) {
+        super();
         this.verbose = options.verbose || false;
     }
 
@@ -113,13 +115,20 @@ export class GeminiClient {
         }
     }
 
+    // Emit progress events for SSE streaming (always emits, unlike log which respects verbose)
+    public progress(message: string, phase?: string) {
+        const logMsg = `[Gemini] ${message}`;
+        console.log(logMsg);
+        this.emit('progress', { type: 'log', message: logMsg, phase, timestamp: Date.now() });
+    }
+
     async init(sessionId?: string) {
-        console.log('[Gemini] Initializing...');
+        this.progress('Initializing...', 'init');
 
         const targetUrl = sessionId
             ? `https://gemini.google.com/app/${sessionId}`
             : 'https://gemini.google.com/app';
-        console.log(`[Gemini] Navigating to: ${targetUrl}`);
+        this.progress(`Navigating to: ${targetUrl}`, 'init');
         await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
 
         await this.page.waitForTimeout(1500);
@@ -129,7 +138,7 @@ export class GeminiClient {
             'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
         );
         if (await acceptAllButtons.count() > 0) {
-            console.log('[Gemini] Cookie consent detected, clicking Accept all...');
+            this.progress('Cookie consent detected, clicking Accept all...', 'init');
             await acceptAllButtons.first().click().catch(() => { });
             await this.page.waitForTimeout(2000);
         }
@@ -139,7 +148,7 @@ export class GeminiClient {
             'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Not now"), button:has-text("Close"), button:has-text("Zavřít"), button:has-text("Později")'
         );
         if (await dismissButtons.count() > 0) {
-            console.log('[Gemini] Advertising/promo popup detected, clicking dismiss...');
+            this.progress('Advertising/promo popup detected, clicking dismiss...', 'init');
             // Iterate and click visible ones
             const count = await dismissButtons.count();
             for (let i = 0; i < count; i++) {
@@ -174,7 +183,7 @@ export class GeminiClient {
             // Check if we're on a valid Gemini page anyway (sidebar visible)
             const sidebarVisible = await this.page.locator('.conversations-list, [aria-label*="conversation" i], [data-sidebar]').count() > 0;
             if (sidebarVisible) {
-                console.log('[Gemini] Sidebar visible, proceeding despite input element not found.');
+                this.progress('Sidebar visible, proceeding despite input element not found.', 'init');
             } else {
                 console.warn('[Gemini] Timeout waiting for chat interface.');
                 await this.dumpState('gemini_init_fail');
@@ -182,7 +191,7 @@ export class GeminiClient {
             }
         }
 
-        console.log('[Gemini] Ready.');
+        this.progress('Ready.', 'init');
     }
 
     getCurrentSessionId(): string | null {
@@ -1638,7 +1647,7 @@ export class GeminiClient {
     }
 
     async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean } = {}): Promise<string> {
-        console.log(`[Gemini] Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch})`);
+        this.progress(`Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch})`, 'research');
         try {
             // Handle Session Switching
             if (options.sessionId) {
@@ -1667,14 +1676,14 @@ export class GeminiClient {
 
             // Handle Deep Research Confirmation Flow
             if (options.deepResearch) {
-                console.log('[Gemini] Deep Research started, waiting for plan...');
+                this.progress('Deep Research started, waiting for plan...', 'research');
                 await this.waitForAndConfirmResearchPlan().catch(e => console.warn('[Gemini] Plan confirmation skipped/failed:', e.message));
 
-                console.log('[Gemini] Waiting for research completion...');
+                this.progress('Waiting for research completion...', 'research');
                 await this.waitForResearchCompletion();
             }
 
-            console.log('[Gemini] Waiting for response...');
+            this.progress('Waiting for response...', 'research');
             const responseSelector = 'model-response, .message-content, .response-container-content';
             await this.page.waitForSelector(responseSelector, { timeout: 60000 }); // Longer timeout for standard response too
             await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => { });
@@ -1691,7 +1700,7 @@ export class GeminiClient {
                 }
 
                 const text = await lastResponse.innerText();
-                console.log('[Gemini] Response extracted.');
+                this.progress('Response extracted.', 'research');
                 return text;
             } else {
                 throw new Error('No response elements found.');

@@ -1075,6 +1075,9 @@ app.post('/gemini/research', async (req, res) => {
         const { query } = req.body;
         if (!query) return res.status(400).json({ error: 'Query is required' });
 
+        // Check if client wants SSE streaming
+        const wantsSSE = req.headers.accept?.includes('text/event-stream');
+
         if (!geminiClient) {
             console.log('[Server] Creating Gemini client...');
             // Lazy browser init if startup failed
@@ -1086,10 +1089,35 @@ app.post('/gemini/research', async (req, res) => {
             await geminiClient.init();
         }
 
-        console.log(`[Server] Generating Gemini response for: "${query}"`);
-        const response = await geminiClient.research(query);
+        if (wantsSSE) {
+            // SSE streaming mode
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
 
-        res.json({ success: true, data: response });
+            // Send progress events as they occur
+            const progressHandler = (data: any) => {
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            };
+            geminiClient.on('progress', progressHandler);
+
+            try {
+                console.log(`[Server] Generating Gemini response (SSE) for: "${query}"`);
+                const response = await geminiClient.research(query);
+
+                // Send final result
+                res.write(`data: ${JSON.stringify({ type: 'result', success: true, data: response })}\n\n`);
+                res.end();
+            } finally {
+                geminiClient.removeListener('progress', progressHandler);
+            }
+        } else {
+            // Traditional JSON response mode
+            console.log(`[Server] Generating Gemini response for: "${query}"`);
+            const response = await geminiClient.research(query);
+            res.json({ success: true, data: response });
+        }
     } catch (e: any) {
         console.error('[Server] Gemini research failed:', e);
         res.status(500).json({ success: false, error: e.message });
