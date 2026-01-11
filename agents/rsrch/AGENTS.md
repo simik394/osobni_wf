@@ -65,6 +65,11 @@ After **2-3 failed `search_web` attempts**:
 2. **`jules-mcp` (PRIMARY)**: Create, approve, send_message.
 3. **`browser_subagent` (LAST RESORT)**: UI-only ops.
 
+> **Full delegation guidelines:** See [@flows/autonomous-pm-framework.md](file:///home/sim/Obsi/Prods/01-pwf/flows/autonomous-pm-framework.md) for:
+> - When to delegate vs. do yourself
+> - Jules → YouTrack state mapping
+> - Monitoring and intervention patterns
+
 ---
 
 ## Project Overview
