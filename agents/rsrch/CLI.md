@@ -49,7 +49,7 @@ rsrch batch queries.txt                         # Run queries from file
 ### Research
 ```bash
 rsrch gemini research "Query" [--local]
-rsrch gemini deep-research "Query" [--local] [--headed]
+rsrch gemini deep-research "Query" [--gem="Gem Name"] [--local] [--headed]
 ```
 
 ### Sessions
@@ -58,10 +58,6 @@ rsrch gemini list-sessions [Limit] [Offset] [--local]
 rsrch gemini open-session "SessionID" [--local] [--headed]
 rsrch gemini get-response [SessionID] [Index] [--local]
 rsrch gemini get-responses [SessionID] [--local]
-```
-
-### Messages
-```bash
 rsrch gemini send-message [SessionID] "Message" [--local] [--headed]
 ```
 
@@ -74,15 +70,16 @@ rsrch gemini export-to-docs [SessionID] [--local] [--headed]
 
 ### File Upload
 ```bash
-rsrch gemini upload-file [SessionID] "/path/to/file" [--local]
-rsrch gemini upload-files [SessionID] "file1" "file2" ... [--local]
+rsrch gemini upload-file "/path/to/file" [SessionID] [--local]
+rsrch gemini upload-files "file1" "file2" ... [--local]
+rsrch gemini upload-repo "https://github.com/..." --branch=main [SessionID] [--local]
 ```
 
 ### Gems (Custom Assistants)
 ```bash
 rsrch gemini list-gems [--local]
 rsrch gemini open-gem "GemNameOrID" [--local]
-rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path] [--local]
+rsrch gemini create-gem "Name" --instructions "System prompt" [--file /path] [--config /path] [--local]
 rsrch gemini chat-gem "GemNameOrID" "Message" [--local]
 ```
 
@@ -100,26 +97,36 @@ rsrch gemini sync-conversations [--limit=N] [--offset=M] [--local]
 rsrch notebook create "Title"
 rsrch notebook list [--local]
 rsrch notebook stats "Title" [--local]
-rsrch notebook open "Title" [--local]
+rsrch notebook artifacts "Title" [--local]
 ```
 
 ### Sources
 ```bash
 rsrch notebook add-source "URL" --notebook "Title"
+rsrch notebook add-drive-source "DocName1,DocName2" --notebook "Title"
+rsrch notebook add-text "Notebook Title" "Content or @file.txt" --source-title "Title"
 rsrch notebook sources "Title" [--local]
+rsrch notebook sources-without-audio --notebook "Title"
 rsrch notebook messages "Title" [--local]
 ```
 
 ### Audio
 ```bash
-rsrch notebook audio --notebook "Title" [--dry-run|--wet]
-rsrch notebook download-all-audio "Title" ./output --limit=5 --local
-rsrch notebook artifacts "Title" [--local]
+# Generate audio for sources
+rsrch notebook audio --notebook "Title" [--source "Source Name"] [--prompt "Custom Prompt"] [--wet] [--force]
+
+# Check Generation Status
+rsrch notebook audio-status --notebook "Title"
+
+# Download Audio
+rsrch notebook download-audio "audio.mp3" --notebook "Title" [--latest] [--pattern "regex"]
+rsrch notebook download-all-audio ./output --notebook "Title" [--limit=N]
+rsrch notebook download-batch-audio --titles "Title1,Title2" --output ./output
 ```
 
 ### Sync
 ```bash
-rsrch notebook sync [--limit=N] [--local]
+rsrch notebook sync [--title "Title"] [--audio] [--local]
 ```
 
 ---
@@ -131,6 +138,13 @@ rsrch notebook sync [--limit=N] [--local]
 rsrch graph status                              # Connection status
 rsrch graph notebooks [--limit=N]               # List synced notebooks
 rsrch graph conversations [--limit=N] [--local] # List synced conversations
+rsrch graph jobs [status]                       # List jobs (queued, running, etc)
+```
+
+### Exploration
+```bash
+rsrch graph conversation <ID> [--questions-only] [--answers-only] [--research-docs]
+rsrch graph lineage <ArtifactID>                # Show lineage (Job -> Session -> Doc -> Audio)
 ```
 
 ### Export
@@ -142,7 +156,7 @@ rsrch graph export [--platform=gemini|perplexity] [--format=md|json] [--output=p
 ```bash
 rsrch graph citations [--domain=example.com] [--limit=N]
 rsrch graph citation-usage <url>
-rsrch graph migrate-citations
+rsrch graph migrate-citations                   # Migrate ResearchDocs to Citation nodes
 ```
 
 ---
@@ -162,10 +176,20 @@ rsrch registry lineage <ID>                     # Show parent chain
 
 ---
 
-## Unified Pipeline
+## Monitoring & Automation
 
-End-to-end research to podcast.
+### Watcher
+```bash
+# Watch for new research and auto-process
+rsrch watch [--audio] [--queue] [--folder /path/to/audio] [--once]
+```
 
+### Notifications
+```bash
+rsrch notify "Message" --title "Title" --priority default
+```
+
+### Unified Pipeline
 ```bash
 rsrch unified "Query" [--prompt "custom prompt"] [--dry-run]
 ```
@@ -177,6 +201,7 @@ rsrch unified "Query" [--prompt "custom prompt"] [--dry-run]
 ```bash
 rsrch serve                                     # Start HTTP server
 rsrch serve --port 8080                         # Custom port
+rsrch stop                                      # Stop server
 ```
 
 ---
@@ -185,13 +210,15 @@ rsrch serve --port 8080                         # Custom port
 
 | Flag | Description |
 |------|-------------|
-| `--local` | Use local browser instead of server |
+| `--local` | Use local browser instead of server (Default for most commands) |
 | `--headed` | Show browser window (default: headless) |
 | `--session=ID` | Continue existing session |
 | `--name=NAME` | Create named session |
-| `--deep` | Enable deep research mode |
+| `--deep` | Enable deep research mode (Perplexity) |
+| `--gem="Name"` | Use specific Gem (Gemini) |
 | `--dry-run` | Simulate without side effects |
-| `--wet` | Execute with side effects (audio) |
+| `--wet` | Execute with side effects (e.g. consume audio quota) |
+| `--notebook="Title"` | Specify target NotebookLM notebook |
 
 ---
 
@@ -205,6 +232,8 @@ rsrch serve --port 8080                         # Custom port
 | `BROWSER_WS_ENDPOINT` | - | Remote browser WebSocket URL |
 | `FALKORDB_HOST` | `localhost` | Graph database host |
 | `FALKORDB_PORT` | `6379` | Graph database port |
+| `NTFY_SERVER` | `https://ntfy.sh` | Ntfy server for notifications |
+| `NTFY_TOPIC` | `rsrch-audio` | Ntfy topic |
 
 ---
 

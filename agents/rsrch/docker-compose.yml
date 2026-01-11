@@ -28,6 +28,7 @@ services:
       - ${HOME}/.config/rsrch:/app/config
     environment:
       - PORT=${PORT:-3001}
+      - WINDMILL_TOKEN=${WINDMILL_TOKEN}
       - BROWSER_CDP_ENDPOINT=http://host.docker.internal:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
