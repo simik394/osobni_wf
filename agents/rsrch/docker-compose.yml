@@ -4,9 +4,9 @@ services:
   chromium:
     build: ./browser
     ports:
-      - "5900:5900"
+      - "5902:5900"  # VNC (changed from 5900 to avoid conflict with local x11vnc)
       - "3005:3000"
-      - "9223:9223" # CDP port (socat proxy)
+      - "9225:9223" # CDP port (changed from 9223 to avoid conflict with angrav-browser)
     ipc: host
     volumes:
       - ${HOME}/.config/rsrch/user-data:/app/user-data

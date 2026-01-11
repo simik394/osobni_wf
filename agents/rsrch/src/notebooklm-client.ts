@@ -84,6 +84,54 @@ export class NotebookLMClient {
         }
     }
 
+    async query(message: string): Promise<string> {
+        console.log(`[NotebookLM] Sending query: "${message}"`);
+
+        try {
+            // Wait for input
+            const inputSelector = selectors.chat.input;
+            await this.page.waitForSelector(inputSelector);
+            await this.page.fill(inputSelector, message);
+            await this.humanDelay(800);
+
+            // Click send
+            const sendSelector = selectors.chat.submitButton;
+            await this.page.click(sendSelector);
+
+            // Wait for thinking indicator (short timeout as it appears quickly)
+            // Then wait for it to disappear (long timeout for generation)
+            try {
+                const indicator = selectors.chat.thinkingIndicator;
+                await this.page.waitForSelector(indicator, { timeout: 5000 });
+                await this.page.waitForSelector(indicator, { state: 'hidden', timeout: 60000 });
+            } catch (e) {
+                console.log('[NotebookLM] Warning: Thinking indicator flow timed out or skipped. Checking for message anyway.');
+            }
+
+            // Small settle delay
+            await this.humanDelay(1000);
+
+            // Get response
+            // We want the last message that is NOT the user message if possible,
+            // or just the last message and assume it's the model.
+            // In NotebookLM, model messages usually have specific classes like 'model-message' or 'message-bubble' 
+            // vs 'user-message'.
+
+            // Using a generic approach: fetch last message content
+            const lastMsgSelector = selectors.chat.lastMessage;
+            await this.page.waitForSelector(lastMsgSelector, { timeout: 10000 });
+            const response = await this.page.textContent(lastMsgSelector);
+
+            console.log(`[NotebookLM] Response received (${response?.length} chars)`);
+            return response || '';
+
+        } catch (e) {
+            console.error('[NotebookLM] Query failed:', e);
+            await this.dumpState('query_failure');
+            throw e;
+        }
+    }
+
     private async notifyDiscord(message: string, isError: boolean = false) {
         const webhookUrl = config.notifications?.discordWebhookUrl;
         if (!webhookUrl) return;
@@ -424,6 +472,83 @@ export class NotebookLMClient {
         } else {
             console.warn('[DEBUG] Select button not found or disabled. No files selected?');
         }
+    }
+
+    async uploadLocalFile(filePath: string) {
+        console.log(`[NotebookLM] Uploading local file: ${filePath}`);
+
+        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Sources tab...');
+                await sourcesTab.click();
+                await this.humanDelay(1000);
+            }
+        }
+
+        // Check if "Add sources" dialog is already open (NotebookLM auto-opens after new notebook)
+        const dialogVisible = await this.page.locator('mat-dialog-container').filter({ hasText: /Přidat zdroje|Add sources/i }).count() > 0;
+
+        if (!dialogVisible) {
+            // Click "Add sources" button only if dialog not already open
+            const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
+            if (await addSourceBtn.count() === 0) {
+                throw new Error('"Add sources" button not found');
+            }
+            await addSourceBtn.click();
+            await this.humanDelay(1000);
+        } else {
+            console.log('[NotebookLM] Add sources dialog already open, skipping button click');
+        }
+
+        // Find the file input. Usually it's hidden or handled via a button that triggers file picker.
+        // In Playwright, we can handle the file chooser event.
+
+        const fileChooserPromise = this.page.waitForEvent('filechooser', { timeout: 10000 });
+
+        // The UI shows a drop zone with "vyberte" (select) link. Try multiple selectors:
+        // 1. Text link "vyberte" or "select" within the dialog
+        // 2. The drop zone button
+        // 3. Any clickable element with upload_file icon
+
+        const selectLink = this.page.locator('span.select-files-link, a:has-text("vyberte"), a:has-text("select"), span:has-text("vyberte"), span:has-text("select")').first();
+        const uploadBtn = this.page.locator('button.drop-zone-icon-button, .drop-zone').first();
+        const iconBtn = this.page.locator('mat-icon:has-text("upload_file")').locator('..').first();
+
+        if (await selectLink.count() > 0 && await selectLink.isVisible()) {
+            console.log('[NotebookLM] Clicking select link...');
+            await selectLink.click({ force: true });  // Force click to bypass overlay
+        } else if (await uploadBtn.count() > 0 && await uploadBtn.isVisible()) {
+            console.log('[NotebookLM] Clicking upload button...');
+            await uploadBtn.click({ force: true });
+        } else if (await iconBtn.count() > 0 && await iconBtn.isVisible()) {
+            console.log('[NotebookLM] Clicking icon button...');
+            await iconBtn.click({ force: true });
+        } else {
+            // Last resort: click anywhere in the drop zone area
+            const dropZone = this.page.locator('.drop-zone, [class*="drop-zone"], .file-upload-area').first();
+            if (await dropZone.count() > 0) {
+                console.log('[NotebookLM] Clicking drop zone...');
+                await dropZone.click({ force: true });
+            } else {
+                throw new Error('Upload source button/link not found');
+            }
+        }
+
+        const fileChooser = await fileChooserPromise;
+        await fileChooser.setFiles(filePath);
+        console.log('[NotebookLM] File selected.');
+
+        // Wait for upload to complete
+        // usually the dialog closes automatically or we verify the file appears in source list.
+        // Let's wait for dialog to close.
+        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 30000 });
+
+        // Verify in source list?
+        // Simple delay for now.
+        await this.humanDelay(2000);
     }
 
     private taskQueue: Promise<any> = Promise.resolve();

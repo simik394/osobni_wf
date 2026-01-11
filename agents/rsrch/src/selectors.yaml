@@ -127,3 +127,13 @@ download:
 
   # Visibility states
   menuVisible: '[role="menu"]'
+
+# ============================================================
+# CHAT
+# ============================================================
+chat:
+  input: 'textarea[placeholder*="Začněte psát"], textarea[placeholder*="Tady můžete pokládat"], textarea[placeholder*="Ask a question"]'
+  submitButton: 'button[aria-label*="Odeslat"], button[aria-label*="Submit"], button[aria-label*="Send"]'
+  messageContainer: "conversation-view"
+  lastMessage: "message-bubble:last-of-type .message-content, user-message:last-of-type .message-content"
+  thinkingIndicator: "mat-progress-bar, mat-spinner"
