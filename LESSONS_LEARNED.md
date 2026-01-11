@@ -1,4 +1,29 @@
-# Lessons Learned: Project 01-pwf
+# Lessons Learned
+
+## User Preferences (Critical)
+
+### Don't Ask Obvious Questions (2026-01-11)
+- **Never ask for confirmation on obvious next steps** - just do it
+- **Preface actions with `Assumptions:` header** to make reasoning transparent
+- Only ask in: highly debatable, unknown, or high-stakes situations
+- Example bad: "Want me to test this?" → Just test it
+- Example good: "**Assumptions:** New key needs testing. Testing now..."
+
+### Jules API: startingBranch Required (2026-01-11)
+- **GitHub sources require `githubRepoContext.startingBranch`** field
+- Without it: API returns `400 INVALID_ARGUMENT`
+- Correct format:
+```json
+{
+  "prompt": "task",
+  "sourceContext": {
+    "source": "sources/github/owner/repo",
+    "githubRepoContext": {"startingBranch": "main"}
+  }
+}
+```
+
+
 
 This document serves as the centralized repository for all technical, process, and agentic insights gained during the development of this project.
 
@@ -100,11 +125,8 @@ When wrapping browser automation as OpenAI-compatible API:
 > **Tool Precedence: `jules-cli` FIRST, `browser_subagent` as TEMPORARY FALLBACK**
 > 
 > - Use `jules-cli` for: list, get, status, retry (fast, no memory overhead)
-> - Use `browser_subagent` ONLY until these CLI gaps are closed:
->   - `create` → TOOLS-113
->   - `approve` → TOOLS-114
->   - `respond` → TOOLS-115
->   - `publish` → TOOLS-116
+> - Use `jules-mcp` for: create, approve, send_message, wait_for_completion (reliable, programmatic)
+> - Use `browser_subagent` ONLY as LAST RESORT for capabilities missing in both CLI and MCP (e.g., publishing PRs if not in MCP yet)
 > - See: `agents/jules-go/README.md` and `flows/autonomous-pm-framework.md` section 2.2-2.3
 
 > [!TIP]
