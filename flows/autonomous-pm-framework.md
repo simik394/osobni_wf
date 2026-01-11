@@ -78,12 +78,13 @@ stateDiagram-v2
     Merged --> [*]
 ```
 
-### 2.2 Primary Tool: jules-cli
+### 2.2 Primary Tools: jules-cli & jules-mcp
 
 > [!TIP]
-> **Use `jules-cli` for ALL Jules operations where possible.**
-> 
-> Browser automation is resource-intensive. Use CLI first, browser only as fallback.
+> **Tool Precedence:**
+> 1. `jules-cli` (Fastest, read-only/status)
+> 2. `jules-mcp` (Programmatic, reliable execution)
+> 3. `browser_subagent` (Last resort only)
 
 **Setup:**
 ```bash
@@ -114,17 +115,17 @@ cd /home/sim/Obsi/Prods/01-pwf/agents/jules-go
 ### 2.3 Fallback: Browser Automation
 
 > [!WARNING]
-> **Only use `browser_subagent` when CLI cannot perform the operation.**
+> **Only use `browser_subagent` when CLI AND MCP cannot perform the operation.**
 
 | Operation | Tool | Notes |
 |-----------|------|-------|
 | List sessions | `jules-cli list` | ✅ Primary |
 | Get session status | `jules-cli get` | ✅ Primary |
 | Retry failed | `jules-cli retry` | ✅ Primary |
-| **Approve plan** | `browser_subagent` | ⚠️ Not in CLI yet |
-| **Publish PR** | `browser_subagent` | ⚠️ Not in CLI yet |
-| **Answer clarification** | `browser_subagent` | ⚠️ Not in CLI yet |
-| **Create new session** | `browser_subagent` | ⚠️ Not in CLI yet |
+| **Approve plan** | `jules-mcp` | ✅ Primary |
+| **Answer clarification** | `jules-mcp` | ✅ Primary |
+| **Create new session** | `jules-mcp` | ✅ Primary |
+| **Publish PR** | `browser_subagent` | ⚠️ Not in CLI/MCP yet |
 
 ### 2.4 Dispatch Decision Matrix
 
@@ -309,20 +310,164 @@ Dependencies:
 - Conflicting git operations
 ```
 
-### 6.3 Delegation Heuristics
+### 6.3 Delegation Decision Matrix
 
-| Task Type | Delegate To |
-|-----------|-------------|
-| Add tests | Jules |
-| Refactor code | Jules |
-| Fix specific bug | Jules |
-| Research best practices | rsrch |
-| Verify UI changes | browser_subagent |
-| Infrastructure changes | Manual / Ansible |
+> [!IMPORTANT]
+> **Core Rule**: Compare task complexity against issue management overhead.
+> If executing the task is easier than creating/managing/closing a YouTrack issue → do it yourself.
+
+#### When to Delegate to Jules
+
+| Condition | Action |
+|-----------|--------|
+| Task requires **significant code changes** (3+ files, 50+ lines) | ✅ Delegate to Jules |
+| Task involves **writing tests** from scratch | ✅ Delegate to Jules |
+| Task is **refactoring** with clear scope | ✅ Delegate to Jules |
+| Task requires **understanding unfamiliar codebase areas** | ✅ Delegate to Jules |
+| Task can run **in parallel** while you do other work | ✅ Delegate to Jules |
+| Daily limit has capacity | ✅ Delegate to Jules |
+
+#### When to Do It Yourself
+
+| Condition | Action |
+|-----------|--------|
+| **Quick fix** (typo, single-line change, config tweak) | ⚡ Do it yourself |
+| Task **blocks other work** and needs immediate resolution | ⚡ Do it yourself |
+| Change is **faster to make than to describe** to Jules | ⚡ Do it yourself |
+| You're **already looking at the code** | ⚡ Do it yourself |
+| Jules daily limit is **>95% used** | ⚡ Do it yourself |
+| Task requires **browser/UI interaction** Jules can't do | ⚡ Do it yourself (with browser_subagent) |
+
+#### Complexity Threshold Guide
+
+```
+Complexity Score = (Files touched × 2) + (Lines changed ÷ 10) + (Time estimate in minutes ÷ 5)
+
+Score < 5   → Do it yourself (not worth Jules overhead)
+Score 5-15  → Judgment call (consider current workload)
+Score > 15  → Delegate to Jules
+```
+
+**Examples:**
+- Fix typo in README: 1 file × 2 + 1 line ÷ 10 + 2 min ÷ 5 = **2.5** → Do yourself
+- Add new API endpoint: 3 files × 2 + 80 lines ÷ 10 + 30 min ÷ 5 = **20** → Jules
+- Rename function across codebase: 8 files × 2 + 20 lines ÷ 10 + 10 min ÷ 5 = **20** → Jules
+
+#### Edge Cases
+
+| Situation | Decision |
+|-----------|----------|
+| Small task but you're context-switching a lot | Delegate (preserve your focus) |
+| Large task but Jules keeps failing on it | Do yourself (stop wasting limit) |
+| Task requires secrets/credentials you have | Do yourself (Jules can't access) |
+| Task is research-heavy, then implement | rsrch first, then decide on implementation |
+
+### 6.4 Agent Selection by Task Type
+
+| Task Type | Primary Agent | Fallback |
+|-----------|---------------|----------|
+| Write new code / features | Jules | Manual |
+| Add or fix tests | Jules | Manual |
+| Refactor existing code | Jules | Manual |
+| Research best practices | rsrch | search_web |
+| Verify UI changes | browser_subagent | Manual check |
+| Infrastructure / IaC | Manual + Ansible | - |
+| Quick fixes / hotfixes | Manual | - |
+| Browser-only operations | browser_subagent | - |
 
 ---
 
-## 7. Quality Gates
+## 7. Scalable Session Management (1:N Protocol)
+
+> [!IMPORTANT]
+> **Orchestrator Pattern**: Antigravity acts as the **Orchestrator**, delegating heavy analysis to `rsrch` agents to handle 10-30 concurrent sessions.
+
+### 7.1 The Orchestrator Implementation
+
+| Role | Responsibility | Scaling Model |
+|------|----------------|---------------|
+| **Antigravity (Orchestrator)** | Triage sessions, dispatch analysis commands, execute decisions. | Single Instance |
+| **Windmill Proxy (Workers)** | Orchestrate execution, manage queuing, lightweight logic. | **Horizontal** (Ephemeral Containers) |
+| **rsrch Agent (Browser)** | Execute queries in persistent auth context. | **Vertical** (Concurrent Tab Pool, N=5) |
+
+### 7.2 Hybrid Concurrency Architecture
+
+> [!NOTE]
+> **Interleaved Execution**: The browser container is a singleton, but we maximize throughput via **Tab Pooling**.
+
+1.  **Submitter (Windmill Job)**:
+    *   Acquires a free tab from `tab-pool`.
+    *   Submits the prompt.
+    *   Sets up a **Passive Watcher** on the DOM to stream results.
+    *   *Does not block* the browser from handling other tabs while waiting for LLM generation (15-30s).
+2.  **Watcher**:
+    *   Detects completion events.
+    *   Streams response back to the Proxy.
+    *   Frees the tab for reuse.
+
+This allows up to 5 concurrent "Thinking" sessions per browser instance, actively managed by Windmill Workers.
+
+### 7.3 Delegation Workflows
+
+#### A. Parallel Plan Review (for `AWAITING_PLAN_APPROVAL`)
+
+1.  **Trigger**: Session state is `AWAITING_PLAN_APPROVAL`.
+2.  **Dispatch**: Run `rsrch` which proxies to Windmill Workers:
+    *   *Why Scalable?* This uses the **Proxy Path**. Windmill spawns independent worker containers for each request, bypassing the single-threaded local browser.
+    ```bash
+    rsrch gemini ask --context "[User Prompt] ... [Jules Plan] ..." \
+      "Verify this plan. 1. Does it answer the prompt? 2. Are there security risks? 3. Recommended: APPROVE/REJECT + Reason."
+    ```
+3.  **Aggregate**: Collect outputs.
+4.  **Execute**: 
+    -   **If APPROVED**: Call `jules-mcp approve_session_plan`.
+    -   **If REJECTED**: Call `jules-mcp send_session_message` with the feedback.
+
+#### B. Mass Failure Analysis (for `FAILED`)
+
+1.  **Trigger**: Session state is `FAILED`.
+2.  **Dispatch**: Run `rsrch` on error logs:
+    ```bash
+    rsrch gemini ask --context "[Error Log] ..." \
+      "Analyze failure. Is it: TRANSIENT (network/rate limit), COMPLEX (code ambiguity), or FUNDAMENTAL (impossible)? Return keyword."
+    ```
+3.  **Execute**:
+    -   **TRANSIENT**: Batch retry using `jules-cli retry`.
+    -   **COMPLEX**: Create YouTrack issue for manual split/review.
+    -   **FUNDAMENTAL**: Close with "WontFix" comment.
+
+### 7.4 Reference Prompts
+
+> [!TIP]
+> **Prompt Engineering Strategy**: Use rigid, structured output formats to make automated parsing easier.
+
+#### **A. Plan Validation Prompt**
+```text
+Review the attached implementation plan against the user prompt. 
+CHECKLIST: 
+1. Completeness (covers all requirements?)
+2. Safety (no destructive actions?)
+3. Feasibility (uses available tools?)
+
+DECISION: [APPROVE/REJECT]
+REASONING: [Brief explanation, max 2 sentences]
+```
+
+#### **B. Error Diagnosis Prompt**
+```text
+Analyze the attached session log. 
+CATEGORY: [TRANSIENT/COMPLEX/FUNDAMENTAL]
+- TRANSIENT: Network/Rate Limit issues (Safe to retry).
+- COMPLEX: Logic/Code ambiguity (Needs human review).
+- FUNDAMENTAL: Impossible request/Missing capabilities (Abort).
+
+ACTION: [RETRY/ESCALATE/ABORT]
+EXPLANATION: [1 sentence analysis]
+```
+
+---
+
+## 8. Quality Gates
 
 ### 7.1 Pre-Commit
 
@@ -347,7 +492,7 @@ Dependencies:
 
 ---
 
-## 8. Common Workflows
+## 9. Common Workflows
 
 ### 8.1 Start of Session
 
@@ -383,7 +528,7 @@ When resuming after interruption:
 
 ---
 
-## 9. Error Handling
+## 10. Error Handling
 
 ### 9.1 Jules Session Failures
 
@@ -407,7 +552,7 @@ Failed session → Analyze error
 
 ---
 
-## 10. Metrics & Reporting
+## 11. Metrics & Reporting
 
 ### 10.1 Session Metrics
 
@@ -448,7 +593,7 @@ Failed session → Analyze error
 
 ---
 
-## 11. Anti-Patterns (From LESSONS_LEARNED)
+## 12. Anti-Patterns (From LESSONS_LEARNED)
 
 ### 11.1 What NOT To Do
 
@@ -471,9 +616,9 @@ From [LESSONS_LEARNED.md](file:///home/sim/Obsi/Prods/01-pwf/LESSONS_LEARNED.md)
 
 ---
 
-## 12. References
+## 13. References
 
-- [GEMINI.md](file:///home/sim/Obsi/Prods/01-pwf/GEMINI.md) - Agent protocols and mandates
+- [AGENTS.md](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/AGENTS.md) - Agent protocols and mandates
 - [LESSONS_LEARNED.md](file:///home/sim/Obsi/Prods/01-pwf/LESSONS_LEARNED.md) - Anti-patterns and insights
 - [jules-go README](file:///home/sim/Obsi/Prods/01-pwf/agents/jules-go/README.md) - Jules client documentation
 - [rsrch README](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/README.md) - Research agent documentation

@@ -1,5 +1,72 @@
 # Development Guide - Perplexity Automation
 
+## ⚠️ CRITICAL AGENT PROTOCOLS
+
+> [!CAUTION]
+> ### 🚨 VERIFY BEFORE STATING AS FACT 🚨
+>
+> **NEVER state uncertain information as truth.** If you are not 200% certain about something:
+> 1. **STOP** - Do not include it in your answer
+> 2. **VERIFY FIRST** - Use `search_web`, `rsrch`, `read_url_content`, or other tools
+> 3. **ONLY THEN** state it as fact
+>
+> **If unsure and can't verify:** Say "I'm not certain about X, let me check..." then actually check.
+
+### Research Escalation
+After **2-3 failed `search_web` attempts**:
+1. **DO NOT keep spinning** on more simple searches
+2. **ESCALATE to `rsrch`** - use deep research capability for comprehensive investigation
+3. Only after `rsrch` also fails → ask user for direction.
+
+**Tool hierarchy:** `search_web` (quick) → `rsrch gemini query/deep-research` (comprehensive) → ask user (last resort)
+
+### rsrch Modes
+| Mode | Command | Speed | Reliability | Use Case |
+|------|---------|-------|-------------|----------|
+| **Regular Query** | `rsrch gemini query "prompt"` | Fast (seconds) | ~80% reliable | Quick lookups, general questions |
+| **Deep Research** | `rsrch gemini deep-research "prompt"` | Slow (minutes) | High reliability | Questions that MUST be true and accurate |
+
+**Critical constraint:** Deep research mode can ONLY be turned on for NEW sessions.
+
+## Task Management Rules (YouTrack)
+### When to create YouTrack issues:
+- **Major Tasks**: Create issue, delegate to Jules or track for later.
+- **Micro Tasks**: Execute manually, BUT still create closed issue for tracking.
+- **Blocking**: Do it yourself with available non-AI tools (fastest solution).
+
+### Tracking Requirements:
+- **Missing track of change is UNACCEPTABLE**.
+- **Commit messages**: Mention YouTrack issue ID (e.g., `TOOLS-123: fix typo`).
+- **Progress**: Update checkboxes IMMEDIATELY. Add timestamps `[Started: HH:MM]` and `[x] Task - [HH:MM-HH:MM]`.
+- **Proof**: **Every completed issue MUST have proof** (screenshot, log, video) attached before closing.
+
+### Work Discovery:
+1. **Find work** → `mcp_napovedayt_search_issues` (`for: me #Unresolved`)
+2. **Do the work** → Implement, test, verify, attach proof.
+3. **Close the issue** → Mark complete.
+4. **Repeat**.
+
+## Proactive Assumptions
+- **Never ask for confirmation on obvious next steps**.
+- Preface actions with bold `**Assumptions:**` when making non-trivial decisions.
+- **Lessons Learned**: ALWAYS search for and consult `LESSONS_LEARNED.md` at the start of a task. Update it after finishing.
+
+## User Mandates
+- **Backup First**: Ensure content is backed up before removing.
+- **Docker > Local**: Prefer Docker containers.
+- **Scripts > Ad-hoc**: Create reusable scripts.
+
+## Context Window Monitoring
+- **Report**: "📊 Context: ~XK tokens remaining (Y% used)" every 2-5 responses.
+- **Warn**: "⚠️ Context getting full" below 50K tokens.
+
+## Jules Interaction
+1. **`jules-cli` (PRIMARY)**: List, get, status, retry.
+2. **`jules-mcp` (PRIMARY)**: Create, approve, send_message.
+3. **`browser_subagent` (LAST RESORT)**: UI-only ops.
+
+---
+
 ## Project Overview
 This project automates querying Perplexity.ai using Playwright in a Dockerized environment. It handles authentication, bot detection evasion, and provides both headful and VNC-enabled headless modes.
 
@@ -107,6 +174,47 @@ const lookup = promisify(dns.lookup);
 const result = await lookup(host);
 cdpEndpoint = `http://${result.address}:${url.port}`;
 ```
+
+### 6. Concurrency & Scaling Architecture (Hybrid Model)
+
+> [!IMPORTANT]
+> **Understanding the "Why":** We rely on a singleton browser container to maintain persistent authentication state (avoiding bot detection), but we must scale to handle 20+ concurrent sessions.
+
+**The Solution: Hybrid Concurrency**
+
+1.  **Horizontal Scaling (Windmill Workers):**
+    -   **Role:** Stateless orchestration logic.
+    -   **Mechanism:** Windmill spawns ephemeral containers for each request (e.g., plan review).
+    -   **Behavior:** "Submit & Watch" pattern.
+    -   **Scale:** Unlimited (constrained only by cluster resources).
+
+2.  **Vertical Scaling (Browser Singleton):**
+    -   **Role:** Stateful execution (rendering, clicking).
+    -   **Mechanism:** **TAB POOLING** within the single browser instance.
+    -   **Scale:** Limited by RAM (`MAX_TABS = 5` by default).
+
+**The "Submit & Passive Watcher" Pattern**
+
+To bridge the gap between "Unlimited Workers" and "Limited Tabs", we use a non-blocking pattern:
+
+1.  **Submit:** Worker acquires a tab, submits the prompt, and **immediately returns**.
+2.  **Watch:** Worker sets up a **Passive Watcher** on the DOM.
+3.  **Result:**
+    -   The browser tab sits idle (waiting for network) while the LLM generates (15-30s).
+    -   The browser event loop is free to handle *other* tabs.
+    -   We achieve parallelism *interleaved* within the single thread.
+
+> [!CRITICAL]
+> **TAB PERSISTENCE REQUIRED:**
+> The "Passive Watcher" relies on a `MutationObserver` attached to the *live* DOM context.
+> **Browser tabs MUST NOT be reloaded during active monitoring.**
+> Reloading the page destroys the observer and the JS execution context, breaking the stream/watch process.
+> The tab must remain open and untouched until the LLM generation is complete.
+
+**ANTI-PATTERNS (DO NOT DO):**
+-   ❌ **Blocking Wait:** `await page.waitForSelector(...)` for 30s blocks the entire Node event loop if not careful.
+-   ❌ **Parallel Browsers:** Launching 5 docker containers of `rsrch` will trigger Cloudflare immediately due to shared volume contention or suspicious IP activity.
+-   ❌ **Sequential Queuing:** Queuing requests 1-by-1 at the API level destroys throughput. Use the Tab Pool.
 
 ## Critical Configurations
 

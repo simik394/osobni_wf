@@ -1,7 +1,7 @@
 // Windmill Script: watch_audio_completion
 // Monitors NotebookLM for audio generation completion, updates FalkorDB, and sends ntfy.
 //
-// Architecture per GEMINI.md:
+// Architecture per agents/rsrch/AGENTS.md:
 // 1. click_generate_audio.ts creates a PendingAudio node in FalkorDB.
 // 2. This script (watch_audio_completion.ts) runs on a schedule.
 // 3. It fetches all PendingAudio nodes.

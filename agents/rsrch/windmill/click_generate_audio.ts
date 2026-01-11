@@ -2,7 +2,7 @@
 // Triggers audio generation for a source and updates FalkorDB state
 // NON-BLOCKING: Returns immediately after clicking, does NOT wait for completion
 // 
-// Architecture per GEMINI.md:
+// Architecture per agents/rsrch/AGENTS.md:
 // 1. Click to generate → Update FalkorDB with pending audio → Return immediately
 // 2. Watcher (separate) monitors completion → Webhook updates FalkorDB + ntfy
 

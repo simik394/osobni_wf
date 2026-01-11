@@ -5,7 +5,7 @@
  * by routing audio generation through Windmill's job queue.
  *
  * IMPORTANT: Every job trigger creates a PendingAudio in FalkorDB
- * for real-time state tracking (per GEMINI.md mandate).
+ * for real-time state tracking (per agents/rsrch/AGENTS.md mandate).
  */
 
 import { getGraphStore, type PendingAudio } from './graph-store';
@@ -118,7 +118,7 @@ export class WindmillClient {
 
     /**
      * Trigger audio generation for a single source
-     * Returns immediately with job ID (non-blocking per GEMINI.md architecture)
+     * Returns immediately with job ID (non-blocking per agents/rsrch/AGENTS.md architecture)
      */
     async triggerAudioGeneration(params: AudioGenerationParams): Promise<WindmillJobResult> {
         const url = `${this.baseUrl}/api/w/${this.workspace}/jobs/run/p/f/audio/click_generate_audio`;
