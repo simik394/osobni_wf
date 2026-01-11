@@ -64,25 +64,8 @@ type Activity struct {
 	// Add other activity fields as needed
 }
 
-// Plan represents a Jules plan.
-type Plan struct {
-	// Define plan structure as needed
-}
-
-// CreateSession creates a new Jules session.
-func (c *Client) CreateSession(ctx context.Context) (*Session, error) {
-	req, err := c.newRequest(ctx, "POST", c.baseURL+"/sessions", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var session Session
-	if _, err := c.do(req, &session); err != nil {
-		return nil, err
-	}
-
-	return &session, nil
-}
+// For session creation and plan approval, please use the jules-mcp tool.
+// This client is intended for monitoring and webhook integration.
 
 // GetSession retrieves a Jules session.
 func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, error) {
@@ -129,18 +112,6 @@ func (c *Client) ListActivities(ctx context.Context, sessionID string) ([]*Activ
 	}
 
 	return activities, nil
-}
-
-// ApprovePlan approves a plan for a session.
-func (c *Client) ApprovePlan(ctx context.Context, sessionID string, plan Plan) error {
-	url := fmt.Sprintf("%s/sessions/%s/plan:approve", c.baseURL, sessionID)
-	req, err := c.newRequest(ctx, "POST", url, plan)
-	if err != nil {
-		return err
-	}
-
-	_, err = c.do(req, nil)
-	return err
 }
 
 func (c *Client) newRequest(ctx context.Context, method, url string, body interface{}) (*http.Request, error) {
