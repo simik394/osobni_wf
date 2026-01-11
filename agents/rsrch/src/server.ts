@@ -1077,6 +1077,11 @@ app.post('/gemini/research', async (req, res) => {
 
         if (!geminiClient) {
             console.log('[Server] Creating Gemini client...');
+            // Lazy browser init if startup failed
+            if (!client.isBrowserInitialized()) {
+                console.log('[Server] Browser not initialized - connecting now...');
+                await client.init();
+            }
             geminiClient = await client.createGeminiClient();
             await geminiClient.init();
         }
