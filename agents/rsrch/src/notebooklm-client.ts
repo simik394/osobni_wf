@@ -88,9 +88,24 @@ export class NotebookLMClient {
         console.log(`[NotebookLM] Sending query: "${message}"`);
 
         try {
-            // Wait for input
+            // Wait for input to be visible AND enabled (sources may still be processing)
             const inputSelector = selectors.chat.input;
-            await this.page.waitForSelector(inputSelector);
+            console.log('[NotebookLM] Waiting for chat input to be enabled...');
+
+            // First wait for element to appear
+            await this.page.waitForSelector(inputSelector, { state: 'visible', timeout: 60000 });
+
+            // Then wait specifically for it to become enabled (not disabled)
+            await this.page.waitForFunction(
+                (sel: string) => {
+                    const el = document.querySelector(sel) as HTMLTextAreaElement | null;
+                    return el && !el.disabled;
+                },
+                inputSelector,
+                { timeout: 60000 }
+            );
+
+            console.log('[NotebookLM] Chat input enabled. Filling query...');
             await this.page.fill(inputSelector, message);
             await this.humanDelay(800);
 

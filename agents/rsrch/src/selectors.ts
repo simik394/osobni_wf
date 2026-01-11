@@ -87,6 +87,15 @@ export interface NotebookLMSelectors {
     studio: StudioSelectors;
     audio: AudioSelectors;
     download: DownloadSelectors;
+    chat: ChatSelectors;
+}
+
+export interface ChatSelectors {
+    input: string;
+    submitButton: string;
+    messageContainer: string;
+    lastMessage: string;
+    thinkingIndicator: string;
 }
 
 // Default selectors (fallback if YAML fails to load)
@@ -152,6 +161,13 @@ const defaultSelectors: NotebookLMSelectors = {
         downloadMenuItemCs: 'Stáhnout',
         downloadMenuItemEn: 'Download',
         menuVisible: '[role="menu"]',
+    },
+    chat: {
+        input: 'textarea[placeholder*="Začněte psát"], textarea[placeholder*="Tady můžete pokládat"], textarea[placeholder*="Ask a question"]',
+        submitButton: 'button[aria-label*="Odeslat"], button[aria-label*="Submit"], button[aria-label*="Send"]',
+        messageContainer: 'conversation-view',
+        lastMessage: 'message-bubble:last-of-type .message-content, user-message:last-of-type .message-content',
+        thinkingIndicator: 'mat-progress-bar, mat-spinner',
     },
 };
 

@@ -165,6 +165,76 @@ async function runTests() {
 
         await client.uploadLocalFile(pdfPath); // Assuming we implement this!
 
+        // Wait for source to finish processing - look for spinner in the specific source row
+        console.log('[Test 2] Waiting for source to finish processing...');
+        try {
+            // Wait for the loading spinner inside the source row to disappear
+            // The spinner appears in .loading-spinner-container inside .single-source-container
+            await page.waitForFunction(
+                () => {
+                    // Check if there are any loading spinners in source containers
+                    const sourceContainers = Array.from(document.querySelectorAll('.single-source-container'));
+                    for (const container of sourceContainers) {
+                        const spinner = container.querySelector('mat-progress-spinner, .loading-spinner');
+                        if (spinner) {
+                            return false; // Still processing
+                        }
+                    }
+                    // Also check that at least one source exists
+                    return sourceContainers.length > 0;
+                },
+                { timeout: 180000 } // 3 minute timeout for processing
+            );
+            console.log('[Test 2] Source processing complete.');
+        } catch (e) {
+            console.log('[Test 2] Warning: Source processing wait timed out. Taking screenshot...');
+            await client.dumpState('processing_timeout');
+        }
+
+        // Wait a bit for UI to settle after processing completes
+        await page.waitForTimeout(2000);
+
+        // Ensure source is selected by clicking "Select all sources" checkbox
+        console.log('[Test 2] Selecting all sources...');
+        const selectAllCheckbox = page.locator('input[aria-label*="Vybrat všechny zdroje"], input[aria-label*="Select all sources"]');
+        if (await selectAllCheckbox.count() > 0) {
+            // Toggle twice to ensure selection (clear + select)
+            await selectAllCheckbox.click();
+            await page.waitForTimeout(500);
+            const isChecked = await selectAllCheckbox.isChecked();
+            if (!isChecked) {
+                await selectAllCheckbox.click();
+                await page.waitForTimeout(500);
+            }
+            console.log('[Test 2] Clicked select all sources.');
+        } else {
+            console.log('[Test 2] Warning: Could not find select all checkbox.');
+        }
+
+        // Wait for source count in chat to update (should show > 0)
+        console.log('[Test 2] Waiting for source count to update...');
+        try {
+            await page.waitForFunction(
+                () => {
+                    const countEl = document.querySelector('.selected-num');
+                    if (!countEl) return false;
+                    const text = countEl.textContent || '';
+                    // Check for non-zero count (e.g., "1 zdroj" or "1 source")
+                    const match = text.match(/(\d+)/);
+                    return match && parseInt(match[1]) > 0;
+                },
+                { timeout: 30000 }
+            );
+            console.log('[Test 2] Source count updated.');
+        } catch (e) {
+            console.log('[Test 2] Warning: Source count still shows 0.');
+            await client.dumpState('zero_sources');
+        }
+
+        // Verify source count in chat
+        const sourceCount = await page.locator('.selected-num').textContent();
+        console.log(`[Test 2] Source count indicator: ${sourceCount}`);
+
         const pdfQuery = "What is the sales figure shown in the red box?";
         const pdfAnswer = await client.query(pdfQuery);
         console.log(`[Test 2] Answer: ${pdfAnswer}`);
