@@ -32,6 +32,10 @@ services:
       - BROWSER_CDP_ENDPOINT=http://chromium:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
+      - FALKORDB_HOST=falkordb
+    depends_on:
+      - chromium
+      - falkordb
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: npm run serve
