@@ -1,5 +1,7 @@
 package export
 
+import "strings"
+
 // ExportOptions configures filtering and detail level
 type ExportOptions struct {
 	// Excludes contains path substrings to filter out (e.g., "node_modules")
@@ -8,6 +10,22 @@ type ExportOptions struct {
 	Detail string
 	// Filter: "all", "internal" (structural), "external" (dependencies)
 	Filter string
+	// NodeTypes to include: "Class", "Function", "Package", "File"
+	NodeTypes []string
+	// RelTypes to include: "IMPORTS", "DEFINES", "CALLS"
+	RelTypes []string
+	// Depth limit for traversal (0 = unlimited)
+	Depth int
+}
+
+// SanitizeCypher ensures input strings are safe for Cypher injection (alphanumeric + underscore)
+func SanitizeCypher(s string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			return r
+		}
+		return -1
+	}, s)
 }
 
 const (
@@ -19,9 +37,12 @@ const (
 // DefaultExportOptions returns sensible defaults
 func DefaultExportOptions() ExportOptions {
 	return ExportOptions{
-		Excludes: []string{"node_modules", "vendor", ".git"},
-		Detail:   "medium",
-		Filter:   FilterAll,
+		Excludes:  []string{"node_modules", "vendor", ".git"},
+		Detail:    "medium",
+		Filter:    FilterAll,
+		NodeTypes: []string{}, // Empty means all relevant types
+		RelTypes:  []string{}, // Empty means all relevant relationships
+		Depth:     0,          // 0 means unlimited
 	}
 }
 

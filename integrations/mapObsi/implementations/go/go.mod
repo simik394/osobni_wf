@@ -10,6 +10,7 @@ require (
 	github.com/redis/go-redis/v9 v9.3.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/sourcegraph/scip v0.6.1
+	github.com/stretchr/testify v1.10.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -30,6 +31,7 @@ require (
 	github.com/cockroachdb/redact v1.1.3 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/docker/cli v24.0.4+incompatible // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
@@ -66,6 +68,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/profile v1.7.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pseudomuto/protoc-gen-doc v1.5.1 // indirect
 	github.com/pseudomuto/protokit v0.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect

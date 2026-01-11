@@ -10,6 +10,11 @@ import (
 
 // ExportMermaid generates a Module Dependency Graph (Mermaid flowchart)
 func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (string, error) {
+	// Special case: If user only asks for "Class", delegate to Class Diagram
+	if len(opts.NodeTypes) == 1 && strings.EqualFold(opts.NodeTypes[0], "Class") {
+		return ExportMermaidClasses(ctx, client, scopePath, opts)
+	}
+
 	var sb strings.Builder
 	sb.WriteString("graph TD\n")
 	sb.WriteString("    %% Module Structure with External Dependencies\n")
@@ -56,9 +61,35 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 
 	// 1. Structural Relationships (DEFINES)
 	if opts.Filter == FilterAll || opts.Filter == FilterInternal {
-		queryDefines := "MATCH (c:Code)-[:DEFINES]->(s) WHERE c.path IS NOT NULL RETURN c.path, c.name, labels(s)[0], s.name"
+		// Build label filter if NodeTypes are specified
+		labelFilter := ""
+		if len(opts.NodeTypes) > 0 {
+			validTypes := make([]string, 0, len(opts.NodeTypes))
+			for _, t := range opts.NodeTypes {
+				safeType := SanitizeCypher(t)
+				if safeType != "" {
+					validTypes = append(validTypes, fmt.Sprintf("'%s'", safeType))
+				}
+			}
+			if len(validTypes) > 0 {
+				labelFilter = fmt.Sprintf(" AND labels(s)[0] IN [%s]", strings.Join(validTypes, ", "))
+			}
+		}
+
+		// Handle depth
+		relStr := "-[:DEFINES]->"
+		if opts.Depth > 0 {
+			relStr = fmt.Sprintf("-[:DEFINES*1..%d]->", opts.Depth)
+		}
+
+		queryDefines := fmt.Sprintf("MATCH (c:Code)%s(s) WHERE c.path IS NOT NULL%s RETURN c.path, c.name, labels(s)[0], s.name", relStr, labelFilter)
 		if scopePath != "" {
-			queryDefines = fmt.Sprintf("MATCH (c:Code)-[:DEFINES]->(s) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, labels(s)[0], s.name", scopePath)
+			// Note: scopePath is still potentially unsafe if not sanitized elsewhere, but here we focus on opts
+			// Assuming scopePath is a path string, we should probably treat it carefully too, but keeping minimal changes for now.
+			// Ideally we use parameters, but client.Query seems to take raw string.
+			// We should escape single quotes in scopePath.
+			safeScope := strings.ReplaceAll(scopePath, "'", "\\'")
+			queryDefines = fmt.Sprintf("MATCH (c:Code)%s(s) WHERE c.path CONTAINS '%s'%s RETURN c.path, c.name, labels(s)[0], s.name", relStr, safeScope, labelFilter)
 		}
 
 		resDefines, err := client.Query(ctx, queryDefines)
@@ -90,10 +121,29 @@ func ExportMermaid(ctx context.Context, client *db.Client, scopePath string, opt
 	}
 
 	// 2. Dependency Relationships (IMPORTS)
-	if opts.Filter == FilterAll || opts.Filter == FilterExternal {
-		queryImports := "MATCH (c:Code)-[r:IMPORTS]->(target:Module) WHERE c.path IS NOT NULL RETURN c.path, c.name, target.name"
+	// Check if IMPORTS is allowed (default yes, unless RelTypes specified and excludes IMPORTS)
+	allowImports := true
+	if len(opts.RelTypes) > 0 {
+		allowImports = false
+		for _, rt := range opts.RelTypes {
+			if rt == "IMPORTS" {
+				allowImports = true
+				break
+			}
+		}
+	}
+
+	if allowImports && (opts.Filter == FilterAll || opts.Filter == FilterExternal) {
+		// Handle depth for imports (though usually direct, transitive dependencies might be interesting)
+		relStr := "-[r:IMPORTS]->"
+		if opts.Depth > 0 {
+			relStr = fmt.Sprintf("-[r:IMPORTS*1..%d]->", opts.Depth)
+		}
+
+		queryImports := fmt.Sprintf("MATCH (c:Code)%s(target:Module) WHERE c.path IS NOT NULL RETURN c.path, c.name, target.name", relStr)
 		if scopePath != "" {
-			queryImports = fmt.Sprintf("MATCH (c:Code)-[r:IMPORTS]->(target:Module) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, target.name", scopePath)
+			safeScope := strings.ReplaceAll(scopePath, "'", "\\'")
+			queryImports = fmt.Sprintf("MATCH (c:Code)%s(target:Module) WHERE c.path CONTAINS '%s' RETURN c.path, c.name, target.name", relStr, safeScope)
 		}
 
 		resImports, err := client.Query(ctx, queryImports)

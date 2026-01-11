@@ -73,7 +73,30 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'default' });</script>
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: 'default' });
+        // Enable pan/zoom after mermaid renders
+        window.addEventListener('load', function() {
+            // Give mermaid a moment to render
+            setTimeout(function() {
+                var svgs = document.querySelectorAll(".mermaid svg");
+                svgs.forEach(function(svg) {
+                    // Set IDs to ensure svg-pan-zoom works
+                    if (!svg.id) {
+                        svg.id = "mermaid-" + Math.random().toString(36).substr(2, 9);
+                    }
+                    // Initialize pan-zoom
+                    svgPanZoom('#' + svg.id, {
+                        zoomEnabled: true,
+                        controlIconsEnabled: true,
+                        fit: true,
+                        center: true
+                    });
+                });
+            }, 500);
+        });
+    </script>
 </head>
 
 <body>
@@ -141,6 +164,7 @@
                 onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>alert('Copied!'))">Copy
                 Source</button>
             <span style="display:none;">{{ .Content }}</span> |
+            <a href="{{ .Filename }}" download="{{ .Filename }}">Download</a> |
             <a href="{{ .BrowserLink }}" target="_blank">Raw Source</a>
         </div>
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -65,10 +66,6 @@ func main() {
 	case "ingest-scip":
 		runIngestSCIP(cfg, os.Args[2:])
 	case "export":
-		if len(os.Args) < 3 {
-			fmt.Println("Usage: librarian export <mermaid|dot> [path]")
-			os.Exit(1)
-		}
 		runExport(cfg, os.Args[2:])
 	case "report":
 		if len(os.Args) < 3 {
@@ -95,12 +92,15 @@ Usage:
   librarian query functions <name>   Find function definitions
   librarian query classes <name>     Find class definitions
   librarian stats              Show graph statistics
+  librarian export             Export diagrams (mermaid, plantuml)
 
 Examples:
   librarian scan                        # Full vault scan
   librarian scan agents/                # Scan only agents/ folder
   librarian scan --profile notes        # Use 'notes' profile from config
   librarian analyze 01-pwf              # Trigger AI analysis for project
+  librarian export --format mermaid --type class
+  librarian export --format plantuml --filter "type:Package"
 
 Configuration:
   Place config.yaml at ~/.config/librarian/config.yaml
@@ -354,10 +354,58 @@ func runIngestSCIP(cfg *config.Config, args []string) {
 }
 
 func runExport(cfg *config.Config, args []string) {
-	format := args[0]
-	scopePath := ""
-	if len(args) > 1 {
-		scopePath = args[1]
+	exportCmd := flag.NewFlagSet("export", flag.ExitOnError)
+	format := exportCmd.String("format", "mermaid", "Export format: mermaid, dot, plantuml")
+	typeFilter := exportCmd.String("type", "", "Comma-separated node types to include (e.g. Class,Function)")
+	relFilter := exportCmd.String("relation", "", "Comma-separated relationship types to include")
+	filterStr := exportCmd.String("filter", "", "Filter string (legacy: all, internal, external)")
+	depth := exportCmd.Int("depth", 0, "Depth limit (0=unlimited)")
+	path := exportCmd.String("path", "", "Scope path (optional)")
+
+	// Handle legacy positional arguments if flags are not present
+	// This is a bit tricky with FlagSet, so we try to parse.
+	// If the first arg doesn't start with "-", assume it is format, then path
+	legacyFormat := ""
+	legacyPath := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		legacyFormat = args[0]
+		if len(args) > 1 && !strings.HasPrefix(args[1], "-") {
+			legacyPath = args[1]
+			// remove parsed positional args so flag parsing works on the rest if any
+			args = args[2:]
+		} else {
+			args = args[1:]
+		}
+	}
+
+	if err := exportCmd.Parse(args); err != nil {
+		log.Fatalf("Failed to parse export flags: %v", err)
+	}
+
+	// Consolidate options
+	finalFormat := *format
+	if legacyFormat != "" {
+		finalFormat = legacyFormat
+	}
+	finalPath := *path
+	if legacyPath != "" {
+		finalPath = legacyPath
+	} else if exportCmd.NArg() > 0 {
+		// If path not set by flag or legacy checks, take first remaining arg
+		finalPath = exportCmd.Arg(0)
+	}
+
+	opts := export.DefaultExportOptions()
+	opts.Depth = *depth
+	if *filterStr != "" {
+		opts.Filter = *filterStr
+	}
+
+	if *typeFilter != "" {
+		opts.NodeTypes = strings.Split(*typeFilter, ",")
+	}
+	if *relFilter != "" {
+		opts.RelTypes = strings.Split(*relFilter, ",")
 	}
 
 	dbClient, err := db.NewClient(cfg.Database.Addr, cfg.Database.Graph)
@@ -368,13 +416,13 @@ func runExport(cfg *config.Config, args []string) {
 	ctx := context.Background()
 	var output string
 
-	switch format {
+	switch finalFormat {
 	case "mermaid":
-		output, err = export.ExportMermaid(ctx, dbClient, scopePath, export.DefaultExportOptions())
+		output, err = export.ExportMermaid(ctx, dbClient, finalPath, opts)
 	case "dot":
-		output, err = export.ExportDOT(ctx, dbClient, scopePath, export.DefaultExportOptions())
+		output, err = export.ExportDOT(ctx, dbClient, finalPath, opts)
 	case "plantuml":
-		pumlMap, err := export.ExportPlantUML(ctx, dbClient, scopePath, export.DefaultExportOptions())
+		pumlMap, err := export.ExportPlantUML(ctx, dbClient, finalPath, opts)
 		if err == nil {
 			var sb strings.Builder
 			for filename, content := range pumlMap {
@@ -384,11 +432,10 @@ func runExport(cfg *config.Config, args []string) {
 			}
 			output = sb.String()
 		} else {
-			// Propagate error
 			output = ""
 		}
 	default:
-		log.Fatalf("Unknown export format: %s. Supported: mermaid, dot, plantuml", format)
+		log.Fatalf("Unknown export format: %s. Supported: mermaid, dot, plantuml", finalFormat)
 	}
 
 	if err != nil {

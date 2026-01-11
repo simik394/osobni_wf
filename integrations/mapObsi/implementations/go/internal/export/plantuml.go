@@ -40,10 +40,35 @@ func ExportPlantUML(ctx context.Context, client *db.Client, scopePath string, op
 func exportComponentDiagram(ctx context.Context, client *db.Client, scopePath string, opts ExportOptions) (map[string]string, error) {
 	results := make(map[string]string)
 
+	// Build filter for relationship types
+	relFilter := ""
+	if len(opts.RelTypes) > 0 {
+		validTypes := make([]string, 0, len(opts.RelTypes))
+		for _, t := range opts.RelTypes {
+			safeType := SanitizeCypher(t)
+			if safeType != "" {
+				validTypes = append(validTypes, fmt.Sprintf("'%s'", safeType))
+			}
+		}
+		if len(validTypes) > 0 {
+			relFilter = fmt.Sprintf(" AND type(r) IN [%s]", strings.Join(validTypes, ", "))
+		}
+	}
+
+	// Handle Depth
+	relStr := "-[r]->"
+	typePart := "type(r)"
+	if opts.Depth > 0 {
+		relStr = fmt.Sprintf("-[r*1..%d]->", opts.Depth)
+		// When path is variable length, r is a list. Use type(last(r)) as approximation or simple label
+		typePart = "type(last(r))"
+	}
+
 	// Query all relationships
-	query := "MATCH (n:Code)-[r]->(m) RETURN n.name, type(r), m.name, n.path, m.path"
+	query := fmt.Sprintf("MATCH (n:Code)%s(m) WHERE n.path IS NOT NULL%s RETURN n.name, %s, m.name, n.path, m.path", relStr, relFilter, typePart)
 	if scopePath != "" {
-		query = fmt.Sprintf("MATCH (n:Code)-[r]->(m) WHERE n.path IS NOT NULL AND n.path CONTAINS '%s' RETURN n.name, type(r), m.name, n.path, m.path", scopePath)
+		safeScope := strings.ReplaceAll(scopePath, "'", "\\'")
+		query = fmt.Sprintf("MATCH (n:Code)%s(m) WHERE n.path IS NOT NULL AND n.path CONTAINS '%s'%s RETURN n.name, %s, m.name, n.path, m.path", relStr, safeScope, relFilter, typePart)
 	}
 
 	res, err := client.Query(ctx, query)
