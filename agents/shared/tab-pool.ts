@@ -11,9 +11,21 @@
 import type { Browser, Page, BrowserContext } from 'playwright';
 
 // Configuration
-export const MAX_TABS = 5;
-const BUSY_FLAG = '__WINDMILL_BUSY';
-const TAB_ID_FLAG = '__WINDMILL_TAB_ID';
+export const DEFAULT_MAX_TABS = 5;
+
+export function getMaxTabs(): number {
+    const envVal = process.env.DYNAMIC_MAX_TABS;
+    if (envVal) {
+        const parsed = parseInt(envVal, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+    return DEFAULT_MAX_TABS;
+}
+
+export const BUSY_FLAG = '__WINDMILL_BUSY';
+export const TAB_ID_FLAG = '__WINDMILL_TAB_ID';
 
 // Service URLs for tab identification
 export const SERVICE_URLS = {
@@ -190,15 +202,16 @@ export async function getTab(
 
     // 3. Can we open a new tab?
     const totalTabs = pages.length;
-    if (totalTabs < MAX_TABS) {
-        console.log(`✨ Opening new tab (${totalTabs + 1}/${MAX_TABS})`);
+    const maxTabs = getMaxTabs();
+    if (totalTabs < maxTabs) {
+        console.log(`✨ Opening new tab (${totalTabs + 1}/${maxTabs})`);
         const newPage = await context.newPage();
         await newPage.goto(SERVICE_URLS[service]);
         return newPage;
     }
 
     // 4. Pool is full - throw error (Windmill will retry later)
-    throw new Error(`BROWSER_FULL_CAPACITY: All ${MAX_TABS} tabs are busy`);
+    throw new Error(`BROWSER_FULL_CAPACITY: All ${maxTabs} tabs are busy`);
 }
 
 /**
@@ -244,7 +257,8 @@ export async function pruneExcessTabs(browser: Browser): Promise<void> {
 
     const pages = context.pages();
 
-    if (pages.length <= MAX_TABS) return;
+    const maxTabs = getMaxTabs();
+    if (pages.length <= maxTabs) return;
 
     // Close oldest free tabs first
     const freeTabs: Page[] = [];
@@ -254,7 +268,7 @@ export async function pruneExcessTabs(browser: Browser): Promise<void> {
         }
     }
 
-    const toClose = freeTabs.slice(0, pages.length - MAX_TABS);
+    const toClose = freeTabs.slice(0, pages.length - maxTabs);
     for (const page of toClose) {
         console.log(`🗑️ Closing excess tab: ${page.url()}`);
         await page.close();
