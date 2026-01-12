@@ -1,0 +1,62 @@
+---
+# Preflight checks - verify device connectivity and state
+
+- name: Verify SSH connectivity to reMarkable
+  ansible.builtin.raw: echo "SSH_OK"
+  register: ssh_check
+  changed_when: false
+  failed_when: "'SSH_OK' not in ssh_check.stdout"
+
+- name: Get current firmware version
+  ansible.builtin.raw: cat /etc/version
+  register: current_firmware
+  changed_when: false
+
+- name: Display current firmware
+  ansible.builtin.debug:
+    msg: "Current firmware: {{ current_firmware.stdout | trim }}"
+
+- name: Get device model
+  ansible.builtin.raw: cat /sys/devices/soc0/machine
+  register: device_model
+  changed_when: false
+
+- name: Verify reMarkable 2 device
+  ansible.builtin.fail:
+    msg: "This role is for reMarkable 2 only. Detected: {{ device_model.stdout | trim }}"
+  when: "'reMarkable 2' not in device_model.stdout"
+
+- name: Check if dual-boot already configured
+  ansible.builtin.raw: test -f {{ remarkable_marker_file }} && cat {{ remarkable_marker_file }}
+  register: dualboot_marker
+  failed_when: false
+  changed_when: false
+
+- name: Display dual-boot status
+  ansible.builtin.debug:
+    msg: >-
+      {% if dualboot_marker.rc == 0 %}
+      Dual-boot already installed with version: {{ dualboot_marker.stdout | trim }}
+      {% else %}
+      Dual-boot not yet configured
+      {% endif %}
+
+- name: Get current active partition
+  ansible.builtin.raw: fw_printenv active_partition 2>/dev/null | cut -d= -f2 || echo "unknown"
+  register: active_partition
+  changed_when: false
+
+- name: Get fallback partition
+  ansible.builtin.raw: fw_printenv fallback_partition 2>/dev/null | cut -d= -f2 || echo "unknown"
+  register: fallback_partition
+  changed_when: false
+
+- name: Display partition info
+  ansible.builtin.debug:
+    msg: "Active: {{ active_partition.stdout | trim }}, Fallback: {{ fallback_partition.stdout | trim }}"
+
+- name: Set partition facts
+  ansible.builtin.set_fact:
+    rm_active_partition: "{{ active_partition.stdout | trim }}"
+    rm_fallback_partition: "{{ fallback_partition.stdout | trim }}"
+    rm_current_firmware: "{{ current_firmware.stdout | trim }}"

@@ -1,0 +1,75 @@
+---
+# Download target firmware using codexctl
+
+- name: Ensure codexctl is available locally
+  block:
+    - name: Check if codexctl exists
+      ansible.builtin.stat:
+        path: "{{ codexctl_bin }}"
+      register: codexctl_stat
+      delegate_to: localhost
+
+    - name: Download codexctl if missing
+      ansible.builtin.get_url:
+        url: "{{ codexctl_url }}"
+        dest: "{{ codexctl_bin }}"
+        mode: "0755"
+      delegate_to: localhost
+      when: not codexctl_stat.stat.exists
+
+- name: Create firmware cache directory
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/firmware_cache"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+
+- name: Check if firmware already downloaded
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/firmware_cache/{{ remarkable_target_firmware }}.ext4"
+  register: firmware_cache
+  delegate_to: localhost
+
+- name: Download and extract firmware
+  when: not firmware_cache.stat.exists
+  block:
+    - name: Download firmware using codexctl
+      ansible.builtin.command:
+        cmd: >
+          {{ codexctl_bin }} download
+          --out {{ playbook_dir }}/firmware_cache/
+          --hardware {{ remarkable_hardware }}
+          {{ remarkable_target_firmware }}
+      delegate_to: localhost
+      register: download_result
+      changed_when: true
+
+    - name: Extract firmware to ext4
+      ansible.builtin.command:
+        cmd: >
+          {{ codexctl_bin }} extract
+          {{ playbook_dir }}/firmware_cache/{{ remarkable_target_firmware }}.swu
+          --out {{ playbook_dir }}/firmware_cache/{{ remarkable_target_firmware }}.ext4
+      delegate_to: localhost
+      register: extract_result
+      changed_when: true
+
+- name: Ensure temp directory on device
+  ansible.builtin.raw: mkdir -p {{ remarkable_tmp_dir }}
+  changed_when: false
+
+- name: Transfer firmware to device
+  ansible.builtin.command:
+    cmd: >
+      scp -o StrictHostKeyChecking=no -P {{ remarkable_ssh_port }}
+      {{ playbook_dir }}/firmware_cache/{{ remarkable_target_firmware }}.ext4
+      {{ remarkable_user }}@{{ remarkable_host }}:{{ remarkable_tmp_dir }}/
+  delegate_to: localhost
+  register: transfer_result
+  changed_when: true
+
+- name: Verify firmware on device
+  ansible.builtin.raw: ls -la {{ remarkable_tmp_dir }}/{{ remarkable_target_firmware }}.ext4
+  register: firmware_verify
+  changed_when: false
+  failed_when: remarkable_target_firmware not in firmware_verify.stdout
