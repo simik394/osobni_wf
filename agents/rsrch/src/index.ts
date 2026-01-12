@@ -10,6 +10,7 @@ import { GeminiClient, ResearchInfo } from './gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 import { sendNotification, loadConfigFromEnv } from './notify';
 import { execSync } from 'child_process';
+import { WindmillClient } from './clients/windmill';
 
 const program = new Command();
 
@@ -957,7 +958,27 @@ const gemini = program.command('gemini').description('Gemini commands');
 gemini.command('research <query>')
     .description('Run a research query')
     .option('--local', 'Use local execution')
+    .option('--remote', 'Use Windmill remote execution (Default)', true)
     .action(async (query, opts) => {
+        // Default to remote if not explicitly local
+        if (opts.remote && !opts.local) {
+            console.log(`[CLI] 🚀 Dispatching 'research' to Windmill...`);
+            const client = new WindmillClient();
+            try {
+                const result = await client.executeJob('rsrch/execute', {
+                    command: 'research',
+                    args: { query }
+                });
+                console.log('\n--- Windmill Response ---\n');
+                console.log(result?.data || result);
+                console.log('\n-----------------------\n');
+            } catch (e: any) {
+                console.error(`[CLI] Windmill execution failed: ${e.message}`);
+                process.exit(1);
+            }
+            return;
+        }
+
         const hasLocalFlag = opts.local !== undefined ? opts.local : (!!config.browserWsEndpoint || !!config.browserCdpEndpoint);
         const isLocalExecution = hasLocalFlag || !!config.browserWsEndpoint || !!config.browserCdpEndpoint;
 
@@ -984,10 +1005,30 @@ gemini.command('research <query>')
 gemini.command('deep-research <query>')
     .description('Run deep research')
     .option('--gem <name>', 'Gem name')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
+    .option('--remote', 'Use Windmill remote execution (Default)', true)
     .option('--headed', 'Show browser', false)
     .option('--async', 'Start async (returns job ID immediately)')
     .action(async (query, opts) => {
+        // Default to remote if not explicitly local
+        if (opts.remote && !opts.local) {
+            console.log(`[CLI] 🚀 Dispatching 'deep-research' to Windmill...`);
+            const client = new WindmillClient();
+            try {
+                const result = await client.executeJob('rsrch/execute', {
+                    command: 'deep-research',
+                    args: { query, gem: opts.gem }
+                });
+                console.log('\n--- Windmill Response ---\n');
+                console.log(result); // Deep research result usually has structured data
+                console.log('\n-----------------------\n');
+            } catch (e: any) {
+                console.error(`[CLI] Windmill execution failed: ${e.message}`);
+                process.exit(1);
+            }
+            return;
+        }
+
         if (opts.async) {
             // Async mode - use server endpoint
             console.log('[Deep Research] Starting async job...');
