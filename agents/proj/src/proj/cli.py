@@ -15,20 +15,31 @@ from langchain_core.messages import HumanMessage
 
 from proj.agent import get_graph, create_proj_graph
 from proj.state import ProjState, Project
+from proj.persistence import get_store
 
 app = typer.Typer(help="Personal project management agent")
 console = Console()
 
-# Shared state (in-memory for now)
+# Shared state (loaded from persistence)
 _state: ProjState | None = None
 
 
 def get_state() -> ProjState:
-    """Get or initialize state."""
+    """Get or load state from persistence."""
     global _state
     if _state is None:
-        _state = ProjState()
+        store = get_store()
+        _state = store.load_state()
+        console.print("[dim]State loaded from FalkorDB[/dim]" if store._use_falkor else "[dim]State loaded from JSON[/dim]")
     return _state
+
+
+def save_state() -> None:
+    """Save current state to persistence."""
+    global _state
+    if _state is not None:
+        store = get_store()
+        store.save_state(_state)
 
 
 @app.command()
@@ -52,6 +63,8 @@ def capture(content: str):
         last_msg = result["messages"][-1]
         content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
         console.print(Panel(content, title="Captured", border_style="green"))
+    
+    save_state()
 
 
 @app.command()
@@ -137,6 +150,7 @@ def create_project(name: str, description: str | None = None):
     
     project = Project(name=name, description=description)
     state.projects[project.id] = project
+    save_state()
     
     console.print(f"✅ Created project: [bold]{name}[/bold]")
 

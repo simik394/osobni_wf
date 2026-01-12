@@ -1053,7 +1053,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                                     streamCallback,
                                     {
                                         deepResearch: useDeepResearch,
-                                        sessionId: sessionId
+                                        sessionId: sessionId,
+                                        // Force reset if not using specific session ID
+                                        resetSession: !sessionId
                                     }
                                 );
                             } else {
@@ -1084,7 +1086,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                     try {
                         responseText = await geminiClient.research(prompt, {
                             deepResearch: useDeepResearch,
-                            sessionId: sessionId
+                            sessionId: sessionId,
+                            // Force reset if not using specific session ID
+                            resetSession: !sessionId
                         });
                     } catch (e: any) {
                         if (e.message.includes('Context not initialized') || e.message.includes('Target closed')) {
@@ -1093,7 +1097,8 @@ app.post('/v1/chat/completions', async (req, res) => {
                             await geminiClient.init();
                             responseText = await geminiClient.research(prompt, {
                                 deepResearch: useDeepResearch,
-                                sessionId: sessionId
+                                sessionId: sessionId,
+                                resetSession: !sessionId
                             });
                         } else {
                             throw e;
@@ -1178,6 +1183,9 @@ app.post('/gemini/research', async (req, res) => {
             await geminiClient.init();
         }
 
+        // Default to reset session for standard research queries
+        const options = { resetSession: req.body.resetSession ?? true };
+
         if (wantsSSE) {
             // SSE streaming mode
             res.setHeader('Content-Type', 'text/event-stream');
@@ -1193,7 +1201,9 @@ app.post('/gemini/research', async (req, res) => {
 
             try {
                 console.log(`[Server] Generating Gemini response (SSE) for: "${query}"`);
-                const response = await geminiClient.research(query);
+                // Note: research() doesn't officially support streaming callback in the legacy method, 
+                // but we pass options for future compatibility if research() signatures align
+                const response = await geminiClient.research(query, { deepResearch: false, ...options });
 
                 // Send final result
                 res.write(`data: ${JSON.stringify({ type: 'result', success: true, data: response })}\n\n`);

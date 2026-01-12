@@ -194,6 +194,67 @@ export class GeminiClient extends EventEmitter {
         this.progress('Ready.', 'init');
     }
 
+    /**
+     * Resets the current session to a new chat.
+     * Use this before starting a new request to ensure a clean state
+     * (e.g. to disable Deep Research mode from previous session).
+     */
+    async resetToNewChat(): Promise<void> {
+        console.log('[Gemini] Resetting to new chat...');
+
+        // 1. Check if we are already on the new chat page (URL ends with /app)
+        const url = this.page.url();
+        if (url === 'https://gemini.google.com/app' || url === 'https://gemini.google.com/app/') {
+            // Even if URL is correct, we might have text in input or old state.
+            // Best to still click "New Chat" if visible to be sure.
+        }
+
+        // 2. Try clicking "New Chat" button
+        const newChatSelectors = [
+            'button[aria-label*="New chat"]',
+            'button[aria-label*="Nový chat"]',
+            'button:has-text("New chat")',
+            'button:has-text("Nový chat")',
+            'a[href="/app"][aria-label*="New"]', // Sometimes it's a link
+            '[data-testid="new-chat-button"]'
+        ];
+
+        let clicked = false;
+        for (const selector of newChatSelectors) {
+            const btn = this.page.locator(selector).first();
+            if (await btn.isVisible().catch(() => false)) {
+                console.log(`[Gemini] Clicking New Chat: ${selector}`);
+                await btn.click();
+                clicked = true;
+                break;
+            }
+        }
+
+        if (!clicked) {
+            console.log('[Gemini] New Chat button not found, forcing navigation to /app');
+            await this.page.goto('https://gemini.google.com/app');
+        }
+
+        // 3. Wait for standard greeting or empty state
+        try {
+            // Wait for URL to stabilize
+            await this.page.waitForURL('https://gemini.google.com/app', { timeout: 5000 }).catch(() => { });
+
+            // Wait for empty input
+            const input = this.page.locator('div[contenteditable="true"], textarea').first();
+            await input.waitFor({ state: 'visible', timeout: 5000 });
+
+            // Optional: Check if Deep Research toggle is off? 
+            // Hard to detect "off" state reliably, but new chat should default to off.
+            this.deepResearchEnabled = false;
+
+        } catch (e) {
+            console.warn('[Gemini] Wait for new chat state timed out, but proceeding.');
+        }
+
+        console.log('[Gemini] Reset complete.');
+    }
+
     getCurrentSessionId(): string | null {
         const url = this.page.url();
         const match = url.match(/\/app\/([a-zA-Z0-9]+)/);
@@ -1368,10 +1429,16 @@ export class GeminiClient extends EventEmitter {
     }
 
 
-    async sendMessage(message: string, waitForResponse: boolean = true): Promise<string | null> {
-        console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
+    async sendMessage(message: string, options: { waitForResponse?: boolean, resetSession?: boolean } = {}): Promise<string | null> {
+        console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${options.resetSession})`);
+
+        // Handle Session Reset (NEW functionality for isolation)
+        if (options.resetSession) {
+            await this.resetToNewChat();
+        }
 
         // Start trace for this message exchange
+        const waitForResponse = options.waitForResponse ?? true;
         const trace = telemetry.startTrace('gemini:send-message', {
             messageLength: message.length,
             waitForResponse
@@ -1673,9 +1740,14 @@ export class GeminiClient extends EventEmitter {
         }
     }
 
-    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean } = {}): Promise<string> {
-        this.progress(`Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch})`, 'research');
+    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean, resetSession?: boolean } = {}): Promise<string> {
+        this.progress(`Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch}, Reset: ${options.resetSession})`, 'research');
         try {
+            // Handle Session Reset (NEW functionality for isolation)
+            if (options.resetSession) {
+                await this.resetToNewChat();
+            }
+
             // Handle Session Switching
             if (options.sessionId) {
                 const currentId = this.getCurrentSessionId();
@@ -1780,13 +1852,18 @@ export class GeminiClient extends EventEmitter {
     async researchWithStreaming(
         query: string,
         onChunk: (chunk: { content: string; isComplete: boolean }) => void,
-        options: { pollIntervalMs?: number; timeoutMs?: number; sessionId?: string; sessionName?: string; deepResearch?: boolean } = {}
+        options: { pollIntervalMs?: number; timeoutMs?: number; sessionId?: string; sessionName?: string; deepResearch?: boolean; resetSession?: boolean } = {}
     ): Promise<string> {
         const { pollIntervalMs = 300, timeoutMs = 300000 } = options;
 
-        console.log(`[Gemini] Streaming research: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch})`);
+        console.log(`[Gemini] Streaming research: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch}, Reset: ${options.resetSession})`);
 
         try {
+            // Handle Session Reset (NEW functionality for isolation)
+            if (options.resetSession) {
+                await this.resetToNewChat();
+            }
+
             // Handle Session Switching
             if (options.sessionId) {
                 const currentId = this.getCurrentSessionId();
@@ -1935,7 +2012,14 @@ export class GeminiClient extends EventEmitter {
 
             const registry = getRegistry();
 
-            // Register session at the start
+            // Step 1: Force Reset to avoid carryover
+            // Deep Research MUST start in a fresh state to avoid "mode already active" confusion
+            if (!gemIdOrName) {
+                // Only reset if NOT using a specific Gem (Gems have their own context)
+                await this.resetToNewChat();
+            }
+
+            // Step 1b: Register session at the start (moved after reset)
             const geminiSessionId = this.getCurrentSessionId() || 'new-session';
             const sessionId = registry.registerSession(geminiSessionId, query);
             result.registrySessionId = sessionId;

@@ -20,4 +20,8 @@
       #   vnc_password: "your-secure-password"  # Pass via -e instead
     - role: zellij
       tags: zellij
+    - role: lazydocker
+      tags: lazydocker
+    - role: memgraph_lab_container
+      tags: memgraph_lab
 

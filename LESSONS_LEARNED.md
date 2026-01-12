@@ -530,4 +530,34 @@ Instead, I made assumptions about which way the mismatch went.
 This incident revealed missing documentation:
 - [ ] How Nomad Docker driver pull behavior works
 - [ ] How to deploy new rsrch images (canonical workflow)
-- [ ] Local registry setup on halvarm (now exists but undocumented)
+
+## User Preferences (Critical Task Management)
+
+### Task Analysis & Granularity
+- **Philosophy:** "Breakdown IS Analysis" (Rozepisování je analýza). Hidden complexities are only revealed when breaking tasks down into specific steps.
+- **Requirement:** ESTIMATES must be justified. Never give a raw number (e.g., "2 hours") without a breakdown. Vague estimates are unacceptable.
+- **Structure:** Tasks must be granular and concrete. Avoid high-level, few-word identifiers.
+
+### YouTrack Configuration Standard
+- **Goal:** Manage the file system and project structure similarly to `youtrack.conf`.
+- **Principle:** Configuration as Code / Infrastructure as Code for Project Management.
+- **Action:** Update `youtrack.conf` immediately if new fields or values are needed.
+
+### Workflow
+- **Current State:** YouTrack coverage ~15% (messy).
+- **Objective:** Utilize LLM automation and coordinated agents (Jules, Rsrch) to maximize coverage.
+- **Priorities:** 1. Perfect reflection of project state. 2. Maintain strict standards.
+
+## YouTrack IaC Debugging (The Panda Incident 2026-01-12)
+
+### 1. Token Scope vs User Role
+- **Symptom**: `401 Unauthorized` on `/api/admin/customFieldSettings` despite user having "System Admin" role.
+- **Diagnosis**: Token was created without "YouTrack Administration" scope. Role power != Token power.
+- **Verification**: Use `curl` to Hit specific endpoints. `/api/admin/projects` (Project Admin) vs `/api/admin/customFieldSettings` (Global Admin).
+  - If Projects works but Fields fails -> Partial Scope (Token likely valid but weak).
+  - If both fail -> Invalid Token.
+
+### 2. Configuration Precedence Trap
+- **Symptom**: Providing `YOUTRACK_TOKEN` env var had no effect; script still used old/broken token.
+- **Cause**: `src/config/vault.py` prioritizes Vault lookup over Environment Variables. A stale valid token in Vault masks the new Env Var.
+- **Fix**: Force fallback by breaking Vault connection: `export VAULT_ADDR='http://0.0.0.0:1'` (or unset `VAULT_TOKEN`). This forces the code to use the Env Var.

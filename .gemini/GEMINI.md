@@ -1,15 +1,4 @@
-# Research Project Context
-
-@agents/rsrch/README.md
-@agents/rsrch/AGENTS.md
-@agents/rsrch/API.md
-@agents/rsrch/docs/architecture_matrix.md
-@agents/rsrch/docs/artifact_registry_spec.md
-@agents/rsrch/docs/DEVELOPMENT_PROCESS.md
-@agents/rsrch/docs/automation_standards.md
-
-## User Mandates
-- When making changes, always ensure content is backed up first or added to the destination before removing it from the source to prevent data loss.
+# osobni_wf Project Context
 
 ## Rsrch Efficiency Best Practices
 
@@ -31,7 +20,6 @@ The rsrch agent running at `http://localhost:3001` provides Gemini-powered analy
      -H "Content-Type: application/json" \
      -d '{"model": "gemini-rsrch", "messages": [{"role": "user", "content": "Analyze this code..."}]}'
    ```
-   Available models: `gemini-rsrch` (default), `gemini-deep-research` (thorough analysis), `perplexity`.
 
 3. **Use analysis results** to create Jules prompts or guide your work
 
