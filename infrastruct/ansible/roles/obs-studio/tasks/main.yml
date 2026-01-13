@@ -443,3 +443,46 @@
            exit 1
            ;;
       esac
+
+# ============================================
+# SCREENSHOT RECORD SYSTEMD SERVICE (AUTO-START)
+# ============================================
+
+- name: Ensure user systemd directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: Create screenshot-record systemd service
+  copy:
+    dest: "{{ ansible_env.HOME }}/.config/systemd/user/screenshot-record.service"
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Screenshot Record Service
+      After=graphical-session.target
+      PartOf=graphical-session.target
+
+      [Service]
+      Type=forking
+      ExecStart={{ ansible_env.HOME }}/bin/screenshot-record start
+      ExecStop={{ ansible_env.HOME }}/bin/screenshot-record stop
+      PIDFile=/tmp/screenshot-record.pid
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStopSec=300
+      Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{{ ansible_env.HOME }}/bin
+      Environment=DISPLAY=:1
+      Environment=XAUTHORITY=/run/user/{{ ansible_user_uid }}/gdm/Xauthority
+
+      [Install]
+      WantedBy=graphical-session.target
+  notify: Reload systemd user daemon
+
+- name: Enable screenshot-record service
+  systemd:
+    name: screenshot-record.service
+    scope: user
+    enabled: yes
+    daemon_reload: yes
