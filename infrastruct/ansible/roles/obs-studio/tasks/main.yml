@@ -265,7 +265,7 @@
       RECORDING_DIR="{{ obs_recording_path }}"
       INTERVAL_ACTIVE=2   # seconds when active
       INTERVAL_IDLE=10    # seconds when idle
-      IDLE_THRESHOLD=30   # seconds of no activity before going idle
+      IDLE_THRESHOLD=10   # seconds of no activity before going idle
       CHUNK_DURATION=3600 # 1 hour in seconds
       PIDFILE="/tmp/screenshot-record.pid"
 
