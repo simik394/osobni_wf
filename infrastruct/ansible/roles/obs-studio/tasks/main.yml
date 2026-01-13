@@ -266,7 +266,7 @@
       INTERVAL_ACTIVE=2   # seconds when active
       INTERVAL_IDLE=10    # seconds when idle
       IDLE_THRESHOLD=10   # seconds of no activity before going idle
-      CHUNK_DURATION=3600 # 1 hour in seconds
+      CHUNK_DURATION=900 # 15 minutes in seconds
       PIDFILE="/tmp/screenshot-record.pid"
 
       # Configuration
