@@ -1,0 +1,103 @@
+---
+# Ghostty terminal emulator installation role
+# Builds from source using Zig (required for Ubuntu 22.04/Pop!_OS)
+
+- name: Check if Ghostty is already installed
+  stat:
+    path: "{{ ansible_env.HOME }}/.local/bin/ghostty"
+  register: ghostty_installed
+
+- name: Check installed Ghostty version
+  command: "{{ ansible_env.HOME }}/.local/bin/ghostty --version"
+  register: ghostty_current_version
+  changed_when: false
+  failed_when: false
+  when: ghostty_installed.stat.exists
+
+- name: Set ghostty_needs_install fact
+  set_fact:
+    ghostty_needs_install: "{{ not ghostty_installed.stat.exists }}"
+
+- name: Install build dependencies
+  apt:
+    name:
+      - libgtk-4-dev
+      - libadwaita-1-dev
+      - gettext
+      - libxml2-utils
+      - git
+      - curl
+    state: present
+  become: true
+  when: ghostty_needs_install
+
+- name: Check if Zig is installed
+  command: "{{ zig_install_dir }}/zig version"
+  register: zig_check
+  changed_when: false
+  failed_when: false
+  when: ghostty_needs_install
+
+- name: Download and extract Zig
+  block:
+    - name: Create Zig directory
+      file:
+        path: "{{ zig_install_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download Zig tarball
+      get_url:
+        url: "{{ zig_download_url }}"
+        dest: "/tmp/zig.tar.xz"
+        mode: "0644"
+
+    - name: Extract Zig
+      unarchive:
+        src: "/tmp/zig.tar.xz"
+        dest: "{{ zig_install_dir }}"
+        remote_src: yes
+        extra_opts:
+          - --strip-components=1
+
+    - name: Clean up Zig tarball
+      file:
+        path: "/tmp/zig.tar.xz"
+        state: absent
+  when: ghostty_needs_install and zig_check.rc != 0
+
+- name: Clone Ghostty repository
+  git:
+    repo: "https://github.com/ghostty-org/ghostty.git"
+    dest: "{{ ghostty_src_dir }}"
+    version: "{{ ghostty_version }}"
+    depth: 1
+  when: ghostty_needs_install
+
+- name: Build and install Ghostty
+  shell: |
+    export PATH="{{ zig_install_dir }}:$PATH"
+    zig build -p {{ ansible_env.HOME }}/.local -Doptimize=ReleaseFast -fno-sys=gtk4-layer-shell
+  args:
+    chdir: "{{ ghostty_src_dir }}"
+  environment:
+    HOME: "{{ ansible_env.HOME }}"
+  when: ghostty_needs_install
+
+- name: Ensure Ghostty config directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/ghostty"
+    state: directory
+    mode: "0755"
+
+- name: Deploy Ghostty configuration
+  template:
+    src: config.j2
+    dest: "{{ ansible_env.HOME }}/.config/ghostty/config"
+    mode: "0644"
+    backup: yes
+
+- name: Update desktop database
+  command: update-desktop-database "{{ ansible_env.HOME }}/.local/share/applications"
+  changed_when: false
+  failed_when: false

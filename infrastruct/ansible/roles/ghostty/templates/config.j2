@@ -1,0 +1,47 @@
+# Ghostty Configuration
+# Managed by Ansible - local changes will be overwritten
+
+# Theme - auto-switches light/dark based on desktop environment
+theme = {{ ghostty_theme }}
+
+# Font configuration
+font-family = {{ ghostty_font_family }}
+font-size = {{ ghostty_font_size }}
+
+# Window appearance
+background-opacity = {{ ghostty_background_opacity }}
+{% if ghostty_background_blur %}
+background-blur = true
+{% endif %}
+window-padding-x = {{ ghostty_window_padding_x }}
+window-padding-y = {{ ghostty_window_padding_y }}
+{% if ghostty_window_padding_balance %}
+window-padding-balance = true
+{% endif %}
+
+# GTK settings (Linux specific)
+{% if ghostty_gtk_single_instance %}
+gtk-single-instance = true
+{% endif %}
+{% if not ghostty_gtk_titlebar %}
+gtk-titlebar = false
+{% endif %}
+gtk-tabs-location = {{ ghostty_gtk_tabs_location }}
+{% if ghostty_gtk_wide_tabs %}
+gtk-wide-tabs = true
+{% endif %}
+
+# Shell integration
+shell-integration = {{ ghostty_shell_integration }}
+
+# Performance
+scrollback-limit = {{ ghostty_scrollback_limit }}
+
+# Keybindings
+keybind = ctrl+shift+c=copy_to_clipboard
+keybind = ctrl+shift+v=paste_from_clipboard
+keybind = ctrl+shift+t=new_tab
+keybind = ctrl+shift+n=new_window
+keybind = ctrl+plus=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
+keybind = ctrl+0=reset_font_size

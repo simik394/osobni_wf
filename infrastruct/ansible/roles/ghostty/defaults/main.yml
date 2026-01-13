@@ -1,0 +1,35 @@
+---
+# Ghostty configuration defaults
+
+# Build settings
+ghostty_version: "v1.2.3"
+ghostty_src_dir: "{{ ansible_env.HOME }}/.local/src/ghostty"
+zig_version: "0.13.0"
+zig_install_dir: "{{ ansible_env.HOME }}/.local/zig"
+zig_download_url: "https://ziglang.org/download/{{ zig_version }}/zig-linux-x86_64-{{ zig_version }}.tar.xz"
+
+# Theme: supports light:theme,dark:theme syntax for auto-switching
+ghostty_theme: "light:Catppuccin Latte,dark:Catppuccin Mocha"
+
+# Font settings
+ghostty_font_family: "JetBrains Mono"
+ghostty_font_size: 12
+
+# Window appearance
+ghostty_background_opacity: 0.95
+ghostty_background_blur: true
+ghostty_window_padding_x: 8
+ghostty_window_padding_y: 8
+ghostty_window_padding_balance: true
+
+# GTK settings (Linux specific)
+ghostty_gtk_single_instance: true
+ghostty_gtk_titlebar: false
+ghostty_gtk_tabs_location: "top"
+ghostty_gtk_wide_tabs: true
+
+# Shell integration
+ghostty_shell_integration: "detect"
+
+# Performance
+ghostty_scrollback_limit: 10000
