@@ -72,47 +72,58 @@ go build -o jules-cli-bin ./cmd/jules-cli/main.go
 
 ## API Operations
 
-### What CLI Can Do (Fast, No Browser)
+### What `jules-go` Can Do (Fast, No Browser)
 
 - ✅ List all sessions
 - ✅ Get session details
-- ✅ Retry failed sessions
-- ✅ Check system status
+- ✅ Get session activities
+- ✅ Retry failed sessions (via browser automation)
 
-### What Still Needs Browser (Fallback)
+### What `jules-mcp` Is For
 
-- ⚠️ Create new session
-- ⚠️ Approve plan
-- ⚠️ Answer clarification questions
-- ⚠️ Publish PR
+- ✅ Create new sessions
+- ✅ Approve plans
+- ✅ Send messages and feedback
+- ✅ Publish PRs
 
 ---
 
-## Architecture
+## Architecture: `jules-go` vs `jules-mcp`
 
+The Jules agent ecosystem is split into two main components to separate concerns:
+
+-   **`jules-go` (This Repository)**: Acts as a lightweight monitoring and integration service.
+    -   **Webhook Server**: Listens for events from the Jules API.
+    -   **YouTrack Sync**: Keeps YouTrack issues updated with session status.
+    -   **Notifications**: Sends `ntfy` push notifications.
+    -   **Metrics**: Exposes Prometheus metrics for observability.
+    -   **CLI**: Provides a fast, read-only command-line interface for monitoring session status.
+
+-   **`jules-mcp` (Master Control Program)**: Handles the core interactive lifecycle of a session. This is the primary tool for creating and managing sessions.
+    -   **Session Creation**: Starts new sessions.
+    -   **Plan Approval**: Approves plans proposed by the agent.
+    -   **Messaging**: Sends and receives messages with the agent.
+
+### Usage Examples
+
+**Use `jules-go` for monitoring and automation:**
+
+```bash
+# Check the status of all active sessions from the command line
+./jules-cli-bin list | grep "IN_PROGRESS"
+
+# Get the full details of a specific session for a script
+./jules-cli-bin get 9464138654791526811 --format json
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    jules-go Module                       │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐    ┌──────────────┐                   │
-│  │  jules-cli   │    │ jules-server │                   │
-│  │  (CLI Tool)  │    │  (Webhook)   │                   │
-│  └──────┬───────┘    └──────┬───────┘                   │
-│         │                   │                            │
-│         ▼                   ▼                            │
-│  ┌──────────────────────────────────────┐               │
-│  │           jules.Client               │               │
-│  │   (API Client - client.go)           │               │
-│  └──────────────────┬───────────────────┘               │
-│                     │                                    │
-│                     ▼                                    │
-│  ┌──────────────────────────────────────┐               │
-│  │    jules.googleapis.com/v1alpha      │               │
-│  │    (Header: x-goog-api-key)          │               │
-│  └──────────────────────────────────────┘               │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
+
+**Use `jules-mcp` to start and interact with a session:**
+
+```bash
+# Create a new session (example command)
+jules-mcp create --prompt "Refactor the authentication logic in main.go"
+
+# Approve a plan for an existing session (example command)
+jules-mcp approve 9464138654791526811
 ```
 
 ### Key Files
@@ -173,9 +184,6 @@ session, err := client.GetSession(ctx, "12345")
 
 // Get session activities
 activities, err := client.ListActivities(ctx, "12345")
-
-// Approve a plan
-err := client.ApprovePlan(ctx, "12345")
 ```
 
 ---
