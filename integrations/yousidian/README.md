@@ -6,7 +6,7 @@
 Based on "Architektonická analýza a implementační strategie" (Dec 2025).
 
 ### Phase 1: Connectivity (YOUSIDIAN-3)
-**Objective**: Bridge the gap between Localhost (Obsidian) and Cloud/Cluster (YouTrack/n8n/Windmill).
+**Objective**: Bridge the gap between Localhost (Obsidian) and Cloud/Cluster (YouTrack/Windmill).
 
 **Components**:
 1.  **Obsidian Local REST API**: Plugin running on `localhost:27124`.

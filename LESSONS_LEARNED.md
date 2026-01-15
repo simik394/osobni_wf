@@ -561,3 +561,22 @@ This incident revealed missing documentation:
 - **Symptom**: Providing `YOUTRACK_TOKEN` env var had no effect; script still used old/broken token.
 - **Cause**: `src/config/vault.py` prioritizes Vault lookup over Environment Variables. A stale valid token in Vault masks the new Env Var.
 - **Fix**: Force fallback by breaking Vault connection: `export VAULT_ADDR='http://0.0.0.0:1'` (or unset `VAULT_TOKEN`). This forces the code to use the Env Var.
+
+## Ghostty Docker Build & Ansible
+- **Glibc Compatibility**: Binaries built in Docker containers must be compiled against a libc version equal to or older than the host system's libc. We encountered a `GLIBC_2.38 not found` error when building on Ubuntu 24.04 (glibc 2.38) and running on Pop!_OS 22.04 (glibc 2.35). Switching the Docker base image to `ubuntu:22.04` resolved this.
+- **Zig Versioning**: Ghostty is highly sensitive to Zig versions. v1.2.x strictly required Zig 0.14.1 (and had broken dependency URLs), while v1.1.x required Zig 0.13.0. Always verify the `build.zig.zon` or project documentation for the exact compiler version.
+- **Docker Build Flags**: Build flags like `-fno-sys=gtk4-layer-shell` are version-specific. Attempting to use flags from newer documentation on older versions causes build failures.
+- **Nvidia 580.xx & GTK4 OpenGL Mismatch (2026-01-14)**:
+    - **Symptom**: Ghostty freezes/crashes with `error.OpenGLOutdated` (detecting GL 3.2) on Pop!_OS 22.04 with RTX 4070, despite `glxinfo` reporting OpenGL 4.6.
+    - **Root Cause**: The 580.xx beta driver series interacts poorly with GTK4's GL detection, defaulting to GLES 3.2 context which fails the app's requirement (GL 3.3+).
+    - **Fix**: Force the Desktop OpenGL context via environment variables in the `.desktop` file: `MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLSL_VERSION_OVERRIDE=460`.
+    - **Recommendation**: Avoid 580.xx drivers for GTK4 workloads. Downgrade to 550.xx (Stable) if overrides fail.
+
+## Building Electron Apps in Docker (Logseq Example - 2026-01-14)
+**Context**: Building Logseq DB (Alpha) from source to avoid polluting the host.
+**Issues Encountered**:
+1.  **Node Versioning**: Projects often rely on `.nvmrc` or `engines` fields that generic Docker images miss. *Fix*: Explicitly check `package.json` engines before choosing a base image.
+2.  **Sub-project Dependencies**: Monorepos (or split structures like `root` vs `static/`) often have separate `package.json` files. `yarn install` in root does *not* install binaries (like `electron-forge`) for subdirectories.
+3.  **AppImage & FUSE**: Generating AppImages inside Docker is painful because it requires `fuse` availability (`--device /dev/fuse --cap-add SYS_ADMIN`), which often fails in unprivileged or constrained environments.
+4.  **Missing Utilities**: `electron-builder`'s ZIP target relies on the system `zip` binary, which is missing in slim images.
+**Lesson**: For Electron builds, default to a "fat" builder image (Node LTS + build-essential + zip + git) or consider shell-based builds on the host if FUSE is required, rather than fighting Docker permissions for AppImages. Use `zip` targets in Docker to avoid FUSE entirely.

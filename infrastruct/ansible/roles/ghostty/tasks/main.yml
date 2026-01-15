@@ -1,103 +1,76 @@
 ---
-# Ghostty terminal emulator installation role
-# Builds from source using Zig (required for Ubuntu 22.04/Pop!_OS)
+- name: Create local install directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ansible_env.HOME }}/.local/bin"
+    - "{{ ansible_env.HOME }}/.local/opt"
+    - "{{ ansible_env.HOME }}/.config/ghostty"
 
-- name: Check if Ghostty is already installed
-  stat:
-    path: "{{ ansible_env.HOME }}/.local/bin/ghostty"
-  register: ghostty_installed
-
-- name: Check installed Ghostty version
-  command: "{{ ansible_env.HOME }}/.local/bin/ghostty --version"
-  register: ghostty_current_version
+- name: Check current Zig version
+  command: "{{ ansible_env.HOME }}/.local/opt/zig/zig version"
+  register: current_zig_version
+  ignore_errors: yes
   changed_when: false
-  failed_when: false
-  when: ghostty_installed.stat.exists
 
-- name: Set ghostty_needs_install fact
-  set_fact:
-    ghostty_needs_install: "{{ not ghostty_installed.stat.exists }}"
+- name: Download Zig
+  unarchive:
+    src: "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz"
+    dest: "{{ ansible_env.HOME }}/.local/opt"
+    remote_src: yes
+    creates: "{{ ansible_env.HOME }}/.local/opt/zig-linux-x86_64-0.13.0"
+  when: "current_zig_version.rc != 0 or '0.13.0' not in current_zig_version.stdout"
 
-- name: Install build dependencies
-  apt:
-    name:
-      - libgtk-4-dev
-      - libadwaita-1-dev
-      - gettext
-      - libxml2-utils
-      - git
-      - curl
-    state: present
-  become: true
-  when: ghostty_needs_install
-
-- name: Check if Zig is installed
-  command: "{{ zig_install_dir }}/zig version"
-  register: zig_check
-  changed_when: false
-  failed_when: false
-  when: ghostty_needs_install
-
-- name: Download and extract Zig
-  block:
-    - name: Create Zig directory
-      file:
-        path: "{{ zig_install_dir }}"
-        state: directory
-        mode: "0755"
-
-    - name: Download Zig tarball
-      get_url:
-        url: "{{ zig_download_url }}"
-        dest: "/tmp/zig.tar.xz"
-        mode: "0644"
-
-    - name: Extract Zig
-      unarchive:
-        src: "/tmp/zig.tar.xz"
-        dest: "{{ zig_install_dir }}"
-        remote_src: yes
-        extra_opts:
-          - --strip-components=1
-
-    - name: Clean up Zig tarball
-      file:
-        path: "/tmp/zig.tar.xz"
-        state: absent
-  when: ghostty_needs_install and zig_check.rc != 0
+- name: Symlink Zig folder
+  file:
+    src: "{{ ansible_env.HOME }}/.local/opt/zig-linux-x86_64-0.13.0"
+    dest: "{{ ansible_env.HOME }}/.local/opt/zig"
+    state: link
 
 - name: Clone Ghostty repository
   git:
-    repo: "https://github.com/ghostty-org/ghostty.git"
-    dest: "{{ ghostty_src_dir }}"
-    version: "{{ ghostty_version }}"
+    repo: "https://github.com/ghostty-org/ghostty"
+    dest: "{{ ansible_env.HOME }}/.local/opt/ghostty-src"
+    version: "v1.1.3"
     depth: 1
-  when: ghostty_needs_install
+    force: yes
 
-- name: Build and install Ghostty
+- name: Build and Install Ghostty (Native)
   shell: |
-    export PATH="{{ zig_install_dir }}:$PATH"
-    zig build -p {{ ansible_env.HOME }}/.local -Doptimize=ReleaseFast -fno-sys=gtk4-layer-shell
+    {{ ansible_env.HOME }}/.local/opt/zig/zig build \
+      -p {{ ansible_env.HOME }}/.local \
+      -Doptimize=ReleaseFast
   args:
-    chdir: "{{ ghostty_src_dir }}"
-  environment:
-    HOME: "{{ ansible_env.HOME }}"
-  when: ghostty_needs_install
+    chdir: "{{ ansible_env.HOME }}/.local/opt/ghostty-src"
+  changed_when: true
 
-- name: Ensure Ghostty config directory exists
-  file:
-    path: "{{ ansible_env.HOME }}/.config/ghostty"
-    state: directory
+- name: Rename Ghostty binary to ghostty.bin (for Wrapper)
+  command: mv {{ ansible_env.HOME }}/.local/bin/ghostty {{ ansible_env.HOME }}/.local/bin/ghostty.bin
+  args:
+    creates: "{{ ansible_env.HOME }}/.local/bin/ghostty.bin"
+  # Only run if ghostty exists and ghostty.bin does not
+
+- name: Create Ghostty Wrapper Script (Nvidia Fix)
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/bin/ghostty"
     mode: "0755"
+    content: |
+      #!/bin/bash
+      exec env GSK_RENDERER=ngl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLSL_VERSION_OVERRIDE=460 {{ ansible_env.HOME }}/.local/bin/ghostty.bin "$@"
 
-- name: Deploy Ghostty configuration
+- name: Configure Ghostty
   template:
     src: config.j2
     dest: "{{ ansible_env.HOME }}/.config/ghostty/config"
     mode: "0644"
-    backup: yes
+
+- name: Patch Ghostty Desktop Entry (Nvidia Fixes)
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.local/share/applications/com.mitchellh.ghostty.desktop"
+    regexp: "^Exec=.*"
+    line: "Exec=env GSK_RENDERER=ngl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLSL_VERSION_OVERRIDE=460 {{ ansible_env.HOME }}/.local/bin/ghostty"
 
 - name: Update desktop database
-  command: update-desktop-database "{{ ansible_env.HOME }}/.local/share/applications"
-  changed_when: false
-  failed_when: false
+  command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications

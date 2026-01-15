@@ -26,3 +26,11 @@
       tags: memgraph_lab
     - role: ghostty
       tags: ghostty
+    - role: jabref
+      tags: jabref
+    - role: postgres
+      tags: postgres
+    - role: logseq
+      tags: logseq
+    - role: remarkable_mouse
+      tags: remarkable_mouse

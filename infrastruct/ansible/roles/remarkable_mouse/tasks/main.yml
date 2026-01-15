@@ -1,0 +1,51 @@
+---
+- name: Install system dependencies for remarkable-mouse
+  apt:
+    name:
+      - python3-pip
+      - python3-evdev
+      - xinput
+    state: present
+  become: true
+
+- name: Install remarkable-mouse via pip
+  pip:
+    name: remarkable-mouse
+    state: present
+    executable: pip3
+
+- name: Ensure configuration directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/remarkable-mouse"
+    state: directory
+    mode: "0755"
+
+- name: Create default configuration file
+  copy:
+    dest: "{{ ansible_env.HOME }}/.config/remarkable-mouse/config"
+    mode: "0644"
+    force: no
+    content: |
+      # Configuration for remarkable-mouse
+      # TABLET_IP="10.11.99.1"
+      # MONITOR="eDP-1" # Optional: Hardcode monitor if auto-detection fails
+      # SSH_KEY="~/.ssh/id_rsa" # Optional: Path to SSH key
+
+- name: Ensure ~/bin directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/bin"
+    state: directory
+    mode: "0755"
+
+- name: Create connect-remarkable helper script
+  template:
+    src: connect-remarkable.sh.j2
+    dest: "{{ ansible_env.HOME }}/bin/connect-remarkable"
+    mode: "0755"
+
+- name: Add 'remouse' alias to .bashrc
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: "alias remouse='connect-remarkable'"
+    state: present
+    create: yes

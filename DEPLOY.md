@@ -12,7 +12,7 @@ docker-compose up -d
 ```
 
 ## 2. Yousidian Proxy (New Service)
-**Why**: Secure bridge between Windmill/n8n and Obsidian Local REST API.
+**Why**: Secure bridge between Windmill and Obsidian Local REST API.
 **Action**: Run locally or deploy as systemd user service.
 ```bash
 # Run Ad-Hoc

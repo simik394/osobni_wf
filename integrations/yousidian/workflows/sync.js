@@ -1,6 +1,6 @@
 /**
  * Yousidian Sync Logic
- * Intended for use in n8n Code Node.
+ * Intended for use in Windmill TypeScript/JavaScript scripts.
  */
 
 // Function: Clean Obsidian Markdown for YouTrack
@@ -54,12 +54,10 @@ function normalizePayload(source, data) {
     }
 }
 
-// Example Usage (for n8n)
-// const items = $input.all();
-// return items.map(item => {
-//   const json = item.json;
-//   const cleaned = cleanMarkdown(json.content);
-//   return { json: { ...json, cleanedContent: cleaned } };
-// });
+// Example Usage (for Windmill)
+// export async function main(content: string) {
+//   const cleaned = cleanMarkdown(content);
+//   return { cleanedContent: cleaned };
+// }
 
 module.exports = { cleanMarkdown, normalizePayload };
