@@ -8,7 +8,8 @@ import {
     Relationship,
     PendingAudioStatus,
     PendingAudio,
-    ResearchInfo
+    ResearchInfo,
+    Turn
 } from './types/graph-store';
 
 export * from './types/graph-store';
@@ -205,80 +206,385 @@ export class GraphStore {
         return null;
     }
 
-    // --- Notebooks ---
-    async syncNotebook(data: any): Promise<{ isNew: boolean, id: string }> {
-        // Stub implementation
-        const id = `nb_${data.platformId || Date.now()}`;
-        return { isNew: true, id };
+    /**
+     * Synchronize a Notebook node in the graph.
+     * Uses MERGE to ensure idempotency.
+     */
+    async syncNotebook(data: { platformId: string; title: string; url?: string }): Promise<{ isNew: boolean, id: string }> {
+        const id = `nb_${data.platformId}`;
+        const query = `
+            MERGE (n:Notebook {platformId: $platformId})
+            ON CREATE SET 
+                n.id = $id, 
+                n.title = $title, 
+                n.url = $url, 
+                n.createdAt = $now,
+                n._isNew = true
+            ON MATCH SET 
+                n.title = $title, 
+                n.url = $url, 
+                n.updatedAt = $now,
+                n._isNew = false
+            RETURN n.id as id, n._isNew as isNew
+        `;
+
+        try {
+            const result = await this._executeQuery<{ id: string, isNew: boolean }[]>(query, {
+                params: {
+                    platformId: data.platformId,
+                    id,
+                    title: data.title,
+                    url: data.url || '',
+                    now: Date.now()
+                }
+            });
+
+            if (result.data && result.data.length > 0) {
+                // FalkorDB returns objects differently depending on version/driver
+                const row = result.data[0] as any;
+                return {
+                    id: row.id || row[0],
+                    isNew: row.isNew !== undefined ? row.isNew : row[1]
+                };
+            }
+            return { isNew: false, id };
+        } catch (e) {
+            console.error('[GraphStore] syncNotebook error:', e);
+            return { isNew: false, id };
+        }
     }
 
     async getNotebooks(limit = 50): Promise<any[]> {
-        return [];
+        const query = `MATCH (n:Notebook) RETURN n ORDER BY n.updatedAt DESC, n.createdAt DESC LIMIT $limit`;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { limit } });
+            return (result.data || []).map(row => {
+                const node = row[0] || row;
+                return node.properties || node;
+            });
+        } catch (e) {
+            console.error('[GraphStore] getNotebooks error:', e);
+            return [];
+        }
     }
 
     async getSourcesWithoutAudio(platformId: string): Promise<any[]> {
         return [];
     }
 
-    // --- Conversations / Sessions ---
-    async createSession(data: any): Promise<string> {
-        return `session_${Date.now()}`;
+    /**
+     * Create a new research session node.
+     */
+    async createSession(data: { platform: string; platformId: string; title?: string }): Promise<string> {
+        const id = `session_${data.platform}_${data.platformId}`;
+        const query = `
+            MERGE (s:Session {platformId: $platformId, platform: $platform})
+            ON CREATE SET s.id = $id, s.title = $title, s.createdAt = $now
+            ON MATCH SET s.title = $title, s.updatedAt = $now
+            RETURN s.id as id
+        `;
+        try {
+            const result = await this._executeQuery<{ id: string }[]>(query, {
+                params: {
+                    platformId: data.platformId,
+                    platform: data.platform,
+                    id,
+                    title: data.title || '',
+                    now: Date.now()
+                }
+            });
+            return result.data && result.data.length > 0 ? (result.data[0] as any).id : id;
+        } catch (e) {
+            console.error('[GraphStore] createSession error:', e);
+            return id;
+        }
     }
 
-    async createOrUpdateGeminiSession(data: any): Promise<void> {
+    /**
+     * Specialized update for Gemini sessions including deep research state.
+     */
+    async createOrUpdateGeminiSession(data: {
+        sessionId: string;
+        title: string;
+        isDeepResearch?: boolean
+    }): Promise<void> {
+        const query = `
+            MERGE (s:Session {platformId: $sessionId, platform: 'gemini'})
+            ON CREATE SET 
+                s.id = "session_gemini_" + $sessionId, 
+                s.title = $title, 
+                s.isDeepResearch = $isDeepResearch,
+                s.createdAt = $now
+            ON MATCH SET 
+                s.title = $title, 
+                s.isDeepResearch = $isDeepResearch,
+                s.updatedAt = $now
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    sessionId: data.sessionId,
+                    title: data.title,
+                    isDeepResearch: !!data.isDeepResearch,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] createOrUpdateGeminiSession error:', e);
+        }
     }
 
-    async syncConversation(data: any): Promise<{ isNew: boolean, id: string }> {
-        return { isNew: true, id: data.id || `conv_${Date.now()}` };
+    /**
+     * Synchronize a Conversation node in the graph.
+     */
+    async syncConversation(data: {
+        platformId: string;
+        title: string;
+        platform: string;
+        type?: string;
+        turns?: Turn[]
+    }): Promise<{ isNew: boolean, id: string }> {
+        const id = `conv_${data.platformId}`;
+        const query = `
+            MERGE (c:Conversation {platformId: $platformId})
+            ON CREATE SET 
+                c.id = $id, 
+                c.title = $title, 
+                c.platform = $platform, 
+                c.type = $type,
+                c.createdAt = $now,
+                c.turnCount = $turnCount,
+                c._isNew = true
+            ON MATCH SET 
+                c.title = $title, 
+                c.type = $type,
+                c.turnCount = $turnCount,
+                c.updatedAt = $now,
+                c._isNew = false
+            RETURN c.id as id, c._isNew as isNew
+        `;
+
+        try {
+            const result = await this._executeQuery<{ id: string, isNew: boolean }[]>(query, {
+                params: {
+                    platformId: data.platformId,
+                    id,
+                    title: data.title,
+                    platform: data.platform,
+                    type: data.type || 'regular',
+                    turnCount: data.turns?.length || 0,
+                    now: Date.now()
+                }
+            });
+
+            // If turns provided, we could store them as separate nodes or property
+            // For now, let's keep it simple and return the conversation info.
+
+            if (result.data && result.data.length > 0) {
+                const row = result.data[0] as any;
+                return {
+                    id: row.id || row[0],
+                    isNew: row.isNew !== undefined ? row.isNew : row[1]
+                };
+            }
+            return { isNew: false, id };
+        } catch (e) {
+            console.error('[GraphStore] syncConversation error:', e);
+            return { isNew: false, id };
+        }
     }
 
     async getConversationsByPlatform(platform: string, limit = 50): Promise<any[]> {
-        return [];
+        const query = `
+            MATCH (c:Conversation {platform: $platform})
+            RETURN c ORDER BY c.createdAt DESC LIMIT $limit
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { platform, limit } });
+            return (result.data || []).map(row => {
+                const node = row[0] || row;
+                return node.properties || node;
+            });
+        } catch (e) {
+            console.error('[GraphStore] getConversationsByPlatform error:', e);
+            return [];
+        }
     }
 
     async getConversationWithFilters(id: string, filters: any): Promise<{ conversation: any, turns: any[], researchDocs: any[] }> {
+        // Complex query to get conversation + turns + research docs
+        const query = `
+            MATCH (c:Conversation {id: $id})
+            OPTIONAL MATCH (c)-[:CONTAINS]->(t:Turn)
+            OPTIONAL MATCH (c)-[:HAS_RESEARCH_DOC]->(d:ResearchDoc)
+            RETURN c, collect(DISTINCT t) as turns, collect(DISTINCT d) as docs
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { id } });
+            if (result.data && result.data.length > 0) {
+                const row = result.data[0] as any;
+                const c = row.c || row[0];
+                const turns = row.turns || row[1] || [];
+                const docs = row.docs || row[2] || [];
+
+                return {
+                    conversation: c.properties || c,
+                    turns: turns.map((t: any) => t.properties || t),
+                    researchDocs: docs.map((d: any) => d.properties || d)
+                };
+            }
+        } catch (e) {
+            console.error('[GraphStore] getConversationWithFilters error:', e);
+        }
         return { conversation: null, turns: [], researchDocs: [] };
     }
 
     async getChangedConversations(since: number): Promise<any[]> {
-        return [];
+        const query = `
+            MATCH (c:Conversation)
+            WHERE c.updatedAt > $since OR c.createdAt > $since
+            RETURN c ORDER BY c.updatedAt DESC
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { since } });
+            return (result.data || []).map(row => (row[0] || row).properties || (row[0] || row));
+        } catch (e) {
+            console.error('[GraphStore] getChangedConversations error:', e);
+            return [];
+        }
     }
 
-    async updateLastExportedAt(id: string, timestamp: number): Promise<void> {}
+    async updateLastExportedAt(id: string, timestamp: number): Promise<void> {
+        const query = `MATCH (c:Conversation {id: $id}) SET c.lastExportedAt = $timestamp`;
+        try {
+            await this._executeQuery(query, { params: { id, timestamp } });
+        } catch (e) {
+            console.error('[GraphStore] updateLastExportedAt error:', e);
+        }
+    }
 
     // --- Lineage ---
     async getLineageChain(artifactId: string): Promise<any> {
+        const query = `
+            MATCH (a {id: $id})
+            OPTIONAL MATCH (j:Job)-[:GENERATED]->(s:Session)-[:HAS_RESEARCH_DOC]->(d:ResearchDoc)-[:HAS_AUDIO]->(au:Audio)
+            WHERE a.id IN [j.id, s.id, d.id, au.id]
+            RETURN j, s, d, au
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { id: artifactId } });
+            if (result.data && result.data.length > 0) {
+                const row = result.data[0] as any;
+                return {
+                    job: (row.j || row[0])?.properties || null,
+                    session: (row.s || row[1])?.properties || null,
+                    document: (row.d || row[2])?.properties || null,
+                    audio: (row.au || row[3])?.properties || null
+                };
+            }
+        } catch (e) {
+            console.error('[GraphStore] getLineageChain error:', e);
+        }
         return { job: null, session: null, document: null, audio: null };
     }
 
     async getLineage(nodeId: string): Promise<any[]> {
-        return [];
+        const query = `
+            MATCH (n {id: $id})
+            MATCH (n)<-[r*1..5]-(m)
+            RETURN m, r
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { id: nodeId } });
+            return (result.data || []).map(row => (row[0] || row).properties || (row[0] || row));
+        } catch (e) {
+            console.error('[GraphStore] getLineage error:', e);
+            return [];
+        }
     }
 
     // --- Citations ---
     async getCitations(filters: { domain?: string, limit?: number }): Promise<any[]> {
-        return [];
+        const where = filters.domain ? `WHERE s.domain = $domain` : '';
+        const query = `
+            MATCH (s:Source)
+            ${where}
+            RETURN s ORDER BY s.createdAt DESC LIMIT $limit
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, {
+                params: {
+                    domain: filters.domain || '',
+                    limit: filters.limit || 50
+                }
+            });
+            return (result.data || []).map(row => (row[0] || row).properties || (row[0] || row));
+        } catch (e) {
+            console.error('[GraphStore] getCitations error:', e);
+            return [];
+        }
     }
 
     async getCitationUsage(url: string): Promise<any[]> {
-        return [];
+        const query = `
+            MATCH (s:Source {url: $url})<-[:REFERENCES]-(t)
+            RETURN t
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { url } });
+            return (result.data || []).map(row => (row[0] || row).properties || (row[0] || row));
+        } catch (e) {
+            console.error('[GraphStore] getCitationUsage error:', e);
+            return [];
+        }
     }
 
     async migrateCitations(): Promise<{ processed: number, citations: number }> {
+        // Implementation for migrating legacy citations if needed
         return { processed: 0, citations: 0 };
     }
 
     // --- Audio ---
-    async createResearchAudio(data: any): Promise<string> {
-        return `audio_${Date.now()}`;
+    async createResearchAudio(data: { docId: string; path: string; duration?: number }): Promise<string> {
+        const id = `au_${Date.now()}`;
+        const query = `
+            MATCH (d:ResearchDoc {id: $docId})
+            CREATE (au:Audio {id: $id, path: $path, duration: $duration, createdAt: $now})
+            MERGE (d)-[:HAS_AUDIO]->(au)
+            RETURN au.id as id
+        `;
+        try {
+            const result = await this._executeQuery<{ id: string }[]>(query, {
+                params: {
+                    docId: data.docId,
+                    path: data.path,
+                    duration: data.duration || 0,
+                    id,
+                    now: Date.now()
+                }
+            });
+            return result.data && result.data.length > 0 ? (result.data[0] as any).id : id;
+        } catch (e) {
+            console.error('[GraphStore] createResearchAudio error:', e);
+            return id;
+        }
     }
 
     async getAudioForResearchDoc(docId: string): Promise<any> {
+        const query = `MATCH (d:ResearchDoc {id: $docId})-[:HAS_AUDIO]->(au:Audio) RETURN au`;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { docId } });
+            if (result.data && result.data.length > 0) {
+                return (result.data[0][0] || result.data[0]).properties || result.data[0][0];
+            }
+        } catch (e) {
+            console.error('[GraphStore] getAudioForResearchDoc error:', e);
+        }
         return null;
     }
 
     // --- Pending Audio ---
-     async createPendingAudio(
+    async createPendingAudio(
         notebookTitle: string,
         sources: string[],
         options?: { windmillJobId?: string; customPrompt?: string }
@@ -290,13 +596,13 @@ export class GraphStore {
     }
 
     async updatePendingAudioStatus(id: string, status: PendingAudioStatus, extra?: { error?: string; resultAudioId?: string; windmillJobId?: string }): Promise<void> {
-         let set = `pa.status = '${status}'`;
-         if (status === 'started' || status === 'generating') set += `, pa.startedAt = ${Date.now()}`;
-         if (status === 'completed' || status === 'failed') set += `, pa.completedAt = ${Date.now()}`;
-         if (extra?.error) set += `, pa.error = '${escapeString(extra.error)}'`;
-         if (extra?.resultAudioId) set += `, pa.resultAudioId = '${escapeString(extra.resultAudioId)}'`;
-         if (extra?.windmillJobId) set += `, pa.windmillJobId = '${escapeString(extra.windmillJobId)}'`;
-         await this._executeQuery(`MATCH (pa:PendingAudio {id: '${escapeString(id)}'}) SET ${set}`);
+        let set = `pa.status = '${status}'`;
+        if (status === 'started' || status === 'generating') set += `, pa.startedAt = ${Date.now()}`;
+        if (status === 'completed' || status === 'failed') set += `, pa.completedAt = ${Date.now()}`;
+        if (extra?.error) set += `, pa.error = '${escapeString(extra.error)}'`;
+        if (extra?.resultAudioId) set += `, pa.resultAudioId = '${escapeString(extra.resultAudioId)}'`;
+        if (extra?.windmillJobId) set += `, pa.windmillJobId = '${escapeString(extra.windmillJobId)}'`;
+        await this._executeQuery(`MATCH (pa:PendingAudio {id: '${escapeString(id)}'}) SET ${set}`);
     }
 
     async getPendingAudio(id: string): Promise<PendingAudio | null> {
@@ -351,13 +657,13 @@ export class GraphStore {
 
     // --- Entity ---
     async addEntity(entity: Entity): Promise<void> {
-         const propsJson = escapeString(JSON.stringify(entity.properties));
-         await this._executeQuery(`CREATE (e:Entity:${entity.type} {id: '${escapeString(entity.id)}', type: '${escapeString(entity.type)}', name: '${escapeString(entity.name)}', properties: '${propsJson}', createdAt: ${Date.now()}})`);
+        const propsJson = escapeString(JSON.stringify(entity.properties));
+        await this._executeQuery(`CREATE (e:Entity:${entity.type} {id: '${escapeString(entity.id)}', type: '${escapeString(entity.type)}', name: '${escapeString(entity.name)}', properties: '${propsJson}', createdAt: ${Date.now()}})`);
     }
 
     async addRelationship(rel: Relationship): Promise<void> {
-         const propsJson = rel.properties ? escapeString(JSON.stringify(rel.properties)) : '{}';
-         await this._executeQuery(`MATCH (a:Entity {id: '${escapeString(rel.from)}'}), (b:Entity {id: '${escapeString(rel.to)}'}) CREATE (a)-[:${rel.type} {properties: '${propsJson}', createdAt: ${Date.now()}}]->(b)`);
+        const propsJson = rel.properties ? escapeString(JSON.stringify(rel.properties)) : '{}';
+        await this._executeQuery(`MATCH (a:Entity {id: '${escapeString(rel.from)}'}), (b:Entity {id: '${escapeString(rel.to)}'}) CREATE (a)-[:${rel.type} {properties: '${propsJson}', createdAt: ${Date.now()}}]->(b)`);
     }
 
     async findEntities(type: string, limit = 100): Promise<Entity[]> {
@@ -369,6 +675,109 @@ export class GraphStore {
         let query = `MATCH (a:Entity {id: '${escapeString(entityId)}'})-[r${relationshipType ? `:${relationshipType}` : ''}]->(b:Entity) RETURN b`;
         const result = await this._executeQuery<any[]>(query);
         return (result.data || []).map(row => this.nodeToEntity(row[0]));
+    }
+
+    // --- Fact Extraction & Reasoning ---
+
+    /**
+     * Store an extracted fact and link it to its source (e.g. Conversation or ResearchDoc).
+     */
+    async storeFact(fact: string, sourceId: string, metadata: Record<string, any> = {}): Promise<void> {
+        const id = `fact_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const query = `
+            MATCH (s {id: $sourceId})
+            MERGE (f:Fact {content: $content})
+            ON CREATE SET f.id = $id, f.createdAt = $now, f.metadata = $metadata
+            MERGE (s)-[:EVIDENCE_FOR {createdAt: $now}]->(f)
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    sourceId,
+                    content: fact,
+                    id,
+                    metadata: JSON.stringify(metadata),
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] storeFact error:', e);
+        }
+    }
+
+    /**
+     * Add a citation/source URL and link it to a node.
+     */
+    async addCitation(data: { url: string; title?: string; domain?: string }, targetId: string): Promise<void> {
+        const query = `
+            MATCH (t {id: $targetId})
+            MERGE (s:Source {url: $url})
+            ON CREATE SET 
+                s.id = "src_" + apoc.text.base64Encode($url),
+                s.title = $title, 
+                s.domain = $domain, 
+                s.createdAt = $now
+            ON MATCH SET 
+                s.title = CASE WHEN s.title IS NULL THEN $title ELSE s.title END,
+                s.updatedAt = $now
+            MERGE (t)-[:REFERENCES {createdAt: $now}]->(s)
+        `;
+        // Note: Using a heuristic for ID if apoc not available, or just regular ID if preferred
+        const id = `doc_${Buffer.from(data.url).toString('base64').substring(0, 16)}`;
+
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    targetId,
+                    url: data.url,
+                    title: data.title || '',
+                    domain: data.domain || new URL(data.url).hostname,
+                    now: Date.now()
+                }
+            }).catch(async (e) => {
+                // Fallback if apoc is missing
+                const fallbackQuery = `
+                    MATCH (t {id: $targetId})
+                    MERGE (s:Source {url: $url})
+                    ON CREATE SET s.id = $id, s.title = $title, s.domain = $domain, s.createdAt = $now
+                    MERGE (t)-[:REFERENCES {createdAt: $now}]->(s)
+                `;
+                return this._executeQuery(fallbackQuery, {
+                    params: { targetId, url: data.url, title: data.title || '', domain: data.domain || '', id, now: Date.now() }
+                });
+            });
+        } catch (e) {
+            console.error('[GraphStore] addCitation error:', e);
+        }
+    }
+
+    /**
+     * Create reasoning steps for a specific turn or action.
+     */
+    async createReasoningStep(turnId: string, steps: string[]): Promise<void> {
+        const query = `
+            MATCH (t {id: $turnId})
+            UNWIND range(0, size($steps)-1) as idx
+            WITH t, idx, $steps[idx] as stepText
+            CREATE (rs:ReasoningStep {
+                id: $turnId + "_step_" + idx,
+                content: stepText,
+                order: idx,
+                createdAt: $now
+            })
+            MERGE (t)-[:THOUGHT_PROCESS]->(rs)
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    turnId,
+                    steps,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] createReasoningStep error:', e);
+        }
     }
 }
 

@@ -34,3 +34,7 @@
       tags: logseq
     - role: remarkable_mouse
       tags: remarkable_mouse
+    - role: kdiskmark
+      tags: kdiskmark
+    - role: chrome-bookmarks
+      tags: chrome-bookmarks

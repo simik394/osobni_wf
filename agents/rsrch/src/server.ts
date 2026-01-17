@@ -471,9 +471,8 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
 
         // 7. Track in Graph
         const audioNode = await graphStore.createResearchAudio({
-            researchDocId,
+            docId: researchDocId,
             path: localPath,
-            filename: localFilename,
             duration: 0
         });
 
@@ -1242,7 +1241,10 @@ app.get('/gemini/sessions', async (req, res) => {
             console.log(`[Server] Syncing ${sessions.length} Gemini sessions to FalkorDB...`);
             (async () => {
                 for (const session of sessions) {
-                    await graphStore.createOrUpdateGeminiSession(session);
+                    await graphStore.createOrUpdateGeminiSession({
+                        sessionId: session.id || '',
+                        title: session.name
+                    });
                 }
                 console.log('[Server] Gemini session sync complete.');
             })().catch(err => {
@@ -1317,10 +1319,9 @@ app.post('/gemini/sync-graph', async (req, res) => {
                 // Create session in FalkorDB (duplicates will fail silently)
                 const sessionId = `gemini-${docId}`;
                 await graphStore.createSession({
-                    id: sessionId,
+                    platformId: docId,
                     platform: 'gemini',
-                    externalId: docId,
-                    query: doc.title || doc.firstHeading || ''
+                    title: doc.title || doc.firstHeading || ''
                 });
 
                 syncedIds.push(docId);

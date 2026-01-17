@@ -21,9 +21,6 @@ export default defineConfig({
       '**/docker-*.ts',
       '**/verify-registry-demo.ts',
       '**/test-parser-fix.ts',
-      // Script-style tests that don't use Vitest framework
-      '**/artifact-registry.test.ts',
-      '**/graph-store.test.ts',
       // References dead code (knowledge.ts.disabled)
       '**/knowledge.test.ts',
     ],
