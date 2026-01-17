@@ -273,6 +273,98 @@ profile.command('delete <profileId>')
         }
     });
 
+profile.command('sync-to-remote [profileId]')
+    .description('Export auth from local browser and sync to remote server')
+    .option('--remote <host>', 'Remote host (e.g., halvarm or user@host)', 'halvarm')
+    .option('--cdp-port <port>', 'Local CDP port', '9222')
+    .option('--remote-path <path>', 'Remote profiles path', '/opt/rsrch/profiles')
+    .action(async (profileId, opts) => {
+        const id = profileId || globalProfileId;
+        const cdpEndpoint = `http://localhost:${opts.cdpPort}`;
+
+        console.log(`\n🔄 Syncing profile '${id}' to ${opts.remote}...\n`);
+
+        // Step 1: Connect to local browser via CDP
+        console.log(`[1/4] Connecting to local browser via CDP (${cdpEndpoint})...`);
+        const { chromium } = await import('playwright');
+
+        let browser;
+        try {
+            browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: 5000 });
+            console.log('  ✓ Connected to browser');
+        } catch (e: any) {
+            console.error(`  ✗ Failed to connect: ${e.message}`);
+            console.error('\n  Make sure your browser is running with remote debugging enabled.');
+            console.error('  For Cromite: it should be enabled by default on port 9222.\n');
+            process.exit(1);
+        }
+
+        // Step 2: Extract storage state
+        console.log('[2/4] Extracting session cookies and storage...');
+        const contexts = browser.contexts();
+        if (contexts.length === 0) {
+            console.error('  ✗ No browser contexts found');
+            await browser.close();
+            process.exit(1);
+        }
+
+        const context = contexts[0];
+        const state = await context.storageState();
+
+        // Filter for relevant cookies (Google, Gemini, Perplexity, NotebookLM)
+        const relevantDomains = ['.google.com', 'gemini.google.com', 'notebooklm.google.com', '.perplexity.ai'];
+        const filteredCookies = state.cookies.filter((c: any) =>
+            relevantDomains.some(d => c.domain.includes(d.replace('.', '')))
+        );
+
+        console.log(`  ✓ Extracted ${filteredCookies.length} relevant cookies`);
+
+        // Step 3: Save auth.json locally
+        console.log('[3/4] Saving auth.json...');
+        const { ensureProfileDir, getAuthFile } = await import('./profile');
+        ensureProfileDir(id);
+        const authFile = getAuthFile(id);
+
+        const authState = {
+            cookies: filteredCookies,
+            origins: state.origins
+        };
+
+        const fs = await import('fs');
+        fs.writeFileSync(authFile, JSON.stringify(authState, null, 2));
+        console.log(`  ✓ Saved to ${authFile}`);
+
+        // Step 4: Upload to remote server via SCP
+        console.log(`[4/4] Uploading to ${opts.remote}:${opts.remotePath}/${id}/...`);
+        const { execSync } = await import('child_process');
+
+        try {
+            // Use temp file approach to handle Docker volume permissions
+            const remoteTmpFile = `/tmp/rsrch_auth_${id}_${Date.now()}.json`;
+
+            // Copy to remote /tmp first
+            execSync(`scp "${authFile}" ${opts.remote}:${remoteTmpFile}`, { stdio: 'pipe' });
+
+            // Ensure remote directory exists and move file with sudo
+            execSync(`ssh ${opts.remote} "sudo mkdir -p ${opts.remotePath}/${id} && sudo cp ${remoteTmpFile} ${opts.remotePath}/${id}/auth.json && sudo chown 1200:1201 ${opts.remotePath}/${id}/auth.json && rm ${remoteTmpFile}"`, { stdio: 'pipe' });
+            console.log('  ✓ Uploaded auth.json');
+
+            // Verify
+            const remoteCheck = execSync(`ssh ${opts.remote} "cat ${opts.remotePath}/${id}/auth.json | head -c 100"`, { encoding: 'utf-8' });
+            if (remoteCheck.includes('"cookies"')) {
+                console.log('  ✓ Verified remote auth.json');
+            }
+        } catch (e: any) {
+            console.error(`  ✗ Upload failed: ${e.message}`);
+            process.exit(1);
+        }
+
+        console.log(`\n✅ Profile '${id}' synced to ${opts.remote} successfully!\n`);
+        console.log(`You can now use: rsrch --server http://${opts.remote}:3001 gemini list-sessions\n`);
+
+        await browser.close();
+    });
+
 // Notebook
 const notebook = program.command('notebook').description('NotebookLM commands');
 
