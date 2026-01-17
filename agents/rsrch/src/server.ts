@@ -1638,7 +1638,7 @@ export async function startServer(port: number = PORT) {
             console.warn('[Server] Job queue and graph features will be disabled.');
         }
 
-        const server = app.listen(port, () => {
+        const server = app.listen(port, '0.0.0.0', () => {
             console.log(`\n✓ Perplexity Researcher server running on http://localhost:${port}`);
             console.log(`\nEndpoints:`);
             console.log(`  GET  /health             - Health check`);

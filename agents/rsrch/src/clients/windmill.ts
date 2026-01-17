@@ -42,9 +42,9 @@ export class WindmillClient {
         }
 
         return {
-            baseUrl: custom?.baseUrl || process.env.WINDMILL_URL || "http://halvarm:3030", // Fallback to internal address
+            baseUrl: custom?.baseUrl || process.env.WINDMILL_URL || "http://halvarm:8000", // Windmill on halvarm server
             token: custom?.token || process.env.WINDMILL_TOKEN || fileConfig.token || "",
-            workspace: custom?.workspace || process.env.WINDMILL_WORKSPACE || "rsrch",
+            workspace: custom?.workspace || process.env.WINDMILL_WORKSPACE || "knowlage",
         };
     }
 
@@ -68,7 +68,7 @@ export class WindmillClient {
 
     private async waitForJob(jobId: string) {
         // Polling logic
-        const maxRetries = 60; // 1 minute approx
+        const maxRetries = 300; // 5 minutes approx
         for (let i = 0; i < maxRetries; i++) {
             await new Promise(r => setTimeout(r, 1000));
             const res = await this.axios.get(`/w/${this.config.workspace}/jobs/${jobId}/result`);

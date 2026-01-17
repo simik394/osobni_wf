@@ -956,49 +956,43 @@ graph.command('migrate-citations')
 const gemini = program.command('gemini').description('Gemini commands');
 
 gemini.command('research <query>')
-    .description('Run a research query')
-    .option('--local', 'Use local execution')
-    .option('--remote', 'Use Windmill remote execution (Default)', true)
+    .description('Execute a Google Gemini research query (Deep Research)')
     .action(async (query, opts) => {
-        // Default to remote if not explicitly local
-        if (opts.remote && !opts.local) {
-            console.log(`[CLI] 🚀 Dispatching 'research' to Windmill...`);
-            const client = new WindmillClient();
-            try {
-                const result = await client.executeJob('rsrch/execute', {
-                    command: 'research',
-                    args: { query }
-                });
-                console.log('\n--- Windmill Response ---\n');
-                console.log(result?.data || result);
-                console.log('\n-----------------------\n');
-            } catch (e: any) {
-                console.error(`[CLI] Windmill execution failed: ${e.message}`);
-                process.exit(1);
-            }
-            return;
+        // Enforce remote Windmill execution
+        console.log(`[CLI] 🚀 Dispatching 'research' to Windmill...`);
+        const client = new WindmillClient();
+        try {
+            const result = await client.executeJob('rsrch/execute', {
+                command: 'research',
+                args: { query }
+            });
+            console.log('\n--- Windmill Response ---\n');
+            console.log(result?.data || result);
+            console.log('\n-----------------------\n');
+        } catch (e: any) {
+            console.error(`[CLI] Windmill execution failed: ${e.message}`);
+            process.exit(1);
         }
+    });
 
-        const hasLocalFlag = opts.local !== undefined ? opts.local : (!!config.browserWsEndpoint || !!config.browserCdpEndpoint);
-        const isLocalExecution = hasLocalFlag || !!config.browserWsEndpoint || !!config.browserCdpEndpoint;
-
-        if (isLocalExecution) {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const response = await gemini.research(query);
-                console.log('\n--- Gemini Response ---\n');
-                console.log(response);
-                console.log('\n-----------------------\n');
-            }, undefined, hasLocalFlag);
-        } else {
-            // Server mode with SSE streaming for progress updates
-            const result = await sendServerRequestWithSSE('/gemini/research', { query });
-            if (result?.success) {
-                console.log('\n--- Gemini Response ---\n');
-                console.log(result.data);
-                console.log('\n-----------------------\n');
-            } else {
-                console.error('Research failed:', result?.error || 'Unknown error');
-            }
+gemini.command('chat <message>')
+    .description('Chat with Google Gemini')
+    .option('--session <id>', 'Existing session ID')
+    .action(async (message, opts) => {
+        // Enforce remote Windmill execution
+        console.log(`[CLI] 🚀 Dispatching 'chat' to Windmill...`);
+        const client = new WindmillClient();
+        try {
+            const result = await client.executeJob('rsrch/execute', {
+                command: 'chat',
+                args: { message, sessionId: opts.session }
+            });
+            console.log('\n--- Windmill Response ---\n');
+            console.log(result?.data || result);
+            console.log('\n-----------------------\n');
+        } catch (e: any) {
+            console.error(`[CLI] Windmill execution failed: ${e.message}`);
+            process.exit(1);
         }
     });
 
