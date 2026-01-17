@@ -58,7 +58,7 @@
     mode: "0755"
     content: |
       #!/bin/bash
-      exec env GSK_RENDERER=ngl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLSL_VERSION_OVERRIDE=460 {{ ansible_env.HOME }}/.local/bin/ghostty.bin "$@"
+      exec env GSK_RENDERER=gl __GL_SYNC_TO_VBLANK=0 {{ ansible_env.HOME }}/.local/bin/ghostty.bin "$@"
 
 - name: Configure Ghostty
   template:
@@ -70,7 +70,7 @@
   lineinfile:
     path: "{{ ansible_env.HOME }}/.local/share/applications/com.mitchellh.ghostty.desktop"
     regexp: "^Exec=.*"
-    line: "Exec=env GSK_RENDERER=ngl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLSL_VERSION_OVERRIDE=460 {{ ansible_env.HOME }}/.local/bin/ghostty"
+    line: "Exec=env GSK_RENDERER=gl __GL_SYNC_TO_VBLANK=0 {{ ansible_env.HOME }}/.local/bin/ghostty"
 
 - name: Update desktop database
   command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications
