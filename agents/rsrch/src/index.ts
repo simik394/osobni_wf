@@ -138,9 +138,11 @@ async function runLocalNotebookAction(action: (client: PerplexityClient, noteboo
 
 // Helper for local Gemini execution
 async function runLocalGeminiAction(action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string, hasLocalFlag: boolean = true) {
-    console.log(`Running Gemini in ${hasLocalFlag ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
+    // If CDP endpoint is provided, force REMOTE mode
+    const useLocalMode = globalCdpEndpoint ? false : hasLocalFlag;
+    console.log(`Running Gemini in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
     const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
-    await client.init({ local: hasLocalFlag, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+    await client.init({ local: useLocalMode, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
     const gemini = await client.createGeminiClient();
     await gemini.init(sessionId); // Pass sessionId to navigate directly
     try {
@@ -448,9 +450,7 @@ notebook.command('sync')
                     for (const nb of notebooks) {
                         const result = await store.syncNotebook({
                             platformId: nb.platformId,
-                            title: nb.title,
-                            sources: [],
-                            audioOverviews: []
+                            title: nb.title
                         });
                         console.log(`  - ${nb.title} (${result.id}) [${nb.sourceCount} sources]`);
                     }
@@ -1258,8 +1258,28 @@ gemini.command('sync-conversations')
     .description('Sync conversations to graph')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 10)
     .option('--offset <number>', 'Offset', (v) => parseInt(v), 0)
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution (default: remote via Windmill)', false)
     .action(async (opts) => {
+        // Default to remote Windmill execution
+        if (!opts.local) {
+            console.log(`[CLI] 🚀 Dispatching 'sync-conversations' to Windmill...`);
+            const windmill = new WindmillClient();
+            try {
+                const result = await windmill.executeJob('rsrch/execute', {
+                    command: 'sync-conversations',
+                    args: { limit: opts.limit, offset: opts.offset }
+                });
+                console.log('\n--- Windmill Response ---\n');
+                console.log(result?.data || result);
+                console.log('\n-----------------------\n');
+            } catch (e: any) {
+                console.error(`[CLI] Windmill execution failed: ${e.message}`);
+                process.exit(1);
+            }
+            return;
+        }
+
+        // Local execution path
         const { getGraphStore } = await import('./graph-store');
         const store = getGraphStore();
         const graphHost = config.falkor.host;
@@ -1279,8 +1299,7 @@ gemini.command('sync-conversations')
                         platformId: conv.platformId,
                         title: conv.title,
                         type: conv.type,
-                        turns: conv.turns,
-                        researchDocs: conv.researchDocs
+                        turns: conv.turns
                     });
                     if (result.isNew) synced++;
                     else updated++;
