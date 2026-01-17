@@ -137,3 +137,41 @@ chat:
   messageContainer: "conversation-view"
   lastMessage: "message-bubble:last-of-type .message-content, user-message:last-of-type .message-content"
   thinkingIndicator: "mat-progress-bar, mat-spinner"
+
+# ============================================================
+# GEMINI SELECTORS
+# ============================================================
+gemini:
+  auth:
+    acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
+    dismiss: 'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Not now"), button:has-text("Close"), button:has-text("Zavřít"), button:has-text("Později")'
+    signIn: 'button:has-text("Sign in"), a:has-text("Sign in")'
+    welcome: 'button[aria-label*="Close"], button:has-text("Got it"), button:has-text("Skip")'
+  chat:
+    app: 'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]'
+    input: 'div[contenteditable="true"], textarea, input[type="text"]'
+    send: 'button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"], button[type="submit"], button:has(svg[class*="send"]), button:has(path[d*="M2.01"]), div[contenteditable] ~ button'
+    response: "model-response"
+    history: '.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]'
+    newChat: 'button[aria-label*="New chat"], button[aria-label*="Nový chat"], button:has-text("New chat"), button:has-text("Nový chat"), [data-testid="new-chat-button"]'
+  sidebar:
+    menu: 'button[aria-label*="Hlavní nabídka"], button[aria-label*="Main menu"], button[aria-label*="Menu"]'
+    conversations: 'div.conversation[role="button"], a[href*="/app/"], nav [role="listitem"]'
+    showMore: 'button:has-text("Show more"), button:has-text("Zobrazit více")'
+    myStuff: "text=/Můj obsah|My Stuff/i"
+  deepResearch:
+    panel: "deep-research-immersive-panel"
+    documentCard: "div.library-item-card"
+    documentTitle: ".title"
+    toolbarTitle: "h2.title-text"
+    immersiveTitle: "h1"
+  gems:
+    card: '[class*="gem-card"], [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
+    create: 'button:has-text("Create"), button:has-text("New Gem"), button:has-text("Vytvořit"), a:has-text("Create"), [aria-label*="Create" i]'
+    nameInput: 'input[placeholder*="name" i], input[aria-label*="name" i]'
+    instructionInput: 'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], div[contenteditable="true"][placeholder*="instruction" i]'
+    save: 'button:has-text("Save"), button:has-text("Create"), button:has-text("Uložit"), button[type="submit"]'
+  upload:
+    button: 'button[aria-label*="Add" i], button[aria-label*="Attach" i], button[aria-label*="Upload" i], button[aria-label*="Přidat" i], button[aria-label*="Nahrát" i], button:has(mat-icon:has-text("add")), button:has(mat-icon:has-text("attach_file"))'
+    fileInput: 'input[type="file"]'
+    uploadOption: 'button:has-text("Upload"), [role="menuitem"]:has-text("Upload"), button:has-text("Nahrát soubor")'

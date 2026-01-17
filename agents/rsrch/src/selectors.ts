@@ -80,6 +80,56 @@ export interface DownloadSelectors {
     menuVisible: string;
 }
 
+export interface ChatSelectors {
+    input: string;
+    submitButton: string;
+    messageContainer: string;
+    lastMessage: string;
+    thinkingIndicator: string;
+}
+
+export interface GeminiSelectors {
+    auth: {
+        acceptAll: string;
+        dismiss: string;
+        signIn: string;
+        welcome: string;
+    };
+    chat: {
+        app: string;
+        input: string;
+        send: string;
+        response: string;
+        history: string;
+        newChat: string;
+    };
+    sidebar: {
+        menu: string;
+        conversations: string;
+        showMore: string;
+        myStuff: string;
+    };
+    deepResearch: {
+        panel: string;
+        documentCard: string;
+        documentTitle: string;
+        toolbarTitle: string;
+        immersiveTitle: string;
+    };
+    gems: {
+        card: string;
+        create: string;
+        nameInput: string;
+        instructionInput: string;
+        save: string;
+    };
+    upload: {
+        button: string;
+        fileInput: string;
+        uploadOption: string;
+    };
+}
+
 export interface NotebookLMSelectors {
     home: HomeSelectors;
     notebook: NotebookSelectors;
@@ -88,14 +138,7 @@ export interface NotebookLMSelectors {
     audio: AudioSelectors;
     download: DownloadSelectors;
     chat: ChatSelectors;
-}
-
-export interface ChatSelectors {
-    input: string;
-    submitButton: string;
-    messageContainer: string;
-    lastMessage: string;
-    thinkingIndicator: string;
+    gemini: GeminiSelectors;
 }
 
 // Default selectors (fallback if YAML fails to load)
@@ -169,6 +212,47 @@ const defaultSelectors: NotebookLMSelectors = {
         lastMessage: 'message-bubble:last-of-type .message-content, user-message:last-of-type .message-content',
         thinkingIndicator: 'mat-progress-bar, mat-spinner',
     },
+    gemini: {
+        auth: {
+            acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše")',
+            dismiss: 'button:has-text("Ne, díky"), button:has-text("No thanks")',
+            signIn: 'button:has-text("Sign in")',
+            welcome: 'button:has-text("Got it")',
+        },
+        chat: {
+            app: 'chat-app',
+            input: 'div[contenteditable="true"]',
+            send: 'button[aria-label*="Send"]',
+            response: 'model-response',
+            history: '.chat-history-list',
+            newChat: 'button[aria-label*="New chat"]',
+        },
+        sidebar: {
+            menu: 'button[aria-label*="Main menu"]',
+            conversations: 'div.conversation[role="button"]',
+            showMore: 'button:has-text("Show more")',
+            myStuff: 'text=/My Stuff/i',
+        },
+        deepResearch: {
+            panel: 'deep-research-immersive-panel',
+            documentCard: 'div.library-item-card',
+            documentTitle: '.title',
+            toolbarTitle: 'h2.title-text',
+            immersiveTitle: 'h1',
+        },
+        gems: {
+            card: '[class*="gem-card"]',
+            create: 'button:has-text("Create")',
+            nameInput: 'input[placeholder*="name" i]',
+            instructionInput: 'textarea[placeholder*="instruction" i]',
+            save: 'button:has-text("Save")',
+        },
+        upload: {
+            button: 'button[aria-label*="Add" i]',
+            fileInput: 'input[type="file"]',
+            uploadOption: 'button:has-text("Upload")',
+        }
+    }
 };
 
 let cachedSelectors: NotebookLMSelectors | null = null;

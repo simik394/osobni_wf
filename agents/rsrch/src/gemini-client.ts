@@ -5,6 +5,7 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { getRegistry } from './artifact-registry';
 import { getRsrchTelemetry } from '@agents/shared';
+import { selectors } from './selectors';
 
 // Get telemetry instance
 const telemetry = getRsrchTelemetry();
@@ -134,9 +135,7 @@ export class GeminiClient extends EventEmitter {
         await this.page.waitForTimeout(1500);
 
         // Handle Google cookie consent dialog ("Before you continue to Google")
-        const acceptAllButtons = this.page.locator(
-            'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
-        );
+        const acceptAllButtons = this.page.locator(selectors.gemini.auth.acceptAll);
         if (await acceptAllButtons.count() > 0) {
             this.progress('Cookie consent detected, clicking Accept all...', 'init');
             await acceptAllButtons.first().click().catch(() => { });
@@ -144,9 +143,7 @@ export class GeminiClient extends EventEmitter {
         }
 
         // Handle "Stay in the loop" / "Try Gemini Advanced" / "Ne, díky" popups
-        const dismissButtons = this.page.locator(
-            'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Not now"), button:has-text("Close"), button:has-text("Zavřít"), button:has-text("Později")'
-        );
+        const dismissButtons = this.page.locator(selectors.gemini.auth.dismiss);
         if (await dismissButtons.count() > 0) {
             this.progress('Advertising/promo popup detected, clicking dismiss...', 'init');
             // Iterate and click visible ones
@@ -160,14 +157,14 @@ export class GeminiClient extends EventEmitter {
             await this.page.waitForTimeout(1000);
         }
 
-        const signInButton = this.page.locator('button:has-text("Sign in"), a:has-text("Sign in")');
+        const signInButton = this.page.locator(selectors.gemini.auth.signIn);
         if (await signInButton.count() > 0) {
             console.warn('[Gemini] Sign in required.');
             await this.dumpState('gemini_auth_required');
             throw new Error('Gemini requires authentication. Please run rsrch auth first.');
         }
 
-        const closeButtons = this.page.locator('button[aria-label*="Close"], button:has-text("Got it"), button:has-text("Skip")');
+        const closeButtons = this.page.locator(selectors.gemini.auth.welcome);
         if (await closeButtons.count() > 0) {
             await closeButtons.first().click().catch(() => { });
             await this.page.waitForTimeout(500);
@@ -175,13 +172,10 @@ export class GeminiClient extends EventEmitter {
 
         try {
             // Broader selector to handle Gemini UI variations
-            await this.page.waitForSelector(
-                'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]',
-                { timeout: 15000 }
-            );
+            await this.page.waitForSelector(selectors.gemini.chat.app, { timeout: 15000 });
         } catch (e) {
             // Check if we're on a valid Gemini page anyway (sidebar visible)
-            const sidebarVisible = await this.page.locator('.conversations-list, [aria-label*="conversation" i], [data-sidebar]').count() > 0;
+            const sidebarVisible = await this.page.locator(selectors.gemini.chat.history).count() > 0;
             if (sidebarVisible) {
                 this.progress('Sidebar visible, proceeding despite input element not found.', 'init');
             } else {
@@ -210,24 +204,12 @@ export class GeminiClient extends EventEmitter {
         }
 
         // 2. Try clicking "New Chat" button
-        const newChatSelectors = [
-            'button[aria-label*="New chat"]',
-            'button[aria-label*="Nový chat"]',
-            'button:has-text("New chat")',
-            'button:has-text("Nový chat")',
-            'a[href="/app"][aria-label*="New"]', // Sometimes it's a link
-            '[data-testid="new-chat-button"]'
-        ];
-
         let clicked = false;
-        for (const selector of newChatSelectors) {
-            const btn = this.page.locator(selector).first();
-            if (await btn.isVisible().catch(() => false)) {
-                console.log(`[Gemini] Clicking New Chat: ${selector}`);
-                await btn.click();
-                clicked = true;
-                break;
-            }
+        const newChatBtn = this.page.locator(selectors.gemini.chat.newChat).first();
+        if (await newChatBtn.isVisible().catch(() => false)) {
+            console.log(`[Gemini] Clicking New Chat...`);
+            await newChatBtn.click();
+            clicked = true;
         }
 
         if (!clicked) {
@@ -272,14 +254,14 @@ export class GeminiClient extends EventEmitter {
         const sessions: { name: string; id: string | null }[] = [];
         try {
             // Ensure sidebar is visible - sometimes hidden
-            const menuButton = this.page.locator('button[aria-label*="Hlavní nabídka"], button[aria-label*="Main menu"]').first();
+            const menuButton = this.page.locator(selectors.gemini.sidebar.menu).first();
             if (await menuButton.count() > 0) {
                 // Assuming visible for now
             }
 
             // Wait for history loading spinner
             try {
-                await this.page.waitForSelector('.chat-history-list', { timeout: 5000 }).catch(() => { });
+                await this.page.waitForSelector(selectors.gemini.chat.history, { timeout: 5000 }).catch(() => { });
                 const spinner = this.page.locator('.loading-history-spinner-container');
                 if (await spinner.count() > 0) {
                     console.log('[Gemini] Waiting for history spinner to disappear...');
@@ -292,24 +274,14 @@ export class GeminiClient extends EventEmitter {
             const targetCount = offset + limit;
             console.log(`[Gemini] listing sessions (limit: ${limit}, offset: ${offset}, target: ${targetCount})...`);
 
-            let sessionItems = this.page.locator('div.conversation[role="button"]');
-
-            // Fallback selectors if primary fails
-            if (await sessionItems.count() === 0) {
-                // Try anchor tags with session links
-                sessionItems = this.page.locator('a[href*="/app/"]');
-            }
-            if (await sessionItems.count() === 0) {
-                // Try generic list items in navigation
-                sessionItems = this.page.locator('nav [role="listitem"]');
-            }
+            let sessionItems = this.page.locator(selectors.gemini.sidebar.conversations);
             if (await sessionItems.count() > 0) {
                 console.log(`[Gemini] Found sessions using selector: ${await sessionItems.first().evaluate(el => el.tagName.toLowerCase() + (el.className ? '.' + el.className.split(' ').join('.') : ''))} `);
                 await this.dumpState('debug_session_list');
             }
 
             // DEBUG: Dump sidebar HTML to debug missing sessions
-            const sidebarContainer = this.page.locator('.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]').first();
+            const sidebarContainer = this.page.locator(selectors.gemini.chat.history).first();
             if (await sidebarContainer.isVisible()) {
                 console.log('[Gemini] DEBUG: Sidebar Container HTML:');
                 console.log(await sidebarContainer.innerHTML().catch(() => 'Could not read sidebar HTML'));
@@ -344,7 +316,7 @@ export class GeminiClient extends EventEmitter {
                 }
 
                 // Check if "show more" button exists (for deep history)
-                const showMore = this.page.locator('button').filter({ hasText: /Show more|Zobrazit více/i }).first();
+                const showMore = this.page.locator(selectors.gemini.sidebar.showMore).first();
                 if (await showMore.isVisible()) {
                     console.log('[Gemini] Clicking "Show more"...');
                     await showMore.click();
@@ -352,11 +324,7 @@ export class GeminiClient extends EventEmitter {
                 }
 
                 // Refresh selector count
-                if (await this.page.locator('div.conversation[role="button"]').count() > 0) {
-                    sessionItems = this.page.locator('div.conversation[role="button"]');
-                } else if (await this.page.locator('a[href*="/app/"]').count() > 0) {
-                    sessionItems = this.page.locator('a[href*="/app/"]');
-                }
+                sessionItems = this.page.locator(selectors.gemini.sidebar.conversations);
 
                 count = await sessionItems.count();
                 console.log(`[Gemini] Loaded ${count} sessions (Goal: ${targetCount})...`);
@@ -982,7 +950,7 @@ export class GeminiClient extends EventEmitter {
                 }
             } else {
                 // Fallback: Extract from last model response if available
-                const responses = this.page.locator('model-response');
+                const responses = this.page.locator(selectors.gemini.chat.response);
                 if (await responses.count() > 0) {
                     const last = responses.last();
                     const fullText = await last.innerText().catch(() => '');
@@ -1044,26 +1012,10 @@ export class GeminiClient extends EventEmitter {
 
             // Find the attachment button (+ icon near input)
             // Gemini uses various selectors for the add attachment button
-            const attachButtonSelectors = [
-                'button[aria-label*="Add" i]',
-                'button[aria-label*="Attach" i]',
-                'button[aria-label*="Upload" i]',
-                'button[aria-label*="Přidat" i]',  // Czech
-                'button[aria-label*="Nahrát" i]',  // Czech
-                'button:has(mat-icon:has-text("add"))',
-                'button:has(mat-icon:has-text("attach_file"))',
-                '.add-attachment-button',
-                '[data-add-attachment]',
-            ];
-
             let attachButton = null;
-            for (const selector of attachButtonSelectors) {
-                const btn = this.page.locator(selector).first();
-                if (await btn.count() > 0 && await btn.isVisible()) {
-                    attachButton = btn;
-                    console.log(`[Gemini] Found attach button with: ${selector}`);
-                    break;
-                }
+            const btn = this.page.locator(selectors.gemini.upload.button).first();
+            if (await btn.count() > 0 && await btn.isVisible()) {
+                attachButton = btn;
             }
 
             if (!attachButton) {
@@ -1087,10 +1039,10 @@ export class GeminiClient extends EventEmitter {
             if (!attachButton) {
                 console.warn('[Gemini] Attachment button not found. Trying file input directly...');
                 // Some versions have a hidden file input
-                const fileInput = this.page.locator('input[type="file"]');
+                const fileInput = this.page.locator(selectors.gemini.upload.fileInput);
                 if (await fileInput.count() > 0) {
                     await fileInput.setInputFiles(filePath);
-                    console.log(`[Gemini] File uploaded via hidden input: ${filePath}`);
+                    console.log(`[Gemini] File uploaded via input: ${filePath}`);
                     await this.page.waitForTimeout(2000);
                     return true;
                 }
@@ -1107,7 +1059,7 @@ export class GeminiClient extends EventEmitter {
             const fileInput = this.page.locator('input[type="file"]');
             if (await fileInput.count() === 0) {
                 // May need to select "Upload file" from a menu
-                const uploadOption = this.page.locator('button:has-text("Upload"), [role="menuitem"]:has-text("Upload"), button:has-text("Nahrát soubor")');
+                const uploadOption = this.page.locator(selectors.gemini.upload.uploadOption);
                 if (await uploadOption.count() > 0) {
                     await uploadOption.first().click();
                     await this.page.waitForTimeout(500);
@@ -1115,7 +1067,7 @@ export class GeminiClient extends EventEmitter {
             }
 
             // Set the file
-            const finalInput = this.page.locator('input[type="file"]');
+            const finalInput = this.page.locator(selectors.gemini.upload.fileInput);
             if (await finalInput.count() === 0) {
                 await this.dumpState('file_input_not_found');
                 throw new Error('File input not found after clicking attachment button');
@@ -1196,24 +1148,7 @@ export class GeminiClient extends EventEmitter {
             await this.navigateToGems();
 
             // Look for gem cards/items
-            const gemSelectors = [
-                '[class*="gem-card"]',
-                '[class*="gem-item"]',
-                '[data-gem-id]',
-                '.gem-tile',
-                '[role="button"][class*="gem"]',
-                'a[href*="/gem/"]',
-            ];
-
-            let gemItems = null;
-            for (const selector of gemSelectors) {
-                const items = this.page.locator(selector);
-                if (await items.count() > 0) {
-                    gemItems = items;
-                    console.log(`[Gemini] Found gems with: ${selector}`);
-                    break;
-                }
-            }
+            let gemItems = this.page.locator(selectors.gemini.gems.card);
 
             if (!gemItems) {
                 // Fallback: look for any clickable items in main content
@@ -1303,23 +1238,7 @@ export class GeminiClient extends EventEmitter {
             await this.navigateToGems();
 
             // Find "Create" or "New Gem" button
-            const createButtonSelectors = [
-                'button:has-text("Create")',
-                'button:has-text("New Gem")',
-                'button:has-text("Vytvořit")',
-                'a:has-text("Create")',
-                '[aria-label*="Create" i]',
-                'button:has(mat-icon:has-text("add"))',
-            ];
-
-            let createButton = null;
-            for (const selector of createButtonSelectors) {
-                const btn = this.page.locator(selector).first();
-                if (await btn.count() > 0 && await btn.isVisible()) {
-                    createButton = btn;
-                    break;
-                }
-            }
+            let createButton = this.page.locator(selectors.gemini.gems.create).first();
 
             if (!createButton) {
                 await this.dumpState('create_gem_button_not_found');
@@ -1330,17 +1249,14 @@ export class GeminiClient extends EventEmitter {
             await this.page.waitForTimeout(2000);
 
             // Fill in gem name
-            const nameInput = this.page.locator('input[placeholder*="name" i], input[aria-label*="name" i], input').first();
+            const nameInput = this.page.locator(selectors.gemini.gems.nameInput).first();
             if (await nameInput.count() > 0) {
                 await nameInput.fill(config.name);
                 await this.page.waitForTimeout(500);
             }
 
             // Fill in instructions (system prompt)
-            const instructionsInput = this.page.locator(
-                'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], ' +
-                'div[contenteditable="true"][placeholder*="instruction" i], textarea'
-            );
+            const instructionsInput = this.page.locator(selectors.gemini.gems.instructionInput).first();
             if (await instructionsInput.count() > 0) {
                 await instructionsInput.first().fill(config.instructions);
                 await this.page.waitForTimeout(500);
@@ -1354,21 +1270,7 @@ export class GeminiClient extends EventEmitter {
             }
 
             // Save/Create the gem
-            const saveButtonSelectors = [
-                'button:has-text("Save")',
-                'button:has-text("Create")',
-                'button:has-text("Uložit")',
-                'button[type="submit"]',
-            ];
-
-            let saveButton = null;
-            for (const selector of saveButtonSelectors) {
-                const btn = this.page.locator(selector).first();
-                if (await btn.count() > 0 && await btn.isVisible()) {
-                    saveButton = btn;
-                    break;
-                }
-            }
+            let saveButton = this.page.locator(selectors.gemini.gems.save).first();
 
             if (saveButton) {
                 await saveButton.click();
@@ -1448,36 +1350,20 @@ export class GeminiClient extends EventEmitter {
         const generation = telemetry.startGeneration(trace, message, 'gemini-2.0-flash');
 
         try {
-            const inputSelector = 'div[contenteditable="true"], textarea, input[type="text"]';
-            const input = this.page.locator(inputSelector).first();
+            const input = this.page.locator(selectors.gemini.chat.input).first();
             await input.waitFor({ state: 'visible', timeout: 10000 });
 
-            const responsesBefore = await this.page.locator('model-response').count();
+            const responsesBefore = await this.page.locator(selectors.gemini.chat.response).count();
 
             await input.fill(message);
             await this.page.waitForTimeout(300);
 
             // Click Send button (Enter key doesn't work reliably in Docker/VNC)
-            const sendButtonSelectors = [
-                'button[aria-label*="Send"]',
-                'button[aria-label*="Odeslat"]',
-                'button[data-testid="send-button"]',
-                'button[type="submit"]',
-                'button:has(svg[class*="send"])',
-                'button:has(path[d*="M2.01"])',
-                'div[contenteditable] ~ button',
-                'div[class*="input"] button:last-child',
-            ];
-
             let sendClicked = false;
-            for (const selector of sendButtonSelectors) {
-                const btn = this.page.locator(selector).first();
-                if (await btn.isVisible({ timeout: 500 }).catch(() => false)) {
-                    console.log(`[Gemini] Found Send button: ${selector}`);
-                    await btn.click();
-                    sendClicked = true;
-                    break;
-                }
+            const sendBtn = this.page.locator(selectors.gemini.chat.send).first();
+            if (await sendBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+                await sendBtn.click();
+                sendClicked = true;
             }
 
             if (!sendClicked) {
@@ -1548,7 +1434,7 @@ export class GeminiClient extends EventEmitter {
 
         try {
             await this.page.waitForTimeout(500);
-            const responseElements = this.page.locator('model-response');
+            const responseElements = this.page.locator(selectors.gemini.chat.response);
             const count = await responseElements.count();
             console.log(`[Gemini] Found ${count} elements with selector: model-response`);
 
@@ -1569,7 +1455,7 @@ export class GeminiClient extends EventEmitter {
 
     async getLatestResponse(): Promise<string | null> {
         try {
-            const responseElements = this.page.locator('model-response');
+            const responseElements = this.page.locator(selectors.gemini.chat.response);
             const count = await responseElements.count();
             if (count === 0) return null;
 
