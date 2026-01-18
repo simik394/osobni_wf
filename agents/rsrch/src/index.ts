@@ -1363,32 +1363,47 @@ gemini.command('list-sessions')
 gemini.command('send-message <sessionIdOrMessage> [message]')
     .description('Send message to session')
     .option('--local', 'Use local execution', true)
-    .action(async (arg1, arg2, opts) => {
-        let sessionId: string | undefined;
-        let message: string;
-
-        if (arg2) {
-            sessionId = arg1;
-            message = arg2;
-        } else {
-            message = arg1;
+    .action(async (message, sessionId, opts, cmd) => {
+        // Handle optional sessionId
+        if (typeof sessionId !== 'string') {
+            cmd = opts;
+            opts = sessionId;
+            sessionId = undefined; // No sessionId provided
         }
 
-        await runLocalGeminiAction(async (client, gemini) => {
-            const response = await gemini.sendMessage(message);
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                console.log(`Sending message: "${message}"...`);
+                const response = await gemini.sendMessage(message);
+                console.log('\n--- Response ---');
+                console.log(response);
+                console.log('----------------\n');
+            }, sessionId);
+            return;
+        }
+
+        // Production mode
+        try {
+            console.log(`[CLI] Sending message to server: "${message}"...`);
+            const result = await executeGeminiCommand('chat', { message, sessionId }, { server: globalServerUrl });
             console.log('\n--- Response ---');
-            if (response) console.log(response);
-            else console.log('No response received');
+            console.log(result.data?.response || result.response || 'No response data');
             console.log('----------------\n');
-            const currentId = gemini.getCurrentSessionId();
-            if (currentId) console.log(`Session: ${currentId}`);
-        }, sessionId);
+            if (result.data?.sessionId) {
+                console.log(`Session ID: ${result.data.sessionId}`);
+            }
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('get-response [sessionIdOrIndex] [index]')
     .description('Get response from session')
     .option('--local', 'Use local execution', true)
-    .action(async (arg1, arg2, opts) => {
+    .action(async (arg1, arg2, opts, cmd) => {
         let sessionId: string | undefined;
         let idx: number = -1;
 
@@ -1401,21 +1416,69 @@ gemini.command('get-response [sessionIdOrIndex] [index]')
             else sessionId = arg1;
         }
 
-        await runLocalGeminiAction(async (client, gemini) => {
-            const response = await gemini.getResponse(idx);
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const response = await gemini.getResponse(idx);
+                console.log(`\n--- Response (index: ${idx}) ---`);
+                if (response) console.log(response);
+                else console.log('No response found at that index');
+                console.log('----------------------------------\n');
+            }, sessionId);
+            return;
+        }
+
+        // Production mode
+        try {
+            // Note: Server doesn't currently support getResponse(idx) directly, 
+            // but we can fetch all and filter client side for now or assume user wants all if no idx support on server.
+            // Actually get-responses endpoint returns ALL.
+            // Let's implement getting specific index client-side from the full list for now.
+            const result = await executeGeminiCommand('get-responses', { sessionId }, { server: globalServerUrl });
+            const responses = result.data || [];
+
             console.log(`\n--- Response (index: ${idx}) ---`);
-            if (response) console.log(response);
-            else console.log('No response found at that index');
+            if (idx >= 0 && idx < responses.length) {
+                console.log(responses[idx]);
+            } else if (idx === -1 && responses.length > 0) {
+                console.log(responses[responses.length - 1]); // Default to last
+            } else {
+                console.log('No response found at that index');
+            }
             console.log('----------------------------------\n');
-        }, sessionId);
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('get-responses [sessionId]')
     .description('Get all responses from session')
     .option('--local', 'Use local execution', true)
-    .action(async (sessionId, opts) => {
-        await runLocalGeminiAction(async (client, gemini) => {
-            const responses = await gemini.getResponses();
+    .action(async (sessionId, opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const responses = await gemini.getResponses();
+                console.log('\n--- All Responses ---');
+                if (responses.length === 0) console.log('No responses found');
+                else {
+                    responses.forEach((r: string, i: number) => {
+                        console.log(`\n[Response ${i + 1}]`);
+                        console.log(r.substring(0, 500) + (r.length > 500 ? '...' : ''));
+                    });
+                }
+                console.log('---------------------\n');
+            }, sessionId);
+            return;
+        }
+
+        // Production mode
+        try {
+            const result = await executeGeminiCommand('get-responses', { sessionId }, { server: globalServerUrl });
+            const responses = result.data || [];
             console.log('\n--- All Responses ---');
             if (responses.length === 0) console.log('No responses found');
             else {
@@ -1425,28 +1488,51 @@ gemini.command('get-responses [sessionId]')
                 });
             }
             console.log('---------------------\n');
-        }, sessionId);
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('get-research-info [sessionId]')
     .description('Get research info (title, heading)')
     .option('--local', 'Use local execution', true)
-    .action(async (sessionId, opts) => {
-        await runLocalGeminiAction(async (client, gemini) => {
-            const info = await gemini.getResearchInfo();
+    .action(async (sessionId, opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const info = await gemini.getResearchInfo();
+                console.log('\n--- Research Info ---');
+                console.log(`Session ID: ${info.sessionId || 'N/A'}`);
+                console.log(`Title: ${info.title || 'Not found'}`);
+                console.log(`First Heading: ${info.firstHeading || 'Not found'}`);
+                console.log('---------------------\n');
+                console.log('JSON:', JSON.stringify(info, null, 2));
+            }, sessionId);
+            return;
+        }
+
+        // Production mode
+        try {
+            const result = await executeGeminiCommand('get-research-info', { sessionId }, { server: globalServerUrl });
+            const info = result.data || result;
             console.log('\n--- Research Info ---');
             console.log(`Session ID: ${info.sessionId || 'N/A'}`);
             console.log(`Title: ${info.title || 'Not found'}`);
             console.log(`First Heading: ${info.firstHeading || 'Not found'}`);
             console.log('---------------------\n');
             console.log('JSON:', JSON.stringify(info, null, 2));
-        }, sessionId);
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('list-research-docs [arg]')
     .description('List research docs (by limit or sessionID)')
     .option('--local', 'Use local execution', true)
-    .action(async (arg, opts) => {
+    .action(async (arg, opts, cmd) => {
         let limit = 10;
         let sessionId: string | undefined;
 
@@ -1455,20 +1541,43 @@ gemini.command('list-research-docs [arg]')
             else sessionId = arg;
         }
 
-        await runLocalGeminiAction(async (client, gemini) => {
-            let docs: ResearchInfo[] = [];
-            if (sessionId) {
-                console.log(`[CLI] Listing research docs for session: ${sessionId}`);
-                await gemini.openSession(sessionId);
-                docs = await gemini.getAllResearchDocsInSession();
-            } else {
-                docs = await gemini.listDeepResearchDocuments(limit);
-            }
+        const globalOpts = cmd.optsWithGlobals();
 
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                let docs: ResearchInfo[] = [];
+                if (sessionId) {
+                    console.log(`[CLI] Listing research docs for session: ${sessionId}`);
+                    await gemini.openSession(sessionId);
+                    docs = await gemini.getAllResearchDocsInSession();
+                } else {
+                    docs = await gemini.listDeepResearchDocuments(limit);
+                }
+
+                console.log('\n--- Deep Research Documents ---');
+                if (docs.length === 0) console.log('No Deep Research documents found.');
+                else {
+                    docs.forEach((doc: ResearchInfo, idx: number) => {
+                        console.log(`\n[Document ${idx + 1}]`);
+                        console.log(`Title: ${doc.title}`);
+                        console.log(`First Heading: ${doc.firstHeading}`);
+                        console.log(`Session ID: ${doc.sessionId}`);
+                    });
+                }
+                console.log('-------------------------------\n');
+                console.log('JSON:', JSON.stringify(docs, null, 2));
+            });
+            return;
+        }
+
+        // Production Mode (Note: Server currently may not implement listResearchDocs fully, using basic impl)
+        try {
+            const result = await executeGeminiCommand('list-research-docs', { sessionId, limit }, { server: globalServerUrl });
+            const docs = result.data || [];
             console.log('\n--- Deep Research Documents ---');
             if (docs.length === 0) console.log('No Deep Research documents found.');
             else {
-                docs.forEach((doc: ResearchInfo, idx: number) => {
+                docs.forEach((doc: any, idx: number) => {
                     console.log(`\n[Document ${idx + 1}]`);
                     console.log(`Title: ${doc.title}`);
                     console.log(`First Heading: ${doc.firstHeading}`);
@@ -1477,7 +1586,10 @@ gemini.command('list-research-docs [arg]')
             }
             console.log('-------------------------------\n');
             console.log('JSON:', JSON.stringify(docs, null, 2));
-        });
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('sync-conversations')
@@ -1658,30 +1770,54 @@ gemini.command('upload-repo <repoUrl> [sessionId]')
 gemini.command('list-gems')
     .description('List available Gems')
     .option('--local', 'Use local execution', true)
-    .action(async (opts) => {
-        await runLocalGeminiAction(async (client, gemini) => {
-            const gems = await gemini.listGems();
+    .action(async (opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const gems = await gemini.listGems();
+                console.log('\n--- Available Gems ---');
+                gems.forEach((gem: any) => console.log(`- ${gem.name} (ID: ${gem.id})`));
+                console.log('----------------------\n');
+            });
+            return;
+        }
+
+        try {
+            const result = await executeGeminiGet('gems', {}, { server: globalServerUrl });
+            const gems = result.data || [];
             console.log('\n--- Available Gems ---');
-            if (gems.length === 0) console.log('No gems found.');
-            else {
-                gems.forEach((g: { name: string; id: string | null }, i: number) => {
-                    console.log(`${i + 1}. ${g.name}${g.id ? ` (ID: ${g.id})` : ''}`);
-                });
-            }
+            gems.forEach((gem: any) => console.log(`- ${gem.name} (ID: ${gem.id})`));
             console.log('----------------------\n');
-            console.log('JSON:', JSON.stringify(gems, null, 2));
-        });
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('open-gem <gemNameOrId>')
     .description('Open a Gem')
     .option('--local', 'Use local execution', true)
-    .action(async (gemNameOrId, opts) => {
-        await runLocalGeminiAction(async (client, gemini) => {
-            const success = await gemini.openGem(gemNameOrId);
-            if (success) console.log(`\n✅ Opened gem: ${gemNameOrId}`);
-            else console.log(`\n❌ Failed to open gem: ${gemNameOrId}`);
-        });
+    .action(async (gemNameOrId, opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.openGem(gemNameOrId);
+                if (success) console.log(`\n✅ Opened gem: ${gemNameOrId}`);
+                else console.log(`\n❌ Failed to open gem: ${gemNameOrId}`);
+            });
+            return;
+        }
+
+        try {
+            // Note: open-gem on server keeps state in the single browser instance
+            await executeGeminiCommand('open-gem', { gemNameOrId }, { server: globalServerUrl });
+            console.log(`\n✅ Opened gem: ${gemNameOrId} (on server)`);
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('create-gem <name>')
@@ -1723,14 +1859,29 @@ gemini.command('create-gem <name>')
 gemini.command('chat-gem <gemNameOrId> <message>')
     .description('Chat with a Gem')
     .option('--local', 'Use local execution', true)
-    .action(async (gemNameOrId, message, opts) => {
-        await runLocalGeminiAction(async (client, gemini) => {
-            const response = await gemini.chatWithGem(gemNameOrId, message);
+    .action(async (gemNameOrId, message, opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const response = await gemini.chatWithGem(gemNameOrId, message);
+                console.log('\n--- Response ---');
+                if (response) console.log(response);
+                else console.log('No response received');
+                console.log('----------------\n');
+            });
+            return;
+        }
+
+        try {
+            const result = await executeGeminiCommand('chat-gem', { gemNameOrId, message }, { server: globalServerUrl });
             console.log('\n--- Response ---');
-            if (response) console.log(response);
-            else console.log('No response received');
+            console.log(result.data?.response || result.response || 'No response data');
             console.log('----------------\n');
-        });
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 // Registry
