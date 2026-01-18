@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"vlt/internal/config"
 	"vlt/internal/db"
 	"vlt/internal/tui/styles"
@@ -15,6 +17,8 @@ type GlobalState struct {
 	FalkorClient *db.FalkorClient
 	NeoClient    *db.NeoClient
 	ActiveTab    int
+	FalkorStatus string
+	NeoStatus    string
 }
 
 type Model struct {
@@ -39,19 +43,50 @@ func InitialModel(cfg *config.Config) Model {
 			Config:       cfg,
 			FalkorClient: falkor,
 			ActiveTab:    0,
+			FalkorStatus: "Checking...",
+			NeoStatus:    "Checking...",
 		},
 		Input: ti,
 	}
 }
 
+type ConnectionStatusMsg struct {
+	Falkor string
+	Neo    string
+}
+
+func checkConnections(f *db.FalkorClient, n *db.NeoClient) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.TODO()
+		fStatus := "Connected"
+
+		// Simpler check: Just try to connect/ping
+		if err := f.Connect(ctx); err == nil {
+			if f.Ping(ctx) {
+				fStatus = "Online"
+			} else {
+				fStatus = "Unreachable"
+			}
+			f.Close(ctx)
+		} else {
+			fStatus = "Offline"
+		}
+
+		return ConnectionStatusMsg{Falkor: fStatus, Neo: "Disabled (Config)"}
+	}
+}
+
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, checkConnections(m.State.FalkorClient, m.State.NeoClient))
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case ConnectionStatusMsg:
+		m.State.FalkorStatus = msg.Falkor
+		m.State.NeoStatus = msg.Neo
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -59,8 +94,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			m.State.ActiveTab = (m.State.ActiveTab + 1) % 2
 		case "enter":
-			// Execute Query Logic Placeholer
-			m.Output = "Query execution not yet wired to real output"
+			// Execute Query
+			m.Output = "Executing..."
+
+			ctx := context.TODO()
+			err := m.State.FalkorClient.Connect(ctx)
+			if err != nil {
+				m.Output = fmt.Sprintf("Error connecting: %v", err)
+			} else {
+				defer m.State.FalkorClient.Close(ctx)
+				res, err := m.State.FalkorClient.Query(ctx, "rsrch", m.Input.Value())
+				if err != nil {
+					m.Output = fmt.Sprintf("Query Error: %v", err)
+				} else {
+					m.Output = res
+				}
+			}
 		}
 	}
 
@@ -83,7 +132,11 @@ func (m Model) View() string {
 	// Body
 	var body string
 	if m.State.ActiveTab == 0 {
-		body = styles.ContainerStyle.Render("Dashboard View Placeholder\n\n- FalkorDB: Connecting...\n- Neo4j: Disabled")
+		body = styles.ContainerStyle.Render(fmt.Sprintf(
+			"Dashboard\n\n- FalkorDB: %s\n- Neo4j: %s",
+			m.State.FalkorStatus,
+			m.State.NeoStatus,
+		))
 	} else {
 		body = styles.ContainerStyle.Render(
 			lipgloss.JoinVertical(lipgloss.Left,

@@ -12,7 +12,7 @@ import (
 type Client interface {
 	Connect(ctx context.Context) error
 	Close(ctx context.Context) error
-	Query(ctx context.Context, graph string, query string) ([]map[string]interface{}, error)
+	Query(ctx context.Context, graph string, query string) (string, error)
 	Ping(ctx context.Context) bool
 }
 
@@ -43,23 +43,19 @@ func (c *FalkorClient) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *FalkorClient) Query(ctx context.Context, graphName string, query string) ([]map[string]interface{}, error) {
+func (c *FalkorClient) Query(ctx context.Context, graphName string, query string) (string, error) {
 	if c.conn == nil {
-		return nil, fmt.Errorf("not connected")
+		return "", fmt.Errorf("not connected")
 	}
 
-	// Direct REDISGRAPH query to avoid dependency issues with falkordb-go/tablewriter
-	// result, err := c.conn.Do("GRAPH.QUERY", graphName, query, "--compact")
-	// For now we just run it and return empty to satisfy the interface and confirm connectivity.
-	// Parsing compact headers/rows manually is tedious but safe.
-
-	_, err := c.conn.Do("GRAPH.QUERY", graphName, query, "--compact")
+	// Remove --compact to get readable standard output
+	result, err := c.conn.Do("GRAPH.QUERY", graphName, query)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	records := make([]map[string]interface{}, 0)
-	return records, nil
+	// Simple formatter for Redis response
+	return fmt.Sprintf("%v", result), nil
 }
 
 func (c *FalkorClient) Ping(ctx context.Context) bool {
@@ -104,9 +100,9 @@ func (c *NeoClient) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *NeoClient) Query(ctx context.Context, graph string, query string) ([]map[string]interface{}, error) {
+func (c *NeoClient) Query(ctx context.Context, graph string, query string) (string, error) {
 	if c.driver == nil {
-		return nil, fmt.Errorf("not connected")
+		return "", fmt.Errorf("not connected")
 	}
 
 	session := c.driver.NewSession(ctx, neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
@@ -114,15 +110,19 @@ func (c *NeoClient) Query(ctx context.Context, graph string, query string) ([]ma
 
 	result, err := session.Run(ctx, query, nil)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	var records []map[string]interface{}
+	var records []string
 	for result.Next(ctx) {
-		records = append(records, result.Record().AsMap())
+		records = append(records, fmt.Sprintf("%v", result.Record().AsMap()))
 	}
 
-	return records, result.Err()
+	if len(records) == 0 {
+		return "No records found.", result.Err()
+	}
+
+	return fmt.Sprintf("%v", records), result.Err()
 }
 
 func (c *NeoClient) Ping(ctx context.Context) bool {
