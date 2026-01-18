@@ -1670,8 +1670,17 @@ export class GeminiClient extends EventEmitter {
                 'button:has(svg[class*="send"])',
                 'button:has(path[d*="M2.01"])',  // Arrow path pattern
                 // The rightmost button in the input toolbar area
-                'div[contenteditable] ~ button',
-                'div[class*="input"] button:last-child',
+                'button.send-button',
+                // Icon-only buttons (Gemini uses blue arrow)
+                'button[class*="send"]',
+                'button mat-icon:has-text("send")',
+                'button mat-icon:has-text("arrow_upward")',
+                // Primary action button near input
+                'div[class*="input-area"] button:last-child',
+                'div[class*="prompt"] button:last-child',
+                // Visible enabled button with background (the blue arrow)
+                'button[class*="enabled"]',
+                'button[class*="active"]:not([disabled])',
             ];
 
             let sendClicked = false;
