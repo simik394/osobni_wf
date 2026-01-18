@@ -1441,11 +1441,63 @@ app.post('/gemini/get-research-info', async (req, res) => {
 // ============================================================================
 
 // Chat endpoint
+// Chat endpoint
 app.post('/gemini/chat', async (req, res) => {
     try {
         const { message, sessionId, waitForResponse } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
+        // Windmill Proxy
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        if (windmill.isConfigured() && !shouldBypass(req.headers)) {
+            console.log(`[Server] Routing chat to Windmill: "${message.substring(0, 50)}..."`);
+            const job = await windmill.triggerGeminiChat(message, sessionId, waitForResponse);
+
+            if (!job.success) {
+                return res.status(500).json({ success: false, error: job.error });
+            }
+
+            // If async requested OR streaming (Windmill doesn't stream well, so we treat as async job start)
+            if (!waitForResponse || req.headers.accept === 'text/event-stream') {
+                if (req.headers.accept === 'text/event-stream') {
+                    res.setHeader('Content-Type', 'text/event-stream');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.setHeader('Connection', 'keep-alive');
+                    res.write(`data: ${JSON.stringify({ type: 'info', message: 'Job queued via Windmill', jobId: job.jobId })}\n\n`);
+                    res.end();
+                    return;
+                }
+
+                return res.json({
+                    success: true,
+                    data: {
+                        jobId: job.jobId,
+                        status: 'queued',
+                        message: 'Request queued on Windmill'
+                    }
+                });
+            }
+
+            // Sync wait (Blocking)
+            console.log(`[Server] Waiting for Windmill job ${job.jobId}...`);
+            const result = await windmill.waitForJob(job.jobId);
+
+            if (!result.success && result.result?.error) {
+                throw new Error(result.result.error);
+            }
+
+            // Extract response from script result
+            const scriptResult = result.result;
+            if (!scriptResult || !scriptResult.success) {
+                throw new Error(scriptResult?.error || 'Unknown Windmill error');
+            }
+
+            return res.json({ success: true, data: { response: scriptResult.response, sessionId: scriptResult.session_id } });
+        }
+
+        // Fallback to Local Execution
         if (!geminiClient) {
             geminiClient = await client.createGeminiClient();
             await geminiClient.init();
@@ -1455,7 +1507,7 @@ app.post('/gemini/chat', async (req, res) => {
             await geminiClient.openSession(sessionId);
         }
 
-        console.log(`[Server] Gemini chat: "${message.substring(0, 50)}..." (Wait: ${waitForResponse})`);
+        console.log(`[Server] Gemini chat (Local): "${message.substring(0, 50)}..." (Wait: ${waitForResponse})`);
 
         if (req.headers.accept === 'text/event-stream') {
             res.setHeader('Content-Type', 'text/event-stream');
@@ -1487,11 +1539,46 @@ app.post('/gemini/chat', async (req, res) => {
 });
 
 // Send message (alias for chat with explicit session)
+// Send message (alias for chat with explicit session)
 app.post('/gemini/send-message', async (req, res) => {
     try {
         const { message, sessionId } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
+        // Windmill Proxy
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        if (windmill.isConfigured() && !shouldBypass(req.headers)) {
+            console.log(`[Server] Routing send-message to Windmill: "${message.substring(0, 50)}..."`);
+            // send-message is typically blocking by default unless specified differently, 
+            // but the CLI might use this. We assume blocking for consistency with legacy, 
+            // unless async flag was passed (it isn't in body here usually).
+            // Actually, send-message endpoint signature in legacy doesn't take waitForResponse, 
+            // it assumes blocking/wait.
+
+            const job = await windmill.triggerGeminiChat(message, sessionId, true);
+
+            if (!job.success) {
+                return res.status(500).json({ success: false, error: job.error });
+            }
+
+            // Sync wait
+            console.log(`[Server] Waiting for Windmill job ${job.jobId}...`);
+            const result = await windmill.waitForJob(job.jobId);
+
+            if (!result.success && result.result?.error) {
+                throw new Error(result.result.error);
+            }
+            const scriptResult = result.result;
+            if (!scriptResult || !scriptResult.success) {
+                throw new Error(scriptResult?.error || 'Unknown Windmill error');
+            }
+
+            return res.json({ success: true, data: { response: scriptResult.response, sessionId: scriptResult.session_id } });
+        }
+
+        // Fallback
         if (!geminiClient) {
             geminiClient = await client.createGeminiClient();
             await geminiClient.init();

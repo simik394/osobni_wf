@@ -260,6 +260,70 @@ export class WindmillClient {
             return { error: `Failed to get job status: ${error.message}` };
         }
     }
+    /**
+     * Trigger a generic Windmill job (fire and forget or wait via polling in future)
+     */
+    async triggerJob(path: string, args: Record<string, any>): Promise<WindmillJobResult> {
+        const url = `${this.baseUrl}/api/w/${this.workspace}/jobs/run/p/${path}`;
+
+        try {
+            const response = await this.fetchWithRetry(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(args)
+            });
+
+            const jobId = await response.text();
+            return {
+                jobId: jobId.trim().replace(/"/g, ''),
+                success: true
+            };
+        } catch (error: any) {
+            return {
+                jobId: '',
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Trigger Gemini Chat via Windmill
+     */
+    async triggerGeminiChat(message: string, sessionId?: string, waitForResponse: boolean = true): Promise<WindmillJobResult> {
+        return this.triggerJob('f/rsrch/gemini_chat', {
+            message,
+            session_id: sessionId,
+            wait_for_response: waitForResponse
+        });
+    }
+
+    /**
+     * Wait for a job to complete (polling)
+     */
+    async waitForJob(jobId: string, timeout = 60000, interval = 1000): Promise<any> {
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout) {
+            const statusUrl = `${this.baseUrl}/api/w/${this.workspace}/jobs_u/completed/get_result/${jobId}`;
+            try {
+                const response = await this.fetchWithRetry(statusUrl, {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                }, 1, 5000); // 1 retry for status checks
+
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (e) {
+                // Ignore transient errors while polling
+            }
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+        throw new Error(`Job ${jobId} timed out`);
+    }
+
 }
 
 // Singleton instance
