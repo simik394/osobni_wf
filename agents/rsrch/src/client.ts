@@ -290,24 +290,11 @@ export class PerplexityClient extends BaseClient {
                     this.context = existingContexts[0];
                     console.log(`[Client] Reusing existing browser context (profile: ${profileId}, contexts: ${existingContexts.length})`);
 
-                    // Inject cookies from auth.json if available
-                    // This helps when the container browser needs auth but user hasn't logged in via VNC
-                    const storageState = loadStorageState(profileId);
-                    if (storageState?.cookies?.length > 0) {
-                        try {
-                            // Filter for Google auth cookies
-                            const googleCookies = storageState.cookies.filter((c: any) =>
-                                c.domain?.includes('google.com') ||
-                                c.domain?.includes('youtube.com')
-                            );
-                            if (googleCookies.length > 0) {
-                                await this.context.addCookies(googleCookies);
-                                console.log(`[Client] Injected ${googleCookies.length} auth cookies from profile '${profileId}'`);
-                            }
-                        } catch (cookieErr: any) {
-                            console.warn(`[Client] Failed to inject cookies: ${cookieErr.message}`);
-                        }
-                    }
+                    // DON'T inject cookies when connecting via CDP!
+                    // The browser already has auth from VNC login.
+                    // Injecting stale cookies from local profile would break the session.
+                    const pages = this.context.pages();
+                    console.log(`[Client] Browser has ${pages.length} existing pages`);
                 } else {
                     // Only create new context if none exist (shouldn't happen normally)
                     const storageState = loadStorageState(profileId);
