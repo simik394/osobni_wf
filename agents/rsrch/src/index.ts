@@ -11,12 +11,14 @@ import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 import { sendNotification, loadConfigFromEnv } from './notify';
 import { execSync } from 'child_process';
 import { WindmillClient } from './clients/windmill';
+import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
 
 const program = new Command();
 
 // Global state populated from options
 let globalProfileId: string = 'default';
 let globalCdpEndpoint: string | undefined;
+let globalServerUrl: string = process.env.RSRCH_SERVER_URL || 'http://localhost:3001';
 
 // --- Helper Functions ---
 
@@ -165,13 +167,16 @@ function parseQueryOptions(cmdObj: any) {
 // --- Program Configuration ---
 
 program
-    .version('1.0.29')
+    .version('1.0.31')
     .option('--profile <profileId>', 'Profile ID to use', 'default')
-    .option('--cdp <url>', 'CDP Endpoint URL')
+    .option('--cdp <url>', 'CDP Endpoint URL (for --local mode)')
+    .option('--server <url>', 'Server URL for API calls', process.env.RSRCH_SERVER_URL || 'http://localhost:3001')
+    .option('--local', 'Use local browser instead of server (dev only)', false)
     .hook('preAction', (thisCommand) => {
         const opts = thisCommand.opts();
         if (opts.profile) globalProfileId = opts.profile;
         if (opts.cdp) globalCdpEndpoint = opts.cdp;
+        if (opts.server) globalServerUrl = opts.server;
     });
 
 // --- Commands ---
@@ -1328,14 +1333,31 @@ gemini.command('list-sessions')
     .description('List sessions')
     .argument('[limit]', 'Limit', parseInt, 20)
     .argument('[offset]', 'Offset', parseInt, 0)
-    .option('--local', 'Use local execution', true)
-    .action(async (limit, offset, opts) => {
-        await runLocalGeminiAction(async (client, gemini) => {
-            const sessions = await gemini.listSessions(limit, offset);
+    .action(async (limit, offset, opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            // Dev mode: direct browser
+            await runLocalGeminiAction(async (client, gemini) => {
+                const sessions = await gemini.listSessions(limit, offset);
+                console.log(`\n--- Recent Sessions (Limit: ${limit}, Offset: ${offset}) ---`);
+                sessions.forEach((s: { name: string; id: string | null }) => console.log(`- ${s.name} (ID: ${s.id || 'N/A'})`));
+                console.log('JSON:', JSON.stringify(sessions));
+            });
+            return;
+        }
+
+        // Production mode: call server API
+        try {
+            const result = await executeGeminiGet('sessions', { limit, offset }, { server: globalServerUrl });
+            const sessions = result.data || [];
             console.log(`\n--- Recent Sessions (Limit: ${limit}, Offset: ${offset}) ---`);
             sessions.forEach((s: { name: string; id: string | null }) => console.log(`- ${s.name} (ID: ${s.id || 'N/A'})`));
             console.log('JSON:', JSON.stringify(sessions));
-        });
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
     });
 
 gemini.command('send-message <sessionIdOrMessage> [message]')
@@ -1462,56 +1484,60 @@ gemini.command('sync-conversations')
     .description('Sync conversations to graph')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 10)
     .option('--offset <number>', 'Offset', (v) => parseInt(v), 0)
-    .option('--local', 'Use local execution (default: remote via Windmill)', false)
-    .action(async (opts) => {
-        // Default to remote Windmill execution
-        if (!opts.local) {
-            console.log(`[CLI] 🚀 Dispatching 'sync-conversations' to Windmill...`);
-            const windmill = new WindmillClient();
+    .action(async (opts, cmd) => {
+        const globalOpts = cmd.optsWithGlobals();
+
+        if (globalOpts.local) {
+            // Dev mode: direct browser + local FalkorDB
+            const { getGraphStore } = await import('./graph-store');
+            const store = getGraphStore();
+            const graphHost = config.falkor.host;
+            await store.connect(graphHost, config.falkor.port);
+
             try {
-                const result = await windmill.executeJob('rsrch/execute', {
-                    command: 'sync-conversations',
-                    args: { limit: opts.limit, offset: opts.offset }
+                await runLocalGeminiAction(async (client, gemini) => {
+                    console.log(`\n[Sync] Scraping Gemini conversations (limit: ${opts.limit}, offset: ${opts.offset})...\n`);
+                    const conversations = await gemini.scrapeConversations(opts.limit, opts.offset);
+                    console.log(`\n[Sync] Found ${conversations.length} conversations`);
+
+                    let synced = 0;
+                    let updated = 0;
+                    for (const conv of conversations) {
+                        const result = await store.syncConversation({
+                            platform: 'gemini',
+                            platformId: conv.platformId,
+                            title: conv.title,
+                            type: conv.type,
+                            turns: conv.turns
+                        });
+                        if (result.isNew) synced++;
+                        else updated++;
+                    }
+                    console.log(`\n[Sync] Complete: ${synced} new, ${updated} updated\n`);
                 });
-                console.log('\n--- Windmill Response ---\n');
-                console.log(result?.data || result);
-                console.log('\n-----------------------\n');
-            } catch (e: any) {
-                console.error(`[CLI] Windmill execution failed: ${e.message}`);
-                process.exit(1);
+            } finally {
+                await store.disconnect();
             }
             return;
         }
 
-        // Local execution path
-        const { getGraphStore } = await import('./graph-store');
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        await store.connect(graphHost, config.falkor.port);
-
+        // Production mode: call server API
         try {
-            await runLocalGeminiAction(async (client, gemini) => {
-                console.log(`\n[Sync] Scraping Gemini conversations (limit: ${opts.limit}, offset: ${opts.offset})...\n`);
-                const conversations = await gemini.scrapeConversations(opts.limit, opts.offset);
-                console.log(`\n[Sync] Found ${conversations.length} conversations`);
+            console.log(`[CLI] Calling server to sync conversations (limit: ${opts.limit}, offset: ${opts.offset})...`);
+            const result = await executeGeminiCommand('sync-conversations', {
+                limit: opts.limit,
+                offset: opts.offset
+            }, { server: globalServerUrl });
 
-                let synced = 0;
-                let updated = 0;
-                for (const conv of conversations) {
-                    const result = await store.syncConversation({
-                        platform: 'gemini',
-                        platformId: conv.platformId,
-                        title: conv.title,
-                        type: conv.type,
-                        turns: conv.turns
-                    });
-                    if (result.isNew) synced++;
-                    else updated++;
-                }
-                console.log(`\n[Sync] Complete: ${synced} new, ${updated} updated\n`);
-            });
-        } finally {
-            await store.disconnect();
+            const data = result.data || result;
+            console.log(`\n--- Sync Complete ---`);
+            console.log(`  Synced: ${data.synced || 0} new`);
+            console.log(`  Updated: ${data.updated || 0}`);
+            console.log(`  Total: ${data.total || 0}`);
+            console.log(`--------------------\n`);
+        } catch (e: any) {
+            console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
         }
     });
 

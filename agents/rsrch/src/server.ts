@@ -1436,6 +1436,187 @@ app.post('/gemini/get-research-info', async (req, res) => {
     }
 });
 
+// ============================================================================
+// Additional Gemini Endpoints (Production CLI Support)
+// ============================================================================
+
+// Chat endpoint
+app.post('/gemini/chat', async (req, res) => {
+    try {
+        const { message, sessionId } = req.body;
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            await geminiClient.openSession(sessionId);
+        }
+
+        console.log(`[Server] Gemini chat: "${message.substring(0, 50)}..."`);
+        const response = await geminiClient.sendMessage(message);
+        res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+    } catch (e: any) {
+        console.error('[Server] Gemini chat failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Send message (alias for chat with explicit session)
+app.post('/gemini/send-message', async (req, res) => {
+    try {
+        const { message, sessionId } = req.body;
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            await geminiClient.openSession(sessionId);
+        }
+
+        const response = await geminiClient.sendMessage(message);
+        res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+    } catch (e: any) {
+        console.error('[Server] Gemini send-message failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Open session
+app.post('/gemini/open-session', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+        if (!sessionId) return res.status(400).json({ error: 'Session ID is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const success = await geminiClient.openSession(sessionId);
+        res.json({ success, sessionId: geminiClient.getCurrentSessionId() });
+    } catch (e: any) {
+        console.error('[Server] Gemini open-session failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Sync conversations to FalkorDB
+app.post('/gemini/sync-conversations', async (req, res) => {
+    try {
+        const { limit = 10, offset = 0 } = req.body;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        console.log(`[Server] Syncing Gemini conversations (limit: ${limit}, offset: ${offset})...`);
+        const conversations = await geminiClient.scrapeConversations(limit, offset);
+
+        let synced = 0, updated = 0;
+        for (const conv of conversations) {
+            const result = await graphStore.syncConversation({
+                platform: 'gemini',
+                platformId: conv.platformId,
+                title: conv.title,
+                type: conv.type,
+                turns: conv.turns as any  // ScrapedTurn has optional timestamp, acceptable for sync
+            });
+            if (result.isNew) synced++;
+            else updated++;
+        }
+
+        console.log(`[Server] Sync complete: ${synced} new, ${updated} updated`);
+        res.json({ success: true, data: { synced, updated, total: conversations.length } });
+    } catch (e: any) {
+        console.error('[Server] Gemini sync-conversations failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Get responses from current session
+app.post('/gemini/get-responses', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            await geminiClient.openSession(sessionId);
+        }
+
+        const responses = await geminiClient.getResponses();
+        res.json({ success: true, data: responses });
+    } catch (e: any) {
+        console.error('[Server] Gemini get-responses failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// List Gems
+app.get('/gemini/gems', async (req, res) => {
+    try {
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const gems = await geminiClient.listGems();
+        res.json({ success: true, data: gems });
+    } catch (e: any) {
+        console.error('[Server] Gemini list-gems failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Open Gem
+app.post('/gemini/open-gem', async (req, res) => {
+    try {
+        const { gemNameOrId } = req.body;
+        if (!gemNameOrId) return res.status(400).json({ error: 'Gem name or ID is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const success = await geminiClient.openGem(gemNameOrId);
+        res.json({ success });
+    } catch (e: any) {
+        console.error('[Server] Gemini open-gem failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Chat with Gem
+app.post('/gemini/chat-gem', async (req, res) => {
+    try {
+        const { gemNameOrId, message } = req.body;
+        if (!gemNameOrId) return res.status(400).json({ error: 'Gem name or ID is required' });
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const response = await geminiClient.chatWithGem(gemNameOrId, message);
+        res.json({ success: true, data: { response } });
+    } catch (e: any) {
+        console.error('[Server] Gemini chat-gem failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Unified Unified Research to Podcast Endpoint
 app.post('/research-to-podcast', async (req, res) => {
     try {
