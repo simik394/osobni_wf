@@ -188,6 +188,7 @@ program
     .option('--cdp <url>', 'CDP Endpoint URL (for --local mode)')
     .option('--server <url>', 'Server URL for API calls', process.env.RSRCH_SERVER_URL || 'http://localhost:3001')
     .option('--local', 'Use local browser instead of server (dev only)', false)
+    .option('-v, --verbose', 'Enable verbose output', false)
     .hook('preAction', (thisCommand) => {
         const opts = thisCommand.opts();
         if (opts.profile) globalProfileId = opts.profile;
@@ -1402,13 +1403,33 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
         // Production mode
         try {
             console.log(`[CLI] Sending message to server: "${message}"...`);
-            const result = await executeGeminiCommand('chat', { message, sessionId }, { server: globalServerUrl });
+
+            // Import the streaming helper here to avoid circular dep issues if any, 
+            // though cli-utils handles it.
+            const { executeGeminiStream } = await import('./cli-utils');
+
             console.log('\n--- Response ---');
-            console.log(result.data?.response || result.response || 'No response data');
+            let fullResponse = '';
+
+            await executeGeminiStream('chat', { message, sessionId }, { server: globalServerUrl }, (data: any) => {
+                if (data.type === 'progress' && data.text) {
+                    if (cmd.optsWithGlobals().verbose) {
+                        console.log(`[Chunk] ${JSON.stringify(data.text.substring(Math.max(0, data.text.length - 20)))}`);
+                    }
+                    process.stdout.write('\r\x1b[K'); // clear line
+                    process.stdout.write(data.text);
+                    fullResponse = data.text;
+                } else if (data.type === 'result' && data.response) {
+                    fullResponse = data.response;
+                } else if (data.type === 'error') {
+                    console.error(`\n[Stream Error] ${data.error}`);
+                }
+            });
+
+            // Ensure newline at end
+            if (!fullResponse.endsWith('\n')) console.log('');
             console.log('----------------\n');
-            if (result.data?.sessionId) {
-                console.log(`Session ID: ${result.data.sessionId}`);
-            }
+
         } catch (e: any) {
             console.error(`[CLI] Error: ${e.message}`);
             process.exit(1);

@@ -1344,7 +1344,7 @@ export class GeminiClient extends EventEmitter {
     }
 
 
-    async sendMessage(message: string, options: { waitForResponse?: boolean, resetSession?: boolean } = {}): Promise<string | null> {
+    async sendMessage(message: string, options: { waitForResponse?: boolean, resetSession?: boolean, onProgress?: (text: string) => void } = {}): Promise<string | null> {
         console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${options.resetSession})`);
 
         // Handle Session Reset (NEW functionality for isolation)
@@ -1391,22 +1391,29 @@ export class GeminiClient extends EventEmitter {
             }
 
             console.log('[Gemini] Waiting for response...');
-            const maxWait = 60000;
+            const maxWait = 90000; // Increased timeout for long responses
             const pollInterval = 1000;
             let elapsed = 0;
             let lastResponseLength = 0;
             let stableCount = 0;
 
+            const onProgress = options.onProgress;
+
             while (elapsed < maxWait) {
-                const responsesNow = await this.page.locator('model-response').count();
+                const responsesNow = await this.page.locator(selectors.gemini.chat.response).count();
                 if (responsesNow > responsesBefore) {
-                    await this.page.waitForTimeout(1000);
-                    const latestResponse = this.page.locator('model-response').last();
+                    // Response started generating
+                    const latestResponse = this.page.locator(selectors.gemini.chat.response).last();
                     const currentText = await latestResponse.innerText().catch(() => '');
 
-                    if (currentText.length === lastResponseLength && currentText.length > 50) {
+                    // Stream progress if callback provided
+                    if (onProgress && currentText.length > lastResponseLength) {
+                        onProgress(currentText);
+                    }
+
+                    if (currentText.length > 0 && currentText.length === lastResponseLength) {
                         stableCount++;
-                        if (stableCount >= 2) {
+                        if (stableCount >= 2) { // 2s stable -> done
                             console.log('[Gemini] Response stabilized');
                             break;
                         }

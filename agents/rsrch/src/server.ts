@@ -1456,11 +1456,33 @@ app.post('/gemini/chat', async (req, res) => {
         }
 
         console.log(`[Server] Gemini chat: "${message.substring(0, 50)}..."`);
+
+        if (req.headers.accept === 'text/event-stream') {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+
+            const response = await geminiClient.sendMessage(message, {
+                onProgress: (text: string) => {
+                    res.write(`data: ${JSON.stringify({ type: 'progress', text })}\n\n`);
+                }
+            });
+
+            res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: geminiClient.getCurrentSessionId() })}\n\n`);
+            res.end();
+            return;
+        }
+
         const response = await geminiClient.sendMessage(message);
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
     } catch (e: any) {
         console.error('[Server] Gemini chat failed:', e);
-        res.status(500).json({ success: false, error: e.message });
+        if (req.headers.accept === 'text/event-stream') {
+            res.write(`data: ${JSON.stringify({ type: 'error', error: e.message })}\n\n`);
+            res.end();
+        } else {
+            res.status(500).json({ success: false, error: e.message });
+        }
     }
 });
 
