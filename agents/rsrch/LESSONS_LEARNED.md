@@ -3,6 +3,7 @@
 ## 2026-01-18: Auth Restoration Post-Mortem
 
 ### What Was Broken
+- **Windmill Relative Imports**: When deploying Windmill scripts that import from parent directories (e.g. `../../dist`), ensure the import path depth matches the folder structure in Windmill. Windmill scripts in folders (e.g. `f/rsrch/script.ts`) effectively run deeper than local source handling might suggest during build time if not careful with `bun` or module resolution.
 
 1. **CDP Endpoint Disabled**
    - `docker-compose.yml` had `BROWSER_CDP_ENDPOINT` commented out
