@@ -1474,6 +1474,7 @@ app.post('/gemini/chat', async (req, res) => {
             // Wait for job result (including for SSE - Windmill doesn't support real streaming)
             console.log(`[Server] Waiting for Windmill job ${job.jobId}...`);
             const result = await windmill.waitForJob(job.jobId, 120000); // 2 min timeout
+            console.log(`[Server] Windmill result:`, JSON.stringify(result).substring(0, 500));
 
             // Handle SSE mode - send result as stream events
             if (req.headers.accept === 'text/event-stream') {
