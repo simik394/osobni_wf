@@ -1443,7 +1443,7 @@ app.post('/gemini/get-research-info', async (req, res) => {
 // Chat endpoint
 app.post('/gemini/chat', async (req, res) => {
     try {
-        const { message, sessionId } = req.body;
+        const { message, sessionId, waitForResponse } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
         if (!geminiClient) {
@@ -1455,7 +1455,7 @@ app.post('/gemini/chat', async (req, res) => {
             await geminiClient.openSession(sessionId);
         }
 
-        console.log(`[Server] Gemini chat: "${message.substring(0, 50)}..."`);
+        console.log(`[Server] Gemini chat: "${message.substring(0, 50)}..." (Wait: ${waitForResponse})`);
 
         if (req.headers.accept === 'text/event-stream') {
             res.setHeader('Content-Type', 'text/event-stream');
@@ -1473,7 +1473,7 @@ app.post('/gemini/chat', async (req, res) => {
             return;
         }
 
-        const response = await geminiClient.sendMessage(message);
+        const response = await geminiClient.sendMessage(message, { waitForResponse });
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
     } catch (e: any) {
         console.error('[Server] Gemini chat failed:', e);

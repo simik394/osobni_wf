@@ -1380,6 +1380,7 @@ gemini.command('list-sessions')
 gemini.command('send-message <sessionIdOrMessage> [message]')
     .description('Send message to session')
     .option('--local', 'Use local execution', false)
+    .option('--no-wait', 'Do not wait for response')
     .action(async (message, sessionId, opts, cmd) => {
         // Handle optional sessionId
         // If called as 'send-message "Hello"', sessionId is undefined.
@@ -1388,14 +1389,20 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
 
 
         const globalOpts = cmd.optsWithGlobals();
+        const waitForResponse = opts.noWait !== true; // --no-wait sets noWait to true
 
         if (globalOpts.local) {
             await runLocalGeminiAction(async (client, gemini) => {
                 console.log(`Sending message: "${message}"...`);
-                const response = await gemini.sendMessage(message);
-                console.log('\n--- Response ---');
-                console.log(response);
-                console.log('----------------\n');
+                // @ts-ignore
+                const response = await gemini.sendMessage(message, { waitForResponse });
+                if (waitForResponse) {
+                    console.log('\n--- Response ---');
+                    console.log(response);
+                    console.log('----------------\n');
+                } else {
+                    console.log('Message submitted (not waiting for response).');
+                }
             }, sessionId);
             return;
         }
@@ -1408,84 +1415,98 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
             // though cli-utils handles it.
             const { executeGeminiStream } = await import('./cli-utils');
 
-            console.log('\n--- Response ---');
-            let fullResponse = '';
+            if (waitForResponse) {
+                console.log('\n--- Response ---');
+                let fullResponse = '';
 
-            let lastLength = 0;
-            await executeGeminiStream('chat', { message, sessionId }, { server: globalServerUrl }, (data: any) => {
-                if (data.type === 'progress' && data.text) {
-                    if (cmd.optsWithGlobals().verbose) {
-                        console.log(`[Chunk] ${JSON.stringify(data.text.substring(Math.max(0, data.text.length - 20)))}`);
-                    }
-                    const text = data.text;
-
-                    // Specific logic for handling "Thoughts" block expansion which might inject text at start
-                    if (text.length >= lastLength && text.startsWith(fullResponse)) {
-                        // Standard append case
-                        const newContent = text.substring(lastLength);
-                        process.stdout.write(newContent);
-                        lastLength = text.length;
-                        fullResponse = text;
-                    } else {
-                        // Text changed non-additively (e.g. thought block expansion or content rewrite)
-                        // Clear line and reprint from start or diff point?
-                        // Simplest for CLI: Just print everything if it diverged significantly, but that duplicates.
-                        // Better: If we detect divergence, we might need to clear screen or just accept duplication for now?
-                        // Actually, let's try to be smart:
-
-                        // If the new text is SHORTER, something is wrong or reset.
-                        // If longer but doesn't start with old, content was injected.
-
-                        // Let's rely on standard stdout behavior: we can't easily "edit" previous lines without full TUI.
-                        // But we CAN detect if we should print a newline and start over, or just print the diff.
-
-                        // Heuristic: If we are in "thought" mode, the model might inject text at the top.
-                        // If we detect the stored 'fullResponse' is NOT a prefix of 'text', 
-                        // it means the text we already printed is invalid or has shifted.
-
-                        // HACK: for now, just print the *new* part if it seems like an append, 
-                        // OR if it's a completely new block (thoughts), print via newline.
-
-                        // Refined approach:
-                        // 1. Find common prefix length
-                        let commonPrefixLen = 0;
-                        const minLen = Math.min(fullResponse.length, text.length);
-                        while (commonPrefixLen < minLen && fullResponse[commonPrefixLen] === text[commonPrefixLen]) {
-                            commonPrefixLen++;
+                let lastLength = 0;
+                await executeGeminiStream('chat', { message, sessionId, waitForResponse: true }, { server: globalServerUrl }, (data: any) => {
+                    if (data.type === 'progress' && data.text) {
+                        if (cmd.optsWithGlobals().verbose) {
+                            console.log(`[Chunk] ${JSON.stringify(data.text.substring(Math.max(0, data.text.length - 20)))}`);
                         }
+                        const text = data.text;
 
-                        // If common prefix is full previous text, it's a pure append.
-                        if (commonPrefixLen === fullResponse.length) {
+                        // Specific logic for handling "Thoughts" block expansion which might inject text at start
+                        if (text.length >= lastLength && text.startsWith(fullResponse)) {
+                            // Standard append case
                             const newContent = text.substring(lastLength);
                             process.stdout.write(newContent);
+                            lastLength = text.length;
+                            fullResponse = text;
                         } else {
-                            // Content diverged. This happens when "Thoughts" expands at the top.
-                            // We have printed 'fullResponse'. The new text is 'text'.
-                            // The part storing 'fullResponse' on screen is 'dirty'. 
-                            // We should ideally clear it, but we can't reliably.
+                            // Text changed non-additively (e.g. thought block expansion or content rewrite)
+                            // Clear line and reprint from start or diff point?
+                            // Simplest for CLI: Just print everything if it diverged significantly, but that duplicates.
+                            // Better: If we detect divergence, we might need to clear screen or just accept duplication for now?
+                            // Actually, let's try to be smart:
 
-                            // COMPROMISE: Print a marker and the new full text? No, too spammy.
-                            // Print ONLY the divergent part? 
+                            // If the new text is SHORTER, something is wrong or reset.
+                            // If longer but doesn't start with old, content was injected.
 
-                            // If "Thoughts" appeared at the start, 'text' will start with "[Thought Process...]" and then have the old text.
-                            // detecting that pattern:
-                            const divergence = text.substring(commonPrefixLen);
-                            process.stdout.write('\n[Update] ' + divergence);
+                            // Let's rely on standard stdout behavior: we can't easily "edit" previous lines without full TUI.
+                            // But we CAN detect if we should print a newline and start over, or just print the diff.
+
+                            // Heuristic: If we are in "thought" mode, the model might inject text at the top.
+                            // If we detect the stored 'fullResponse' is NOT a prefix of 'text', 
+                            // it means the text we already printed is invalid or has shifted.
+
+                            // HACK: for now, just print the *new* part if it seems like an append, 
+                            // OR if it's a completely new block (thoughts), print via newline.
+
+                            // Refined approach:
+                            // 1. Find common prefix length
+                            let commonPrefixLen = 0;
+                            const minLen = Math.min(fullResponse.length, text.length);
+                            while (commonPrefixLen < minLen && fullResponse[commonPrefixLen] === text[commonPrefixLen]) {
+                                commonPrefixLen++;
+                            }
+
+                            // If common prefix is full previous text, it's a pure append.
+                            if (commonPrefixLen === fullResponse.length) {
+                                const newContent = text.substring(lastLength);
+                                process.stdout.write(newContent);
+                            } else {
+                                // Content diverged. This happens when "Thoughts" expands at the top.
+                                // We have printed 'fullResponse'. The new text is 'text'.
+                                // The part storing 'fullResponse' on screen is 'dirty'. 
+                                // We should ideally clear it, but we can't reliably.
+
+                                // COMPROMISE: Print a marker and the new full text? No, too spammy.
+                                // Print ONLY the divergent part? 
+
+                                // If "Thoughts" appeared at the start, 'text' will start with "[Thought Process...]" and then have the old text.
+                                // detecting that pattern:
+                                const divergence = text.substring(commonPrefixLen);
+                                process.stdout.write('\n[Update] ' + divergence);
+                            }
+
+                            lastLength = text.length;
+                            fullResponse = text;
                         }
-
-                        lastLength = text.length;
-                        fullResponse = text;
+                    } else if (data.type === 'result' && data.response) {
+                        fullResponse = data.response;
+                    } else if (data.type === 'error') {
+                        console.error(`\n[Stream Error] ${data.error}`);
                     }
-                } else if (data.type === 'result' && data.response) {
-                    fullResponse = data.response;
-                } else if (data.type === 'error') {
-                    console.error(`\n[Stream Error] ${data.error}`);
-                }
-            });
+                });
 
-            // Ensure newline at end
-            if (!fullResponse.endsWith('\n')) console.log('');
-            console.log('----------------\n');
+                // Ensure newline at end
+                if (!fullResponse.endsWith('\n')) console.log('');
+                console.log('----------------\n');
+            } else {
+                // Non-blocking submission
+                // We can use executeGeminiCommand (simple POST) instead of stream if we don't care about events.
+                // But strictly speaking, we want to start the generation.
+                // If we use simple POST with waitForResponse: false, the server returns immediately.
+                const { executeGeminiCommand } = await import('./cli-utils');
+                const result = await executeGeminiCommand('chat', { message, sessionId, waitForResponse: false }, { server: globalServerUrl });
+                console.log('Message submitted successfully (async).');
+                if (cmd.optsWithGlobals().verbose) {
+                    console.log('[Verbose] Server acknowledged request.');
+                    console.log(`[Verbose] Session ID: ${result.sessionId || 'N/A'}`);
+                }
+            }
 
         } catch (e: any) {
             console.error(`[CLI] Error: ${e.message}`);
