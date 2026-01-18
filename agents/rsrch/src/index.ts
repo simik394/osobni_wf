@@ -1019,9 +1019,17 @@ graph.command('conversations')
             const conversations = await store.getConversationsByPlatform(opts.platform, opts.limit);
             console.log(`\n${opts.platform.toUpperCase()} Conversations (${conversations.length}):`);
             for (const conv of conversations) {
-                const captured = new Date(conv.capturedAt).toISOString().split('T')[0];
+                let captured = 'N/A';
+                try {
+                    if (conv.capturedAt) {
+                        captured = new Date(conv.capturedAt).toISOString().split('T')[0];
+                    }
+                } catch (e) {
+                    // ignore invalid date
+                }
                 const typeTag = conv.type === 'deep-research' ? ' [DR]' : '';
-                console.log(`  ${conv.id}${typeTag} - "${conv.title.substring(0, 40)}..." (${conv.turnCount} turns, synced: ${captured})`);
+                const title = conv.title || 'Untitled';
+                console.log(`  ${conv.id}${typeTag} - "${title.substring(0, 40)}..." (${conv.turnCount} turns, synced: ${captured})`);
             }
         } finally {
             await store.disconnect();
@@ -1486,6 +1494,10 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
                             fullResponse = text;
                         }
                     } else if (data.type === 'result' && data.response) {
+                        // If we haven't streamed anything yet, print the full response now
+                        if (fullResponse.length === 0) {
+                            process.stdout.write(data.response);
+                        }
                         fullResponse = data.response;
                     } else if (data.type === 'error') {
                         console.error(`\n[Stream Error] ${data.error}`);
