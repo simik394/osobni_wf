@@ -1,5 +1,12 @@
 # LESSONS LEARNED - rsrch Authentication
 
+### Valid Windmill Local Emulation
+To emulate production behavior locally (using local heavy containerized browser but local server logic):
+1. **Bypass Windmill**: Set `USE_WINDMILL=false` to force local execution instead of delegation.
+2. **Connect to Container**: Set `BROWSER_CDP_ENDPOINT=http://localhost:9225` (mapped port) to use the `rsrch-chromium` container.
+3. **Use Production CLI**: Use `rsrch gemini send-message` which uses SSE.
+This allows iterating on server/browser logic without waiting for Windmill deployment loops.
+
 ## 2026-01-18: Auth Restoration Post-Mortem
 
 ### What Was Broken

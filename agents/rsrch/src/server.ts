@@ -11,12 +11,16 @@ import { getRegistry } from './artifact-registry';
 
 // Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
-let shouldBypass: (headers: any) => boolean = () => false;
+// Define shouldBypass locally to ensure Windmill infinite loop protection works
+// even if @agents/shared is missing or fails to load.
+let shouldBypass: (headers: any) => boolean = (headers: any) => {
+    return headers['x-bypass-windmill'] === 'true' || headers['x-windmill-bypass'] === 'true';
+};
 let proxyChatCompletion: any = null;
 try {
     const shared = require('@agents/shared');
     getFalkorClient = shared.getFalkorClient;
-    shouldBypass = shared.shouldBypass || (() => false);
+    if (shared.shouldBypass) shouldBypass = shared.shouldBypass;
     proxyChatCompletion = shared.proxyChatCompletion;
 } catch (e) {
     console.log('[Server] @agents/shared not available, FalkorDB/Windmill logging disabled');
@@ -1451,7 +1455,9 @@ app.post('/gemini/chat', async (req, res) => {
         const { getWindmillClient } = await import('./windmill-client');
         const windmill = getWindmillClient();
 
-        if (windmill.isConfigured() && !shouldBypass(req.headers)) {
+        const useWindmill = process.env.USE_WINDMILL !== 'false';
+
+        if (useWindmill && windmill.isConfigured() && !shouldBypass(req.headers)) {
             console.log(`[Server] Routing chat to Windmill: "${message.substring(0, 50)}..."`);
             const job = await windmill.triggerGeminiChat(message, sessionId, waitForResponse);
 
@@ -1554,7 +1560,9 @@ app.post('/gemini/send-message', async (req, res) => {
         const { getWindmillClient } = await import('./windmill-client');
         const windmill = getWindmillClient();
 
-        if (windmill.isConfigured() && !shouldBypass(req.headers)) {
+        const useWindmill = process.env.USE_WINDMILL !== 'false';
+
+        if (useWindmill && windmill.isConfigured() && !shouldBypass(req.headers)) {
             console.log(`[Server] Routing send-message to Windmill: "${message.substring(0, 50)}..."`);
             // send-message is typically blocking by default unless specified differently, 
             // but the CLI might use this. We assume blocking for consistency with legacy, 
