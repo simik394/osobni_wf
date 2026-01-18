@@ -1,5 +1,86 @@
 # Development Guide - Perplexity Automation
 
+## 🏗️ PRODUCTION ARCHITECTURE - READ THIS FIRST
+
+> [!IMPORTANT]
+> **This is the core architecture. All code must follow this pattern.**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  WINDMILL (Sequential Execution)                               │
+│                                                                │
+│  Request 1 → submit.ts → Tab1: submit query → RETURN           │
+│  Request 2 → submit.ts → Tab2: submit query → RETURN           │
+│  Request 3 → submit.ts → Tab3: submit query → RETURN           │
+│                                                                │
+│  Windmill workers execute SEQUENTIALLY to avoid race           │
+│  conditions when acquiring tabs from the pool.                 │
+└────────────────────────────────────────────────────────────────┘
+                         ↓
+┌────────────────────────────────────────────────────────────────┐
+│  BROWSER SINGLETON (Parallel Capture)                          │
+│  MAX_TABS = 5                                                  │
+│                                                                │
+│  Tab1: [MutationObserver waiting for LLM response...]          │
+│  Tab2: [MutationObserver waiting for LLM response...]          │
+│  Tab3: [MutationObserver waiting for LLM response...]          │
+│                                                                │
+│  All tabs capture responses IN PARALLEL via Node event loop.   │
+│  Browser sits idle while LLMs generate (15-30s per response).  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Key Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| **Submit & Return** | Windmill script submits query, sets up observer, returns **immediately** |
+| **Passive Watcher** | `MutationObserver` on DOM - **NO blocking `await`** |
+| **Tab Persistence** | Tabs **MUST NOT** reload during active monitoring |
+| **Interleaved Parallelism** | Event loop handles multiple responses simultaneously |
+
+### ❌ FORBIDDEN Anti-Patterns
+
+```typescript
+// ❌ NEVER DO THIS - blocks entire event loop
+await page.waitForSelector('.response', { timeout: 60000 });
+
+// ❌ NEVER DO THIS - sequential destroys throughput  
+for (const query of queries) {
+  await submitAndWait(query);  // Blocks!
+}
+
+// ❌ NEVER DO THIS - triggers Cloudflare
+docker run rsrch-browser  // Multiple containers = detected
+```
+
+### ✅ REQUIRED Patterns
+
+```typescript
+// ✅ Submit and return immediately
+async function submit(query: string): Promise<string> {
+  const tab = await tabPool.acquire();
+  await tab.type(query);
+  await tab.click('button.send');
+  setupMutationObserver(tab, onComplete);  // Non-blocking
+  return tab.id;  // Return immediately!
+}
+
+// ✅ Parallel capture via callbacks
+function setupMutationObserver(tab: Page, callback: (result: string) => void) {
+  tab.evaluate(() => {
+    const observer = new MutationObserver((mutations) => {
+      if (responseComplete()) {
+        callback(extractResponse());
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+}
+```
+
+---
+
 ## ⚠️ CRITICAL AGENT PROTOCOLS
 
 > [!CAUTION]
