@@ -1389,7 +1389,8 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
 
 
         const globalOpts = cmd.optsWithGlobals();
-        const waitForResponse = opts.noWait !== true; // --no-wait sets noWait to true
+        // Commander: --no-wait creates 'wait' property initialized to true, set to false when flag is present.
+        const waitForResponse = opts.wait;
 
         if (globalOpts.local) {
             await runLocalGeminiAction(async (client, gemini) => {
@@ -1504,7 +1505,7 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
                 console.log('Message submitted successfully (async).');
                 if (cmd.optsWithGlobals().verbose) {
                     console.log('[Verbose] Server acknowledged request.');
-                    console.log(`[Verbose] Session ID: ${result.sessionId || 'N/A'}`);
+                    console.log(`[Verbose] Session ID: ${result.data?.sessionId || 'N/A'}`);
                 }
             }
 

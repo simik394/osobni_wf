@@ -58,7 +58,7 @@ rsrch gemini list-sessions [Limit] [Offset] [--local]
 rsrch gemini open-session "SessionID" [--local] [--headed]
 rsrch gemini get-response [SessionID] [Index] [--local]
 rsrch gemini get-responses [SessionID] [--local]
-rsrch gemini send-message [SessionID] "Message" [--local] [--headed]
+rsrch gemini send-message [SessionID] "Message" [--local] [--headed] [--no-wait] [--verbose]
 ```
 
 ### Research Documents
