@@ -400,6 +400,12 @@ export class GeminiClient extends EventEmitter {
         console.log(`[Gemini] Looking for Deep Research documents (limit: ${limit})...`);
 
         try {
+            // Ensure we are on the main app page or a session page
+            if (!this.page.url().includes('gemini.google.com/app')) {
+                console.log('[Gemini] Navigating to main app for research docs...');
+                await this.page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+            }
+
             // Wait for page to fully load
             await this.page.waitForTimeout(2000);
 
@@ -437,6 +443,10 @@ export class GeminiClient extends EventEmitter {
                 return Array.from(items).filter(el => (el as HTMLElement).offsetWidth > 0).length;
             });
             console.log(`[Gemini] Found ${visibleCount} visible library-item-card elements`);
+
+            if (visibleCount === 0) {
+                await this.dumpState('list_docs_zero');
+            }
 
             // Get all library items but only process visible ones
             const libraryItems = this.page.locator('div.library-item-card');
@@ -1137,8 +1147,35 @@ export class GeminiClient extends EventEmitter {
      */
     async navigateToGems(): Promise<void> {
         console.log('[Gemini] Navigating to Gems...');
-        await this.page.goto('https://gemini.google.com/gems', { waitUntil: 'domcontentloaded' });
-        await this.page.waitForTimeout(2000);
+
+        // Ensure we are on app
+        if (!this.page.url().includes('gemini.google.com/app')) {
+            await this.page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+            await this.page.waitForTimeout(2000);
+        }
+
+        // Expand sidebar if needed
+        const menuButton = this.page.locator(selectors.gemini.sidebar.menu).first();
+        if (await menuButton.count() > 0) {
+            // Only click if sidebar is likely closed? Or just click to ensure?
+            // Actually Gemini menu toggles. Checking for "Roboti Gem" visibility first is better.
+            const gemsBtn = this.page.locator(selectors.gemini.sidebar.gems).first();
+            if (!(await gemsBtn.isVisible())) {
+                await menuButton.click().catch(() => { });
+                await this.page.waitForTimeout(1000);
+            }
+        }
+
+        // Click Gems
+        const gemsBtn = this.page.locator(selectors.gemini.sidebar.gems).first();
+        if (await gemsBtn.count() > 0 && await gemsBtn.isVisible()) {
+            await gemsBtn.click();
+            await this.page.waitForTimeout(3000);
+        } else {
+            console.warn('[Gemini] Gems button not found in sidebar. Trying direct URL...');
+            await this.page.goto('https://gemini.google.com/app/gems').catch(() => { });
+            await this.page.waitForTimeout(2000);
+        }
 
         // Dismiss any popups
         const dismissButtons = this.page.locator(
@@ -1170,6 +1207,10 @@ export class GeminiClient extends EventEmitter {
 
             const count = await gemItems.count();
             console.log(`[Gemini] Found ${count} gems`);
+
+            if (count === 0) {
+                await this.dumpState('list_gems_zero');
+            }
 
             for (let i = 0; i < count; i++) {
                 const item = gemItems.nth(i);

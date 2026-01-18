@@ -110,6 +110,7 @@ export interface GeminiSelectors {
         conversations: string;
         showMore: string;
         myStuff: string;
+        gems: string;
     };
     deepResearch: {
         panel: string;
@@ -236,6 +237,7 @@ const defaultSelectors: NotebookLMSelectors = {
             conversations: 'div.conversation[role="button"]',
             showMore: 'button:has-text("Show more")',
             myStuff: 'text=/My Stuff/i',
+            gems: 'text=/Gem/i',
         },
         deepResearch: {
             panel: 'deep-research-immersive-panel',

@@ -1658,7 +1658,7 @@ gemini.command('get-research-info [sessionId]')
 
 gemini.command('list-research-docs [arg]')
     .description('List research docs (by limit or sessionID)')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (arg, opts, cmd) => {
         let limit = 10;
         let sessionId: string | undefined;

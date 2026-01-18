@@ -159,6 +159,7 @@ gemini:
     conversations: 'div.conversation[role="button"], a[href*="/app/"], nav [role="listitem"]'
     showMore: 'button:has-text("Show more"), button:has-text("Zobrazit více")'
     myStuff: "text=/Můj obsah|My Stuff/i"
+    gems: "text=/Gem Manager|Správce|Roboti Gem|Gems/i"
   deepResearch:
     panel: "deep-research-immersive-panel"
     documentCard: "div.library-item-card"
