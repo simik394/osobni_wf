@@ -1411,14 +1411,17 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
             console.log('\n--- Response ---');
             let fullResponse = '';
 
+            let lastLength = 0;
             await executeGeminiStream('chat', { message, sessionId }, { server: globalServerUrl }, (data: any) => {
                 if (data.type === 'progress' && data.text) {
                     if (cmd.optsWithGlobals().verbose) {
                         console.log(`[Chunk] ${JSON.stringify(data.text.substring(Math.max(0, data.text.length - 20)))}`);
                     }
-                    process.stdout.write('\r\x1b[K'); // clear line
-                    process.stdout.write(data.text);
-                    fullResponse = data.text;
+                    const text = data.text;
+                    const newContent = text.substring(lastLength);
+                    process.stdout.write(newContent);
+                    lastLength = text.length;
+                    fullResponse = text;
                 } else if (data.type === 'result' && data.response) {
                     fullResponse = data.response;
                 } else if (data.type === 'error') {
