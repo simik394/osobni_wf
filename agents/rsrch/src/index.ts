@@ -13,6 +13,22 @@ import { execSync } from 'child_process';
 import { WindmillClient } from './clients/windmill';
 import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
 
+declare module 'commander' {
+    export interface Command {
+        optsWithGlobals(): any;
+    }
+}
+
+Command.prototype.optsWithGlobals = function () {
+    let options = {};
+    let command: Command | null = this;
+    while (command) {
+        options = { ...command.opts(), ...options };
+        command = command.parent;
+    }
+    return options;
+};
+
 const program = new Command();
 
 // Global state populated from options
@@ -1362,14 +1378,13 @@ gemini.command('list-sessions')
 
 gemini.command('send-message <sessionIdOrMessage> [message]')
     .description('Send message to session')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (message, sessionId, opts, cmd) => {
         // Handle optional sessionId
-        if (typeof sessionId !== 'string') {
-            cmd = opts;
-            opts = sessionId;
-            sessionId = undefined; // No sessionId provided
-        }
+        // If called as 'send-message "Hello"', sessionId is undefined.
+        // Commander passes explicit args, then opts, then cmd.
+        // No manual shifting needed.
+
 
         const globalOpts = cmd.optsWithGlobals();
 
@@ -1402,7 +1417,7 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
 
 gemini.command('get-response [sessionIdOrIndex] [index]')
     .description('Get response from session')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (arg1, arg2, opts, cmd) => {
         let sessionId: string | undefined;
         let idx: number = -1;
@@ -1455,7 +1470,7 @@ gemini.command('get-response [sessionIdOrIndex] [index]')
 
 gemini.command('get-responses [sessionId]')
     .description('Get all responses from session')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (sessionId, opts, cmd) => {
         const globalOpts = cmd.optsWithGlobals();
 
@@ -1496,7 +1511,7 @@ gemini.command('get-responses [sessionId]')
 
 gemini.command('get-research-info [sessionId]')
     .description('Get research info (title, heading)')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (sessionId, opts, cmd) => {
         const globalOpts = cmd.optsWithGlobals();
 
@@ -1769,7 +1784,7 @@ gemini.command('upload-repo <repoUrl> [sessionId]')
 
 gemini.command('list-gems')
     .description('List available Gems')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (opts, cmd) => {
         const globalOpts = cmd.optsWithGlobals();
 
