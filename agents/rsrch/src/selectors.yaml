@@ -168,6 +168,7 @@ gemini:
     immersiveTitle: "h1"
   gems:
     card: '[class*="gem-card"], .bot-row, [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
+    name: ".title, .bot-title, .gem-title, .gem-name"
     create: 'button:has-text("Create"), button:has-text("New Gem"), button:has-text("Vytvořit"), a:has-text("Create"), [aria-label*="Create" i]'
     nameInput: 'input[placeholder*="name" i], input[aria-label*="name" i]'
     instructionInput: 'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], div[contenteditable="true"][placeholder*="instruction" i]'

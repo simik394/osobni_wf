@@ -1214,7 +1214,25 @@ export class GeminiClient extends EventEmitter {
 
             for (let i = 0; i < count; i++) {
                 const item = gemItems.nth(i);
-                const name = await item.innerText().catch(() => '');
+
+                // Try to find specific name element
+                let name = '';
+                const nameSelector = selectors.gemini.gems.name || '.title';
+                const nameEl = item.locator(nameSelector).first();
+                if (await nameEl.count() > 0) {
+                    name = await nameEl.innerText().catch(() => '');
+                }
+
+                if (!name) {
+                    const fullText = await item.innerText().catch(() => '');
+                    const lines = fullText.split('\n').map(l => l.trim()).filter(l => l);
+                    // Heuristic: if first line is very short (avatar letter), take second
+                    if (lines.length > 1 && lines[0].length <= 2) {
+                        name = lines[1];
+                    } else {
+                        name = lines[0] || '';
+                    }
+                }
                 const href = await item.getAttribute('href').catch(() => null);
 
                 let id = null;
@@ -1225,7 +1243,7 @@ export class GeminiClient extends EventEmitter {
 
                 if (name.trim()) {
                     gems.push({
-                        name: name.split('\n')[0].trim(),
+                        name: name.trim(),
                         id,
                     });
                 }

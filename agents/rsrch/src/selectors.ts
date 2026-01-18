@@ -121,6 +121,7 @@ export interface GeminiSelectors {
     };
     gems: {
         card: string;
+        name: string;
         create: string;
         nameInput: string;
         instructionInput: string;
@@ -248,6 +249,7 @@ const defaultSelectors: NotebookLMSelectors = {
         },
         gems: {
             card: '[class*="gem-card"]',
+            name: '.title',
             create: 'button:has-text("Create")',
             nameInput: 'input[placeholder*="name" i]',
             instructionInput: 'textarea[placeholder*="instruction" i]',
