@@ -10,7 +10,7 @@ export async function main(
     message: string,
     session_id?: string,
     wait_for_response: boolean = true,
-    rsrch_server_url: string = 'http://rsrch:3030'
+    rsrch_server_url: string = 'http://halvarm:3030'
 ): Promise<{ success: boolean; response?: string; session_id?: string; error?: string }> {
     console.log(`🚀 Gemini Chat via rsrch API: "${message.substring(0, 50)}..." (Session: ${session_id || 'new'})`);
 

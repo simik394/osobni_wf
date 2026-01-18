@@ -1459,17 +1459,8 @@ app.post('/gemini/chat', async (req, res) => {
                 return res.status(500).json({ success: false, error: job.error });
             }
 
-            // If async requested OR streaming (Windmill doesn't stream well, so we treat as async job start)
-            if (!waitForResponse || req.headers.accept === 'text/event-stream') {
-                if (req.headers.accept === 'text/event-stream') {
-                    res.setHeader('Content-Type', 'text/event-stream');
-                    res.setHeader('Cache-Control', 'no-cache');
-                    res.setHeader('Connection', 'keep-alive');
-                    res.write(`data: ${JSON.stringify({ type: 'info', message: 'Job queued via Windmill', jobId: job.jobId })}\n\n`);
-                    res.end();
-                    return;
-                }
-
+            // If async requested without streaming, return job ID only
+            if (!waitForResponse && req.headers.accept !== 'text/event-stream') {
                 return res.json({
                     success: true,
                     data: {
@@ -1480,21 +1471,34 @@ app.post('/gemini/chat', async (req, res) => {
                 });
             }
 
-            // Sync wait (Blocking)
+            // Wait for job result (including for SSE - Windmill doesn't support real streaming)
             console.log(`[Server] Waiting for Windmill job ${job.jobId}...`);
-            const result = await windmill.waitForJob(job.jobId);
+            const result = await windmill.waitForJob(job.jobId, 120000); // 2 min timeout
 
-            if (!result.success && result.result?.error) {
-                throw new Error(result.result.error);
+            // Handle SSE mode - send result as stream events
+            if (req.headers.accept === 'text/event-stream') {
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+
+                if (result.success === false || (result.result && !result.result.success)) {
+                    const errorMsg = result.result?.error || result.error || 'Unknown Windmill error';
+                    res.write(`data: ${JSON.stringify({ type: 'error', error: errorMsg })}\n\n`);
+                } else {
+                    const scriptResult = result.result || result;
+                    res.write(`data: ${JSON.stringify({ type: 'result', response: scriptResult.response, sessionId: scriptResult.session_id })}\n\n`);
+                }
+                res.end();
+                return;
             }
 
-            // Extract response from script result
-            const scriptResult = result.result;
-            if (!scriptResult || !scriptResult.success) {
-                throw new Error(scriptResult?.error || 'Unknown Windmill error');
+            // Non-SSE blocking wait (JSON response)
+            const scriptResult2 = result.result || result;
+            if (!scriptResult2 || !scriptResult2.success) {
+                throw new Error(scriptResult2?.error || 'Unknown Windmill error');
             }
 
-            return res.json({ success: true, data: { response: scriptResult.response, sessionId: scriptResult.session_id } });
+            return res.json({ success: true, data: { response: scriptResult2.response, sessionId: scriptResult2.session_id } });
         }
 
         // Fallback to Local Execution
