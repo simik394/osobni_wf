@@ -65,3 +65,23 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 ## Previous Lessons
 
 - **Local Mode & Auth Injection**: When using Playwright's `launchPersistentContext` in Local Mode (manual launch), cookies from `auth.json` are NOT automatically loaded. You MUST explicitly inject them using `context.addCookies` after context creation to restore authenticated sessions from synced profiles.
+
+## 2026-01-18: CLI Production Refactor & Deployment
+
+### What Was Done
+1.  **Refactored CLI to Production-First**: All read commands (`list-sessions`, `get-research-info`, etc.) now default to server API.
+    - Added `--local` flag for development loop.
+    - Added global `--server` option.
+
+2.  **Server Endpoint Completeness**: 
+    - **Lesson**: When refactoring CLI to use server, ALWAYS verify server implements the corresponding endpoint.
+    - **Incident**: `list-research-docs` was refactored in CLI but missing on server, causing 404. Had to quick-fix server.
+
+3.  **Deployment & Bottenecks**:
+    - **Lesson**: Large Docker image uploads from local machine (via `docker save | ssh load`) are bandwidth-constrained.
+    - **Solution**: Rely on GitHub Actions/CI for building and pushing images from cloud to registry, then pull on server.
+    
+4.  **Nomad Recovery**:
+    - **Lesson**: Verify location of Nomad job files (`.nomad.hcl`) before stopping jobs.
+    - **Incident**: Stopped job expecting to run local file, but file wasn't present. Had to find it on server (`/opt/nomad/jobs/rsrch.nomad.hcl`).
+
