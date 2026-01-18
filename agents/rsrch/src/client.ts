@@ -239,18 +239,45 @@ export class PerplexityClient extends BaseClient {
                     console.log('Connected via connectOverCDP');
                 } catch (e: any) {
                     console.log(`connectOverCDP failed: ${e.message}`);
-                    console.log('Attempting fallback to chromium.connect (browserless/websocket)...');
+                    console.log('Attempting manual WebSocket URL fetching and fix...');
 
-                    // Method 2: Try connecting via WebSocket (browserless style)
-                    // Convert http/https to ws/wss
-                    const wsEndpoint = endpoint.replace(/^http/, 'ws');
                     try {
-                        this.browser = await (chromium.connect(wsEndpoint) as unknown as Browser);
-                        console.log('Connected via chromium.connect (WebSocket)');
-                    } catch (wsError: any) {
-                        throw new Error(`Failed to connect to browser via CDP or WebSocket. 
-                        CDP Error: ${e.message}
-                        WS Error: ${wsError.message}`);
+                        // Manual fetch of version metadata
+                        // @ts-ignore
+                        const response = await fetch(`${endpoint}/json/version`);
+                        if (!response.ok) throw new Error(`Failed to fetch version info: ${response.statusText}`);
+
+                        const data = await response.json();
+                        let wsEndpoint = data.webSocketDebuggerUrl;
+
+                        if (!wsEndpoint) throw new Error('No webSocketDebuggerUrl found in version info');
+
+                        console.log(`Original WS Endpoint: ${wsEndpoint}`);
+
+                        // Fix hostname if it's 'chromium' or differs from our endpoint hostname
+                        // If we are connecting to localhost:9225, we want ws://localhost:9225/...
+                        // The original might be ws://chromium:9223/...
+                        // We replace the host and port part.
+
+                        // Parse local endpoint to get host/port
+                        const localUrl = new URL(endpoint);
+                        const wsUrl = new URL(wsEndpoint);
+
+                        // If the ws host is 'chromium' or '172.x', force it to our endpoint host
+                        if (wsUrl.hostname !== localUrl.hostname && (wsUrl.hostname === 'chromium' || localUrl.hostname === 'localhost' || localUrl.hostname === '127.0.0.1')) {
+                            wsUrl.hostname = localUrl.hostname;
+                            wsUrl.port = localUrl.port;
+                            wsEndpoint = wsUrl.toString();
+                            console.log(`Fixed WS Endpoint: ${wsEndpoint}`);
+                        }
+
+                        this.browser = await (chromium.connectOverCDP(wsEndpoint) as unknown as Browser);
+                        console.log('Connected via chromium.connectOverCDP (Manual WS Fix)');
+
+                    } catch (manualError: any) {
+                        throw new Error(`Failed to connect to browser via manual WS fix. 
+                        Original CDP Error: ${e.message}
+                        Manual Error: ${manualError.message}`);
                     }
                 }
 
@@ -262,6 +289,25 @@ export class PerplexityClient extends BaseClient {
                 if (existingContexts.length > 0) {
                     this.context = existingContexts[0];
                     console.log(`[Client] Reusing existing browser context (profile: ${profileId}, contexts: ${existingContexts.length})`);
+
+                    // Inject cookies from auth.json if available
+                    // This helps when the container browser needs auth but user hasn't logged in via VNC
+                    const storageState = loadStorageState(profileId);
+                    if (storageState?.cookies?.length > 0) {
+                        try {
+                            // Filter for Google auth cookies
+                            const googleCookies = storageState.cookies.filter((c: any) =>
+                                c.domain?.includes('google.com') ||
+                                c.domain?.includes('youtube.com')
+                            );
+                            if (googleCookies.length > 0) {
+                                await this.context.addCookies(googleCookies);
+                                console.log(`[Client] Injected ${googleCookies.length} auth cookies from profile '${profileId}'`);
+                            }
+                        } catch (cookieErr: any) {
+                            console.warn(`[Client] Failed to inject cookies: ${cookieErr.message}`);
+                        }
+                    }
                 } else {
                     // Only create new context if none exist (shouldn't happen normally)
                     const storageState = loadStorageState(profileId);
@@ -285,40 +331,51 @@ export class PerplexityClient extends BaseClient {
                 fs.mkdirSync(stateDir, { recursive: true });
             }
 
-            // Default to headless unless:
-            // 1. HEADLESS env var explicitly set to 'false', OR
-            // 2. --headed flag is passed in command line args
-            const hasHeadedFlag = process.argv.includes('--headed');
-            const headlessEnv = process.env.HEADLESS;
-            const headless = headlessEnv === 'false' ? false : (hasHeadedFlag ? false : true);
-            console.log(`Headless: ${headless}${hasHeadedFlag ? ' (--headed flag detected)' : ''}`);
+            // Default to HEADED as per user preference ("NO HEADLESS")
+            // In Local Mode inside Docker with Xvfb, we MUST set headless: false to use the display.
+            const headless = false;
+            console.log(`Headless: ${headless} (Forced for Local Mode verification)`);
 
             console.log(`Launching persistent context from: ${stateDir}`);
-            // Cast chromium to any to avoid type mismatch between playwright-extra and downgraded playwright
+            // Force slowMo 100 for Google account safety (User Rule)
             this.context = await (chromium as any).launchPersistentContext(stateDir, {
                 headless: headless,
+                slowMo: 100,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-infobars',
+                    '--window-size=1280,1024',
                     '--no-first-run',
                     '--no-zygote',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-blink-features=AutomationControlled'
+                    // '--disable-gpu', // GPU might be useful if available, but generally disable in docker unless passthrough
+                    '--disable-web-security'
                 ],
-                viewport: { width: 1280, height: 800 },
-                slowMo: 100
+                ignoreDefaultArgs: ['--enable-automation'],
+                viewport: { width: 1280, height: 1024 }
             });
 
             // Get or create page
             if (!this.context) throw new Error('Failed to create browser context');
             this.page = this.context.pages()[0] || await this.context.newPage();
-        }
 
-        console.log('Browser ready');
-        this.isInitialized = true;
+            // Inject auth from auth.json if available (restores synced sessions)
+            try {
+                const storageState = loadStorageState(profileId);
+                if (storageState && storageState.cookies && storageState.cookies.length > 0) {
+                    await this.context.addCookies(storageState.cookies);
+                    console.log(`[Client] Injected ${storageState.cookies.length} auth cookies from auth.json`);
+                } else {
+                    console.log(`[Client] No auth cookies found in auth.json for profile '${profileId}'`);
+                }
+            } catch (e: any) {
+                console.warn(`[Client] Failed to inject auth from auth.json: ${e.message}`);
+            }
+
+            console.log('Browser ready');
+            this.isInitialized = true;
+        }
     }
 
     private async createSession(name?: string): Promise<Session> {
