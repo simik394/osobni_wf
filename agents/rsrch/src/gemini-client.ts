@@ -1404,6 +1404,24 @@ export class GeminiClient extends EventEmitter {
                 if (responsesNow > responsesBefore) {
                     // Response started generating
                     const latestResponse = this.page.locator(selectors.gemini.chat.response).last();
+
+                    // Check for thought toggle and expand (Deep Research / Reasoning models)
+                    if (selectors.gemini.chat.thoughtToggle) {
+                        try {
+                            const toggle = latestResponse.locator(selectors.gemini.chat.thoughtToggle).first();
+                            if (await toggle.isVisible({ timeout: 100 }).catch(() => false)) {
+                                const expanded = await toggle.getAttribute('aria-expanded') === 'true';
+                                if (!expanded) {
+                                    // this.log('Expanding thought/reasoning block...');
+                                    await toggle.click({ timeout: 500 }).catch(() => { });
+                                    await this.page.waitForTimeout(200); // Allow animation/DOM update
+                                }
+                            }
+                        } catch (err) {
+                            // Ignore expansion errors
+                        }
+                    }
+
                     const currentText = await latestResponse.innerText().catch(() => '');
 
                     // Stream progress if callback provided

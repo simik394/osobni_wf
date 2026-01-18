@@ -102,6 +102,8 @@ export interface GeminiSelectors {
         response: string;
         history: string;
         newChat: string;
+        thoughtToggle?: string;
+        thoughtContainer?: string;
     };
     sidebar: {
         menu: string;
@@ -226,6 +228,8 @@ const defaultSelectors: NotebookLMSelectors = {
             response: 'model-response',
             history: '.chat-history-list',
             newChat: 'button[aria-label*="New chat"]',
+            thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header',
+            thoughtContainer: '.thought-process-content, .reasoning-content, .model-response-reasoning',
         },
         sidebar: {
             menu: 'button[aria-label*="Main menu"]',
