@@ -1660,27 +1660,25 @@ export class GeminiClient extends EventEmitter {
 
             // Click Send button (Enter key doesn't work reliably in Docker/VNC)
             // Try multiple selectors as the UI varies between normal and Deep Research mode
+            // IMPORTANT: Avoid generic "last-child" selectors as they match attachment buttons
             const sendButtonSelectors = [
+                // High-priority: aria-labels (most reliable)
                 'button[aria-label*="Send"]',
                 'button[aria-label*="Odeslat"]',
                 'button[data-testid="send-button"]',
-                // Generic submit button near input
+                // Submit button type
                 'button[type="submit"]',
-                // Button with send/arrow icon (common pattern)
+                // Button with send/arrow SVG icon (Gemini uses specific paths)
                 'button:has(svg[class*="send"])',
                 'button:has(path[d*="M2.01"])',  // Arrow path pattern
-                // The rightmost button in the input toolbar area
+                // Class-based (specific)
                 'button.send-button',
-                // Icon-only buttons (Gemini uses blue arrow)
                 'button[class*="send"]',
+                // Material icon based
                 'button mat-icon:has-text("send")',
                 'button mat-icon:has-text("arrow_upward")',
-                // Primary action button near input
-                'div[class*="input-area"] button:last-child',
-                'div[class*="prompt"] button:last-child',
-                // Visible enabled button with background (the blue arrow)
-                'button[class*="enabled"]',
-                'button[class*="active"]:not([disabled])',
+                // Enabled state (the blue arrow becomes enabled when text is entered)
+                'button[class*="enabled"]:not([aria-label*="Add"]):not([aria-label*="Přidat"])',
             ];
 
             let sendClicked = false;
@@ -1695,7 +1693,7 @@ export class GeminiClient extends EventEmitter {
             }
 
             if (!sendClicked) {
-                // Last resort: try to find any visible button near the input and click it
+                // Fallback: use Enter key to submit
                 console.log('[Gemini] No Send button found, trying Enter key...');
                 await input.press('Enter');
             }
