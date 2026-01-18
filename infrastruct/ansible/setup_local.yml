@@ -32,6 +32,8 @@
       tags: ghostty
       vars:
         ghostty_command: "{{ ansible_env.HOME }}/.local/bin/nu"
+    - role: wezterm
+      tags: wezterm
     - role: jabref
       tags: jabref
     - role: postgres
