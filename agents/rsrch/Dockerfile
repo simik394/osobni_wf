@@ -13,6 +13,8 @@ RUN sed -i 's|file:../shared|file:./shared|g' package.json
 RUN cd shared && npm install && npm run build
 
 # Install dependencies (browsers are already in the image)
+# Install xvfb for headed mode support
+RUN apt-get update && apt-get install -y xvfb && rm -rf /var/lib/apt/lists/*
 RUN npm install
 
 # Copy rsrch source files

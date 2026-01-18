@@ -365,6 +365,78 @@ profile.command('sync-to-remote [profileId]')
         await browser.close();
     });
 
+profile.command('sync')
+    .description('Copy browser auth from local Cromite/Chromium to rsrch container')
+    .option('--source <path>', 'Source browser profile path (e.g., ~/.config/chromium/"Profile 1")')
+    .option('--target <name>', 'Target: local | halvarm', 'local')
+    .option('--list-sources', 'List available source profiles')
+    .option('--restart', 'Restart target browser after sync', true)
+    .action(async (opts) => {
+        const { listSourceProfiles, syncProfile, restartTarget, SYNC_TARGETS } = await import('./profile-sync');
+
+        // List sources mode
+        if (opts.listSources) {
+            console.log('\n📂 Available source profiles:\n');
+            const profiles = listSourceProfiles();
+            for (const p of profiles) {
+                console.log(`  ${p.name}${p.alias ? ` (alias: ${p.alias})` : ''}`);
+                console.log(`    Path: ${p.path}`);
+                console.log(`    Last modified: ${p.lastModified.toISOString()}`);
+                console.log('');
+            }
+            console.log(`\nUsage: rsrch profile sync --source "<path>" --target <local|halvarm>\n`);
+            return;
+        }
+
+        // Validate source
+        if (!opts.source) {
+            console.error('Error: --source is required. Use --list-sources to see available profiles.');
+            process.exit(1);
+        }
+
+        // Expand ~ in path
+        const path = await import('path');
+        const os = await import('os');
+        let sourcePath = opts.source.replace(/^~/, os.homedir());
+
+        // Validate target
+        if (!SYNC_TARGETS[opts.target]) {
+            console.error(`Error: Unknown target '${opts.target}'. Available: ${Object.keys(SYNC_TARGETS).join(', ')}`);
+            process.exit(1);
+        }
+
+        console.log(`\n🔐 Profile Sync`);
+        console.log(`   Source: ${sourcePath}`);
+        console.log(`   Target: ${SYNC_TARGETS[opts.target].name}`);
+        console.log('');
+
+        const result = syncProfile(sourcePath, opts.target);
+
+        if (result.success) {
+            console.log(`\n✅ Sync successful!`);
+            console.log(`   Files: ${result.filesTransferred.join(', ') || 'none'}`);
+            console.log(`   Dirs:  ${result.dirsTransferred.join(', ') || 'none'}`);
+
+            if (result.errors.length > 0) {
+                console.log(`   Warnings: ${result.errors.join(', ')}`);
+            }
+
+            if (opts.restart && result.targetRestartNeeded) {
+                console.log('');
+                restartTarget(opts.target);
+                console.log('\n✅ Browser restarted. Auth should be active now.');
+            } else if (result.targetRestartNeeded) {
+                console.log('\n⚠️  Restart the target browser to apply changes.');
+            }
+        } else {
+            console.error(`\n❌ Sync failed:`);
+            for (const err of result.errors) {
+                console.error(`   - ${err}`);
+            }
+            process.exit(1);
+        }
+    });
+
 // Notebook
 const notebook = program.command('notebook').description('NotebookLM commands');
 
@@ -514,6 +586,7 @@ notebook.command('download-all-audio [outputDir]')
 notebook.command('sync')
     .description('Sync notebook(s) to graph')
     .option('--title <title>', 'Notebook title (sync single)')
+    .option('--pattern <regex>', 'Regex pattern to filter notebooks')
     .option('-a, --audio', 'Download audio during sync')
     .option('--local', 'Use local execution', true)
     .action(async (opts) => {
@@ -533,20 +606,59 @@ notebook.command('sync')
                     const result = await store.syncNotebook(data);
                     console.log(`\n[Sync] Result: ${result.isNew ? 'New' : 'Updated'} notebook ${result.id}\n`);
                 } else {
-                    // Sync all notebooks
+                    // Sync all (or filtered) notebooks
                     console.log('\n[Sync] Listing all notebooks...');
-                    const notebooks = await notebook.listNotebooks();
+                    let notebooks = await notebook.listNotebooks();
 
-                    console.log(`\n[Sync] Found ${notebooks.length} notebooks. Syncing metadata...`);
+                    if (opts.pattern) {
+                        try {
+                            const regex = new RegExp(opts.pattern, 'i');
+                            notebooks = notebooks.filter((nb: { title: string }) => regex.test(nb.title));
+                            console.log(`[Sync] Filtered by pattern "${opts.pattern}": ${notebooks.length} notebooks found.`);
+                        } catch (e: any) {
+                            console.error(`[Sync] Invalid regex pattern: ${e.message}`);
+                            process.exit(1);
+                        }
+                    }
+
+                    console.log(`\n[Sync] Processing ${notebooks.length} notebooks. Syncing metadata...`);
 
                     for (const nb of notebooks) {
+                        // If we are just syncing metadata, we use store.syncNotebook with minimal data
+                        // But if we want DEEP sync, we should probably scrape content?
+                        // Original code only synced metadata here.
+                        // The user said "view the uptodate from online mirrored data", implying content. 
+                        // But the original code loop just synced metadata:
+                        /*
                         const result = await store.syncNotebook({
                             platformId: nb.platformId,
                             title: nb.title
                         });
-                        console.log(`  - ${nb.title} (${result.id}) [${nb.sourceCount} sources]`);
+                        */
+                        // If the user wants FULL sync of filtered notebooks, we should probably iterate and scrape?
+                        // "MAKE THE RSRCH COMMAND TO BE ABLE TO SELECT ONLY SOME..."
+                        // If they select specific ones, they likely want the CONTENT.
+                        // I will upgrade this loop to SCRAPE if a pattern is provided, or if explicitly asked? 
+                        // Safe bet: If pattern is provided, do deep sync? Or keep it metadata-only?
+                        // The `rsrch notebook sync --title` does deep sync. `rsrch notebook sync` does metadata only.
+                        // I will make the loop do DEEP sync if `pattern` is present because why else filter?
+
+                        if (opts.pattern) {
+                            console.log(`  - Scraping content for "${nb.title}"...`);
+                            const data = await notebook.scrapeNotebook(nb.title, opts.audio);
+                            await store.syncNotebook(data);
+                            console.log(`    ✓ Synced content.`);
+                        } else {
+                            const result = await store.syncNotebook({
+                                platformId: nb.platformId,
+                                title: nb.title
+                            });
+                            console.log(`  - ${nb.title} (${result.id}) [Metadata Only]`);
+                        }
                     }
-                    console.log('\n[Sync] Metadata sync complete. To scrape contents, use: rsrch notebook sync --title "Name"\n');
+                    if (!opts.pattern) {
+                        console.log('\n[Sync] Metadata sync complete. To scrape contents, use: rsrch notebook sync --title "Name" (or --pattern)\n');
+                    }
                 }
             });
         } finally {
