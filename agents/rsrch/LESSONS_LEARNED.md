@@ -85,3 +85,17 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
     - **Lesson**: Verify location of Nomad job files (`.nomad.hcl`) before stopping jobs.
     - **Incident**: Stopped job expecting to run local file, but file wasn't present. Had to find it on server (`/opt/nomad/jobs/rsrch.nomad.hcl`).
 
+## 2026-01-18: SSE Streaming & Thought Expansion
+
+### 1. Streaming "Thoughts" from Reasoning Models
+- **Challenge**: New Gemini reasoning models (Gemini 2.0 Flash Thinking) hide reasoning behind a collapsed UI element ("Show reasoning" / "Myšlenkový proces").
+- **Solution**:
+    - **Auto-Expansion**: Implemented a check in the scraping loop (`GeminiClient.sendMessage`) to detect `button[aria-label="Show reasoning"]`.
+    - **Action**: Script automatically clicks the button if `aria-expanded="false"`.
+    - **Result**: The reasoning text becomes part of the DOM and is captured by standard `innerText()` scraping, allowing it to be streamed via SSE seamlessly.
+
+### 2. SSE on CLI
+- **Issue**: Naive printing in CLI caused overwrites of previous multi-line chunks.
+- **Fix**: Implemented delta-based printing or full-text replacement with caret management.
+- **Protocol**: `Accept: text/event-stream` header is CRITICAL for server to trigger streaming mode. Always verify headers when debugging 404/empty responses.
+
