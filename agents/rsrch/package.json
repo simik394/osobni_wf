@@ -1,6 +1,6 @@
 {
   "name": "rsrch",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "Automated researcher agent using Perplexity AI and Gemini",
   "main": "src/index.ts",
   "bin": {

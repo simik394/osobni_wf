@@ -1485,7 +1485,8 @@ gemini.command('sync-conversations')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 10)
     .option('--offset <number>', 'Offset', (v) => parseInt(v), 0)
     .option('--async', 'Run in background and return immediately', false)
-    .option('--no-stream', 'Disable real-time progress streaming', false)
+    .option('--stream', 'Show real-time progress streaming', true)
+    .option('--no-stream', 'Disable real-time progress streaming')
     .action(async (opts, cmd) => {
         const globalOpts = cmd.optsWithGlobals();
 
