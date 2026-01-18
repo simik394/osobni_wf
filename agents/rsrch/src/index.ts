@@ -1418,10 +1418,64 @@ gemini.command('send-message <sessionIdOrMessage> [message]')
                         console.log(`[Chunk] ${JSON.stringify(data.text.substring(Math.max(0, data.text.length - 20)))}`);
                     }
                     const text = data.text;
-                    const newContent = text.substring(lastLength);
-                    process.stdout.write(newContent);
-                    lastLength = text.length;
-                    fullResponse = text;
+
+                    // Specific logic for handling "Thoughts" block expansion which might inject text at start
+                    if (text.length >= lastLength && text.startsWith(fullResponse)) {
+                        // Standard append case
+                        const newContent = text.substring(lastLength);
+                        process.stdout.write(newContent);
+                        lastLength = text.length;
+                        fullResponse = text;
+                    } else {
+                        // Text changed non-additively (e.g. thought block expansion or content rewrite)
+                        // Clear line and reprint from start or diff point?
+                        // Simplest for CLI: Just print everything if it diverged significantly, but that duplicates.
+                        // Better: If we detect divergence, we might need to clear screen or just accept duplication for now?
+                        // Actually, let's try to be smart:
+
+                        // If the new text is SHORTER, something is wrong or reset.
+                        // If longer but doesn't start with old, content was injected.
+
+                        // Let's rely on standard stdout behavior: we can't easily "edit" previous lines without full TUI.
+                        // But we CAN detect if we should print a newline and start over, or just print the diff.
+
+                        // Heuristic: If we are in "thought" mode, the model might inject text at the top.
+                        // If we detect the stored 'fullResponse' is NOT a prefix of 'text', 
+                        // it means the text we already printed is invalid or has shifted.
+
+                        // HACK: for now, just print the *new* part if it seems like an append, 
+                        // OR if it's a completely new block (thoughts), print via newline.
+
+                        // Refined approach:
+                        // 1. Find common prefix length
+                        let commonPrefixLen = 0;
+                        const minLen = Math.min(fullResponse.length, text.length);
+                        while (commonPrefixLen < minLen && fullResponse[commonPrefixLen] === text[commonPrefixLen]) {
+                            commonPrefixLen++;
+                        }
+
+                        // If common prefix is full previous text, it's a pure append.
+                        if (commonPrefixLen === fullResponse.length) {
+                            const newContent = text.substring(lastLength);
+                            process.stdout.write(newContent);
+                        } else {
+                            // Content diverged. This happens when "Thoughts" expands at the top.
+                            // We have printed 'fullResponse'. The new text is 'text'.
+                            // The part storing 'fullResponse' on screen is 'dirty'. 
+                            // We should ideally clear it, but we can't reliably.
+
+                            // COMPROMISE: Print a marker and the new full text? No, too spammy.
+                            // Print ONLY the divergent part? 
+
+                            // If "Thoughts" appeared at the start, 'text' will start with "[Thought Process...]" and then have the old text.
+                            // detecting that pattern:
+                            const divergence = text.substring(commonPrefixLen);
+                            process.stdout.write('\n[Update] ' + divergence);
+                        }
+
+                        lastLength = text.length;
+                        fullResponse = text;
+                    }
                 } else if (data.type === 'result' && data.response) {
                     fullResponse = data.response;
                 } else if (data.type === 'error') {

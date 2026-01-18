@@ -1422,7 +1422,19 @@ export class GeminiClient extends EventEmitter {
                         }
                     }
 
-                    const currentText = await latestResponse.innerText().catch(() => '');
+                    // Force grab full text, including expanded reasoning
+                    // Note: If expanded, the reasoning text should be part of innerText
+                    let currentText = await latestResponse.innerText().catch(() => '');
+
+                    // If we have a separate thought container that isn't being captured by parent innerText for some reason:
+                    if (selectors.gemini.chat.thoughtContainer) {
+                        const thoughts = latestResponse.locator(selectors.gemini.chat.thoughtContainer).first();
+                        if (await thoughts.isVisible().catch(() => false)) {
+                            // Sometimes innerText of parent misses dynamically loaded shadow/iframe content? 
+                            // Unlikely for Gemini, but let's be safe.
+                            // Actually, standard Gemini behavior: once expanded, it's just a div.
+                        }
+                    }
 
                     // Stream progress if callback provided
                     if (onProgress && currentText.length > lastResponseLength) {
