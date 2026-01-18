@@ -1484,6 +1484,8 @@ gemini.command('sync-conversations')
     .description('Sync conversations to graph')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 10)
     .option('--offset <number>', 'Offset', (v) => parseInt(v), 0)
+    .option('--async', 'Run in background and return immediately', false)
+    .option('--no-stream', 'Disable real-time progress streaming', false)
     .action(async (opts, cmd) => {
         const globalOpts = cmd.optsWithGlobals();
 
@@ -1497,7 +1499,9 @@ gemini.command('sync-conversations')
             try {
                 await runLocalGeminiAction(async (client, gemini) => {
                     console.log(`\n[Sync] Scraping Gemini conversations (limit: ${opts.limit}, offset: ${opts.offset})...\n`);
-                    const conversations = await gemini.scrapeConversations(opts.limit, opts.offset);
+                    const conversations = await gemini.scrapeConversations(opts.limit, opts.offset, (p: any) => {
+                        process.stdout.write(`\r[Sync] Progress: ${p.current}/${p.total} - ${p.title.substring(0, 30)}...`);
+                    });
                     console.log(`\n[Sync] Found ${conversations.length} conversations`);
 
                     let synced = 0;
@@ -1523,20 +1527,59 @@ gemini.command('sync-conversations')
 
         // Production mode: call server API
         try {
-            console.log(`[CLI] Calling server to sync conversations (limit: ${opts.limit}, offset: ${opts.offset})...`);
-            const result = await executeGeminiCommand('sync-conversations', {
-                limit: opts.limit,
-                offset: opts.offset
-            }, { server: globalServerUrl });
+            if (opts.async) {
+                console.log(`[CLI] Submitting background sync job (limit: ${opts.limit}, offset: ${opts.offset})...`);
+                const result = await executeGeminiCommand('sync-conversations', {
+                    limit: opts.limit,
+                    offset: opts.offset,
+                    async: true
+                }, { server: globalServerUrl });
 
-            const data = result.data || result;
-            console.log(`\n--- Sync Complete ---`);
-            console.log(`  Synced: ${data.synced || 0} new`);
-            console.log(`  Updated: ${data.updated || 0}`);
-            console.log(`  Total: ${data.total || 0}`);
-            console.log(`--------------------\n`);
+                console.log(`\n--- Sync Job Submitted ---`);
+                console.log(`  Job ID: ${result.jobId}`);
+                console.log(`  Status: ${result.message}`);
+                console.log(`  Check status at: ${result.statusUrl}`);
+                console.log(`---------------------------\n`);
+                return;
+            }
+
+            if (opts.stream !== false) {
+                console.log(`[CLI] Starting sync with real-time updates...`);
+                // Use dynamic import to avoid circular dependency
+                const { executeGeminiStream } = await import('./cli-utils');
+                const result = await executeGeminiStream('sync-conversations', {
+                    limit: opts.limit,
+                    offset: opts.offset
+                }, { server: globalServerUrl }, (event: any) => {
+                    if (event.type === 'progress') {
+                        process.stdout.write(`\r[Sync] ${event.status}: ${event.current}/${event.total} - ${event.title.substring(0, 30)}...`);
+                    } else if (event.type === 'error') {
+                        console.error(`\n[CLI] Server error: ${event.error}`);
+                    }
+                });
+
+                const data = result.data || result;
+                console.log(`\n\n--- Sync Complete ---`);
+                console.log(`  Synced: ${data.synced || 0} new`);
+                console.log(`  Updated: ${data.updated || 0}`);
+                console.log(`  Total: ${data.total || 0}`);
+                console.log(`--------------------\n`);
+            } else {
+                console.log(`[CLI] Calling server to sync conversations (blocking)...`);
+                const result = await executeGeminiCommand('sync-conversations', {
+                    limit: opts.limit,
+                    offset: opts.offset
+                }, { server: globalServerUrl });
+
+                const data = result.data || result;
+                console.log(`\n--- Sync Complete ---`);
+                console.log(`  Synced: ${data.synced || 0} new`);
+                console.log(`  Updated: ${data.updated || 0}`);
+                console.log(`  Total: ${data.total || 0}`);
+                console.log(`--------------------\n`);
+            }
         } catch (e: any) {
-            console.error(`[CLI] Error: ${e.message}`);
+            console.error(`\n[CLI] Error: ${e.message}`);
             process.exit(1);
         }
     });

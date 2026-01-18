@@ -82,6 +82,69 @@ export async function executeGeminiGet(
     }
 }
 
+/**
+ * Execute a Gemini command with SSE streaming.
+ */
+export async function executeGeminiStream(
+    endpoint: string,
+    args: Record<string, any>,
+    opts: ServerOptions,
+    onEvent: (data: any) => void
+): Promise<any> {
+    const serverUrl = opts.server || DEFAULT_SERVER_URL;
+    const url = `${serverUrl}/gemini/${endpoint}`;
+
+    console.log(`[CLI] Calling server (stream): ${url}`);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream'
+            },
+            body: JSON.stringify(args)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server returned ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('Response body is not readable');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        onEvent(data);
+                        if (data.type === 'result') return data;
+                    } catch (e) {
+                        console.error('[CLI] Failed to parse SSE data:', line);
+                    }
+                }
+            }
+        }
+    } catch (e: any) {
+        if (e.cause?.code === 'ECONNREFUSED') {
+            throw new Error(`Server not reachable at ${serverUrl}. Start server with 'rsrch serve' or use --local flag.`);
+        }
+        throw e;
+    }
+}
+
 export function getServerUrl(opts: ServerOptions): string {
     return opts.server || DEFAULT_SERVER_URL;
 }

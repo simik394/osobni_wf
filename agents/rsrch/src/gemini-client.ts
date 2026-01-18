@@ -538,7 +538,11 @@ export class GeminiClient extends EventEmitter {
      * @param offset Starting offset in session list
      * @returns Array of scraped conversations with turns and metadata
      */
-    async scrapeConversations(limit: number = 10, offset: number = 0): Promise<ScrapedConversation[]> {
+    async scrapeConversations(
+        limit: number = 10,
+        offset: number = 0,
+        onProgress?: (data: { current: number, total: number, title: string, status: string }) => void
+    ): Promise<ScrapedConversation[]> {
         const conversations: ScrapedConversation[] = [];
         console.log(`[Gemini] Scraping conversations (limit: ${limit}, offset: ${offset})...`);
 
@@ -557,6 +561,15 @@ export class GeminiClient extends EventEmitter {
             for (let i = 0; i < sessions.length; i++) {
                 const session = sessions[i];
                 console.log(`[Gemini] Scraping ${i + 1}/${sessions.length}: "${session.name}"...`);
+
+                if (onProgress) {
+                    onProgress({
+                        current: i + 1,
+                        total: sessions.length,
+                        title: session.name,
+                        status: 'scraping'
+                    });
+                }
 
                 try {
                     // Click to open session

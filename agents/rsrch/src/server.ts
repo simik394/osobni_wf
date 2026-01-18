@@ -1509,13 +1509,98 @@ app.post('/gemini/open-session', async (req, res) => {
 // Sync conversations to FalkorDB
 app.post('/gemini/sync-conversations', async (req, res) => {
     try {
-        const { limit = 10, offset = 0 } = req.body;
+        const { limit = 10, offset = 0, async = false } = req.body;
+        const wantsSSE = req.headers.accept?.includes('text/event-stream');
 
         if (!geminiClient) {
             geminiClient = await client.createGeminiClient();
             await geminiClient.init();
         }
 
+        // --- 1. Immediate Return (Async Mode) ---
+        if (async && !wantsSSE) {
+            const job = await graphStore.addJob('syncConversations', `limit:${limit}, offset:${offset}`, { limit, offset });
+
+            // Execute in background
+            (async () => {
+                try {
+                    console.log(`[Server] Background sync job ${job.id} started...`);
+                    const conversations = await geminiClient!.scrapeConversations(limit, offset);
+                    let synced = 0, updated = 0;
+                    for (const conv of conversations) {
+                        const result = await graphStore.syncConversation({
+                            platform: 'gemini',
+                            platformId: conv.platformId,
+                            title: conv.title,
+                            type: conv.type,
+                            turns: conv.turns as any
+                        });
+                        if (result.isNew) synced++;
+                        else updated++;
+                    }
+                    await graphStore.updateJobStatus(job.id, 'completed', { result: { synced, updated, total: conversations.length } });
+                    console.log(`[Server] Background sync job ${job.id} complete.`);
+                } catch (e: any) {
+                    console.error(`[Server] Background sync job ${job.id} failed:`, e);
+                    await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+                }
+            })().catch(console.error);
+
+            return res.json({
+                success: true,
+                message: 'Sync job started in background',
+                jobId: job.id,
+                statusUrl: `/jobs/${job.id}`
+            });
+        }
+
+        // --- 2. SSE Streaming Mode ---
+        if (wantsSSE) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
+
+            const onProgress = (data: any) => {
+                res.write(`data: ${JSON.stringify({ type: 'progress', ...data })}\n\n`);
+            };
+
+            console.log(`[Server] Syncing Gemini conversations (SSE, limit: ${limit}, offset: ${offset})...`);
+            const conversations = await geminiClient.scrapeConversations(limit, offset, onProgress);
+
+            let synced = 0, updated = 0;
+            for (let i = 0; i < conversations.length; i++) {
+                const conv = conversations[i];
+                res.write(`data: ${JSON.stringify({
+                    type: 'progress',
+                    status: 'syncing',
+                    title: conv.title,
+                    current: i + 1,
+                    total: conversations.length
+                })}\n\n`);
+
+                const result = await graphStore.syncConversation({
+                    platform: 'gemini',
+                    platformId: conv.platformId,
+                    title: conv.title,
+                    type: conv.type,
+                    turns: conv.turns as any
+                });
+                if (result.isNew) synced++;
+                else updated++;
+            }
+
+            console.log(`[Server] Sync complete: ${synced} new, ${updated} updated`);
+            res.write(`data: ${JSON.stringify({
+                type: 'result',
+                success: true,
+                data: { synced, updated, total: conversations.length }
+            })}\n\n`);
+            res.end();
+            return;
+        }
+
+        // --- 3. Standard Blocking Mode ---
         console.log(`[Server] Syncing Gemini conversations (limit: ${limit}, offset: ${offset})...`);
         const conversations = await geminiClient.scrapeConversations(limit, offset);
 
@@ -1526,7 +1611,7 @@ app.post('/gemini/sync-conversations', async (req, res) => {
                 platformId: conv.platformId,
                 title: conv.title,
                 type: conv.type,
-                turns: conv.turns as any  // ScrapedTurn has optional timestamp, acceptable for sync
+                turns: conv.turns as any
             });
             if (result.isNew) synced++;
             else updated++;
@@ -1536,7 +1621,12 @@ app.post('/gemini/sync-conversations', async (req, res) => {
         res.json({ success: true, data: { synced, updated, total: conversations.length } });
     } catch (e: any) {
         console.error('[Server] Gemini sync-conversations failed:', e);
-        res.status(500).json({ success: false, error: e.message });
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, error: e.message });
+        } else {
+            res.write(`data: ${JSON.stringify({ type: 'error', error: e.message })}\n\n`);
+            res.end();
+        }
     }
 });
 

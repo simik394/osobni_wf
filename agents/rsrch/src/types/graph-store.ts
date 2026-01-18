@@ -11,7 +11,7 @@ export interface FalkorDBNode {
 
 export interface GraphJob {
     id: string;
-    type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast';
+    type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast' | 'syncConversations';
     status: 'queued' | 'running' | 'completed' | 'failed';
     query: string;
     options?: Record<string, unknown>;
