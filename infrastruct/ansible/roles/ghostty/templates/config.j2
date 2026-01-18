@@ -1,23 +1,40 @@
 # Ghostty Configuration
 # Managed by Ansible - local changes will be overwritten
 
-# Theme - auto-switches light/dark based on desktop environment
-theme = {{ ghostty_theme }}
+# Theme configuration
+background = {{ ghostty_background }}
+foreground = {{ ghostty_foreground }}
+
+# Palette colors
+{% for color in ghostty_palette %}
+palette = {{ color }}
+{% endfor %}
 
 # Font configuration
 font-family = {{ ghostty_font_family }}
 font-size = {{ ghostty_font_size }}
+font-thicken = {{ ghostty_font_thicken | lower }}
+font-feature = {{ ghostty_font_feature }}
+
+# Rendering tweaks
+freetype-load-flags = {{ ghostty_freetype_load_flags }}
+adjust-cell-height = {{ ghostty_adjust_cell_height }}
+adjust-cell-width = {{ ghostty_adjust_cell_width }}
+window-colorspace = {{ ghostty_window_colorspace }}
 
 # Window appearance
 background-opacity = {{ ghostty_background_opacity }}
 {% if ghostty_background_blur %}
 background-blur = true
+{% else %}
+background-blur = false
 {% endif %}
 window-padding-x = {{ ghostty_window_padding_x }}
 window-padding-y = {{ ghostty_window_padding_y }}
 {% if ghostty_window_padding_balance %}
 window-padding-balance = true
 {% endif %}
+window-decoration = {{ ghostty_window_decoration | lower }}
 
 # GTK settings (Linux specific)
 {% if ghostty_gtk_single_instance %}
@@ -29,10 +46,18 @@ gtk-titlebar = false
 gtk-tabs-location = {{ ghostty_gtk_tabs_location }}
 {% if ghostty_gtk_wide_tabs %}
 gtk-wide-tabs = true
+{% else %}
+gtk-wide-tabs = false
 {% endif %}
+
+# Cursor configuration
+cursor-style = {{ ghostty_cursor_style }}
+cursor-blink = {{ ghostty_cursor_blink | lower }}
+cursor-style-blink = {{ ghostty_cursor_style_blink | lower }}
 
 # Shell integration
 shell-integration = {{ ghostty_shell_integration }}
+term = {{ ghostty_term }}
 {% if ghostty_command %}
 command = {{ ghostty_command }}
 {% endif %}
