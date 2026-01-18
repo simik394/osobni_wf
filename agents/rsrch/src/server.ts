@@ -1707,6 +1707,34 @@ app.post('/gemini/chat-gem', async (req, res) => {
     }
 });
 
+// List Research Docs
+app.post('/gemini/list-research-docs', async (req, res) => {
+    try {
+        const { sessionId, limit } = req.body;
+        const limitNum = typeof limit === 'number' ? limit : 10;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        let docs: any[] = [];
+        if (sessionId) {
+            console.log(`[Server] Listing research docs for session: ${sessionId}`);
+            await geminiClient.openSession(sessionId);
+            docs = await geminiClient.getAllResearchDocsInSession();
+        } else {
+            console.log(`[Server] Listing research docs (limit ${limitNum})...`);
+            docs = await geminiClient.listDeepResearchDocuments(limitNum);
+        }
+
+        res.json({ success: true, data: docs });
+    } catch (e: any) {
+        console.error('[Server] Gemini list-research-docs failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Unified Unified Research to Podcast Endpoint
 app.post('/research-to-podcast', async (req, res) => {
     try {
