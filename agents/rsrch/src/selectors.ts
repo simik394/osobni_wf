@@ -228,7 +228,7 @@ const defaultSelectors: NotebookLMSelectors = {
             response: 'model-response',
             history: '.chat-history-list',
             newChat: 'button[aria-label*="New chat"]',
-            thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header',
+            thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header, button[aria-label*="Zobrazit uvažování"], button:has-text("Zobrazit uvažování"), button:has-text("Show reasoning")',
             thoughtContainer: '.thought-process-content, .reasoning-content, .model-response-reasoning',
         },
         sidebar: {

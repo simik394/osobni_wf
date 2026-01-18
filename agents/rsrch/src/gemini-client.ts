@@ -1412,7 +1412,7 @@ export class GeminiClient extends EventEmitter {
                             if (await toggle.isVisible({ timeout: 100 }).catch(() => false)) {
                                 const expanded = await toggle.getAttribute('aria-expanded') === 'true';
                                 if (!expanded) {
-                                    // this.log('Expanding thought/reasoning block...');
+                                    if (this.verbose) console.log('[Gemini] Expanding thought/reasoning block...');
                                     await toggle.click({ timeout: 500 }).catch(() => { });
                                     await this.page.waitForTimeout(200); // Allow animation/DOM update
                                 }
