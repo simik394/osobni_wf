@@ -155,7 +155,7 @@ gemini:
     history: '.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]'
     newChat: 'button[aria-label*="New chat"], button[aria-label*="Nový chat"], button:has-text("New chat"), button:has-text("Nový chat"), [data-testid="new-chat-button"]'
   sidebar:
-    menu: 'button[aria-label*="Hlavní nabídka"], button[aria-label*="Main menu"], button[aria-label*="Menu"]'
+    menu: 'button[aria-label*="Hlavní nabídka"], button[aria-label*="nabídka"], button[aria-label*="Main menu"], button[aria-label*="Menu"]'
     conversations: 'div.conversation[role="button"], a[href*="/app/"], nav [role="listitem"]'
     showMore: 'button:has-text("Show more"), button:has-text("Zobrazit více")'
     myStuff: "text=/Můj obsah|My Stuff/i"
@@ -167,7 +167,7 @@ gemini:
     toolbarTitle: "h2.title-text"
     immersiveTitle: "h1"
   gems:
-    card: '[class*="gem-card"], [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
+    card: '[class*="gem-card"], .bot-row, [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
     create: 'button:has-text("Create"), button:has-text("New Gem"), button:has-text("Vytvořit"), a:has-text("Create"), [aria-label*="Create" i]'
     nameInput: 'input[placeholder*="name" i], input[aria-label*="name" i]'
     instructionInput: 'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], div[contenteditable="true"][placeholder*="instruction" i]'
