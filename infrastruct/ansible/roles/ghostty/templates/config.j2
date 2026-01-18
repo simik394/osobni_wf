@@ -33,6 +33,9 @@ gtk-wide-tabs = true
 
 # Shell integration
 shell-integration = {{ ghostty_shell_integration }}
+{% if ghostty_command %}
+command = {{ ghostty_command }}
+{% endif %}
 
 # Performance
 scrollback-limit = {{ ghostty_scrollback_limit }}

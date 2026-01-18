@@ -22,10 +22,16 @@
       tags: zellij
     - role: lazydocker
       tags: lazydocker
+    - role: fonts
+      tags: fonts
     - role: memgraph_lab_container
       tags: memgraph_lab
+    - role: nushell
+      tags: nushell
     - role: ghostty
       tags: ghostty
+      vars:
+        ghostty_command: "{{ ansible_env.HOME }}/.local/bin/nu"
     - role: jabref
       tags: jabref
     - role: postgres
