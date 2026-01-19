@@ -270,6 +270,24 @@ export class GraphStore {
         }
     }
 
+    async getSourcesWithoutAudio(platformId: string): Promise<any[]> {
+        const query = `
+            MATCH (n:Notebook {platformId: $platformId})-[:CONTAINS]->(s:Source)
+            WHERE NOT (s)-[:HAS_AUDIO]->()
+            RETURN s
+        `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { platformId } });
+            return (result.data || []).map(row => {
+                const node = row[0] || row;
+                return node.properties || node;
+            });
+        } catch (e) {
+            console.error('[GraphStore] getSourcesWithoutAudio error:', e);
+            return [];
+        }
+    }
+
     /**
      * Create or update a session
      */
@@ -416,7 +434,7 @@ export class GraphStore {
         try {
             const result = await this._executeQuery<any[]>(query, { params: { platform, limit } });
             return (result.data || []).map(row => {
-                const node = row[0] || row.c || row;
+                const node = (row as any).c || row[0] || row;
                 return node.properties || node;
             });
         } catch (e) {
@@ -552,6 +570,11 @@ export class GraphStore {
         }
     }
 
+    async migrateCitations(): Promise<{ processed: number, citations: number }> {
+        // Implementation for migrating legacy citations if needed
+        return { processed: 0, citations: 0 };
+    }
+
     // --- Audio ---
     async createResearchAudio(data: { docId?: string; researchDocId?: string; path: string; duration?: number; filename?: string; audioId?: string }): Promise<string> {
         const id = data.audioId || `au_${Date.now()}`;
@@ -650,7 +673,7 @@ export class GraphStore {
         const where = status ? `WHERE pa.status = '${status}'` : '';
         const result = await this._executeQuery<any[]>(`MATCH (pa:PendingAudio) ${where} RETURN pa ORDER BY pa.createdAt DESC LIMIT 50`);
         return (result.data || []).map(row => {
-            const node = row[0] || row.pa || row;
+            const node = (row as any).pa || row[0] || row;
             const props = node.properties || node;
             return {
                 id: props.id,

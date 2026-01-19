@@ -402,7 +402,7 @@ notebook.command('sources-without-audio')
                 console.log('✅ All sources have audio generated!');
             } else {
                 console.log(`\n📋 Sources without audio (${sources.length}):\n`);
-                sources.forEach((s, i) => {
+                sources.forEach((s: any, i: number) => {
                     console.log(`   ${i + 1}. ${s.title} [${s.type}]`);
                 });
             }
