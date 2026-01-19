@@ -1274,11 +1274,13 @@ gemini
     .description('Chat with Gemini')
     .option('-s, --session <id>', 'Session ID')
     .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
+    .option('-g, --gem <id>', 'Gem ID or Name')
     .option('-f, --file <path...>', 'File(s) to attach')
     .action(async (message, opts, cmdObj) => {
         const options = getOptionsWithGlobals(cmdObj);
         const sessionId = options.session;
         const model = options.model;
+        const gemId = options.gem;
         const useServer = !options.local;
         let files = options.file || [];
 
@@ -1308,7 +1310,7 @@ gemini
                 }
             }
 
-            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model, files });
+            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model, gemId, files });
         } else {
             const path = await import('node:path');
             // Resolve local paths if needed, though gemini-client probably resolves them or expects absolute?
@@ -1316,12 +1318,36 @@ gemini
             const absFiles = files.map((f: string) => path.resolve(f));
 
             await runLocalGeminiAction(async (client, gemini) => {
-                if (model) await gemini.setModel(model);
+                if (gemId) {
+                     await gemini.selectGem(gemId);
+                } else if (model) {
+                     await gemini.setModel(model);
+                }
+
                 const response = await gemini.sendMessage(message, {
                     onProgress: (text: string) => process.stdout.write(text),
-                    files: absFiles
+                    files: absFiles,
+                    gemId
                 });
                 console.log('\n');
+
+                // After message sent, we definitely have a session ID
+                if (gemId) {
+                    try {
+                        const { getGraphStore } = await import('./graph-store');
+                        const store = getGraphStore();
+                        await store.connect(config.falkor.host, config.falkor.port);
+                        const currentSessionId = gemini.getCurrentSessionId();
+                        if (currentSessionId) {
+                            await store.linkSessionToGem(currentSessionId, gemId);
+                            console.log(`[FalkorDB] Linked session ${currentSessionId} to Gem ${gemId}`);
+                        }
+                        await store.disconnect();
+                    } catch (e) {
+                         // ignore
+                    }
+                }
+
             }, sessionId);
         }
     });
@@ -2035,7 +2061,10 @@ gemini.command('sources')
         }
     });
 
-gemini.command('list-gems')
+// Gems Subcommand
+const gems = gemini.command('gems').description('Gem management');
+
+gems.command('list')
     .description('List available Gems')
     .option('--local', 'Use local execution', false)
     .action(async (opts, cmd) => {
@@ -2045,8 +2074,28 @@ gemini.command('list-gems')
             await runLocalGeminiAction(async (client, gemini) => {
                 const gems = await gemini.listGems();
                 console.log('\n--- Available Gems ---');
-                gems.forEach((gem: any) => console.log(`- ${gem.name} (ID: ${gem.id})`));
+                gems.forEach((gem: any) => {
+                    const customTag = gem.isCustom ? ' [Custom]' : '';
+                    console.log(`- ${gem.name}${customTag} (ID: ${gem.id})`);
+                    if (gem.description) console.log(`  ${gem.description}`);
+                });
                 console.log('----------------------\n');
+
+                // Sync to FalkorDB
+                try {
+                    const { getGraphStore } = await import('./graph-store');
+                    const store = getGraphStore();
+                    await store.connect(config.falkor.host, config.falkor.port);
+                    console.log('[FalkorDB] Syncing Gems...');
+                    for (const gem of gems) {
+                        if (gem.id) {
+                            await store.syncGem(gem);
+                        }
+                    }
+                    await store.disconnect();
+                } catch (e) {
+                    // Ignore graph errors in CLI output unless verbose
+                }
             });
             return;
         }
@@ -2055,47 +2104,31 @@ gemini.command('list-gems')
             const result = await executeGeminiGet('gems', {}, { server: globalServerUrl });
             const gems = result.data || [];
             console.log('\n--- Available Gems ---');
-            gems.forEach((gem: any) => console.log(`- ${gem.name} (ID: ${gem.id})`));
-            console.log('----------------------\n');
-        } catch (e: any) {
-            console.error(`[CLI] Error: ${e.message}`);
-            process.exit(1);
-        }
-    });
-
-gemini.command('open-gem <gemNameOrId>')
-    .description('Open a Gem')
-    .option('--local', 'Use local execution', true)
-    .action(async (gemNameOrId, opts, cmd) => {
-        const globalOpts = cmd.optsWithGlobals();
-
-        if (globalOpts.local) {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.openGem(gemNameOrId);
-                if (success) console.log(`\n✅ Opened gem: ${gemNameOrId}`);
-                else console.log(`\n❌ Failed to open gem: ${gemNameOrId}`);
+            gems.forEach((gem: any) => {
+                const customTag = gem.isCustom ? ' [Custom]' : '';
+                console.log(`- ${gem.name}${customTag} (ID: ${gem.id})`);
+                if (gem.description) console.log(`  ${gem.description}`);
             });
-            return;
-        }
+            console.log('----------------------\n');
 
-        try {
-            // Note: open-gem on server keeps state in the single browser instance
-            await executeGeminiCommand('open-gem', { gemNameOrId }, { server: globalServerUrl });
-            console.log(`\n✅ Opened gem: ${gemNameOrId} (on server)`);
+            // Note: Server logic for 'gems' endpoint should ideally handle sync if we want it to happen on server side.
+            // But if we are just listing, maybe we don't trigger sync there?
+            // For now, we assume server might have synced it or we rely on explicit actions.
         } catch (e: any) {
             console.error(`[CLI] Error: ${e.message}`);
             process.exit(1);
         }
     });
 
-gemini.command('create-gem <name>')
+gems.command('create')
     .description('Create a new Gem')
+    .requiredOption('--name <name>', 'Gem name')
     .requiredOption('--instructions <text>', 'System instructions')
     .option('--file <paths...>', 'Files to upload')
     .option('--config <path>', 'Config file')
     .option('--local', 'Use local execution', true)
-    .action(async (name, opts) => {
-        let gemName = name;
+    .action(async (opts) => {
+        let gemName = opts.name;
         let instructions = opts.instructions;
         let files = opts.file || [];
 
@@ -2119,10 +2152,32 @@ gemini.command('create-gem <name>')
                 instructions,
                 files: files.length > 0 ? files : undefined,
             });
-            if (gemId) console.log(`\n✅ Created gem: ${gemName} (ID: ${gemId})`);
+            if (gemId) {
+                console.log(`\n✅ Created gem: ${gemName} (ID: ${gemId})`);
+
+                // Sync to FalkorDB
+                try {
+                    const { getGraphStore } = await import('./graph-store');
+                    const store = getGraphStore();
+                    await store.connect(config.falkor.host, config.falkor.port);
+                    await store.syncGem({
+                        id: gemId,
+                        name: gemName,
+                        description: instructions.substring(0, 200), // Use first part of instructions as description
+                        isCustom: true
+                    });
+                    await store.disconnect();
+                    console.log('[FalkorDB] Synced new Gem.');
+                } catch (e) {
+                    console.warn('[FalkorDB] Sync failed (non-fatal).');
+                }
+            }
             else console.log(`\n⚠️ Gem created but ID unknown: ${gemName}`);
         });
     });
+
+// Deprecated / Aliases (kept for compatibility if needed, or removed)
+// Removed old list-gems, open-gem, create-gem in favor of `gems` subcommand and `chat --gem`
 
 gemini.command('chat-gem <gemNameOrId> <message>')
     .description('Chat with a Gem')

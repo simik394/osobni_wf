@@ -583,6 +583,60 @@ export class GraphStore {
         return null;
     }
 
+    // --- Gems ---
+    async syncGem(data: { id: string; name: string; description?: string; isCustom?: boolean }): Promise<void> {
+        const query = `
+            MERGE (g:Gem {id: $id})
+            ON CREATE SET
+                g.name = $name,
+                g.description = $description,
+                g.isCustom = $isCustom,
+                g.createdAt = $now
+            ON MATCH SET
+                g.name = $name,
+                g.description = $description,
+                g.isCustom = $isCustom,
+                g.updatedAt = $now
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    id: data.id,
+                    name: data.name,
+                    description: data.description || '',
+                    isCustom: !!data.isCustom,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] syncGem error:', e);
+        }
+    }
+
+    async linkSessionToGem(sessionId: string, gemId: string): Promise<void> {
+        // Handle Gemini session IDs that might be prefixed
+        const cleanSessionId = sessionId.startsWith('session_gemini_') ? sessionId.replace('session_gemini_', '') : sessionId;
+        const fullSessionId = sessionId.startsWith('session_gemini_') ? sessionId : `session_gemini_${sessionId}`;
+
+        const query = `
+            MATCH (s:Session), (g:Gem {id: $gemId})
+            WHERE s.id = $fullSessionId OR s.platformId = $cleanSessionId
+            MERGE (s)-[:USES_GEM {createdAt: $now}]->(g)
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    fullSessionId,
+                    cleanSessionId,
+                    gemId,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] linkSessionToGem error:', e);
+        }
+    }
+
     // --- Pending Audio ---
     async createPendingAudio(
         notebookTitle: string,

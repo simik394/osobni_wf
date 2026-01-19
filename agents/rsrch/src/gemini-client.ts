@@ -99,6 +99,7 @@ export interface GemInfo {
     name: string;
     id: string | null;     // URL ID if extractable
     description?: string;
+    isCustom?: boolean;
 }
 
 export class GeminiClient extends EventEmitter {
@@ -1336,10 +1337,25 @@ export class GeminiClient extends EventEmitter {
                     if (match) id = match[1];
                 }
 
+                // Description extraction
+                let description = '';
+                const textContent = await item.innerText().catch(() => '');
+                const lines = textContent.split('\n').map(l => l.trim()).filter(l => l);
+                const nameIdx = lines.indexOf(name);
+                if (nameIdx >= 0 && nameIdx + 1 < lines.length) {
+                    description = lines[nameIdx + 1];
+                }
+
+                // Determine if custom
+                const hasEdit = await item.locator('button[aria-label*="Edit"], button[aria-label*="Upravit"]').count() > 0;
+                const isCustom = hasEdit;
+
                 if (name.trim()) {
                     gems.push({
                         name: name.trim(),
                         id,
+                        description,
+                        isCustom
                     });
                 }
             }
@@ -1349,6 +1365,16 @@ export class GeminiClient extends EventEmitter {
         }
 
         return gems;
+    }
+
+    /**
+     * Select a Gem for the session (wrapper around openGem)
+     */
+    async selectGem(gemId: string): Promise<void> {
+        const success = await this.openGem(gemId);
+        if (!success) {
+            throw new Error(`Failed to select gem: ${gemId}`);
+        }
     }
 
     /**
@@ -1501,15 +1527,18 @@ export class GeminiClient extends EventEmitter {
         resetSession?: boolean,
         onProgress?: (text: string) => void,
         files?: string[],
-        model?: string
+        model?: string,
+        gemId?: string
     } = {}): Promise<string | null> {
-        const { waitForResponse = true, resetSession, onProgress, files = [], model } = options;
+        const { waitForResponse = true, resetSession, onProgress, files = [], model, gemId } = options;
 
         console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
 
         await this.checkAuth();
 
-        if (model) {
+        if (gemId) {
+            await this.selectGem(gemId);
+        } else if (model) {
             await this.setModel(model);
         }
 
@@ -1518,7 +1547,7 @@ export class GeminiClient extends EventEmitter {
         }
 
         // Handle Session Reset (NEW functionality for isolation)
-        if (resetSession) {
+        if (resetSession && !gemId) {
             await this.resetToNewChat();
         }
 
@@ -1846,7 +1875,7 @@ export class GeminiClient extends EventEmitter {
         }
     }
 
-    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean, resetSession?: boolean, model?: string } = {}): Promise<string> {
+    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean, resetSession?: boolean, model?: string, gemId?: string } = {}): Promise<string> {
         this.progress(`Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch}, Reset: ${options.resetSession})`, 'research');
         try {
             // Handle Session Reset (NEW functionality for isolation)
@@ -1854,8 +1883,13 @@ export class GeminiClient extends EventEmitter {
                 await this.resetToNewChat();
             }
 
+            // Handle Gem selection
+            if (options.gemId) {
+                await this.selectGem(options.gemId);
+            }
+
             // Handle Session Switching
-            if (options.sessionId) {
+            if (options.sessionId && !options.gemId) {
                 const currentId = this.getCurrentSessionId();
                 if (currentId !== options.sessionId) {
                     await this.openSession(options.sessionId);
@@ -1868,7 +1902,7 @@ export class GeminiClient extends EventEmitter {
             }
 
             // Set model if specified
-            if (options.model) {
+            if (options.model && !options.gemId) {
                 await this.setModel(options.model);
             }
 
