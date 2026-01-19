@@ -1,0 +1,22 @@
+name: multi-source-aggregate
+description: Query multiple sources and aggregate
+steps:
+  - id: query_gemini
+    agent: gemini
+    action: query
+    params:
+      query: ${inputs.query}
+  - id: query_perplexity
+    agent: perplexity
+    action: query
+    params:
+      query: ${inputs.query}
+  - id: summarize
+    agent: gemini
+    action: query
+    params:
+      message: |
+        Synthesize these two results:
+        Gemini: ${steps.query_gemini}
+        Perplexity: ${steps.query_perplexity}
+    dependsOn: [query_gemini, query_perplexity]

@@ -1,0 +1,34 @@
+name: daily-digest
+description: Daily digest of news
+triggers:
+  - type: schedule
+    cron: "0 8 * * *"
+steps:
+  - id: news_tech
+    agent: perplexity
+    action: query
+    params:
+      query: Top tech news today
+  - id: news_science
+    agent: perplexity
+    action: query
+    params:
+      query: Top science news today
+  - id: digest
+    agent: gemini
+    action: query
+    params:
+      message: |
+        Create a daily digest from:
+        Tech: ${steps.news_tech}
+        Science: ${steps.news_science}
+    dependsOn: [news_tech, news_science]
+  - id: audio_digest
+    agent: notebooklm
+    action: audio
+    params:
+      notebookTitle: Daily Digest
+      sources: []
+      prompt: "Read this as a news anchor."
+    dependsOn: [digest]
+    condition: "${inputs.audio} == true"
