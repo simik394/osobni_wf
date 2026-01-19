@@ -13,7 +13,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
-from models import Task
+from .models import Task
+from .solver_registry import SOLVER_REGISTRY as SOLVERS, SolverCapability
 
 
 @dataclass
@@ -22,50 +23,6 @@ class SolverMatch:
     confidence: float  # 0-1
     reason: str
     fallback: Optional[str] = None  # Alternative if primary unavailable
-
-
-@dataclass
-class SolverCapability:
-    """Solver with its capabilities and constraints"""
-    name: str
-    max_complexity: int  # 1-10, higher = can handle more complex tasks
-    concurrency: int  # Max parallel sessions
-    strengths: list[str] = field(default_factory=list)
-    
-    
-# Solver capabilities (from SOLVER_REGISTRY.md)
-SOLVERS = {
-    'local-slm': SolverCapability(
-        name='local-slm',
-        max_complexity=3,  # Simple tasks only
-        concurrency=999,   # Unlimited
-        strengths=['quick', 'simple', 'offline'],
-    ),
-    'gemini': SolverCapability(
-        name='gemini',
-        max_complexity=7,  # Analysis, planning
-        concurrency=10,    # Rate limited
-        strengths=['analysis', 'planning', 'docs'],
-    ),
-    'perplexity': SolverCapability(
-        name='perplexity',
-        max_complexity=5,  # Research tasks
-        concurrency=1,
-        strengths=['research', 'web'],
-    ),
-    'angrav': SolverCapability(
-        name='angrav',
-        max_complexity=6,  # Browser automation
-        concurrency=3,
-        strengths=['automation', 'browser'],
-    ),
-    'jules': SolverCapability(
-        name='jules',
-        max_complexity=10,  # Full implementation
-        concurrency=15,
-        strengths=['code', 'implementation', 'refactor'],
-    ),
-}
 
 
 def estimate_complexity(task: Task) -> int:
@@ -204,72 +161,89 @@ def match_solver(
     require_available: bool = True
 ) -> SolverMatch:
     """
-    Match a task to the most appropriate solver.
-    
-    Priority:
-    1. Explicit tags (manual override)
-    2. Complexity-based matching
-    3. Historical success rate
-    4. Availability check
+    Match a task to the most appropriate solver using advanced routing.
+
+    Matching Priority:
+    1.  **Explicit Tags**: Manual override via YouTrack issue tags (e.g., `#jules`).
+    2.  **Regex Match**: High-confidence match on task summary keywords.
+    3.  **Capability Match**: Score based on file types, required tools, and tags.
+    4.  **Complexity & Availability**: Filter by complexity and current availability.
+    5.  **Historical Performance**: Final score weighted by historical success.
     """
     issue = issue or {}
     
-    # 1. Check for explicit tags (highest priority override)
+    # 1. Check for explicit tags (highest priority)
     explicit_tags = extract_tags(issue)
     if explicit_tags:
         for tag in explicit_tags:
-            if tag in SOLVERS:
-                if not require_available or check_availability(tag):
-                    return SolverMatch(
-                        solver=tag,
-                        confidence=1.0,
-                        reason=f'explicit tag #{tag}',
-                        fallback=None,
-                    )
-    
-    # 2. Estimate task complexity
+            if tag in SOLVERS and (not require_available or check_availability(tag)):
+                return SolverMatch(
+                    solver=tag,
+                    confidence=1.0,
+                    reason=f'explicit tag #{tag}',
+                    fallback=None,
+                )
+
+    # 2. Regex-based matching from summary
+    summary = task.summary
+    for solver in SOLVERS.values():
+        if solver.summary_regex and solver.summary_regex.search(summary):
+            if not require_available or check_availability(solver.name):
+                return SolverMatch(
+                    solver=solver.name,
+                    confidence=0.9,
+                    reason=f"summary regex match on '{solver.summary_regex.pattern}'",
+                    fallback=None,
+                )
+
+    # 3. If no regex match, score by capability
     complexity = estimate_complexity(task)
     
-    # 3. Find solvers that can handle this complexity
-    capable_solvers = [
-        (name, cap) for name, cap in SOLVERS.items()
-        if cap.max_complexity >= complexity
+    # Filter by complexity and availability first
+    candidate_solvers = [
+        s for s in SOLVERS.values()
+        if s.max_complexity >= complexity
     ]
-    
-    if not capable_solvers:
-        # Fallback to most capable
-        capable_solvers = [('jules', SOLVERS['jules'])]
-    
-    # 4. Filter by availability
     if require_available:
-        available_solvers = [
-            (name, cap) for name, cap in capable_solvers
-            if check_availability(name)
-        ]
-        if available_solvers:
-            capable_solvers = available_solvers
-    
-    # 5. Score by historical success + complexity fit
+        candidate_solvers = [s for s in candidate_solvers if check_availability(s.name)]
+
+    if not candidate_solvers:
+        # Fallback to most capable if no candidates found
+        return SolverMatch(solver='jules', confidence=0.3, reason='fallback to most capable', fallback='gemini')
+
+    # Score remaining candidates
     scored = []
-    for name, cap in capable_solvers:
-        history_score = get_historical_success(name, task)
+    for solver in candidate_solvers:
+        # Capability score (file types, tools)
+        cap_score = 0.0
+        # Check file type support
+        if solver.supported_file_types:
+            affected_exts = {Path(f).suffix for f in task.affected_files if Path(f).suffix}
+            if affected_exts and any(ext in solver.supported_file_types for ext in affected_exts):
+                cap_score += 0.4
         
-        # Prefer solvers closest to required complexity (don't overkill)
-        complexity_fit = 1 - abs(cap.max_complexity - complexity) / 10
-        
-        total_score = history_score * 0.6 + complexity_fit * 0.4
-        scored.append((name, total_score, cap))
-    
+        # Add other capability checks here in the future (e.g., required_tools)
+
+        # Historical performance score
+        history_score = get_historical_success(solver.name, task)
+
+        # Complexity fit (prefer solvers closer to the task complexity)
+        complexity_fit = 1 - abs(solver.max_complexity - complexity) / 10
+
+        # Weighted final score
+        total_score = (cap_score * 0.3) + (history_score * 0.4) + (complexity_fit * 0.3)
+        scored.append((solver, total_score))
+
     scored.sort(key=lambda x: x[1], reverse=True)
-    
-    best_name, best_score, best_cap = scored[0]
-    fallback = scored[1][0] if len(scored) > 1 else None
-    
+
+    best_solver, best_score = scored[0]
+    fallback_solver = scored[1][0] if len(scored) > 1 else None
+
     return SolverMatch(
-        solver=best_name,
+        solver=best_solver.name,
         confidence=best_score,
-        reason=f'complexity {complexity}/10 → {best_name} (max: {best_cap.max_complexity})',
-        fallback=fallback,
+        reason=f"capability match (comp: {complexity}, score: {best_score:.2f})",
+        fallback=fallback_solver.name if fallback_solver else None,
     )
 
 
