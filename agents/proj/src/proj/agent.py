@@ -8,9 +8,11 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
+from langchain_google_genai import ChatGoogleGenerativeAI
 from proj.state import ProjState, InboxItem, Task, TaskStatus
 from proj.tools.capture import capture_tool
 from proj.tools.triage import triage_tool
+from proj.tools.estimate import update_estimates
 from proj.integrations.rsrch import query_rsrch
 
 
@@ -68,6 +70,8 @@ def supervisor_node(state: ProjState) -> dict:
         return {"next_agent": "resume"}
     elif any(kw in content for kw in ["review", "today", "priorities", "what's next"]):
         return {"next_agent": "review"}
+    elif any(kw in content for kw in ["sync", "estimate"]):
+        return {"next_agent": "estimate"}
     else:
         return {"next_agent": "respond"}
 
@@ -202,7 +206,55 @@ def respond_node(state: ProjState) -> dict:
     }
 
 
-def route_after_supervisor(state: ProjState) -> Literal["capture", "triage", "resume", "review", "respond"]:
+def estimate_node(state: ProjState) -> dict:
+    """Generate estimates for tasks based on historical data."""
+    
+    # Prepare historical data
+    completed_tasks = [
+        t for t in state.tasks.values() 
+        if t.status == TaskStatus.DONE and t.actual_duration_minutes is not None
+    ]
+    
+    if not completed_tasks:
+        return {"messages": [AIMessage(content="📊 No completed tasks with recorded durations. Cannot sync estimates.")]}
+        
+    history = "\n".join(
+        f"- Task: {t.title}\n  Estimated: {t.estimated_duration_minutes} min\n  Actual: {t.actual_duration_minutes} min"
+        for t in completed_tasks
+    )
+    
+    # Prepare tasks to be estimated
+    tasks_to_estimate = [
+        t for t in state.tasks.values() 
+        if t.status == TaskStatus.TODO and t.estimated_duration_minutes is None
+    ]
+    
+    if not tasks_to_estimate:
+        return {"messages": [AIMessage(content="✨ All tasks are already estimated.")]}
+        
+    task_list = "\n".join(
+        f"- {t.id}: {t.title}" for t in tasks_to_estimate
+    )
+    
+    # Create prompt for LLM
+    prompt = f"""Based on the following historical data:
+{history}
+
+Estimate the duration in minutes for these tasks:
+{task_list}
+
+Call the `update_estimates` tool with the results.
+"""
+    
+    llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
+    tool_llm = llm.bind_tools([update_estimates])
+    
+    response = tool_llm.invoke(prompt)
+    
+    return {"messages": [response]}
+
+
+def route_after_supervisor(state: ProjState) -> Literal["capture", "triage", "resume", "review", "estimate", "respond"]:
     """Route to the appropriate sub-agent based on supervisor decision."""
     return state.next_agent or "respond"
 
@@ -219,7 +271,9 @@ def create_proj_graph() -> StateGraph:
     builder.add_node("triage", triage_node)
     builder.add_node("resume", resume_node)
     builder.add_node("review", review_node)
+    builder.add_node("estimate", estimate_node)
     builder.add_node("respond", respond_node)
+    builder.add_node("update_estimates", ToolNode([update_estimates]))
     
     # Set entry point
     builder.set_entry_point("supervisor")
@@ -233,6 +287,7 @@ def create_proj_graph() -> StateGraph:
             "triage": "triage",
             "resume": "resume",
             "review": "review",
+            "estimate": "estimate",
             "respond": "respond",
         }
     )
@@ -242,6 +297,8 @@ def create_proj_graph() -> StateGraph:
     builder.add_edge("triage", END)
     builder.add_edge("resume", END)
     builder.add_edge("review", END)
+    builder.add_edge("estimate", "update_estimates")
+    builder.add_edge("update_estimates", END)
     builder.add_edge("respond", END)
     
     return builder.compile()
