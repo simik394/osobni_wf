@@ -12,6 +12,7 @@ import { sendNotification, loadConfigFromEnv } from './notify';
 import { execSync } from 'child_process';
 import { WindmillClient } from './clients/windmill';
 import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
+import { WorkflowEngine } from './workflows/engine';
 
 // Helper to get options with globals (merging parent options)
 function getOptionsWithGlobals(command: any): any {
@@ -2326,6 +2327,90 @@ program.command('notify <message>')
         console.log(`📬 Sending notification: "${message}"`);
         const results = await sendNotification(message, { title: opts.title, priority: opts.priority });
         console.log('Results:', results);
+    });
+
+// Workflow
+const workflow = program.command('workflow').description('Workflow management');
+
+workflow.command('list')
+    .description('List available workflows')
+    .action(async () => {
+        const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+        const engine = new WorkflowEngine(client);
+
+        const possiblePaths = [
+            path.join(__dirname, 'workflows/templates'),
+            path.join(__dirname, '../src/workflows/templates')
+        ];
+
+        let loaded = false;
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                engine.loadWorkflows(p);
+                loaded = true;
+                break;
+            }
+        }
+
+        if (!loaded) {
+             console.log('No workflow templates found in:', possiblePaths.join(', '));
+             return;
+        }
+
+        const workflows = engine.listWorkflows();
+        if (workflows.length === 0) {
+            console.log('No workflows found.');
+        } else {
+            console.log('\nAvailable Workflows:');
+            workflows.forEach(w => {
+                console.log(`- ${w.name}: ${w.description || ''}`);
+            });
+            console.log('');
+        }
+    });
+
+workflow.command('run <name>')
+    .description('Run a workflow')
+    .option('--input <key=value...>', 'Input parameters', (val, memo: any) => {
+        const [k, v] = val.split('=');
+        memo[k] = v;
+        return memo;
+    }, {})
+    .option('--local', 'Use local execution', true)
+    .action(async (name, opts) => {
+        const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+        await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+
+        const engine = new WorkflowEngine(client);
+        const possiblePaths = [
+            path.join(__dirname, 'workflows/templates'),
+            path.join(__dirname, '../src/workflows/templates')
+        ];
+
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                engine.loadWorkflows(p);
+                break;
+            }
+        }
+
+        try {
+            console.log(`[Workflow] Starting ${name}...`);
+            console.log(`[Workflow] Inputs:`, opts.input);
+            const execution = await engine.execute(name, opts.input);
+            console.log(`[Workflow] Completed with status: ${execution.status}`);
+            console.log('Results:', JSON.stringify(execution.results, null, 2));
+        } catch (e: any) {
+            console.error(`[Workflow] Failed: ${e.message}`);
+        } finally {
+            await client.close();
+        }
+    });
+
+workflow.command('create')
+    .description('Create a new workflow interactive')
+    .action(async () => {
+        console.log('Interactive creation not implemented yet. Please create YAML file in workflows/templates.');
     });
 
 program.parse(process.argv);

@@ -1,0 +1,24 @@
+name: research-to-podcast
+description: Research a topic and generate a podcast
+steps:
+  - id: research
+    agent: gemini
+    action: query
+    params:
+      query: ${inputs.topic}
+  - id: export
+    agent: gemini
+    action: export
+    params:
+      sessionId: ${steps.research.sessionId}
+    dependsOn: [research]
+  - id: audio
+    agent: notebooklm
+    action: audio
+    params:
+      notebookTitle: Podcast - ${inputs.topic}
+      createNotebook: Podcast - ${inputs.topic}
+      sources:
+        - ${steps.export.result.docUrl}
+      prompt: Create a deep dive podcast about this.
+    dependsOn: [export]

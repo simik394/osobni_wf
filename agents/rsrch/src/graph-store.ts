@@ -779,6 +779,88 @@ export class GraphStore {
             console.error('[GraphStore] createReasoningStep error:', e);
         }
     }
+
+    // --- Workflows ---
+
+    async createWorkflowExecution(execution: any): Promise<void> {
+        const query = `
+            CREATE (w:WorkflowExecution {
+                id: $id,
+                workflowName: $workflowName,
+                status: $status,
+                startTime: $startTime,
+                results: $results,
+                error: $error
+            })
+        `;
+        const params = {
+            id: execution.id,
+            workflowName: execution.workflowName,
+            status: execution.status,
+            startTime: execution.startTime,
+            results: JSON.stringify(execution.results || {}),
+            error: execution.error || ''
+        };
+        try {
+            await this._executeQuery(query, { params });
+        } catch (e: any) {
+            console.error('[GraphStore] createWorkflowExecution error:', e.message);
+        }
+    }
+
+    async updateWorkflowExecution(execution: any): Promise<void> {
+        let set = `w.status = $status, w.results = $results`;
+        if (execution.endTime) set += `, w.endTime = $endTime`;
+        if (execution.error) set += `, w.error = $error`;
+
+        const query = `MATCH (w:WorkflowExecution {id: $id}) SET ${set}`;
+        const params = {
+            id: execution.id,
+            status: execution.status,
+            results: JSON.stringify(execution.results || {}),
+            endTime: execution.endTime || 0,
+            error: execution.error || ''
+        };
+        try {
+            await this._executeQuery(query, { params });
+        } catch (e: any) {
+            console.error('[GraphStore] updateWorkflowExecution error:', e.message);
+        }
+    }
+
+    async updateStepExecution(executionId: string, step: any): Promise<void> {
+        const query = `
+            MATCH (w:WorkflowExecution {id: $executionId})
+            MERGE (s:StepExecution {id: $stepId, workflowExecutionId: $executionId})
+            ON CREATE SET
+                s.status = $status,
+                s.startTime = $startTime,
+                s.endTime = $endTime,
+                s.result = $result,
+                s.error = $error
+            ON MATCH SET
+                s.status = $status,
+                s.startTime = $startTime,
+                s.endTime = $endTime,
+                s.result = $result,
+                s.error = $error
+            MERGE (w)-[:HAS_STEP]->(s)
+        `;
+        const params = {
+            executionId,
+            stepId: step.id,
+            status: step.status,
+            startTime: step.startTime || 0,
+            endTime: step.endTime || 0,
+            result: JSON.stringify(step.result || {}),
+            error: step.error || ''
+        };
+        try {
+            await this._executeQuery(query, { params });
+        } catch (e: any) {
+            console.error('[GraphStore] updateStepExecution error:', e.message);
+        }
+    }
 }
 
 let graphStore: GraphStore | null = null;
