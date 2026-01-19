@@ -2122,6 +2122,100 @@ Focus on depth, nuance, and covering aspects that might be missing above.
  * POST /jules/publish-selected
  * Body: { sessionIds: string[], mode?: 'branch' | 'pr' }
  */
+/**
+ * Internal helper to publish a single Jules session via browser
+ */
+async function performJulesPublish(sessionId: string, mode: 'pr' | 'branch' = 'pr'): Promise<{ success: boolean; error?: string }> {
+    console.log(`[Jules Automation] Publishing session ${sessionId} (mode: ${mode})...`);
+
+    // Create a temporary client for this purpose if one isn't active
+    // We MUST use the 'personal' profile for Jules auth
+    const julesClient = new PerplexityClient({ profileId: 'personal', headless: true });
+
+    try {
+        await julesClient.init();
+        const notebook = await julesClient.createNotebookClient();
+        const page = notebook.page;
+
+        await page.goto(`https://jules.google.com/session/${sessionId}`, {
+            waitUntil: 'networkidle',
+            timeout: 60000
+        });
+
+        // SlowMo for less detection
+        await page.waitForTimeout(2000);
+
+        // 1. Find and click Publish button
+        const publishButton = page.locator('button').filter({ hasText: /^Publish$/i }).first();
+        if (!(await publishButton.isVisible())) {
+            // Check if already published
+            const alreadyPublished = await page.locator('a[href*="github.com"][href*="/pull/"]').isVisible();
+            if (alreadyPublished) {
+                return { success: true };
+            }
+            throw new Error('Publish button not found');
+        }
+
+        await publishButton.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Click PR or Branch option
+        if (mode === 'pr') {
+            const prOption = page.locator('button, div, li').filter({ hasText: /Publish PR/i }).first();
+            await prOption.click();
+        } else {
+            const branchOption = page.locator('button, div, li').filter({ hasText: /Publish Branch/i }).first();
+            await branchOption.click();
+        }
+        await page.waitForTimeout(1000);
+
+        // 3. Confirm
+        const confirmButton = page.locator('button').filter({ hasText: /Confirm|Submit|Publish/i }).first();
+        await confirmButton.click();
+
+        // Wait for PR link to appear as confirmation
+        await page.waitForSelector('a[href*="github.com"][href*="/pull/"]', { timeout: 30000 });
+
+        console.log(`[Jules Automation] Session ${sessionId} published successfully.`);
+        return { success: true };
+
+    } catch (e: any) {
+        console.error(`[Jules Automation] Publish failed for ${sessionId}:`, e.message);
+        return { success: false, error: e.message };
+    } finally {
+        await julesClient.shutdown().catch(() => { });
+    }
+}
+
+/**
+ * Endpoint for automated Jules publishing (triggered by Windmill)
+ */
+app.post('/jules/publish-session', async (req, res) => {
+    const { sessionId, mode = 'pr', waitForCompletion = true } = req.body;
+
+    if (!sessionId) {
+        return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    if (!waitForCompletion) {
+        // Run in background
+        performJulesPublish(sessionId, mode).catch(e => {
+            console.error(`[Server] Background Jules publish failed for ${sessionId}:`, e);
+        });
+        return res.status(202).json({ success: true, message: 'Publishing started in background' });
+    }
+
+    const result = await performJulesPublish(sessionId, mode);
+    if (result.success) {
+        res.json({ success: true, message: 'Session published' });
+    } else {
+        res.status(500).json({ success: false, error: result.error });
+    }
+});
+
+/**
+ * Publish selected Jules sessions (Orchestrator endpoint)
+ */
 app.post('/jules/publish-selected', async (req, res) => {
     try {
         const { sessionIds, mode = 'pr' } = req.body;
@@ -2129,101 +2223,34 @@ app.post('/jules/publish-selected', async (req, res) => {
         if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
             return res.status(400).json({
                 success: false,
-                error: 'sessionIds array is required and must not be empty'
+                error: 'sessionIds array is required'
             });
         }
 
-        console.log(`[Server] Publishing ${sessionIds.length} selected Jules sessions (mode: ${mode})`);
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
 
-        // Import puppeteer for browser automation
-        const puppeteer = require('puppeteer-core');
+        if (windmill.isConfigured()) {
+            console.log(`[Server] Queueing ${sessionIds.length} Jules sessions via Windmill...`);
+            const { queued, failed } = await windmill.queueSessionPublishing(sessionIds, mode);
 
-        // Connect to existing browser via CDP
-        const browser = await puppeteer.connect({
-            browserWSEndpoint: 'ws://localhost:9222/devtools/browser',
-            defaultViewport: null
-        }).catch(() => null);
-
-        if (!browser) {
-            return res.status(503).json({
-                success: false,
-                error: 'Cannot connect to browser. Ensure Chrome is running with --remote-debugging-port=9222'
+            return res.status(202).json({
+                success: queued.length > 0,
+                message: `Queued ${queued.length} publishing job(s)`,
+                jobs: queued,
+                failed: failed.length > 0 ? failed : undefined
             });
         }
 
-        const results: { sessionId: string; success: boolean; error?: string }[] = [];
-
-        for (const sessionId of sessionIds) {
-            try {
-                console.log(`[Server] Publishing session: ${sessionId}`);
-
-                // Open session page
-                const page = await browser.newPage();
-                await page.goto(`https://jules.google.com/session/${sessionId}`, {
-                    waitUntil: 'networkidle2',
-                    timeout: 30000
-                });
-
-                // Wait for page to load
-                await page.waitForTimeout(2000);
-
-                // Check for "Publish" button
-                const publishButton = await page.$('button:has-text("Publish")');
-
-                if (!publishButton) {
-                    // Check if already published
-                    const prLink = await page.$('a[href*="github.com"][href*="/pull/"]');
-                    if (prLink) {
-                        results.push({ sessionId, success: true, error: 'Already published' });
-                        await page.close();
-                        continue;
-                    }
-                    results.push({ sessionId, success: false, error: 'No Publish button found' });
-                    await page.close();
-                    continue;
-                }
-
-                // Click Publish button
-                await publishButton.click();
-                await page.waitForTimeout(1000);
-
-                // Select PR or Branch based on mode
-                if (mode === 'pr') {
-                    const prOption = await page.$('text="Publish PR"');
-                    if (prOption) {
-                        await prOption.click();
-                        await page.waitForTimeout(500);
-                    }
-                } else {
-                    const branchOption = await page.$('text="Publish Branch"');
-                    if (branchOption) {
-                        await branchOption.click();
-                        await page.waitForTimeout(500);
-                    }
-                }
-
-                // Confirm publish
-                const confirmButton = await page.$('button:has-text("Confirm"), button:has-text("Submit")');
-                if (confirmButton) {
-                    await confirmButton.click();
-                    await page.waitForTimeout(3000);
-                }
-
-                results.push({ sessionId, success: true });
-                await page.close();
-
-            } catch (err: any) {
-                console.error(`[Server] Failed to publish session ${sessionId}:`, err.message);
-                results.push({ sessionId, success: false, error: err.message });
-            }
+        // Fallback to local execution
+        console.warn('[Server] Windmill not configured, executing Jules publish locally...');
+        const results = [];
+        for (const id of sessionIds) {
+            results.push({ sessionId: id, ...await performJulesPublish(id, mode) });
         }
 
-        await browser.disconnect();
-
-        const successCount = results.filter(r => r.success).length;
         res.json({
-            success: successCount > 0,
-            message: `Published ${successCount}/${sessionIds.length} sessions`,
+            success: results.some(r => r.success),
             results
         });
 
@@ -2235,23 +2262,15 @@ app.post('/jules/publish-selected', async (req, res) => {
 
 /**
  * Publish all Jules sessions in AWAITING_USER_FEEDBACK state.
- * POST /jules/publish-all
- * Body: { mode?: 'branch' | 'pr' }
  */
 app.post('/jules/publish-all', async (req, res) => {
     try {
         const { mode = 'pr' } = req.body;
-
         console.log(`[Server] Publishing all awaiting Jules sessions (mode: ${mode})`);
-
-        // First, get list of sessions via Jules MCP
-        // Note: This requires the jules-mcp tools to be available
-        // For now, we'll return an error directing to use publish-selected
 
         return res.status(501).json({
             success: false,
-            error: 'publish-all requires listing sessions first. Use /jules/publish-selected with specific session IDs.',
-            hint: 'Use the Jules MCP list_sessions tool to get session IDs, then call /jules/publish-selected'
+            error: 'publish-all requires listing sessions first. Use /jules/publish-selected with specific session IDs.'
         });
 
     } catch (e: any) {

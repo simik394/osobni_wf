@@ -24,6 +24,11 @@ export interface AudioGenerationParams {
     customPrompt?: string;
 }
 
+export interface SessionPublishParams {
+    sessionId: string;
+    mode: 'pr' | 'branch';
+}
+
 export class WindmillClient {
     private token: string;
     private baseUrl: string;
@@ -153,6 +158,39 @@ export class WindmillClient {
     }
 
     /**
+     * Trigger Jules session publishing
+     */
+    async triggerSessionPublishing(params: SessionPublishParams): Promise<WindmillJobResult> {
+        const url = `${this.baseUrl}/api/w/${this.workspace}/jobs/run/p/f/jules/click_publish_session`;
+
+        try {
+            const response = await this.fetchWithRetry(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: params.sessionId,
+                    mode: params.mode
+                })
+            });
+
+            const jobId = await response.text();
+            return {
+                jobId: jobId.trim().replace(/"/g, ''),
+                success: true
+            };
+        } catch (error: any) {
+            return {
+                jobId: '',
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * Queue multiple audio generations with FalkorDB state tracking
      * Each source gets its own Windmill job for parallel execution
      *
@@ -260,6 +298,7 @@ export class WindmillClient {
             return { error: `Failed to get job status: ${error.message}` };
         }
     }
+
     /**
      * Trigger a generic Windmill job (fire and forget or wait via polling in future)
      */
@@ -324,6 +363,24 @@ export class WindmillClient {
         throw new Error(`Job ${jobId} timed out`);
     }
 
+    /**
+     * Queue multiple Jules session publishing jobs
+     */
+    async queueSessionPublishing(sessionIds: string[], mode: 'pr' | 'branch' = 'pr'): Promise<{ queued: WindmillJobResult[]; failed: WindmillJobResult[] }> {
+        const queued: WindmillJobResult[] = [];
+        const failed: WindmillJobResult[] = [];
+
+        for (const sessionId of sessionIds) {
+            const result = await this.triggerSessionPublishing({ sessionId, mode });
+            if (result.success) {
+                queued.push(result);
+            } else {
+                failed.push(result);
+            }
+        }
+
+        return { queued, failed };
+    }
 }
 
 // Singleton instance
