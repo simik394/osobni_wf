@@ -2213,20 +2213,14 @@ registry.command('lineage <id>')
 // Standalone Commands
 program.command('query [query]')
     .description('Run a research query (standalone)')
+    .option('--agent <agent>', 'Agent to use (gemini, perplexity, notebooklm)')
+    .option('--all', 'Run on all agents')
     .option('--session <session>', 'Session ID')
     .option('--name <name>', 'Session Name')
     .option('--deep', 'Deep research mode')
     .option('--keep-alive', 'Keep browser open')
     .action(async (query, opts) => {
-        if (query) {
-            const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
-            await client.init({ keepAlive: opts.keepAlive, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
-            try {
-                await client.query(query, opts);
-            } finally {
-                await client.close();
-            }
-        } else {
+        if (!query) {
             // Legacy mode (queries.json)
             if (fs.existsSync(config.paths.queriesFile)) {
                 console.log('No query argument provided. Reading from queries.json...');
@@ -2244,8 +2238,86 @@ program.command('query [query]')
                 } else {
                     console.error('queries.json should be an array of strings.');
                 }
+                return;
             } else {
                 console.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
+                return;
+            }
+        }
+
+        if (opts.agent || opts.all) {
+            // Unified Agent Mode
+            const { createAgent, getAllAgents, closeAgents, setBrowserClient } = await import('./agents');
+
+            // Initialize shared client with CLI options
+            const { PerplexityClient } = await import('./client');
+            const client = new PerplexityClient({
+                profileId: globalProfileId,
+                cdpEndpoint: globalCdpEndpoint,
+                keepAlive: opts.keepAlive
+            });
+            // Pre-initialize to ensure options are respected
+            await client.init({
+                profileId: globalProfileId,
+                cdpEndpoint: globalCdpEndpoint,
+                keepAlive: opts.keepAlive
+            });
+            setBrowserClient(client);
+
+            try {
+                if (opts.all) {
+                    const agents = getAllAgents();
+                    console.log(`Running query on all agents: ${agents.map(a => a.name).join(', ')}`);
+
+                    const results = await Promise.all(agents.map(async agent => {
+                        try {
+                            console.log(`[${agent.name}] Querying...`);
+                            const result = await agent.query(query, {
+                                deepResearch: opts.deep,
+                            });
+                            return { agent: agent.name, result };
+                        } catch (e: any) {
+                            return { agent: agent.name, error: e.message };
+                        }
+                    }));
+
+                    results.forEach(r => {
+                        console.log(`\n=== ${r.agent} ===`);
+                        if (r.error) {
+                            console.error(`Error: ${r.error}`);
+                        } else {
+                            console.log(r.result?.content);
+                            if (r.result?.citations && r.result.citations.length > 0) {
+                                console.log('\nCitations:');
+                                r.result.citations.forEach((c: any) => console.log(`[${c.id}] ${c.text} (${c.url})`));
+                            }
+                        }
+                    });
+                } else {
+                    const agent = createAgent(opts.agent as any);
+                    console.log(`[${agent.name}] Querying...`);
+                    const result = await agent.query(query, {
+                        deepResearch: opts.deep
+                    });
+                    console.log(result.content);
+                    if (result.citations && result.citations.length > 0) {
+                        console.log('\nCitations:');
+                        result.citations.forEach((c: any) => console.log(`[${c.id}] ${c.text} (${c.url})`));
+                    }
+                }
+            } finally {
+                if (!opts.keepAlive) {
+                    await closeAgents();
+                }
+            }
+        } else {
+            // Legacy Perplexity Client Mode
+            const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+            await client.init({ keepAlive: opts.keepAlive, profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+            try {
+                await client.query(query, opts);
+            } finally {
+                await client.close();
             }
         }
     });
