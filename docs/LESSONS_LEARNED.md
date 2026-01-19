@@ -540,3 +540,41 @@ This incident revealed missing documentation:
 3.  **AppImage & FUSE**: Generating AppImages inside Docker is painful because it requires `fuse` availability (`--device /dev/fuse --cap-add SYS_ADMIN`), which often fails in unprivileged or constrained environments.
 4.  **Missing Utilities**: `electron-builder`'s ZIP target relies on the system `zip` binary, which is missing in slim images.
 **Lesson**: For Electron builds, default to a "fat" builder image (Node LTS + build-essential + zip + git) or consider shell-based builds on the host if FUSE is required, rather than fighting Docker permissions for AppImages. Use `zip` targets in Docker to avoid FUSE entirely.
+
+## PM Orchestration & Jules Delegation (2026-01-19)
+
+### Jules MCP vs CLI
+- **MCP `create_session` Issues**: The `jules-mcp` tool's `create_session` had "invalid argument" errors with complex prompts. The Jules CLI (`jules new`) worked reliably for delegation.
+- **Recommendation**: Use `jules new "$(cat prompt.md)"` for delegating work bundles. The CLI is more stable for complex, multi-issue prompts.
+
+### Batch Delegation Strategy
+- **Grouping Related Issues**: Bundling 2-4 related issues into 2-3 hour work packages maximizes Jules efficiency and ensures proper context.
+- **Example Success**: RSRCH async bundle (TOOLS-134 + TOOLS-133) groups non-blocking deep research with dynamic tab configuration - both touch the same tab pool infrastructure.
+- **Anti-Pattern**: Don't delegate single small issues (<1h) individually - Jules has startup overhead. Bundle them with related work.
+
+### PR Merge Blockers
+- **"Not Mergeable" ≠ Conflicts**: GitHub API returns 405 "not mergeable" for PRs with pending CI checks, not just merge conflicts.
+- **Verification**: Check PR status via `get_status` method before attempting merge. Look for `state: "pending"` or failing checks.
+- **Workaround**: For PRs stuck in pending CI, investigate the CI pipeline rather than assuming conflicts.
+
+### YouTrack State Synchronization
+- **Critical**: Update YouTrack issue states IMMEDIATELY after PR merges to maintain consistency between code and project management.
+- **Pattern**: After merging PR, update issue to "Fixed" state AND add comment with PR link for traceability.
+- **Example**: QUEST-5,6,7,8 were all merged but still in "Submitted" state - updated them with PR links for audit trail.
+
+### Delegation Prompt Quality
+- **Include YouTrack Links**: Always include `See: https://napoveda.youtrack.cloud/issue/TOOLS-XXX` in delegation prompts for full context.
+- **Provide Acceptance Criteria**: Clear, testable acceptance criteria help Jules verify work completion.
+- **Context Matters**: Include parent epic context (e.g., "Part of TOOLS-132 async architecture epic") to help Jules understand the bigger picture.
+- **Verification Plan**: Always include a verification section with specific commands to run and expected outcomes.
+
+### Parallel Execution
+- **Jules Handles Concurrency Well**: Successfully ran 3 Jules sessions in parallel covering 9 issues without conflicts.
+- **Resource Consideration**: Each session consumes compute resources - monitor system load when running many parallel sessions.
+- **Independence**: Ensure delegated bundles are independent (different codebases or non-overlapping files) to avoid merge conflicts.
+
+### Session Review Process
+- **Pagination**: Jules MCP returns 50 sessions per page - always check for `nextPageToken` to get full session list.
+- **Archived Sessions**: Some session IDs may return "not found" errors - these are likely archived or deleted. Skip and continue.
+- **State Filtering**: Focus on COMPLETED and AWAITING_USER_FEEDBACK states for actionable review work.
+
