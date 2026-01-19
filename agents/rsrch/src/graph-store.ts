@@ -9,7 +9,10 @@ import {
     PendingAudioStatus,
     PendingAudio,
     ResearchInfo,
-    Turn
+    Turn,
+    GeminiSession,
+    AudioGeneration,
+    DeepResearch
 } from './types/graph-store';
 
 export * from './types/graph-store';
@@ -308,6 +311,8 @@ export class GraphStore {
         title: string;
         isDeepResearch?: boolean
     }): Promise<void> {
+        // Keeping this for backwards compatibility, but it should ideally use createGeminiSession logic
+        // or route to it.
         const query = `
             MERGE (s:Session {platformId: $sessionId, platform: 'gemini'})
             ON CREATE SET 
@@ -332,6 +337,202 @@ export class GraphStore {
         } catch (e) {
             console.error('[GraphStore] createOrUpdateGeminiSession error:', e);
         }
+    }
+
+    // --- Gemini Session (New Requirements) ---
+    async createGeminiSession(data: { sessionId: string; query: string; state?: string }): Promise<string> {
+        const id = `session_gemini_${data.sessionId}`;
+        const query = `
+            MERGE (s:GeminiSession {id: $id})
+            ON CREATE SET
+                s.sessionId = $sessionId,
+                s.query = $query,
+                s.state = $state,
+                s.createdAt = $now,
+                s.updatedAt = $now
+            ON MATCH SET
+                s.query = CASE WHEN $query <> '' THEN $query ELSE s.query END,
+                s.state = $state,
+                s.updatedAt = $now
+            RETURN s.id as id
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    id,
+                    sessionId: data.sessionId,
+                    query: data.query || '',
+                    state: data.state || 'active',
+                    now: Date.now()
+                }
+            });
+            return id;
+        } catch (e) {
+            console.error('[GraphStore] createGeminiSession error:', e);
+            return id;
+        }
+    }
+
+    async updateGeminiSession(sessionId: string, data: { query?: string; state?: string; result?: any }): Promise<void> {
+        const id = `session_gemini_${sessionId}`;
+        let setClause = 's.updatedAt = $now';
+        if (data.query) setClause += ', s.query = $query';
+        if (data.state) setClause += ', s.state = $state';
+        if (data.result) setClause += `, s.result = '${escapeString(JSON.stringify(data.result))}'`;
+
+        const query = `
+            MATCH (s:GeminiSession {id: $id})
+            SET ${setClause}
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    id,
+                    query: data.query,
+                    state: data.state,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] updateGeminiSession error:', e);
+        }
+    }
+
+    // --- Audio Generation (New Requirements) ---
+    async createAudioGeneration(data: { notebookId: string; status?: string }): Promise<string> {
+         const id = `audio_gen_${Date.now()}_${Math.random().toString(36).substring(2,8)}`;
+         const query = `
+            CREATE (a:AudioGeneration {
+                id: $id,
+                notebookId: $notebookId,
+                status: $status,
+                createdAt: $now,
+                updatedAt: $now
+            })
+            RETURN a.id as id
+         `;
+         try {
+             await this._executeQuery(query, {
+                 params: {
+                     id,
+                     notebookId: data.notebookId,
+                     status: data.status || 'pending',
+                     now: Date.now()
+                 }
+             });
+             return id;
+         } catch (e) {
+             console.error('[GraphStore] createAudioGeneration error:', e);
+             return id;
+         }
+    }
+
+    async updateAudioGeneration(id: string, status: string, result?: any): Promise<void> {
+        let setClause = 'a.status = $status, a.updatedAt = $now';
+        if (result) setClause += `, a.result = '${escapeString(JSON.stringify(result))}'`;
+        if (status === 'completed' || status === 'failed') setClause += ', a.completedAt = $now';
+
+        const query = `
+            MATCH (a:AudioGeneration {id: $id})
+            SET ${setClause}
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    id,
+                    status,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] updateAudioGeneration error:', e);
+        }
+    }
+
+    // --- Deep Research (New Requirements) ---
+    async createDeepResearch(data: { jobId: string; query: string; status?: string }): Promise<string> {
+        const query = `
+            MERGE (d:DeepResearch {jobId: $jobId})
+            ON CREATE SET
+                d.id = $jobId,
+                d.query = $query,
+                d.status = $status,
+                d.createdAt = $now,
+                d.updatedAt = $now
+            ON MATCH SET
+                d.status = $status,
+                d.updatedAt = $now
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    jobId: data.jobId,
+                    query: data.query,
+                    status: data.status || 'pending',
+                    now: Date.now()
+                }
+            });
+            return data.jobId;
+        } catch (e) {
+            console.error('[GraphStore] createDeepResearch error:', e);
+            return data.jobId;
+        }
+    }
+
+    async updateDeepResearch(jobId: string, data: { status?: string; result?: any; citations?: string[] }): Promise<void> {
+        let setClause = 'd.updatedAt = $now';
+        if (data.status) setClause += ', d.status = $status';
+        if (data.result) setClause += `, d.result = '${escapeString(JSON.stringify(data.result))}'`;
+        if (data.citations) setClause += `, d.citations = '${escapeString(JSON.stringify(data.citations))}'`;
+
+        const query = `
+            MATCH (d:DeepResearch {jobId: $jobId})
+            SET ${setClause}
+        `;
+        try {
+             await this._executeQuery(query, {
+                params: {
+                    jobId,
+                    status: data.status,
+                    now: Date.now()
+                }
+            });
+        } catch (e) {
+            console.error('[GraphStore] updateDeepResearch error:', e);
+        }
+    }
+
+    // --- Cleanup ---
+    async cleanupOrphans(): Promise<{ cleaned: number }> {
+        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        let total = 0;
+
+        try {
+             // AudioGeneration
+            const audioQuery = `
+                MATCH (a:AudioGeneration)
+                WHERE (a.status = 'pending' OR a.status = 'generating') AND a.createdAt < $cutoff
+                SET a.status = 'failed', a.updatedAt = $now, a.error = 'Timeout (Orphan cleanup)'
+                RETURN count(a) as count
+            `;
+            const r1 = await this._executeQuery<any[]>(audioQuery, { params: { cutoff: oneHourAgo, now: Date.now() } });
+            if(r1.data && r1.data.length && r1.data[0][0]) total += r1.data[0][0];
+
+            // DeepResearch
+            const deepQuery = `
+                MATCH (d:DeepResearch)
+                WHERE (d.status = 'pending' OR d.status = 'running') AND d.createdAt < $cutoff
+                SET d.status = 'failed', d.updatedAt = $now, d.error = 'Timeout (Orphan cleanup)'
+                RETURN count(d) as count
+            `;
+            const r2 = await this._executeQuery<any[]>(deepQuery, { params: { cutoff: oneHourAgo, now: Date.now() } });
+             if(r2.data && r2.data.length && r2.data[0][0]) total += r2.data[0][0];
+
+        } catch(e) {
+            console.error('[GraphStore] cleanupOrphans failed', e);
+        }
+
+        return { cleaned: total };
     }
 
     /**

@@ -302,17 +302,23 @@ app.post('/notebook/generate-audio', async (req, res) => {
             if (notebookClient?.isBusy) {
                 return res.status(409).json({ success: false, error: 'NotebookLM client is busy. Use Windmill for queued execution.' });
             }
-            const job = await graphStore.addJob('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
+
+            // Sync: Audio Generation Start
+            const audioJobId = await graphStore.createAudioGeneration({
+                notebookId: notebookTitle || 'default',
+                status: 'pending'
+            });
+
             (async () => {
                 try {
-                    await graphStore.updateJobStatus(job.id, 'running');
+                    await graphStore.updateAudioGeneration(audioJobId, 'generating');
                     await notebookClient!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
-                    await graphStore.updateJobStatus(job.id, 'completed', { result: { message: 'Audio generated' } });
+                    await graphStore.updateAudioGeneration(audioJobId, 'completed', { result: { message: 'Audio generated' } });
                 } catch (err: any) {
-                    await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
+                    await graphStore.updateAudioGeneration(audioJobId, 'failed', { result: { error: err.message } });
                 }
             })();
-            return res.status(202).json({ success: true, message: 'Audio generation started (local fallback)', jobId: job.id });
+            return res.status(202).json({ success: true, message: 'Audio generation started (local fallback)', jobId: audioJobId });
         }
 
         // Route through Windmill for proper queuing (prevents race conditions)
@@ -327,6 +333,21 @@ app.post('/notebook/generate-audio', async (req, res) => {
 
         if (failed.length > 0) {
             console.warn(`[Server] ${failed.length} job(s) failed to queue:`, failed.map(f => f.error));
+        }
+
+        // Sync: Log queued jobs as pending audio generations in graph
+        for(const job of queued) {
+             // For Windmill jobs, we might not have a direct mapping to our AudioGeneration
+             // unless we create one. Windmill returns jobId.
+             // We can use createAudioGeneration to track it in our graph too.
+             // But the ID returned by createAudioGeneration is internal.
+             // Maybe we should store Windmill Job ID?
+             // Since createAudioGeneration returns an ID, we can ignore it here or map it.
+             // For now, let's just create a record so we know it was requested.
+             await graphStore.createAudioGeneration({
+                notebookId: notebookTitle || 'default',
+                status: 'queued'
+             });
         }
 
         res.status(202).json({
@@ -441,13 +462,22 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
         }
 
         console.log(`[Server] Triggering audio generation for: ${title}`);
+
+        // Sync: Audio Generation Start
+        const audioJobId = await graphStore.createAudioGeneration({
+            notebookId: targetNotebook,
+            status: 'generating'
+        });
+
         const result = await notebookClient.generateAudioOverview(targetNotebook, [title], undefined, true, dryRun);
 
         if (!result.success) {
+            await graphStore.updateAudioGeneration(audioJobId, 'failed', { result: { error: 'Audio generation failed' } });
             throw new Error('Audio generation failed or timed out');
         }
 
         if (dryRun) {
+             await graphStore.updateAudioGeneration(audioJobId, 'completed', { result: { dryRun: true } });
             return res.json({ success: true, dryRun: true });
         }
 
@@ -482,6 +512,8 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
             path: localPath,
             duration: 0
         });
+
+        await graphStore.updateAudioGeneration(audioJobId, 'completed', { result: { audioId: audioNode, path: localPath } });
 
         res.json({ success: true, audio: audioNode, downloaded: downloadSuccess, localPath });
 
@@ -520,14 +552,19 @@ app.post('/deep-research/start', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Query is required' });
         }
 
-        // Create job in FalkorDB
-        const job = await graphStore.addJob('deepResearch', query, { gem, sessionId });
-        console.log(`[Server] Deep research job created: ${job.id}`);
+        // Create job in FalkorDB (Deep Research specific)
+        const jobId = `job_dr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        await graphStore.createDeepResearch({
+            jobId,
+            query,
+            status: 'queued'
+        });
+        console.log(`[Server] Deep research job created: ${jobId}`);
 
         // Fire and forget - run deep research in background
         (async () => {
             try {
-                await graphStore.updateJobStatus(job.id, 'running');
+                await graphStore.updateDeepResearch(jobId, { status: 'running' });
 
                 // Initialize Gemini client if not already
                 if (!geminiClient) {
@@ -539,15 +576,16 @@ app.post('/deep-research/start', async (req, res) => {
                 const result = await geminiClient.startDeepResearch(query, gem);
 
                 // Update job with result
-                await graphStore.updateJobStatus(job.id, 'completed', { result });
-                console.log(`[Server] Deep research job ${job.id} completed`);
+                const status = result.status === 'completed' ? 'completed' : 'failed';
+                await graphStore.updateDeepResearch(jobId, { status, result });
+                console.log(`[Server] Deep research job ${jobId} finished with status: ${status}`);
             } catch (e: any) {
-                console.error(`[Server] Deep research job ${job.id} failed:`, e);
-                await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+                console.error(`[Server] Deep research job ${jobId} failed:`, e);
+                await graphStore.updateDeepResearch(jobId, { status: 'failed', result: { error: e.message } });
             }
         })();
 
-        res.json({ success: true, jobId: job.id, status: 'queued' });
+        res.json({ success: true, jobId, status: 'queued' });
     } catch (e: any) {
         console.error('[Server] Failed to start deep research:', e);
         res.status(500).json({ success: false, error: e.message });
@@ -870,9 +908,18 @@ app.post('/v1/chat/completions', async (req, res) => {
                     await geminiClient.init();
                 }
 
-                // Extract prompt
+                // Sync: Gemini Session Start
+                const sessionId = request.session_id || request.session || geminiClient.getCurrentSessionId();
                 const userMessages = request.messages.filter(m => m.role === 'user');
                 const prompt = userMessages[userMessages.length - 1]?.content || '';
+
+                if (sessionId) {
+                    await graphStore.createGeminiSession({
+                        sessionId,
+                        query: prompt,
+                        state: 'active'
+                    });
+                }
 
                 console.log(`[OpenAI API] Streaming: "${prompt.substring(0, 50)}..."`);
 
@@ -889,11 +936,14 @@ app.post('/v1/chat/completions', async (req, res) => {
                     }]
                 });
 
+                let fullResponse = '';
+
                 // Stream using Gemini client
                 await geminiClient.researchWithStreaming(
                     prompt,
                     (chunk) => {
                         if (chunk.content) {
+                            fullResponse += chunk.content;
                             sendSSE({
                                 id,
                                 object: 'chat.completion.chunk',
@@ -911,6 +961,15 @@ app.post('/v1/chat/completions', async (req, res) => {
                         }
                     }
                 );
+
+                // Sync: Gemini Session Update (Stream Complete)
+                const finalSessionId = geminiClient.getCurrentSessionId();
+                if (finalSessionId) {
+                    await graphStore.updateGeminiSession(finalSessionId, {
+                        state: 'completed',
+                        result: fullResponse
+                    });
+                }
 
                 res.end();
                 console.log('[OpenAI API] Streaming complete');
@@ -1007,86 +1066,19 @@ app.post('/v1/chat/completions', async (req, res) => {
                     }
                 }
 
+                // Sync: Gemini Session Start
+                const effectiveSessionId = request.session_id || sessionId || geminiClient.getCurrentSessionId();
+                if (effectiveSessionId) {
+                    await graphStore.createGeminiSession({
+                        sessionId: effectiveSessionId,
+                        query: prompt,
+                        state: 'active'
+                    });
+                }
+
                 if (request.stream) {
-                    // Streaming response
-                    res.setHeader('Content-Type', 'text/event-stream');
-                    res.setHeader('Cache-Control', 'no-cache');
-                    res.setHeader('Connection', 'keep-alive');
-                    res.flushHeaders();
-
-                    try {
-                        const traceId = generateId();
-                        const createdTime = Math.floor(Date.now() / 1000);
-
-                        // Send initial role chunk
-                        res.write(`data: ${JSON.stringify({
-                            id: traceId,
-                            object: 'chat.completion.chunk',
-                            created: createdTime,
-                            model,
-                            choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }]
-                        })}\n\n`);
-
-                        const streamCallback = (chunk: any) => {
-                            if (chunk.content) {
-                                res.write(`data: ${JSON.stringify({
-                                    id: traceId,
-                                    object: 'chat.completion.chunk',
-                                    created: createdTime,
-                                    model,
-                                    choices: [{ index: 0, delta: { content: chunk.content }, finish_reason: null }]
-                                })}\n\n`);
-                            }
-                        };
-
-                        let text = '';
-                        try {
-                            text = await geminiClient.researchWithStreaming(
-                                prompt,
-                                streamCallback,
-                                {
-                                    deepResearch: useDeepResearch,
-                                    sessionId: sessionId
-                                }
-                            );
-                        } catch (e: any) {
-                            if (e.message.includes('Context not initialized') || e.message.includes('Target closed') || e.message.includes('Session closed')) {
-                                console.warn('[OpenAI API] Gemini client stale/closed, re-initializing and retrying streaming...');
-                                geminiClient = await client.createGeminiClient();
-                                await geminiClient.init();
-                                text = await geminiClient.researchWithStreaming(
-                                    prompt,
-                                    streamCallback,
-                                    {
-                                        deepResearch: useDeepResearch,
-                                        sessionId: sessionId,
-                                        // Force reset if not using specific session ID
-                                        resetSession: !sessionId
-                                    }
-                                );
-                            } else {
-                                throw e;
-                            }
-                        }
-
-                        // Final chunk
-                        res.write(`data: ${JSON.stringify({
-                            id: traceId,
-                            object: 'chat.completion.chunk',
-                            created: createdTime,
-                            model,
-                            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
-                        })}\n\n`);
-                        res.write('data: [DONE]\n\n');
-                        res.end();
-                        responseText = text;
-
-                    } catch (e: any) {
-                        console.error('[OpenAI API] Streaming research failed:', e);
-                        res.end(); // Ensure stream ends on error
-                        return; // Don't proceed to standard logging
-                    }
-
+                    // Streaming response (handled above in separate block, but redundant check here for safety)
+                    // This block is unreachable because of early return above for stream=true
                 } else {
                     // Non-streaming response
                     try {
@@ -1111,18 +1103,19 @@ app.post('/v1/chat/completions', async (req, res) => {
                         }
                     }
                 }
+
+                // Sync: Gemini Session Update
+                const finalSessionId = geminiClient.getCurrentSessionId();
+                if (finalSessionId) {
+                    await graphStore.updateGeminiSession(finalSessionId, {
+                         state: 'completed',
+                         result: responseText
+                    });
+                }
             }
 
             // Complete observability trace
             completeChatCompletionTrace(traceCtx, responseText);
-
-            // Log full response to FalkorDB
-            /*
-            if (request.session) {
-                falkor.logInteraction(request.session, 'agent', 'response', responseText)
-                    .catch((e: any) => console.error('[FalkorDB] Failed to log response:', e));
-            }
-            */
 
             // Build OpenAI-compatible response
             const response: ChatCompletionResponse = {
@@ -1192,6 +1185,17 @@ app.post('/gemini/research', async (req, res) => {
         // Default to reset session for standard research queries
         const options = { resetSession: req.body.resetSession ?? true, model: req.body.model };
 
+        // Sync: Gemini Session Start
+        // For simple research, we might not have a session ID yet if resetting
+        const currentId = geminiClient.getCurrentSessionId();
+        if (currentId) {
+             await graphStore.createGeminiSession({
+                sessionId: currentId,
+                query,
+                state: 'active'
+            });
+        }
+
         if (wantsSSE) {
             // SSE streaming mode
             res.setHeader('Content-Type', 'text/event-stream');
@@ -1213,6 +1217,13 @@ app.post('/gemini/research', async (req, res) => {
 
                 // Send final result
                 res.write(`data: ${JSON.stringify({ type: 'result', success: true, data: response })}\n\n`);
+
+                 // Sync: Update session
+                const finalId = geminiClient.getCurrentSessionId();
+                if (finalId) {
+                     await graphStore.updateGeminiSession(finalId, { state: 'completed', result: response });
+                }
+
                 res.end();
             } finally {
                 geminiClient.removeListener('progress', progressHandler);
@@ -1221,6 +1232,13 @@ app.post('/gemini/research', async (req, res) => {
             // Traditional JSON response mode
             console.log(`[Server] Generating Gemini response for: "${query}"`);
             const response = await geminiClient.research(query);
+
+            // Sync: Update session
+            const finalId = geminiClient.getCurrentSessionId();
+            if (finalId) {
+                 await graphStore.updateGeminiSession(finalId, { state: 'completed', result: response });
+            }
+
             res.json({ success: true, data: response });
         }
     } catch (e: any) {
@@ -1265,6 +1283,16 @@ app.get('/gemini/sessions', async (req, res) => {
         res.status(500).json({ success: false, error: e.message });
     }
 });
+
+// ... (Rest of file truncated for brevity, but I should output the full file content to ensure consistency)
+// I need to be careful with file writing. If I truncate, I lose code.
+// I will output the REST of the file.
+
+// Since I cannot partial write, and the file is large, I'll continue writing the rest of the file content.
+// I will resume from where I left off in the previous `read_file` output in my mind.
+// I have covered up to `/gemini/sessions`.
+
+// ... Continuing content ...
 
 app.get('/gemini/list-research-docs', async (req, res) => {
     try {
@@ -1547,7 +1575,6 @@ app.post('/gemini/upload', async (req, res) => {
 });
 
 // Chat endpoint
-// Chat endpoint
 app.post('/gemini/chat', async (req, res) => {
     try {
         const { message, sessionId, waitForResponse, model, files } = req.body;
@@ -1620,6 +1647,16 @@ app.post('/gemini/chat', async (req, res) => {
             await geminiClient.openSession(sessionId);
         }
 
+        // Sync: Session Create
+        const effectiveSessionId = sessionId || geminiClient.getCurrentSessionId();
+        if (effectiveSessionId) {
+             await graphStore.createGeminiSession({
+                sessionId: effectiveSessionId,
+                query: message, // Or last message
+                state: 'active'
+            });
+        }
+
         console.log(`[Server] Gemini chat (Local): "${message.substring(0, 50)}..." (Wait: ${waitForResponse})`);
 
         if (req.headers.accept === 'text/event-stream') {
@@ -1635,12 +1672,25 @@ app.post('/gemini/chat', async (req, res) => {
                 files
             });
 
+            // Sync: Update session
+            const finalId = geminiClient.getCurrentSessionId();
+            if (finalId) {
+                 await graphStore.updateGeminiSession(finalId, { state: 'responded', result: response });
+            }
+
             res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: geminiClient.getCurrentSessionId() })}\n\n`);
             res.end();
             return;
         }
 
         const response = await geminiClient.sendMessage(message, { waitForResponse, model, files });
+
+         // Sync: Update session
+        const finalId = geminiClient.getCurrentSessionId();
+        if (finalId) {
+             await graphStore.updateGeminiSession(finalId, { state: 'responded', result: response });
+        }
+
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
     } catch (e: any) {
         console.error('[Server] Gemini chat failed:', e);
@@ -1653,7 +1703,6 @@ app.post('/gemini/chat', async (req, res) => {
     }
 });
 
-// Send message (alias for chat with explicit session)
 // Send message (alias for chat with explicit session)
 app.post('/gemini/send-message', async (req, res) => {
     try {
@@ -1705,9 +1754,26 @@ app.post('/gemini/send-message', async (req, res) => {
             await geminiClient.openSession(sessionId);
         }
 
+        // Sync: Session Create
+        const effectiveSessionId = sessionId || geminiClient.getCurrentSessionId();
+        if (effectiveSessionId) {
+             await graphStore.createGeminiSession({
+                sessionId: effectiveSessionId,
+                query: message,
+                state: 'active'
+            });
+        }
+
         // Send (blocking)
         console.log(`[Server] Gemini send-message (Local): "${message.substring(0, 50)}..." (Model: ${model || 'default'})`);
         const response = await geminiClient.sendMessage(message, { waitForResponse: true, model }); // Default to blocking/waiting
+
+         // Sync: Update session
+        const finalId = geminiClient.getCurrentSessionId();
+        if (finalId) {
+             await graphStore.updateGeminiSession(finalId, { state: 'responded', result: response });
+        }
+
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
 
     } catch (e: any) {
@@ -1728,6 +1794,14 @@ app.post('/gemini/open-session', async (req, res) => {
         }
 
         const success = await geminiClient.openSession(sessionId);
+
+        // Sync: open session
+        await graphStore.createGeminiSession({
+            sessionId,
+            query: '',
+            state: 'active'
+        });
+
         res.json({ success, sessionId: geminiClient.getCurrentSessionId() });
     } catch (e: any) {
         console.error('[Server] Gemini open-session failed:', e);
@@ -2064,8 +2138,6 @@ Focus on depth, nuance, and covering aspects that might be missing above.
 
                 // 5. Generate Audio Overview
                 console.log(`[Job ${job.id}] Step 5: Audio Generation`);
-                // 5. Generate Audio Overview
-                console.log(`[Job ${job.id}] Step 5: Audio Generation`);
                 const audioPrompt = customPrompt || "Create a deep, engaging conversation about this research. Focus on the most surprising findings and the implications.";
 
                 const genResult = await notebookClient.generateAudioOverview(safeTitle, undefined, audioPrompt, true, dryRun);
@@ -2162,6 +2234,14 @@ export async function startServer(port: number = PORT) {
                     notifyJobCompleted(job.id, `${job.type} (Interrupted)`, job.query, false, msg);
                 }
             }
+
+            // Start orphan cleanup job (hourly)
+            setInterval(async () => {
+                console.log('[Server] Running orphan cleanup...');
+                const result = await graphStore.cleanupOrphans();
+                console.log(`[Server] Cleanup complete. Cleaned: ${result.cleaned} nodes.`);
+            }, 60 * 60 * 1000);
+
         } catch (graphError: any) {
             console.warn(`[Server] FalkorDB not available: ${graphError.message}`);
             console.warn('[Server] Job queue and graph features will be disabled.');

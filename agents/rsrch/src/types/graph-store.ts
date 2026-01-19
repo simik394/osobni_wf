@@ -45,6 +45,16 @@ export interface Session {
     createdAt: number;
 }
 
+// Specific Gemini Session
+export interface GeminiSession {
+    id: string; // Internal graph ID (e.g. session_gemini_XYZ)
+    sessionId: string; // Gemini Platform ID
+    query: string;
+    state: string; // JSON string of state or status?
+    createdAt: number;
+    updatedAt: number;
+}
+
 export interface Document {
     id: string;
     title: string;
@@ -74,6 +84,21 @@ export interface PendingAudio {
     completedAt?: number;
     error?: string;
     resultAudioId?: string;
+}
+
+// Alias for AudioGeneration requirement
+export interface AudioGeneration extends PendingAudio {
+    notebookId?: string; // Optional if we map notebookTitle to ID
+}
+
+export interface DeepResearch {
+    jobId: string;
+    query: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    result?: unknown;
+    citations?: string[]; // JSON string array or relationship?
+    createdAt: number;
+    updatedAt: number;
 }
 
 export interface Conversation {

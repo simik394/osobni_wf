@@ -895,6 +895,80 @@ notebook.command('sources-without-audio')
         }
     });
 
+// Top-level Job/Status Commands (Requirement: FalkorDB Sync)
+program.command('status [jobId]')
+    .description('Show system status or specific job details')
+    .action(async (jobId) => {
+        if (jobId) {
+            // Show job details
+            try {
+                const response = await sendServerRequest(`/jobs/${jobId}`);
+                if (response.success && response.job) {
+                    const job = response.job;
+                    console.log(`\n=== Job ${job.id} ===`);
+                    console.log(`Type: ${job.type}`);
+                    console.log(`Status: ${job.status}`);
+                    console.log(`Query: ${job.query}`);
+                    console.log(`Created: ${new Date(job.createdAt).toLocaleString()}`);
+                    if (job.startedAt) console.log(`Started: ${new Date(job.startedAt).toLocaleString()}`);
+                    if (job.completedAt) console.log(`Completed: ${new Date(job.completedAt).toLocaleString()}`);
+                    if (job.error) console.log(`Error: ${job.error}`);
+                    if (job.result) console.log(`Result:`, JSON.stringify(job.result, null, 2));
+                    console.log('==================\n');
+                } else {
+                    console.error('Job not found');
+                }
+            } catch (e: any) {
+                console.error(`Error: ${e.message}`);
+            }
+        } else {
+            // Show system status
+            try {
+                const response = await sendServerRequest('/graph/status');
+                if (response.success) {
+                    console.log('\n=== System Status ===');
+                    console.log(`Connection: ${response.connection}`);
+                    if (response.stats) {
+                        console.log('Jobs:', response.stats);
+                    }
+                    console.log('=====================\n');
+                }
+            } catch (e: any) {
+                console.error(`Error: ${e.message}`);
+            }
+        }
+    });
+
+program.command('jobs')
+    .description('List jobs')
+    .option('--pending', 'Show pending/queued/running jobs only')
+    .action(async (opts) => {
+        try {
+            const response = await sendServerRequest('/jobs');
+            if (response.success) {
+                let jobs = response.jobs;
+                if (opts.pending) {
+                    jobs = jobs.filter((j: any) => ['queued', 'running', 'pending', 'generating'].includes(j.status));
+                }
+
+                if (jobs.length === 0) {
+                    console.log('No jobs found.');
+                    return;
+                }
+
+                console.table(jobs.map((j: any) => ({
+                    ID: j.id,
+                    Type: j.type,
+                    Status: j.status,
+                    Query: j.query ? j.query.substring(0, 40) + '...' : '',
+                    Created: new Date(j.createdAt).toLocaleTimeString()
+                })));
+            }
+        } catch (e: any) {
+            console.error(`Error: ${e.message}`);
+        }
+    });
+
 // Graph
 const graph = program.command('graph').description('Graph database commands');
 
