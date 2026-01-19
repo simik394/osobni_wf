@@ -72,7 +72,10 @@ class Project(BaseModel):
     goal: str | None = None  # What does "done" look like?
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    last_touched: datetime = Field(default_factory=datetime.now)
+    last_accessed: datetime = Field(default_factory=datetime.now)
+    importance: int = Field(default=5, ge=1, le=10)  # 1-10 scale
+    decay_rate: float = Field(default=0.05)  # Daily decay factor
+    energy_level: EnergyLevel = EnergyLevel.MEDIUM
     tags: list[str] = Field(default_factory=list)
     # Context restoration
     last_context: str | None = None  # Breadcrumb for resuming

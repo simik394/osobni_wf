@@ -12,6 +12,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 from langchain_core.messages import HumanMessage
+import json
+from pathlib import Path
 
 from proj.agent import get_graph, create_proj_graph
 from proj.state import ProjState, Project
@@ -19,15 +21,34 @@ from proj.state import ProjState, Project
 app = typer.Typer(help="Personal project management agent")
 console = Console()
 
-# Shared state (in-memory for now)
+# Define the state file path
+STATE_FILE = Path.home() / ".proj" / "state.json"
+STATE_FILE.parent.mkdir(exist_ok=True)
+
+# Shared state
 _state: ProjState | None = None
 
 
+def save_state(state: ProjState):
+    """Save the current state to the JSON file."""
+    with open(STATE_FILE, "w") as f:
+        json.dump(state.dict(), f, indent=2)
+
+
+def load_state() -> ProjState:
+    """Load the state from the JSON file."""
+    if not STATE_FILE.exists():
+        return ProjState()
+    with open(STATE_FILE, "r") as f:
+        data = json.load(f)
+        return ProjState(**data)
+
+
 def get_state() -> ProjState:
-    """Get or initialize state."""
+    """Get or initialize state from the file."""
     global _state
     if _state is None:
-        _state = ProjState()
+        _state = load_state()
     return _state
 
 
