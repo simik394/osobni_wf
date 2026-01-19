@@ -108,8 +108,10 @@ When wrapping browser automation as OpenAI-compatible API:
 
 ## Anti-Patterns & Points of Struggle
 - **Reinventing the Wheel (Context Blindness)**: I spent significant time designing a custom 'Service Registry' for FalkorDB, completely ignoring that the user's stack (Nomad/Consul) already solves this. *Lesson:* Always audit the existing infrastructure capabilities *before* proposing new state management components. 
-- **Code Debugging vs. Arch Defects**: I wasted cycles adding debug logs to `logInteraction` to fix a "missing session" bug. The code was fine; the architecture was flawed (One agent used Names, the other UUIDs). *Lesson:* When an integration fails silently, verify the *data contract* (ID format) before debugging the *code logic*.
-- **The "White Box" Fallacy**: I initially proposed "Tool Middleware" for Angrav, assuming we could wrap its function calls. I failed to realize Angrav is a "UI Driver" (Black Box) until late in the planning. *Lesson:* Explicitly categorize agents as "Code Executors" (Middleware possible) vs "UI Drivers" (Scrapers only) at the start of design.
+- **Refactoring & Project Integrity**: When refactoring core classes (like `GraphStore`) across multiple files, always perform a full project build (`npm run build`) to catch stale callers and implicit `any` errors that might not be visible in a single-file view.
+
+## FalkorDB Interaction Patterns (2026-01-19)
+- **Deterministic Node Access**: FalkorDB's query results can vary in structure depending on the `RETURN` clause. To handle this robustly in TypeScript, use a permissive node extraction helper: `const node = (row as any).c || row[0] || row;`. This ensures property access works whether the node is returned as a named variable, the first element of a row, or the row itself.
 
 ## Playwright & Browser Automation
 - **Text-Pattern Matching for Dynamic UIs**: When DOM classes are unstable (e.g. Tailwind classes changing or being generic), rely on robust Regex matching against `textContent` to identify item types (like "Edited file.ts" or tool outputs) rather than fragile CSS selectors.
