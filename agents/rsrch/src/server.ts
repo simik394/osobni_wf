@@ -10,6 +10,7 @@ import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
+import { configureNotifications, sendNotification } from './notify';
 import { getRegistry } from './artifact-registry';
 
 // Optional shared imports (may not be available in Docker)
@@ -109,6 +110,51 @@ app.post('/shutdown', async (req, res) => {
     }
 
     process.exit(0);
+});
+
+// Windmill Webhook
+app.post('/webhooks/windmill', async (req, res) => {
+    const { jobId, status, result, error, type, query, notebookId, sourceTitle, pendingAudioId } = req.body;
+    console.log(`[Webhook] Received Windmill callback for job ${jobId} (${status})`);
+
+    try {
+        // 1. Update FalkorDB based on type
+        // If pendingAudioId is present, it's an audio generation job
+        if (pendingAudioId) {
+             const finalStatus = status === 'completed' || status === 'success' ? 'completed' : 'failed';
+             // For pending audio, we might need to update the PendingAudio node
+             // Assuming graphStore has methods for this or we run a cypher query
+             if (finalStatus === 'completed') {
+                await graphStore.updatePendingAudioStatus(pendingAudioId, 'completed');
+             } else {
+                await graphStore.updatePendingAudioStatus(pendingAudioId, 'failed', { error: error || 'Failed' });
+             }
+        } else if (jobId && type) {
+             // Generic job update
+             const finalStatus = status === 'completed' || status === 'success' ? 'completed' : 'failed';
+             await graphStore.updateJobStatus(jobId, finalStatus, { result, error });
+        }
+
+        // 2. Notification
+        if (status === 'completed' || status === 'success') {
+            await sendNotification(`Job completed: ${type || 'Unknown'}\n${(typeof result === 'string' ? result : JSON.stringify(result))?.substring?.(0, 100) || ''}`, {
+                title: `✅ Windmill Job Success`,
+                priority: 'default',
+                tags: ['windmill', 'success']
+            });
+        } else {
+             await sendNotification(`Job failed: ${type || 'Unknown'}\n${error || ''}`, {
+                title: `❌ Windmill Job Failed`,
+                priority: 'high',
+                tags: ['windmill', 'error']
+            });
+        }
+
+        res.json({ success: true });
+    } catch (e: any) {
+        console.error('[Webhook] Error processing callback:', e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Query endpoint
@@ -2133,6 +2179,12 @@ process.on('SIGINT', async () => {
 // Start server
 export async function startServer(port: number = PORT) {
     try {
+        // Configure notifications
+        configureNotifications({
+            ntfy: config.notifications.ntfy,
+            discord: { webhookUrl: config.notifications.discordWebhookUrl! }
+        });
+
         // Try to connect browser, but don't fail startup if unavailable
         console.log('Initializing Perplexity client (browser connection)...');
         try {

@@ -10,6 +10,7 @@
 
 import { getGraphStore, type PendingAudio } from './graph-store';
 import { ApiError, AuthError, NetworkError } from './errors';
+import { config } from './config';
 
 export interface WindmillJobResult {
     jobId: string;
@@ -30,9 +31,9 @@ export class WindmillClient {
     private workspace: string;
 
     constructor() {
-        this.token = process.env.WINDMILL_TOKEN || '';
-        this.baseUrl = process.env.WINDMILL_URL || 'http://localhost:8000';
-        this.workspace = process.env.WINDMILL_WORKSPACE || 'knowlage';
+        this.token = config.windmill?.token || process.env.WINDMILL_TOKEN || '';
+        this.baseUrl = config.windmill?.apiUrl || process.env.WINDMILL_BASE_URL || process.env.WINDMILL_URL || 'http://localhost:8000';
+        this.workspace = config.windmill?.workspace || process.env.WINDMILL_WORKSPACE || 'knowlage';
 
         if (!this.token) {
             console.warn('[WindmillClient] WINDMILL_TOKEN not set - job triggering will fail');
@@ -261,6 +262,39 @@ export class WindmillClient {
         }
     }
     /**
+     * List recent jobs
+     */
+    async listJobs(limit = 10): Promise<any[]> {
+        const url = `${this.baseUrl}/api/w/${this.workspace}/jobs_u/list?per_page=${limit}`;
+        try {
+            const response = await this.fetchWithRetry(url, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            return await response.json();
+        } catch (error: any) {
+            console.error('Failed to list jobs:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Execute a job (blocking by default)
+     */
+    async executeJob(path: string, args: Record<string, any>, wait: boolean = true): Promise<any> {
+        const result = await this.triggerJob(path, args);
+        if (wait && result.success && result.jobId) {
+            try {
+                const jobDetails = await this.waitForJob(result.jobId);
+                // Return the result payload if available, or the full details
+                return jobDetails.result || jobDetails;
+            } catch (e) {
+                return { ...result, error: String(e) };
+            }
+        }
+        return result;
+    }
+
+    /**
      * Trigger a generic Windmill job (fire and forget or wait via polling in future)
      */
     async triggerJob(path: string, args: Record<string, any>): Promise<WindmillJobResult> {
@@ -299,6 +333,34 @@ export class WindmillClient {
             session_id: sessionId,
             wait_for_response: waitForResponse
         });
+    }
+
+    /**
+     * Create a schedule
+     */
+    async createSchedule(path: string, cron: string, args: Record<string, any> = {}, description?: string): Promise<string> {
+        const url = `${this.baseUrl}/api/w/${this.workspace}/schedules/create`;
+        try {
+            const response = await this.fetchWithRetry(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    path,
+                    schedule: cron,
+                    timezone: "UTC",
+                    args,
+                    is_active: true,
+                    description: description || `Scheduled via rsrch CLI: ${path}`
+                })
+            });
+            const result = await response.text();
+            return result; // Returns schedule UUID
+        } catch (error: any) {
+            throw new Error(`Failed to create schedule: ${error.message}`);
+        }
     }
 
     /**
