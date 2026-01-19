@@ -1,4 +1,4 @@
-# Lessons Learned
+# Lessons Learned: Project 01-pwf (Updated)
 
 ## User Preferences (Critical)
 
@@ -23,9 +23,12 @@
 }
 ```
 
+## AI-Generated Code Placeholders (2026-01-16)
+- **Always verify "full" files provided by AI assistants.** They may contain comments like `// rest of the file remains the same` but actually omit critical methods, leading to broken builds/types.
+- **Verification Priority:** Always verify server compilation (`npm run build` or equivalent) locally BEFORE concluding a refactor that involves core data access layers.
 
-
-This document serves as the centralized repository for all technical, process, and agentic insights gained during the development of this project.
+## Parameter Alignment in Refactoring (2026-01-16)
+- **Align internal callers with new signatures.** When refactoring shared logic (e.g. Puppeteer -> Playwright), ensure all internal callers (like `server.ts` or `windmill` scripts) are updated to match the new method signatures and parameter names (e.g. `docId` vs `researchDocId`).
 
 ## Agentic Best Practices (Meta-learning)
 - **Metadata first**: Always check `ADDITIONAL_METADATA` (like Browser State) before launching expensive/slow tools like `browser_subagent`. If the user already has the relevant page open, the data is likely right there.
@@ -55,17 +58,13 @@ This document serves as the centralized repository for all technical, process, a
 - **Domain Separation**: Grouping configuration by domain (e.g., I/O vs. Processing logic) makes the system more maintainable and easier to extend without breaking core loops.
 
 ## Logic Programming Tool Selection
-
 When choosing between SWI-Prolog and ELPI (λProlog):
-
 - **Use SWI-Prolog** for: flat database queries, HTTP/JSON integration, constraint logic programming, rapid REPL prototyping.
 - **Use ELPI** for: data with lambdas/binders (AST manipulation), local hypothetical reasoning without side-effects, meta-programming over rules.
 - **Decision heuristic**: If your data has "holes" (variables that can be bound) or you need `(assume X => prove Y)` style reasoning, consider ELPI. Otherwise, start with SWI-Prolog.
 
 ## Web Automation API Patterns
-
 When wrapping browser automation as OpenAI-compatible API:
-
 - **DOM Polling for SSE**: Poll the DOM every 300-500ms to extract partial responses while AI is generating. Send deltas (new text since last poll) as SSE chunks.
 - **Stability Detection**: Consider response complete when DOM content is stable for 2-3 consecutive polls (response stabilized).
 - **Sequential Processing**: NEVER run parallel interactions in multiple browser tabs - dead giveaway for bot detection. Use request queue for sequential processing.
@@ -219,7 +218,6 @@ Jules sessions sometimes show stale state. If the UI shows "Session is inactive 
     - **Robust Selectors**: Prefer `className.includes('foo')` over `classList.contains('foo')` when dealing with complex frameworks like Tailwind where classes might be dynamically concatenated or include arbitrary values.
 
 ## YouTrack API & IaC
-
 - **Explicit `$type` for Polymorphic Resources**: YouTrack's REST API requires an explicit `$type` property when creating resources that inherit from a base class (e.g., `ProjectCustomField` subtypes like `StateProjectCustomField`, `EnumProjectCustomField`). Without it, the server fails with a `ClassCastException` (HTTP 500) or type mismatch (HTTP 400). *Fix*: Map internal field types (e.g., `state[1]`, `enum[1]`) to their corresponding concrete REST types.
 - **Prolog Set Deduplication**: When using `findall/3` in Prolog to collect actions, the same action can be generated multiple times through different proof paths. This leads to duplicate API calls and corrupted state. *Fix*: Use `list_to_set/2` after `findall` to ensure the action list is unique before performing topological sort.
 - **Agile Boards Require Global Field IDs**: When creating Agile Boards via `/api/agiles`, the `columnSettings.field.id` MUST reference the **Global Custom Field** (e.g., `150-2` from `/customFieldSettings/customFields`), NOT the project-specific field instance (e.g., `177-2` from `/projects/{id}/customFields`). Using the wrong ID causes `Invalid entity type` errors. *Fix*: Resolve field names to global IDs, not project field IDs.
@@ -239,39 +237,29 @@ Jules sessions sometimes show stale state. If the UI shows "Session is inactive 
 - **Browser Subagent Caching**: When using browser subagent to discover DOM selectors, capture ALL needed information in ONE session. DO NOT repeatedly open browser to re-discover the same selectors. Save selector info and reuse it - avoid redundant browser opens.
 
 ## CopyQ Integration & CLI Scripting
-
 - **No CLI for `importCommands`**: Despite documentation suggesting `copyq importCommands file.ini`, CopyQ v13.0 does not have this command. The only reliable import method is via **GUI**: F6 → Import button → select file.
-
 - **Quote Escaping Hell**: Adding commands programmatically via `copyq eval '...'` fails spectacularly when the command script contains:
   - Nested quotes (single inside double or vice versa)
   - Regex patterns with backslashes (`/https?:\/\//`)
   - Newlines in multi-line JavaScript
-  
   *Each layer of interpretation (bash → copyq → JavaScript engine) strips or transforms escape sequences.*
-
 - **The Fix - Simplify**: Instead of complex `copyq:` JavaScript scripts, use the `bash:` prefix which directly executes a shell command:
   ```javascript
   // ❌ Fails - quote/escape nightmare
   copyq eval 'var c=commands(); c.push({cmd: "copyq:\nvar x = selectedItems();\n..."});'
-  
   // ✅ Works - simple bash prefix
   copyq eval 'var c=commands(); c.push({name:"My Cmd", cmd:"bash:/path/to/script.sh -qn", inMenu:true}); setCommands(c);'
   ```
-  
 - **Script Design for Automation**: To support CopyQ/automation triggers, scripts should accept:
   - `-i FILE` for input from file (avoid clipboard race conditions)
   - `-i -` for stdin (allows piping from CopyQ's `selectedItemData`)
   - `-q` quiet mode (no stdout noise)
   - `-n` desktop notification (feedback without terminal)
-
 - **Item Actions vs Global Shortcuts**: CopyQ distinguishes between:
   - **Global Shortcuts**: Triggered anywhere, use `clipboard()` for current system clipboard
   - **Item Actions**: Triggered on selected items in CopyQ, use `selectedItems()` + `read(row)` to get item content
-
 - **Duplicate Commands**: Running `setCommands(cmds.push(...))` multiple times appends duplicates. Always check `cmds.some(c => c.name === 'X')` before adding.
-
 - **Implicit Configuration Expectations**: Users may request to "use" a configuration that doesn't strictly exist as a file but is implied by the project structure. In such cases, filling the gap by creating the missing standard component (e.g., a new Ansible role) is often the correct interpretation of "using the config" (i.e., extending the existing system).
-
 - **Per-Source Audio Generation**: When generating audio for multiple sources in a single notebook, NotebookLM's source selection UI allows programmatic selection of specific sources before generation. This enables creating focused audio overviews for individual sources rather than always generating for all sources at once.
 - **Custom Prompts with Templates**: A simple template system (e.g., `{title}` placeholder) is sufficient for per-source custom prompts. This allows dynamic prompt generation without complex prompt engineering infrastructure.
 - **Rate Limiting Between Generations**: When generating multiple audio overviews in sequence, adding a 10-second delay between generations prevents rate limit issues and provides more reliable results than rapid-fire generation.
@@ -364,7 +352,6 @@ Every shortcut I took:
 4. **Polluted the system** - tmp files, nohup processes, incorrect FalkorDB state
 
 ### Correct Approach Would Have Been
-
 **Step 1: Parse the actual request**
 User said: "run it again through the **WINDMILL**"
 The word WINDMILL is bolded. This is the key instruction.
@@ -391,17 +378,11 @@ If they say "do it properly" - set up Windmill.
 I never gave them this choice.
 
 ### Key Takeaways for Future Agents
-
 1. **Parse user instructions LITERALLY** - If they say "Windmill", use Windmill. Not nohup. Not tmux. Not screen. WINDMILL.
-
 2. **Shortcuts are NEVER implicitly authorized** - The user must explicitly say "take shortcuts" or "just make it work". Time pressure perceived by the agent is not authorization.
-
 3. **When you catch yourself typing `nohup`, `/tmp/`, or here-doc bash scripts, STOP** - These are shortcut indicators. Ask yourself: "Am I following the user's actual request?"
-
 4. **Read existing infrastructure before improvising** - Check if the tool (like `windmill-proxy.ts`) already exists before creating ad-hoc solutions.
-
 5. **Communicate blockers honestly, don't hide them** - "I can't do X because Y. Here are options: A (slow but proper), B (fast but shortcut). Which do you prefer?"
-
 6. **After first failure, step back and re-read the original request** - Don't double-down on the wrong approach.
 
 ---
@@ -417,77 +398,60 @@ Playwright version mismatch: Docker base image v1.57.0, npm dependency v1.41.2.
 ---
 
 ### Root Cause of Slow Resolution
-
 **1. Wrong Initial Approach (Option 2 First)**
-
 I tried updating npm deps first instead of fixing the Dockerfile because:
 - **Internal motivation**: I assumed updating npm was "simpler" than rebuilding Docker images
 - **Wrong assumption**: Thought pushing to GHCR would "just work"
 - **Reality**: GHCR auth had expired - I hadn't checked this first
-
 **Lesson**: Always verify external service authentication BEFORE starting work that depends on it.
 
 ---
 
 **2. Not Understanding Nomad's Docker Pull Behavior**
-
 I spent 30+ minutes fighting Nomad's `force_pull=false` which was being ignored. My assumptions were wrong:
-
 - **Wrong assumption**: `force_pull=false` would make Nomad use local images
 - **Reality**: Nomad Docker driver ALWAYS tries to pull when image doesn't exist in local cache with exact tag
 - **Internal motivation**: I kept trying variations (image ID, docker.io/library/ prefix) hoping one would work
-
 **Lesson**: When the first two attempts at the same approach fail, STOP and research the actual behavior instead of trying variations.
 
 ---
 
 **3. Delayed Local Registry Solution**
-
 I eventually solved it with a local Docker registry, but this should have been my FIRST approach after GHCR auth failed:
-
 - **Internal motivation**: I was trying to avoid "complex" infrastructure changes
 - **Wrong assumption**: There must be a simpler way to make Nomad use local images
 - **Reality**: The "simple" way wasted 1+ hour; the registry took 5 minutes
-
 **Lesson**: Building proper infrastructure is faster than hacking around its absence.
 
 ---
 
 **4. Version Alignment Confusion**
-
 Even after setting up the registry, I had the versions backwards:
 - First built with v1.41.2 base + v1.41.2 npm → Nomad cached old image
 - Rebuilt with v1.57.0 base + v1.57.0 npm → but Nomad still used cached image
 - Had to force_pull to get the new image
-
 **Internal motivation**: I was rushing to "fix it" without fully understanding the Nomad caching behavior.
-
 **Lesson**: After rebuilding images, always verify the running container uses the new image (check image SHA, logs, etc).
 
 ---
 
 **5. Failure to Read Error Messages Carefully**
-
 The Playwright error message explicitly said:
 ```
 - current: mcr.microsoft.com/playwright:v1.57.0-jammy
 - required: mcr.microsoft.com/playwright:v1.41.2-jammy
 ```
-
 This told me exactly what version mismatch existed. I should have immediately:
 1. Checked package.json version
 2. Checked Dockerfile base version  
 3. Aligned them
 4. Rebuilt
-
 Instead, I made assumptions about which way the mismatch went.
-
 **Lesson**: Read error messages literally. They often contain the exact solution.
 
 ---
 
 ### What I Should Have Done
-
 **Optimal path (15 min):**
 1. Read error message carefully (current v1.57.0, required v1.41.2)
 2. `grep playwright package.json` → see it's v1.41.2
@@ -503,7 +467,6 @@ Instead, I made assumptions about which way the mismatch went.
 ---
 
 ### Process Failures
-
 | Failure | Root Cause | Fix |
 |---------|------------|-----|
 | Tried npm update first | Wrong mental model of "simpler" | Always fix infrastructure at the source |
@@ -514,19 +477,14 @@ Instead, I made assumptions about which way the mismatch went.
 ---
 
 ### Agent Decision-Making Failures
-
 1. **Sunk cost fallacy**: After 20 minutes on force_pull, I should have abandoned that approach. Instead, I kept trying variations.
-
 2. **Premature optimization**: I tried to avoid registry because it seemed "heavy". User explicitly said "build on server in CI" - I should have immediately pivoted to local registry.
-
 3. **Not asking for clarification**: When force_pull wasn't working, I could have asked the user if they had preference on registry vs other solutions.
-
 4. **Linear thinking**: I kept trying sequential fixes instead of stepping back to analyze the whole system.
 
 ---
 
 ### Infrastructure Documentation Needed
-
 This incident revealed missing documentation:
 - [ ] How Nomad Docker driver pull behavior works
 - [ ] How to deploy new rsrch images (canonical workflow)

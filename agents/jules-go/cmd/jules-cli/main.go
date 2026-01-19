@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	jules "jules-go"
+	"jules-go/internal/browser"
 	"jules-go/internal/logging"
 )
 
@@ -27,11 +28,19 @@ func main() {
 	// Define subcommands
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listFormat := listCmd.String("format", "table", "Output format: table, json")
+	listState := listCmd.String("state", "", "Filter by state: AWAITING_USER_FEEDBACK, COMPLETED, etc")
 
 	getCmd := flag.NewFlagSet("get", flag.ExitOnError)
 
 	retryCmd := flag.NewFlagSet("retry", flag.ExitOnError)
 	retryMax := retryCmd.Int("max", 3, "Maximum retry attempts")
+
+	publishCmd := flag.NewFlagSet("publish", flag.ExitOnError)
+	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
+	publishHeadless := publishCmd.Bool("headless", false, "Run in headless mode")
+
+	publishAllCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
+	publishAllHeadless := publishAllCmd.Bool("headless", false, "Run in headless mode")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 
@@ -43,7 +52,7 @@ func main() {
 	}
 
 	apiKey := os.Getenv("JULES_API_KEY")
-	if apiKey == "" && os.Args[1] != "version" && os.Args[1] != "help" {
+	if apiKey == "" && os.Args[1] != "version" && os.Args[1] != "help" && os.Args[1] != "publish" && os.Args[1] != "publish-all" {
 		fmt.Fprintln(os.Stderr, "Error: JULES_API_KEY environment variable required")
 		os.Exit(1)
 	}
@@ -62,6 +71,16 @@ func main() {
 		if err != nil {
 			slog.Error("failed to list sessions", "err", err)
 			os.Exit(1)
+		}
+		// Filter by state if specified
+		if *listState != "" {
+			filtered := []*jules.Session{}
+			for _, s := range sessions {
+				if s.State == *listState {
+					filtered = append(filtered, s)
+				}
+			}
+			sessions = filtered
 		}
 		printSessions(sessions, *listFormat)
 
@@ -105,6 +124,104 @@ func main() {
 		}
 		printJSON(result)
 
+	case "publish":
+		publishCmd.Parse(os.Args[2:])
+		if publishCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli publish <session-id> [--pr=true|false] [--headless]")
+			os.Exit(1)
+		}
+		sessionID := publishCmd.Arg(0)
+		sessionURL := fmt.Sprintf("https://jules.google.com/session/%s", sessionID)
+
+		fmt.Printf("Publishing session %s...\n", sessionID)
+		bs, err := browser.NewJulesSession(*publishHeadless)
+		if err != nil {
+			slog.Error("failed to create browser session", "err", err)
+			os.Exit(1)
+		}
+		defer bs.Close()
+
+		if err := bs.NavigateToSession(sessionURL); err != nil {
+			slog.Error("failed to navigate to session", "err", err)
+			os.Exit(1)
+		}
+
+		if *publishPR {
+			if err := bs.ClickPublishPR(); err != nil {
+				slog.Error("failed to click publish PR", "err", err)
+				os.Exit(1)
+			}
+		} else {
+			if err := bs.ClickPublishBranch(); err != nil {
+				slog.Error("failed to click publish branch", "err", err)
+				os.Exit(1)
+			}
+		}
+
+		fmt.Println("Waiting for publish to complete...")
+		if err := bs.WaitForPublishComplete(); err != nil {
+			slog.Error("publish did not complete", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✅ Session %s published successfully!\n", sessionID)
+
+	case "publish-all":
+		publishAllCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		// Filter to AWAITING_USER_FEEDBACK (Ready for review)
+		waiting := []*jules.Session{}
+		for _, s := range sessions {
+			if s.State == "AWAITING_USER_FEEDBACK" {
+				waiting = append(waiting, s)
+			}
+		}
+
+		fmt.Printf("Found %d sessions waiting for review\n", len(waiting))
+
+		bs, err := browser.NewJulesSession(*publishAllHeadless)
+		if err != nil {
+			slog.Error("failed to create browser session", "err", err)
+			os.Exit(1)
+		}
+		defer bs.Close()
+
+		for i, s := range waiting {
+			sessionURL := fmt.Sprintf("https://jules.google.com/session/%s", s.ID)
+			fmt.Printf("[%d/%d] Publishing %s: %s\n", i+1, len(waiting), s.ID, s.Title)
+
+			if err := bs.NavigateToSession(sessionURL); err != nil {
+				fmt.Printf("  ❌ Failed to navigate: %v\n", err)
+				continue
+			}
+
+			if !bs.IsReadyForReview() {
+				fmt.Printf("  ⏭️ Not ready for review, skipping\n")
+				continue
+			}
+
+			if err := bs.ClickPublishPR(); err != nil {
+				fmt.Printf("  ❌ Failed to publish: %v\n", err)
+				continue
+			}
+
+			if err := bs.WaitForPublishComplete(); err != nil {
+				fmt.Printf("  ⚠️ Publish may still be in progress: %v\n", err)
+			} else {
+				fmt.Printf("  ✅ Published!\n")
+			}
+		}
+		fmt.Println("Done!")
+
 	case "status":
 		statusCmd.Parse(os.Args[2:])
 		budget := jules.DefaultRetryBudget()
@@ -135,12 +252,14 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
-  list    List all sessions [--format table|json]
-  get     Get session details <session-id>
-  retry   Retry a failed session <session-id> [--max N]
-  status  Show system status
-  version Show version information
-  help    Show this help message
+  list         List all sessions [--format table|json] [--state STATE]
+  get          Get session details <session-id>
+  retry        Retry a failed session <session-id> [--max N]
+  publish      Publish a session's branch/PR <session-id> [--pr=true|false] [--headless]
+  publish-all  Publish ALL waiting sessions [--headless]
+  status       Show system status
+  version      Show version information
+  help         Show this help message
 
 Environment:
   JULES_API_KEY  Required API key for Jules API`)
