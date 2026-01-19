@@ -1042,257 +1042,191 @@ export class GeminiClient extends EventEmitter {
      * @param filePath - Absolute path to the file to upload
      * @returns true if upload succeeded, false otherwise
      */
-    async getContextSources(): Promise<string[]> {
+    async setModel(modelName: string): Promise<boolean> {
+        console.log(`[Gemini] Switching model to: ${modelName}`);
         try {
-            // Find the attachment button (+ icon near input)
-            let attachButton = null;
-            const btn = this.page.locator(selectors.gemini.upload.button).first();
-            if (await btn.count() > 0 && await btn.isVisible()) {
-                attachButton = btn;
-            } else {
-                const buttons = this.page.locator('button');
-                const count = await buttons.count();
-                for (let i = 0; i < count; i++) {
-                    const btn = buttons.nth(i);
-                    const text = await btn.innerText().catch(() => '');
-                    const ariaLabel = await btn.getAttribute('aria-label') || '';
-                    if (text.includes('+') || ariaLabel.toLowerCase().includes('add') || ariaLabel.toLowerCase().includes('attach')) {
-                        if (await btn.isVisible()) {
-                            attachButton = btn;
-                            break;
-                        }
-                    }
+            // 1. Click model dropdown trigger
+            const trigger = this.page.locator(selectors.gemini.model.trigger).first();
+            if (!await trigger.isVisible()) {
+                console.warn('[Gemini] Primary model trigger selector failed, trying getByRole fallback...');
+                const fallbackTrigger = this.page.getByRole('button', { name: /Změnit model|Otevřít výběr|Change model|Open mode/i });
+
+                // Also try clicking the wrapper div if button fails
+                const wrapperDiv = this.page.locator('div[aria-label*="Otevřít výběr režimu" i], div[aria-label*="Změnit model" i]').first();
+
+                if (await fallbackTrigger.isVisible()) {
+                    await fallbackTrigger.click();
+                } else if (await wrapperDiv.isVisible()) {
+                    console.log('[Gemini] Clicking model wrapper div...');
+                    await wrapperDiv.click();
+                } else {
+                    console.warn('[Gemini] Model selector user trigger not found (primary and fallback)');
+                    await this.dumpState('model_trigger_missing');
+                    return false;
                 }
+            } else {
+                await trigger.click();
             }
-
-            if (!attachButton) return [];
-
-            await attachButton.click();
             await this.page.waitForTimeout(1000);
 
-            // Scrape menu items
-            const fileInput = this.page.locator(selectors.gemini.upload.fileInput);
-            const menuItems = this.page.locator(selectors.gemini.model.item); // Reuse model item selector or generic menu item
-            const sources: string[] = [];
+            // 2. Select model based on name
+            let targetSelector = '';
+            const name = modelName.toLowerCase();
 
-            // Check for file upload support
-            if (await fileInput.count() > 0) {
-                sources.push('File Upload');
+            if (name.includes('flash') || name.includes('rych')) {
+                targetSelector = selectors.gemini.model.flash;
+            } else if (name.includes('think') || name.includes('mysl')) {
+                targetSelector = selectors.gemini.model.thinking;
+            } else if (name.includes('pro')) {
+                targetSelector = selectors.gemini.model.pro;
+            } else {
+                console.warn(`[Gemini] Unknown model nickname: ${modelName}, trying direct text match`);
+                targetSelector = `text="${modelName}"`;
             }
 
-            const count = await menuItems.count();
-            for (let i = 0; i < count; i++) {
-                const text = await menuItems.nth(i).innerText();
-                if (text) sources.push(text.split('\n')[0]);
-            }
+            const modelOption = this.page.locator(targetSelector).first();
+            // Wait for option to appear
+            try { await modelOption.waitFor({ state: 'visible', timeout: 5000 }); } catch (e) { }
 
-            // Close menu
-            await this.page.keyboard.press('Escape');
-
-            return sources;
-
-        } catch (e) {
-            console.error('Failed to get context sources:', e);
-            return [];
-        }
-    }
-
-    async uploadFile(filePath: string): Promise<boolean> {
-        console.log(`[Gemini] Uploading file: ${filePath}`);
-
-        try {
-            // Verify file exists
-            if (!fs.existsSync(filePath)) {
-                throw new Error(`File not found: ${filePath}`);
-            }
-
-            // Find the attachment button (+ icon near input)
-            // Gemini uses various selectors for the add attachment button
-            let attachButton = null;
-            const btn = this.page.locator(selectors.gemini.upload.button).first();
-            if (await btn.count() > 0 && await btn.isVisible()) {
-                attachButton = btn;
-            }
-
-            if (!attachButton) {
-                // Try finding by icon content
-                const buttons = this.page.locator('button');
-                const count = await buttons.count();
-                for (let i = 0; i < count; i++) {
-                    const btn = buttons.nth(i);
-                    const text = await btn.innerText().catch(() => '');
-                    const ariaLabel = await btn.getAttribute('aria-label') || '';
-                    if (text.includes('+') || ariaLabel.toLowerCase().includes('add') || ariaLabel.toLowerCase().includes('attach')) {
-                        if (await btn.isVisible()) {
-                            attachButton = btn;
-                            console.log(`[Gemini] Found attach button by content scan`);
-                            break;
-                        }
+            if (await modelOption.count() > 0) {
+                await modelOption.click();
+                console.log(`[Gemini] Selected model: ${modelName}`);
+                await this.page.waitForTimeout(1000); // Wait for switch
+                return true;
+            } else {
+                // Try JS Click as last resort
+                const jsClickSuccess = await this.page.evaluate((modelKey) => {
+                    // Try looking for data-test-id based on model name keywords
+                    if (modelKey.includes('flash') || modelKey.includes('rych')) {
+                        const el = document.querySelector('[data-test-id*="bard-mode-option-rychl"]') as HTMLElement;
+                        if (el) { el.click(); return true; }
                     }
-                }
-            }
+                    if (modelKey.includes('think') || modelKey.includes('mysl')) {
+                        const el = document.querySelector('[data-test-id*="bard-mode-option-s"]') as HTMLElement;
+                        if (el) { el.click(); return true; }
+                    }
+                    if (modelKey.includes('pro')) {
+                        const el = document.querySelector('[data-test-id*="bard-mode-option-pro"]') as HTMLElement;
+                        if (el) { el.click(); return true; }
+                    }
+                    return false;
+                }, name);
 
-            if (!attachButton) {
-                console.warn('[Gemini] Attachment button not found. Trying file input directly...');
-                // Some versions have a hidden file input
-                const fileInput = this.page.locator(selectors.gemini.upload.fileInput);
-                if (await fileInput.count() > 0) {
-                    await fileInput.setInputFiles(filePath);
-                    console.log(`[Gemini] File uploaded via input: ${filePath}`);
-                    await this.page.waitForTimeout(2000);
+                if (jsClickSuccess) {
+                    console.log(`[Gemini] Selected model via JS: ${modelName}`);
+                    await this.page.waitForTimeout(1000);
                     return true;
                 }
 
-                await this.dumpState('upload_button_not_found');
-                throw new Error('Could not find attachment button or file input');
-            }
-
-            // Click the attachment button
-            await attachButton.click();
-            await this.page.waitForTimeout(1000);
-
-            // Look for file input that appears after clicking
-            const fileInput = this.page.locator('input[type="file"]');
-            if (await fileInput.count() === 0) {
-                // May need to select "Upload file" from a menu
-                const uploadOption = this.page.locator(selectors.gemini.upload.uploadOption);
-                if (await uploadOption.count() > 0) {
-                    await uploadOption.first().click();
-                    await this.page.waitForTimeout(500);
-                }
-            }
-
-            // Set the file
-            const finalInput = this.page.locator(selectors.gemini.upload.fileInput);
-            if (await finalInput.count() === 0) {
-                await this.dumpState('file_input_not_found');
-                throw new Error('File input not found after clicking attachment button');
-            }
-
-            await finalInput.setInputFiles(filePath);
-            console.log(`[Gemini] File selected: ${path.basename(filePath)}`);
-
-            // Wait for upload to complete (look for thumbnail or filename in UI)
-            await this.page.waitForTimeout(3000);
-
-            // Verify upload (look for filename in attachments area)
-            const filename = path.basename(filePath);
-            const attachmentVisible = await this.page.locator(`text="${filename}"`).count() > 0 ||
-                await this.page.locator('[class*="attachment"]').count() > 0 ||
-                await this.page.locator('[class*="upload"]').count() > 0;
-
-            if (attachmentVisible) {
-                console.log(`[Gemini] ✅ File uploaded successfully: ${filename}`);
-            } else {
-                console.log(`[Gemini] ⚠️ File may have uploaded but verification unclear`);
-            }
-
-            return true;
-
-        } catch (e: any) {
-            console.error(`[Gemini] Failed to upload file: ${e.message}`);
-            await this.dumpState('upload_fail');
-            return false;
-        }
-    }
-
-    /**
-     * Upload multiple files to the current Gemini chat session.
-     * 
-     * @param filePaths - Array of absolute paths to files
-     * @returns Number of successfully uploaded files
-     */
-    async uploadFiles(filePaths: string[]): Promise<number> {
-        let successCount = 0;
-        for (const filePath of filePaths) {
-            const success = await this.uploadFile(filePath);
-            if (success) successCount++;
-            await this.page.waitForTimeout(1000); // Rate limit between uploads
-        }
-        console.log(`[Gemini] Uploaded ${successCount}/${filePaths.length} files`);
-        return successCount;
-    }
-
-    // ==================== MODEL SELECTION ====================
-
-    /**
-     * Set the Gemini model (e.g., "Gemini 2.0 Flash", "Gemini Advanced").
-     * This interacts with the UI model picker.
-     */
-    async setModel(modelName: string): Promise<boolean> {
-        console.log(`[Gemini] Setting model to: ${modelName}`);
-        try {
-            // 1. Check if model selector is visible
-            const modelTrigger = this.page.locator(selectors.gemini.model.trigger).first();
-
-            // If not found, maybe we are in a state where it's not visible?
-            if (await modelTrigger.count() === 0) {
-                console.warn('[Gemini] Model selector trigger not found. Are we in a chat?');
+                console.error(`[Gemini] Model option not found for: ${modelName}`);
+                await this.dumpState('model_option_missing');
+                // Close menu if open
+                await this.page.keyboard.press('Escape');
                 return false;
             }
-
-            // Check current model (often displayed in the button text)
-            const currentText = await modelTrigger.innerText();
-            if (currentText.includes(modelName)) {
-                console.log(`[Gemini] Model is already set to ${modelName}`);
-                return true;
-            }
-
-            // 2. Open model menu
-            await modelTrigger.click();
-            await this.page.waitForTimeout(500);
-
-            // 3. Find and click the model option
-            // Strategies: exact text, partial text, or looking inside the menu
-            const menu = this.page.locator(selectors.gemini.model.menu);
-            if (await menu.count() > 0) {
-                // Map common model aliases to potential UI text patterns (including Czech)
-                const modelMappings: Record<string, string[]> = {
-                    'flash': ['Flash', 'Rychlý', 'Fast', 'Rychle'],
-                    'pro': ['Pro', 'Ultra', 'Advanced'],
-                    'thinking': ['Thinking', 'Reasoning', 'S myšlením', 'Chain of Thought'],
-                    'deep': ['Deep Research', 'Hloubkový průzkum']
-                };
-
-                // Determine search terms: use direct input + mapped aliases
-                let searchTerms = [modelName];
-                for (const [key, aliases] of Object.entries(modelMappings)) {
-                    if (modelName.toLowerCase().includes(key)) {
-                        searchTerms = [...searchTerms, ...aliases];
-                    }
-                }
-
-                // Look for menu item matching any search term
-                for (const term of searchTerms) {
-                    const option = menu.locator(selectors.gemini.model.item).filter({ hasText: term }).first();
-                    if (await option.count() > 0) {
-                        await option.click();
-                        console.log(`[Gemini] Selected model: ${term} (requested: ${modelName})`);
-                        await this.page.waitForTimeout(1000); // Wait for switch
-                        return true;
-                    }
-                }
-
-                // Try looking for "Advanced" toggle if requesting Advanced/Pro
-                if (modelName.includes('Advanced') || modelName.includes('Ultra')) {
-                    const advancedBtn = menu.locator(selectors.gemini.model.advanced).first();
-                    if (await advancedBtn.count() > 0) {
-                        await advancedBtn.click();
-                        console.log(`[Gemini] Switched to Advanced/Ultra`);
-                        return true;
-                    }
-                }
-            }
-
-            console.warn(`[Gemini] Model option '${modelName}' not found in menu.`);
-            // Close menu
-            await this.page.keyboard.press('Escape');
-            return false;
-
         } catch (e: any) {
-            console.error(`[Gemini] Failed to set model: ${e.message}`);
+            console.error(`[Gemini] Error setting model: ${e.message}`);
             return false;
         }
+    }
+
+    /**
+     * Upload files to the current Gemini chat session.
+     */
+    async uploadFiles(filePaths: string[]): Promise<boolean> {
+        try {
+            console.log(`[Gemini] Uploading ${filePaths.length} files...`);
+
+            // 1. Open "+" menu
+            const plusBtn = this.page.locator(selectors.gemini.upload.button).first();
+            try {
+                // Try primary selector
+                await plusBtn.waitFor({ state: 'visible', timeout: 3000 });
+                await plusBtn.click();
+            } catch (e) {
+                console.warn('[Gemini] Primary upload selector failed, trying getByRole fallback...');
+                // Fallback to robust role-based location
+                const fallbackBtn = this.page.getByRole('button', { name: /nahrávání|Upload|Přidat|Attach|Add/i }).first();
+                if (await fallbackBtn.isVisible()) {
+                    await fallbackBtn.click();
+                } else {
+                    console.error('[Gemini] Upload (+) button not visible (primary and fallback)');
+                    await this.dumpState('upload_btn_missing');
+                    return false;
+                }
+            }
+            await this.page.waitForTimeout(1000);
+
+            // 2. Choose "Upload files" / "Nahrát soubory"
+            // Note: The input[type="file"] might be hidden but accessible. 
+            // Often clicking the menu item triggers the system dialog, which we must intercept with setInputFiles.
+            // BETTER: Directly attach to the input[type="file"] if present in DOM, 
+            // but usually it's better to use the specific menu flow if the input is created dynamically.
+
+            // Checking if file input is available directly or after clicking "Upload files"
+            let fileInput = this.page.locator(selectors.gemini.upload.fileInput).first();
+
+            // First try hidden file input with data-test-id (most reliable)
+            const hiddenFileInput = this.page.locator('[data-test-id="hidden-local-file-upload-button"] input[type="file"], [data-test-id*="file-upload"] input[type="file"], input[type="file"]').first();
+            if (await hiddenFileInput.count() > 0) {
+                console.log('[Gemini] Found hidden file input via data-test-id, setting files directly...');
+                await hiddenFileInput.setInputFiles(filePaths);
+            } else if (await fileInput.count() > 0) {
+                console.log('[Gemini] Found file input, setting files directly...');
+                await fileInput.setInputFiles(filePaths);
+            } else {
+                // Click "Upload files" menu item to spawn input or trigger dialog
+                const uploadItem = this.page.locator(selectors.gemini.upload.uploadFile).first();
+                // Wait for menu item
+                try { await uploadItem.waitFor({ state: 'visible', timeout: 3000 }); } catch (e) { }
+
+                if (await uploadItem.isVisible()) {
+                    // Start waiting for file chooser before clicking
+                    const fileChooserPromise = this.page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null);
+                    await uploadItem.click();
+
+                    const fileChooser = await fileChooserPromise;
+                    if (fileChooser) {
+                        await fileChooser.setFiles(filePaths);
+                    } else {
+                        // Fallback: try setting input directly again if it appeared
+                        const lateInput = this.page.locator(selectors.gemini.upload.fileInput).first();
+                        if (await lateInput.count() > 0) {
+                            await lateInput.setInputFiles(filePaths);
+                        } else {
+                            console.error('[Gemini] File chooser did not appear and input not found');
+                            return false;
+                        }
+                    }
+                } else {
+                    console.error('[Gemini] "Upload files" menu item not found');
+                    await this.dumpState('upload_option_missing');
+                    // Close menu
+                    await this.page.keyboard.press('Escape');
+                    return false;
+                }
+            }
+
+            // 3. Wait for upload to complete
+            // Look for progress indicators or specific upload chips
+            console.log('[Gemini] Waiting for files to process...');
+            await this.page.waitForTimeout(2000 * filePaths.length); // Basic wait, can be improved by checking for spinners
+
+            return true;
+        } catch (e: any) {
+            console.error(`[Gemini] Upload files failed: ${e.message}`);
+            await this.dumpState('upload_files_fail');
+            return false;
+        }
+    }
+
+    /**
+     * Get sources from the current context.
+     * (Placeholder implementation)
+     */
+    async getContextSources(): Promise<{ title: string, url: string }[]> {
+        // TODO: Implement source extraction for Gemini
+        return [];
     }
 
     /**
@@ -1425,7 +1359,7 @@ export class GeminiClient extends EventEmitter {
 
         try {
             // If it looks like an ID (alphanumeric), try direct navigation
-            if (/^[a-zA-Z0-9_-]+$/.test(nameOrId) && !nameOrId.includes(' ')) {
+            if (/^ [a - zA - Z0 -9_ -] + $ /.test(nameOrId) && !nameOrId.includes(' ')) {
                 await this.page.goto(`https://gemini.google.com/gem/${nameOrId}`, { waitUntil: 'domcontentloaded' });
                 await this.page.waitForTimeout(2000);
 
@@ -1497,9 +1431,7 @@ export class GeminiClient extends EventEmitter {
 
             // Upload files if specified
             if (config.files && config.files.length > 0) {
-                for (const filePath of config.files) {
-                    await this.uploadFile(filePath);
-                }
+                await this.uploadFiles(config.files);
             }
 
             // Save/Create the gem

@@ -1484,51 +1484,64 @@ app.post('/gemini/set-model', async (req, res) => {
     }
 });
 
-app.post('/gemini/upload-file', async (req, res) => {
+app.post('/gemini/upload', async (req, res) => {
     try {
-        const { filePath, content, filename, mimeType } = req.body;
+        const body = req.body;
+        let filesToUpload: string[] = [];
 
-        if (!filePath && !content) {
-            return res.status(400).json({ error: 'Either filePath or content must be provided' });
+        // 1. Handle new "files" array
+        if (body.files && Array.isArray(body.files)) {
+            for (const f of body.files) {
+                if (typeof f === 'string') {
+                    filesToUpload.push(f);
+                } else if (typeof f === 'object') {
+                    if (f.path) {
+                        filesToUpload.push(f.path);
+                    } else if (f.content && f.filename) {
+                        const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
+                        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                        const targetPath = path.join(tempDir, f.filename);
+                        fs.writeFileSync(targetPath, f.content, 'utf8');
+                        filesToUpload.push(targetPath);
+                    }
+                }
+            }
+        }
+        // 2. Handle legacy single file properties (filePath, content, filename)
+        else if (body.filePath || body.content) {
+            let targetPath = body.filePath;
+            if (body.content) {
+                if (!body.filename) return res.status(400).json({ error: 'Filename is required when providing content' });
+                const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
+                if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                targetPath = path.join(tempDir, body.filename);
+                fs.writeFileSync(targetPath, body.content, 'utf8');
+            }
+            if (targetPath) filesToUpload.push(targetPath);
+        }
+
+        if (filesToUpload.length === 0) {
+            return res.status(400).json({ error: 'No valid files provided' });
         }
 
         if (!geminiClient) {
+            console.log('[Server] Creating Gemini client for upload...');
+            if (!client.isBrowserInitialized()) await client.init();
             geminiClient = await client.createGeminiClient();
             await geminiClient.init();
         }
 
-        let targetPath = filePath;
+        console.log(`[Server] Uploading ${filesToUpload.length} files to Gemini...`);
+        const result = await geminiClient.uploadFiles(filesToUpload);
 
-        // If content is provided, write to temp file
-        if (content) {
-            if (!filename) return res.status(400).json({ error: 'Filename is required when providing content' });
-
-            const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
-            if (!fs.existsSync(tempDir)) {
-                fs.mkdirSync(tempDir, { recursive: true });
-            }
-
-            targetPath = path.join(tempDir, filename);
-
-            // Handle base64 or plain text
-            // Assuming content is base64 encoded for binary safety if it's not text
-            // But for now, let's assume the client handles encoding. 
-            // If the client sends raw text, we write raw text.
-            // If the client sends structured data, they should serialize it.
-            // Let's assume content is a string.
-
-            fs.writeFileSync(targetPath, content, 'utf8'); // Simplification: assuming text/utf8 for now or relying on client to send path for binaries
-            // TODO: Support binary uploads via base64
-            console.log(`[Server] Wrote uploaded content to ${targetPath}`);
+        if (result) {
+            res.json({ success: true, count: filesToUpload.length, paths: filesToUpload });
+        } else {
+            res.status(500).json({ success: false, error: 'Upload process failed' });
         }
 
-        console.log(`[Server] Uploading file to Gemini: ${targetPath}`);
-        await geminiClient.uploadFile(targetPath);
-
-        res.json({ success: true, path: targetPath });
-
     } catch (e: any) {
-        console.error('[Server] Upload file failed:', e);
+        console.error('[Server] Upload failed:', e);
         res.status(500).json({ success: false, error: e.message });
     }
 });

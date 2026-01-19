@@ -1205,18 +1205,38 @@ gemini.command('research <query>')
     });
 
 gemini
+    .command('set-model <model>')
+    .description('Set Gemini model')
+    .action(async (model, opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
+        const useServer = !options.local;
+
+        if (useServer) {
+            const result = await sendServerRequest('/gemini/set-model', { model });
+            if (result.success) {
+                console.log(result.message);
+            }
+        } else {
+            await runLocalGeminiAction(async (client, gemini) => {
+                await gemini.setModel(model);
+            });
+        }
+    });
+
+gemini
     .command('upload <files...>')
     .description('Upload files to Gemini')
     .action(async (files, opts, cmdObj) => {
         const options = getOptionsWithGlobals(cmdObj);
 
         console.log(`Uploading ${files.length} files...`);
-        // Check if we should use server (default) or local
-        const useServer = !options.local; // Assuming 'local' flag flips this
+        const useServer = !options.local;
 
         if (useServer) {
             const fs = await import('node:fs');
             const path = await import('node:path');
+
+            const payloadFiles = [];
             for (const file of files) {
                 const absPath = path.resolve(file);
                 if (!fs.existsSync(absPath)) {
@@ -1224,15 +1244,24 @@ gemini
                     continue;
                 }
                 const content = fs.readFileSync(absPath, 'utf8');
-                // For now, let's assume text files.
-                await sendServerRequest('/gemini/upload-file', {
+                payloadFiles.push({
                     content,
                     filename: path.basename(absPath)
                 });
-                console.log(`Uploaded: ${file}`);
+            }
+
+            if (payloadFiles.length > 0) {
+                const response = await sendServerRequest('/gemini/upload', {
+                    files: payloadFiles
+                });
+                if (response.success) {
+                    console.log(`Uploaded ${response.count} files.`);
+                    // response.paths has server-side paths
+                }
             }
         } else {
             // Local mode
+            const path = await import('node:path');
             await runLocalGeminiAction(async (client, gemini) => {
                 await gemini.uploadFiles(files.map((f: string) => path.resolve(f)));
             });
@@ -1245,19 +1274,52 @@ gemini
     .description('Chat with Gemini')
     .option('-s, --session <id>', 'Session ID')
     .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
+    .option('-f, --file <path...>', 'File(s) to attach')
     .action(async (message, opts, cmdObj) => {
         const options = getOptionsWithGlobals(cmdObj);
         const sessionId = options.session;
         const model = options.model;
         const useServer = !options.local;
+        let files = options.file || [];
 
         if (useServer) {
-            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model });
+            // If files attached, upload them first to get server-side paths
+            if (files.length > 0) {
+                console.log(`[CLI] Uploading ${files.length} attachments...`);
+                const fs = await import('node:fs');
+                const path = await import('node:path');
+
+                const payloadFiles = [];
+                for (const file of files) {
+                    const absPath = path.resolve(file);
+                    if (fs.existsSync(absPath)) {
+                        payloadFiles.push({
+                            content: fs.readFileSync(absPath, 'utf8'),
+                            filename: path.basename(absPath)
+                        });
+                    }
+                }
+
+                if (payloadFiles.length > 0) {
+                    const upRes = await sendServerRequest('/gemini/upload', { files: payloadFiles });
+                    if (upRes.success && upRes.paths) {
+                        files = upRes.paths; // Use server-side paths
+                    }
+                }
+            }
+
+            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model, files });
         } else {
+            const path = await import('node:path');
+            // Resolve local paths if needed, though gemini-client probably resolves them or expects absolute?
+            // gemini-client expects absolute usually.
+            const absFiles = files.map((f: string) => path.resolve(f));
+
             await runLocalGeminiAction(async (client, gemini) => {
                 if (model) await gemini.setModel(model);
                 const response = await gemini.sendMessage(message, {
-                    onProgress: (text: string) => process.stdout.write(text)
+                    onProgress: (text: string) => process.stdout.write(text),
+                    files: absFiles
                 });
                 console.log('\n');
             }, sessionId);
