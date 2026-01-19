@@ -10,7 +10,7 @@ import { GeminiClient, ResearchInfo } from './gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 import { sendNotification, loadConfigFromEnv } from './notify';
 import { execSync } from 'child_process';
-import { WindmillClient } from './clients/windmill';
+import { getWindmillClient } from './windmill-client';
 import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
 
 // Helper to get options with globals (merging parent options)
@@ -1189,9 +1189,9 @@ gemini.command('research <query>')
     .action(async (query, opts) => {
         // Enforce remote Windmill execution
         console.log(`[CLI] 🚀 Dispatching 'research' to Windmill...`);
-        const client = new WindmillClient();
+        const client = getWindmillClient();
         try {
-            const result = await client.executeJob('rsrch/execute', {
+            const result = await client.executeJob('f/rsrch/execute', {
                 command: 'research',
                 args: { query }
             });
@@ -1337,9 +1337,9 @@ gemini.command('deep-research <query>')
         // Default to remote if not explicitly local
         if (opts.remote && !opts.local) {
             console.log(`[CLI] 🚀 Dispatching 'deep-research' to Windmill...`);
-            const client = new WindmillClient();
+            const client = getWindmillClient();
             try {
-                const result = await client.executeJob('rsrch/execute', {
+                const result = await client.executeJob('f/rsrch/execute', {
                     command: 'deep-research',
                     args: { query, gem: opts.gem }
                 });
@@ -2148,6 +2148,95 @@ gemini.command('chat-gem <gemNameOrId> <message>')
             console.log('----------------\n');
         } catch (e: any) {
             console.error(`[CLI] Error: ${e.message}`);
+            process.exit(1);
+        }
+    });
+
+// Windmill
+const windmill = program.command('windmill').description('Windmill commands');
+
+windmill.command('run <script> [args...]')
+    .description('Execute a Windmill script (e.g. f/rsrch/rsrch-query)')
+    .option('--json <jsonArgs>', 'JSON arguments string')
+    .action(async (script, args, opts) => {
+        const client = getWindmillClient();
+        if (!client.isConfigured()) {
+            console.error('Windmill not configured (WINDMILL_TOKEN missing)');
+            process.exit(1);
+        }
+
+        let scriptArgs = {};
+        if (opts.json) {
+            try {
+                scriptArgs = JSON.parse(opts.json);
+            } catch (e) {
+                console.error('Invalid JSON args');
+                process.exit(1);
+            }
+        } else {
+            // Parse args array into object? Or just pass as is?
+            // Usually scripts expect named args.
+            // If args provided as key=value
+            args.forEach((arg: string) => {
+                const [k, v] = arg.split('=');
+                if (k && v) (scriptArgs as any)[k] = v;
+            });
+        }
+
+        console.log(`Running script: ${script}...`);
+        try {
+            const result = await client.executeJob(script, scriptArgs);
+            console.log(JSON.stringify(result, null, 2));
+        } catch (e: any) {
+            console.error('Execution failed:', e.message);
+            process.exit(1);
+        }
+    });
+
+windmill.command('status <jobId>')
+    .description('Get job status')
+    .action(async (jobId) => {
+        const client = getWindmillClient();
+        const status = await client.getJobStatus(jobId);
+        console.log(JSON.stringify(status, null, 2));
+    });
+
+windmill.command('list')
+    .description('List recent jobs')
+    .option('--limit <number>', 'Limit', (v) => parseInt(v), 10)
+    .action(async (opts) => {
+        const client = getWindmillClient();
+        const jobs = await client.listJobs(opts.limit);
+        console.log(JSON.stringify(jobs, null, 2));
+    });
+
+windmill.command('schedule <script> <cron> [args...]')
+    .description('Schedule a Windmill script (cron format: "*/5 * * * *")')
+    .option('--json <jsonArgs>', 'JSON arguments string')
+    .action(async (script, cron, args, opts) => {
+        const client = getWindmillClient();
+
+        let scriptArgs = {};
+        if (opts.json) {
+            try {
+                scriptArgs = JSON.parse(opts.json);
+            } catch (e) {
+                console.error('Invalid JSON args');
+                process.exit(1);
+            }
+        } else {
+            args.forEach((arg: string) => {
+                const [k, v] = arg.split('=');
+                if (k && v) (scriptArgs as any)[k] = v;
+            });
+        }
+
+        console.log(`Scheduling script: ${script} with cron: "${cron}"...`);
+        try {
+            const uuid = await client.createSchedule(script, cron, scriptArgs);
+            console.log(`Schedule created! UUID: ${uuid}`);
+        } catch (e: any) {
+            console.error('Scheduling failed:', e.message);
             process.exit(1);
         }
     });
