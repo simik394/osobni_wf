@@ -2113,6 +2113,173 @@ Focus on depth, nuance, and covering aspects that might be missing above.
     }
 });
 
+// ============================================================================
+// Jules Session Publishing Endpoints
+// ============================================================================
+
+/**
+ * Publish selected Jules sessions by session ID.
+ * POST /jules/publish-selected
+ * Body: { sessionIds: string[], mode?: 'branch' | 'pr' }
+ */
+app.post('/jules/publish-selected', async (req, res) => {
+    try {
+        const { sessionIds, mode = 'pr' } = req.body;
+
+        if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'sessionIds array is required and must not be empty'
+            });
+        }
+
+        console.log(`[Server] Publishing ${sessionIds.length} selected Jules sessions (mode: ${mode})`);
+
+        // Import puppeteer for browser automation
+        const puppeteer = require('puppeteer-core');
+
+        // Connect to existing browser via CDP
+        const browser = await puppeteer.connect({
+            browserWSEndpoint: 'ws://localhost:9222/devtools/browser',
+            defaultViewport: null
+        }).catch(() => null);
+
+        if (!browser) {
+            return res.status(503).json({
+                success: false,
+                error: 'Cannot connect to browser. Ensure Chrome is running with --remote-debugging-port=9222'
+            });
+        }
+
+        const results: { sessionId: string; success: boolean; error?: string }[] = [];
+
+        for (const sessionId of sessionIds) {
+            try {
+                console.log(`[Server] Publishing session: ${sessionId}`);
+
+                // Open session page
+                const page = await browser.newPage();
+                await page.goto(`https://jules.google.com/session/${sessionId}`, {
+                    waitUntil: 'networkidle2',
+                    timeout: 30000
+                });
+
+                // Wait for page to load
+                await page.waitForTimeout(2000);
+
+                // Check for "Publish" button
+                const publishButton = await page.$('button:has-text("Publish")');
+
+                if (!publishButton) {
+                    // Check if already published
+                    const prLink = await page.$('a[href*="github.com"][href*="/pull/"]');
+                    if (prLink) {
+                        results.push({ sessionId, success: true, error: 'Already published' });
+                        await page.close();
+                        continue;
+                    }
+                    results.push({ sessionId, success: false, error: 'No Publish button found' });
+                    await page.close();
+                    continue;
+                }
+
+                // Click Publish button
+                await publishButton.click();
+                await page.waitForTimeout(1000);
+
+                // Select PR or Branch based on mode
+                if (mode === 'pr') {
+                    const prOption = await page.$('text="Publish PR"');
+                    if (prOption) {
+                        await prOption.click();
+                        await page.waitForTimeout(500);
+                    }
+                } else {
+                    const branchOption = await page.$('text="Publish Branch"');
+                    if (branchOption) {
+                        await branchOption.click();
+                        await page.waitForTimeout(500);
+                    }
+                }
+
+                // Confirm publish
+                const confirmButton = await page.$('button:has-text("Confirm"), button:has-text("Submit")');
+                if (confirmButton) {
+                    await confirmButton.click();
+                    await page.waitForTimeout(3000);
+                }
+
+                results.push({ sessionId, success: true });
+                await page.close();
+
+            } catch (err: any) {
+                console.error(`[Server] Failed to publish session ${sessionId}:`, err.message);
+                results.push({ sessionId, success: false, error: err.message });
+            }
+        }
+
+        await browser.disconnect();
+
+        const successCount = results.filter(r => r.success).length;
+        res.json({
+            success: successCount > 0,
+            message: `Published ${successCount}/${sessionIds.length} sessions`,
+            results
+        });
+
+    } catch (e: any) {
+        console.error('[Server] Jules publish-selected failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * Publish all Jules sessions in AWAITING_USER_FEEDBACK state.
+ * POST /jules/publish-all
+ * Body: { mode?: 'branch' | 'pr' }
+ */
+app.post('/jules/publish-all', async (req, res) => {
+    try {
+        const { mode = 'pr' } = req.body;
+
+        console.log(`[Server] Publishing all awaiting Jules sessions (mode: ${mode})`);
+
+        // First, get list of sessions via Jules MCP
+        // Note: This requires the jules-mcp tools to be available
+        // For now, we'll return an error directing to use publish-selected
+
+        return res.status(501).json({
+            success: false,
+            error: 'publish-all requires listing sessions first. Use /jules/publish-selected with specific session IDs.',
+            hint: 'Use the Jules MCP list_sessions tool to get session IDs, then call /jules/publish-selected'
+        });
+
+    } catch (e: any) {
+        console.error('[Server] Jules publish-all failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * Get Jules session status (lightweight wrapper around MCP).
+ * GET /jules/sessions/:sessionId
+ */
+app.get('/jules/sessions/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // This would require calling the Jules MCP get_session tool
+        // For now, redirect to the Jules UI
+        res.json({
+            sessionId,
+            url: `https://jules.google.com/session/${sessionId}`,
+            hint: 'Use Jules MCP get_session for detailed status'
+        });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing browser...');
