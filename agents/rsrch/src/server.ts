@@ -1447,6 +1447,19 @@ app.post('/gemini/get-research-info', async (req, res) => {
 // Additional Gemini Endpoints (Production CLI Support)
 // ============================================================================
 
+app.get('/gemini/sources', async (req, res) => {
+    try {
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+        const sources = await geminiClient.getContextSources();
+        res.json({ success: true, sources });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/gemini/set-model', async (req, res) => {
     try {
         const { model } = req.body;

@@ -1961,6 +1961,18 @@ gemini.command('upload-repo <repoUrl> [sessionId]')
         }, sessionId);
     });
 
+gemini.command('sources')
+    .description('List available context sources')
+    .action(async () => {
+        const response = await sendServerRequest('/gemini/sources');
+        if (response.success && response.sources) {
+            console.log('Available Context Sources:');
+            response.sources.forEach((s: string) => console.log(` - ${s}`));
+        } else {
+            console.log('No sources found or failed to retrieve sources.');
+        }
+    });
+
 gemini.command('list-gems')
     .description('List available Gems')
     .option('--local', 'Use local execution', false)

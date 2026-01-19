@@ -1042,6 +1042,61 @@ export class GeminiClient extends EventEmitter {
      * @param filePath - Absolute path to the file to upload
      * @returns true if upload succeeded, false otherwise
      */
+    async getContextSources(): Promise<string[]> {
+        try {
+            // Find the attachment button (+ icon near input)
+            let attachButton = null;
+            const btn = this.page.locator(selectors.gemini.upload.button).first();
+            if (await btn.count() > 0 && await btn.isVisible()) {
+                attachButton = btn;
+            } else {
+                const buttons = this.page.locator('button');
+                const count = await buttons.count();
+                for (let i = 0; i < count; i++) {
+                    const btn = buttons.nth(i);
+                    const text = await btn.innerText().catch(() => '');
+                    const ariaLabel = await btn.getAttribute('aria-label') || '';
+                    if (text.includes('+') || ariaLabel.toLowerCase().includes('add') || ariaLabel.toLowerCase().includes('attach')) {
+                        if (await btn.isVisible()) {
+                            attachButton = btn;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!attachButton) return [];
+
+            await attachButton.click();
+            await this.page.waitForTimeout(1000);
+
+            // Scrape menu items
+            const fileInput = this.page.locator(selectors.gemini.upload.fileInput);
+            const menuItems = this.page.locator(selectors.gemini.model.item); // Reuse model item selector or generic menu item
+            const sources: string[] = [];
+
+            // Check for file upload support
+            if (await fileInput.count() > 0) {
+                sources.push('File Upload');
+            }
+
+            const count = await menuItems.count();
+            for (let i = 0; i < count; i++) {
+                const text = await menuItems.nth(i).innerText();
+                if (text) sources.push(text.split('\n')[0]);
+            }
+
+            // Close menu
+            await this.page.keyboard.press('Escape');
+
+            return sources;
+
+        } catch (e) {
+            console.error('Failed to get context sources:', e);
+            return [];
+        }
+    }
+
     async uploadFile(filePath: string): Promise<boolean> {
         console.log(`[Gemini] Uploading file: ${filePath}`);
 
