@@ -108,7 +108,11 @@ class ProjStore:
             t.updated_at = $updated_at,
             t.tags = $tags,
             t.blocked_by = $blocked_by,
-            t.notes = $notes
+            t.notes = $notes,
+            t.estimated_duration_minutes = $estimated_duration_minutes,
+            t.actual_duration_minutes = $actual_duration_minutes,
+            t.started_at = $started_at,
+            t.completed_at = $completed_at
         RETURN t.id
         """
         result = graph.query(query, {
@@ -125,6 +129,10 @@ class ProjStore:
             "tags": json.dumps(task.tags),
             "blocked_by": task.blocked_by,
             "notes": task.notes,
+            "estimated_duration_minutes": task.estimated_duration_minutes,
+            "actual_duration_minutes": task.actual_duration_minutes,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         })
         
         # Create relationship to project if exists
@@ -214,6 +222,10 @@ class ProjStore:
                 tags=json.loads(props.get("tags", "[]")),
                 blocked_by=props.get("blocked_by"),
                 notes=props.get("notes"),
+                estimated_duration_minutes=int(props["estimated_duration_minutes"]) if props.get("estimated_duration_minutes") else None,
+                actual_duration_minutes=int(props["actual_duration_minutes"]) if props.get("actual_duration_minutes") else None,
+                started_at=datetime.fromisoformat(props["started_at"]) if props.get("started_at") else None,
+                completed_at=datetime.fromisoformat(props["completed_at"]) if props.get("completed_at") else None,
             )
             state.tasks[task.id] = task
         

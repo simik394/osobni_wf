@@ -52,6 +52,11 @@ class Task(BaseModel):
     tags: list[str] = Field(default_factory=list)
     blocked_by: str | None = None  # Task ID or description
     notes: str | None = None
+    # Time tracking
+    estimated_duration_minutes: int | None = None
+    actual_duration_minutes: int | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class InboxItem(BaseModel):
