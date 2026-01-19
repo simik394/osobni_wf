@@ -1244,7 +1244,7 @@ gemini
     .command('chat <message>')
     .description('Chat with Gemini')
     .option('-s, --session <id>', 'Session ID')
-    .option('--model <name>', 'Gemini Model (e.g. "Gemini 2.0 Flash", "Gemini Advanced")')
+    .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
     .action(async (message, opts, cmdObj) => {
         const options = getOptionsWithGlobals(cmdObj);
         const sessionId = options.session;
@@ -1397,7 +1397,7 @@ gemini.command('list-sessions')
 
         gemini.command('research <query>')
             .description('Research a topic with Gemini')
-            .option('--model <name>', 'Gemini Model')
+            .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
             .option('-d, --deep', 'Enable Deep Research mode')
             .option('-s, --session <id>', 'Session ID')
             .action(async (query, opts, cmdObj) => {
