@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 import { PerplexityClient } from './client';
 import { config } from './config';
 
@@ -1187,7 +1190,7 @@ app.post('/gemini/research', async (req, res) => {
         }
 
         // Default to reset session for standard research queries
-        const options = { resetSession: req.body.resetSession ?? true };
+        const options = { resetSession: req.body.resetSession ?? true, model: req.body.model };
 
         if (wantsSSE) {
             // SSE streaming mode
@@ -1444,11 +1447,110 @@ app.post('/gemini/get-research-info', async (req, res) => {
 // Additional Gemini Endpoints (Production CLI Support)
 // ============================================================================
 
+app.get('/gemini/sources', async (req, res) => {
+    try {
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+        const sources = await geminiClient.getContextSources();
+        res.json({ success: true, sources });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/gemini/set-model', async (req, res) => {
+    try {
+        const { model } = req.body;
+        if (!model) return res.status(400).json({ error: 'Model name is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        console.log(`[Server] Setting Gemini model to: ${model}`);
+        const success = await geminiClient.setModel(model);
+
+        if (success) {
+            res.json({ success: true, model });
+        } else {
+            res.status(400).json({ success: false, error: `Failed to set model to ${model}` });
+        }
+    } catch (e: any) {
+        console.error('[Server] Set model failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/gemini/upload', async (req, res) => {
+    try {
+        const body = req.body;
+        let filesToUpload: string[] = [];
+
+        // 1. Handle new "files" array
+        if (body.files && Array.isArray(body.files)) {
+            for (const f of body.files) {
+                if (typeof f === 'string') {
+                    filesToUpload.push(f);
+                } else if (typeof f === 'object') {
+                    if (f.path) {
+                        filesToUpload.push(f.path);
+                    } else if (f.content && f.filename) {
+                        const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
+                        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                        const targetPath = path.join(tempDir, f.filename);
+                        fs.writeFileSync(targetPath, f.content, 'utf8');
+                        filesToUpload.push(targetPath);
+                    }
+                }
+            }
+        }
+        // 2. Handle legacy single file properties (filePath, content, filename)
+        else if (body.filePath || body.content) {
+            let targetPath = body.filePath;
+            if (body.content) {
+                if (!body.filename) return res.status(400).json({ error: 'Filename is required when providing content' });
+                const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
+                if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                targetPath = path.join(tempDir, body.filename);
+                fs.writeFileSync(targetPath, body.content, 'utf8');
+            }
+            if (targetPath) filesToUpload.push(targetPath);
+        }
+
+        if (filesToUpload.length === 0) {
+            return res.status(400).json({ error: 'No valid files provided' });
+        }
+
+        if (!geminiClient) {
+            console.log('[Server] Creating Gemini client for upload...');
+            if (!client.isBrowserInitialized()) await client.init();
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        console.log(`[Server] Uploading ${filesToUpload.length} files to Gemini...`);
+        const result = await geminiClient.uploadFiles(filesToUpload);
+
+        if (result) {
+            res.json({ success: true, count: filesToUpload.length, paths: filesToUpload });
+        } else {
+            res.status(500).json({ success: false, error: 'Upload process failed' });
+        }
+
+    } catch (e: any) {
+        console.error('[Server] Upload failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Chat endpoint
 // Chat endpoint
 app.post('/gemini/chat', async (req, res) => {
     try {
-        const { message, sessionId, waitForResponse } = req.body;
+        const { message, sessionId, waitForResponse, model, files } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
         // Windmill Proxy
@@ -1528,7 +1630,9 @@ app.post('/gemini/chat', async (req, res) => {
             const response = await geminiClient.sendMessage(message, {
                 onProgress: (text: string) => {
                     res.write(`data: ${JSON.stringify({ type: 'progress', text })}\n\n`);
-                }
+                },
+                model,
+                files
             });
 
             res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: geminiClient.getCurrentSessionId() })}\n\n`);
@@ -1536,7 +1640,7 @@ app.post('/gemini/chat', async (req, res) => {
             return;
         }
 
-        const response = await geminiClient.sendMessage(message, { waitForResponse });
+        const response = await geminiClient.sendMessage(message, { waitForResponse, model, files });
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
     } catch (e: any) {
         console.error('[Server] Gemini chat failed:', e);
@@ -1553,7 +1657,7 @@ app.post('/gemini/chat', async (req, res) => {
 // Send message (alias for chat with explicit session)
 app.post('/gemini/send-message', async (req, res) => {
     try {
-        const { message, sessionId } = req.body;
+        const { message, sessionId, model } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
         // Windmill Proxy
@@ -1601,8 +1705,11 @@ app.post('/gemini/send-message', async (req, res) => {
             await geminiClient.openSession(sessionId);
         }
 
-        const response = await geminiClient.sendMessage(message);
+        // Send (blocking)
+        console.log(`[Server] Gemini send-message (Local): "${message.substring(0, 50)}..." (Model: ${model || 'default'})`);
+        const response = await geminiClient.sendMessage(message, { waitForResponse: true, model }); // Default to blocking/waiting
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+
     } catch (e: any) {
         console.error('[Server] Gemini send-message failed:', e);
         res.status(500).json({ success: false, error: e.message });

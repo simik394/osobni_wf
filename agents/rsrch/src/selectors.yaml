@@ -142,6 +142,16 @@ chat:
 # GEMINI SELECTORS
 # ============================================================
 gemini:
+  model:
+    trigger: 'button[aria-label*="Změnit model" i], button[aria-label*="Otevřít výběr režimu" i], div[aria-label*="Otevřít výběr režimu" i] button, button:has(mat-icon:has-text("keyboard_arrow_down")), button[aria-label*="Model"], button[aria-label*="model"], [data-testid="model-selector-button"], button:has-text("Gemini")'
+    menu: '[role="menu"], [role="listbox"]'
+    item: '[role="menuitem"], [role="option"]'
+    advanced: 'button:has-text("Advanced"), button:has-text("Pokročilé")'
+    # Model names mapping
+    flash: '[data-test-id*="bard-mode-option-rychl"], [data-test-id*="bard-mode-option-flash"], text="Rychlý", text="Flash"'
+    thinking: '[data-test-id*="bard-mode-option-s"], [data-test-id*="bard-mode-option-think"], text="S myšlením", text="Thinking"'
+    pro: '[data-test-id*="bard-mode-option-pro"], text="Pro"'
+
   auth:
     acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
     dismiss: 'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Not now"), button:has-text("Close"), button:has-text("Zavřít"), button:has-text("Později")'
@@ -174,6 +184,12 @@ gemini:
     instructionInput: 'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], div[contenteditable="true"][placeholder*="instruction" i]'
     save: 'button:has-text("Save"), button:has-text("Create"), button:has-text("Uložit"), button[type="submit"]'
   upload:
-    button: 'button[aria-label*="Add" i], button[aria-label*="Attach" i], button[aria-label*="Upload" i], button[aria-label*="Přidat" i], button[aria-label*="Nahrát" i], button:has(mat-icon:has-text("add")), button:has(mat-icon:has-text("attach_file"))'
+    button: 'button[mattooltip*="Přidat"], button[mattooltip*="Upload"], button[aria-label*="Přidat"], button[aria-label*="Upload"], .fonticon-plus-new, .fonticon-add-circle'
     fileInput: 'input[type="file"]'
-    uploadOption: 'button:has-text("Upload"), [role="menuitem"]:has-text("Upload"), button:has-text("Nahrát soubor")'
+    menu: '[role="menu"]'
+    # Upload options
+    uploadFile: 'text="Přidat soubory"|text="Upload files"|text="Nahrát soubory"|text="Upload from computer"'
+    drive: 'text="Přidat z Disku"|text="Drive"'
+    photos: 'text="Fotky"|text="Photos"'
+    importCode: 'text="Importovat kód"|text="Import code"'
+    notebooklm: 'text="NotebookLM"'

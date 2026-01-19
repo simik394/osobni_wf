@@ -26,6 +26,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./src:/app/src
+      - ./dist:/app/dist
       - ${HOME}/.config/rsrch:/app/config
       - ${HOME}/.rsrch/profiles:/app/profiles
     environment:

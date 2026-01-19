@@ -13,21 +13,16 @@ import { execSync } from 'child_process';
 import { WindmillClient } from './clients/windmill';
 import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
 
-declare module 'commander' {
-    export interface Command {
-        optsWithGlobals(): any;
-    }
-}
-
-Command.prototype.optsWithGlobals = function () {
+// Helper to get options with globals (merging parent options)
+function getOptionsWithGlobals(command: any): any {
     let options = {};
-    let command: Command | null = this;
-    while (command) {
-        options = { ...command.opts(), ...options };
-        command = command.parent;
+    let current = command;
+    while (current) {
+        options = { ...current.opts(), ...options };
+        current = current.parent;
     }
     return options;
-};
+}
 
 const program = new Command();
 
@@ -1209,24 +1204,125 @@ gemini.command('research <query>')
         }
     });
 
-gemini.command('chat <message>')
-    .description('Chat with Google Gemini')
-    .option('--session <id>', 'Existing session ID')
-    .action(async (message, opts) => {
-        // Enforce remote Windmill execution
-        console.log(`[CLI] 🚀 Dispatching 'chat' to Windmill...`);
-        const client = new WindmillClient();
-        try {
-            const result = await client.executeJob('rsrch/execute', {
-                command: 'chat',
-                args: { message, sessionId: opts.session }
+gemini
+    .command('set-model <model>')
+    .description('Set Gemini model')
+    .action(async (model, opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
+        const useServer = !options.local;
+
+        if (useServer) {
+            const result = await sendServerRequest('/gemini/set-model', { model });
+            if (result.success) {
+                console.log(result.message);
+            }
+        } else {
+            await runLocalGeminiAction(async (client, gemini) => {
+                await gemini.setModel(model);
             });
-            console.log('\n--- Windmill Response ---\n');
-            console.log(result?.data || result);
-            console.log('\n-----------------------\n');
-        } catch (e: any) {
-            console.error(`[CLI] Windmill execution failed: ${e.message}`);
-            process.exit(1);
+        }
+    });
+
+gemini
+    .command('upload <files...>')
+    .description('Upload files to Gemini')
+    .action(async (files, opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
+
+        console.log(`Uploading ${files.length} files...`);
+        const useServer = !options.local;
+
+        if (useServer) {
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+
+            const payloadFiles = [];
+            for (const file of files) {
+                const absPath = path.resolve(file);
+                if (!fs.existsSync(absPath)) {
+                    console.error(`File not found: ${absPath}`);
+                    continue;
+                }
+                const content = fs.readFileSync(absPath, 'utf8');
+                payloadFiles.push({
+                    content,
+                    filename: path.basename(absPath)
+                });
+            }
+
+            if (payloadFiles.length > 0) {
+                const response = await sendServerRequest('/gemini/upload', {
+                    files: payloadFiles
+                });
+                if (response.success) {
+                    console.log(`Uploaded ${response.count} files.`);
+                    // response.paths has server-side paths
+                }
+            }
+        } else {
+            // Local mode
+            const path = await import('node:path');
+            await runLocalGeminiAction(async (client, gemini) => {
+                await gemini.uploadFiles(files.map((f: string) => path.resolve(f)));
+            });
+        }
+        console.log('Upload complete.');
+    });
+
+gemini
+    .command('chat <message>')
+    .description('Chat with Gemini')
+    .option('-s, --session <id>', 'Session ID')
+    .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
+    .option('-f, --file <path...>', 'File(s) to attach')
+    .action(async (message, opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
+        const sessionId = options.session;
+        const model = options.model;
+        const useServer = !options.local;
+        let files = options.file || [];
+
+        if (useServer) {
+            // If files attached, upload them first to get server-side paths
+            if (files.length > 0) {
+                console.log(`[CLI] Uploading ${files.length} attachments...`);
+                const fs = await import('node:fs');
+                const path = await import('node:path');
+
+                const payloadFiles = [];
+                for (const file of files) {
+                    const absPath = path.resolve(file);
+                    if (fs.existsSync(absPath)) {
+                        payloadFiles.push({
+                            content: fs.readFileSync(absPath, 'utf8'),
+                            filename: path.basename(absPath)
+                        });
+                    }
+                }
+
+                if (payloadFiles.length > 0) {
+                    const upRes = await sendServerRequest('/gemini/upload', { files: payloadFiles });
+                    if (upRes.success && upRes.paths) {
+                        files = upRes.paths; // Use server-side paths
+                    }
+                }
+            }
+
+            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model, files });
+        } else {
+            const path = await import('node:path');
+            // Resolve local paths if needed, though gemini-client probably resolves them or expects absolute?
+            // gemini-client expects absolute usually.
+            const absFiles = files.map((f: string) => path.resolve(f));
+
+            await runLocalGeminiAction(async (client, gemini) => {
+                if (model) await gemini.setModel(model);
+                const response = await gemini.sendMessage(message, {
+                    onProgress: (text: string) => process.stdout.write(text),
+                    files: absFiles
+                });
+                console.log('\n');
+            }, sessionId);
         }
     });
 
@@ -1359,7 +1455,40 @@ gemini.command('list-sessions')
     .argument('[limit]', 'Limit', parseInt, 20)
     .argument('[offset]', 'Offset', parseInt, 0)
     .action(async (limit, offset, opts, cmd) => {
-        const globalOpts = cmd.optsWithGlobals();
+        const globalOpts = getOptionsWithGlobals(cmd);
+
+        gemini.command('research <query>')
+            .description('Research a topic with Gemini')
+            .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
+            .option('-d, --deep', 'Enable Deep Research mode')
+            .option('-s, --session <id>', 'Session ID')
+            .action(async (query, opts, cmdObj) => {
+                const options = getOptionsWithGlobals(cmdObj);
+                const model = options.model;
+                const useServer = !options.local;
+
+                if (useServer) {
+                    // Use sendServerRequest with SSE if supported, or just wait?
+                    // server.ts /gemini/research uses SSE if header present.
+                    await sendServerRequestWithSSE('/gemini/research', {
+                        query,
+                        model,
+                        deepResearch: options.deep,
+                        sessionId: options.session
+                    });
+                } else {
+                    await runLocalGeminiAction(async (client, gemini) => {
+                        const response = await gemini.research(query, {
+                            model,
+                            deepResearch: options.deep,
+                            sessionId: options.session
+                        });
+                        console.log('\nResult:\n', response);
+                    });
+                }
+            });
+
+        gemini.command('list-sessions')
 
         if (globalOpts.local) {
             // Dev mode: direct browser
@@ -1892,6 +2021,18 @@ gemini.command('upload-repo <repoUrl> [sessionId]')
                 console.log(`[Repo] Temporary files kept in temp dir for reference.`);
             }
         }, sessionId);
+    });
+
+gemini.command('sources')
+    .description('List available context sources')
+    .action(async () => {
+        const response = await sendServerRequest('/gemini/sources');
+        if (response.success && response.sources) {
+            console.log('Available Context Sources:');
+            response.sources.forEach((s: string) => console.log(` - ${s}`));
+        } else {
+            console.log('No sources found or failed to retrieve sources.');
+        }
     });
 
 gemini.command('list-gems')

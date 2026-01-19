@@ -95,6 +95,16 @@ export interface GeminiSelectors {
         signIn: string;
         welcome: string;
     };
+    model: {
+        trigger: string;
+        menu: string;
+        item: string;
+        advanced: string;
+        flash: string;
+        thinking: string;
+        pro: string;
+    };
+
     chat: {
         app: string;
         input: string;
@@ -130,7 +140,11 @@ export interface GeminiSelectors {
     upload: {
         button: string;
         fileInput: string;
-        uploadOption: string;
+        uploadFile: string;
+        drive: string;
+        photos: string;
+        importCode: string;
+        notebooklm: string;
     };
 }
 
@@ -223,6 +237,16 @@ const defaultSelectors: NotebookLMSelectors = {
             signIn: 'button:has-text("Sign in")',
             welcome: 'button:has-text("Got it")',
         },
+        model: {
+            trigger: 'button[aria-label*="Model"]',
+            menu: '[role="menu"]',
+            item: '[role="menuitem"]',
+            advanced: 'button:has-text("Advanced")',
+            flash: 'text="Rychlý"|text="Flash"',
+            thinking: 'text="S myšlením"|text="Deep Think"|text="Thinking"',
+            pro: 'text="Pro"|text="Gemini Pro"',
+        },
+
         chat: {
             app: 'chat-app',
             input: 'div[contenteditable="true"]',
@@ -258,7 +282,11 @@ const defaultSelectors: NotebookLMSelectors = {
         upload: {
             button: 'button[aria-label*="Add" i]',
             fileInput: 'input[type="file"]',
-            uploadOption: 'button:has-text("Upload")',
+            uploadFile: 'button:has-text("Upload")',
+            drive: 'text="Přidat z Disku"|text="Drive"',
+            photos: 'text="Fotky"|text="Photos"',
+            importCode: 'text="Importovat kód"|text="Import code"',
+            notebooklm: 'text="NotebookLM"',
         }
     }
 };
