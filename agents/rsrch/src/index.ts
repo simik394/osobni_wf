@@ -13,21 +13,16 @@ import { execSync } from 'child_process';
 import { WindmillClient } from './clients/windmill';
 import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
 
-declare module 'commander' {
-    export interface Command {
-        optsWithGlobals(): any;
-    }
-}
-
-Command.prototype.optsWithGlobals = function () {
+// Helper to get options with globals (merging parent options)
+function getOptionsWithGlobals(command: any): any {
     let options = {};
-    let command: Command | null = this;
-    while (command) {
-        options = { ...command.opts(), ...options };
-        command = command.parent;
+    let current = command;
+    while (current) {
+        options = { ...current.opts(), ...options };
+        current = current.parent;
     }
     return options;
-};
+}
 
 const program = new Command();
 
@@ -1210,9 +1205,10 @@ gemini.command('research <query>')
     });
 
 gemini
-    .command('upload <files...>', 'Upload files to Gemini')
-    .action(async (files, cmdObj) => {
-        const options = cmdObj.optsWithGlobals();
+    .command('upload <files...>')
+    .description('Upload files to Gemini')
+    .action(async (files, opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
 
         console.log(`Uploading ${files.length} files...`);
         // Check if we should use server (default) or local
@@ -1245,11 +1241,12 @@ gemini
     });
 
 gemini
-    .command('chat <message>', 'Chat with Gemini')
+    .command('chat <message>')
+    .description('Chat with Gemini')
     .option('-s, --session <id>', 'Session ID')
     .option('--model <name>', 'Gemini Model (e.g. "Gemini 2.0 Flash", "Gemini Advanced")')
-    .action(async (message, cmdObj) => {
-        const options = cmdObj.optsWithGlobals();
+    .action(async (message, opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
         const sessionId = options.session;
         const model = options.model;
         const useServer = !options.local;
@@ -1396,15 +1393,15 @@ gemini.command('list-sessions')
     .argument('[limit]', 'Limit', parseInt, 20)
     .argument('[offset]', 'Offset', parseInt, 0)
     .action(async (limit, offset, opts, cmd) => {
-        const globalOpts = cmd.optsWithGlobals();
+        const globalOpts = getOptionsWithGlobals(cmd);
 
         gemini.command('research <query>')
             .description('Research a topic with Gemini')
             .option('--model <name>', 'Gemini Model')
             .option('-d, --deep', 'Enable Deep Research mode')
             .option('-s, --session <id>', 'Session ID')
-            .action(async (query, cmdObj) => {
-                const options = cmdObj.optsWithGlobals();
+            .action(async (query, opts, cmdObj) => {
+                const options = getOptionsWithGlobals(cmdObj);
                 const model = options.model;
                 const useServer = !options.local;
 
