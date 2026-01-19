@@ -101,6 +101,12 @@ export interface GemInfo {
     description?: string;
 }
 
+export interface Source {
+    type: 'text' | 'file' | 'url';
+    content: string; // text content, file path, or URL
+    filename?: string;
+}
+
 export class GeminiClient extends EventEmitter {
     private verbose: boolean = false;
     private deepResearchEnabled = false;
@@ -1034,6 +1040,79 @@ export class GeminiClient extends EventEmitter {
     }
 
     /**
+     * Upload a single file (wrapper for uploadFiles)
+     */
+    async uploadFile(filePath: string): Promise<boolean> {
+        return this.uploadFiles([filePath]);
+    }
+
+    /**
+     * Inject text into the chat input (without sending).
+     * Appends to existing text.
+     */
+    async injectText(text: string): Promise<void> {
+        console.log(`[Gemini] Injecting text (${text.length} chars)...`);
+        const input = this.page.locator(selectors.gemini.chat.input).first();
+        await input.waitFor({ state: 'visible' });
+
+        // Append text. Note: fill() replaces. pressSequentially appends?
+        // Strategy: Focus and type.
+        await input.click();
+
+        // Check if empty. If not, add newline.
+        const currentText = await input.innerText();
+        if (currentText && currentText.trim().length > 0) {
+            await this.page.keyboard.press('Enter');
+            await this.page.keyboard.down('Shift');
+            await this.page.keyboard.press('Enter');
+            await this.page.keyboard.up('Shift');
+        }
+
+        // Use clipboard paste for large text to avoid slow typing
+        if (text.length > 50) {
+            await input.pressSequentially(text, { delay: 1 });
+        } else {
+            await this.page.keyboard.type(text);
+        }
+
+        await this.page.waitForTimeout(500);
+    }
+
+    /**
+     * Inject a URL into the chat input and wait for preview.
+     */
+    async injectUrl(url: string): Promise<void> {
+        console.log(`[Gemini] Injecting URL: ${url}`);
+        await this.injectText(url);
+
+        // Wait for preview to appear (heuristic)
+        console.log('[Gemini] Waiting for URL preview...');
+        await this.page.waitForTimeout(3000);
+    }
+
+    /**
+     * Inject multiple sources (files, urls, text).
+     */
+    async injectSources(sources: Source[]): Promise<void> {
+        console.log(`[Gemini] Injecting ${sources.length} sources...`);
+
+        // Separate files from text/url to batch uploads
+        const files = sources.filter(s => s.type === 'file').map(s => s.content);
+        if (files.length > 0) {
+            await this.uploadFiles(files);
+        }
+
+        // Process others
+        for (const source of sources) {
+            if (source.type === 'url') {
+                await this.injectUrl(source.content);
+            } else if (source.type === 'text') {
+                await this.injectText(source.content);
+            }
+        }
+    }
+
+    /**
      * Upload a file to the current Gemini chat session.
      * 
      * Supports: PDFs, images, text files, and other document types.
@@ -1501,25 +1580,32 @@ export class GeminiClient extends EventEmitter {
         resetSession?: boolean,
         onProgress?: (text: string) => void,
         files?: string[],
+        sources?: Source[],
         model?: string
     } = {}): Promise<string | null> {
-        const { waitForResponse = true, resetSession, onProgress, files = [], model } = options;
+        const { waitForResponse = true, resetSession, onProgress, files = [], sources = [], model } = options;
 
         console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
 
         await this.checkAuth();
 
+        // Handle Session Reset FIRST (before injections)
+        if (resetSession) {
+            await this.resetToNewChat();
+        }
+
         if (model) {
             await this.setModel(model);
         }
 
+        // 1. Upload files (legacy argument)
         if (files.length > 0) {
             await this.uploadFiles(files);
         }
 
-        // Handle Session Reset (NEW functionality for isolation)
-        if (resetSession) {
-            await this.resetToNewChat();
+        // 2. Inject Sources (new argument)
+        if (sources.length > 0) {
+            await this.injectSources(sources);
         }
 
         // Start trace for this message exchange
@@ -1538,7 +1624,10 @@ export class GeminiClient extends EventEmitter {
 
             const responsesBefore = await this.page.locator(selectors.gemini.chat.response).count();
 
-            await input.fill(message);
+            // 3. Send Message
+            if (message) {
+                await this.injectText(message);
+            }
             await this.page.waitForTimeout(300);
 
             // Click Send button (Enter key doesn't work reliably in Docker/VNC)

@@ -7,7 +7,7 @@ import { PerplexityClient } from './client';
 import { config } from './config';
 
 import { NotebookLMClient } from './notebooklm-client';
-import { GeminiClient } from './gemini-client';
+import { GeminiClient, Source } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
@@ -1550,7 +1550,7 @@ app.post('/gemini/upload', async (req, res) => {
 // Chat endpoint
 app.post('/gemini/chat', async (req, res) => {
     try {
-        const { message, sessionId, waitForResponse, model, files } = req.body;
+        const { message, sessionId, waitForResponse, model, files, sources } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
         // Windmill Proxy
@@ -1632,7 +1632,8 @@ app.post('/gemini/chat', async (req, res) => {
                     res.write(`data: ${JSON.stringify({ type: 'progress', text })}\n\n`);
                 },
                 model,
-                files
+                files,
+                sources
             });
 
             res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: geminiClient.getCurrentSessionId() })}\n\n`);
@@ -1640,7 +1641,7 @@ app.post('/gemini/chat', async (req, res) => {
             return;
         }
 
-        const response = await geminiClient.sendMessage(message, { waitForResponse, model, files });
+        const response = await geminiClient.sendMessage(message, { waitForResponse, model, files, sources });
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
     } catch (e: any) {
         console.error('[Server] Gemini chat failed:', e);
@@ -1657,7 +1658,7 @@ app.post('/gemini/chat', async (req, res) => {
 // Send message (alias for chat with explicit session)
 app.post('/gemini/send-message', async (req, res) => {
     try {
-        const { message, sessionId, model } = req.body;
+        const { message, sessionId, model, sources } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
         // Windmill Proxy
@@ -1707,7 +1708,7 @@ app.post('/gemini/send-message', async (req, res) => {
 
         // Send (blocking)
         console.log(`[Server] Gemini send-message (Local): "${message.substring(0, 50)}..." (Model: ${model || 'default'})`);
-        const response = await geminiClient.sendMessage(message, { waitForResponse: true, model }); // Default to blocking/waiting
+        const response = await geminiClient.sendMessage(message, { waitForResponse: true, model, sources }); // Default to blocking/waiting
         res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
 
     } catch (e: any) {

@@ -6,7 +6,7 @@ import { startServer } from './server';
 import * as fs from 'fs';
 import { config } from './config';
 import * as path from 'path';
-import { GeminiClient, ResearchInfo } from './gemini-client';
+import { GeminiClient, ResearchInfo, Source } from './gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 import { sendNotification, loadConfigFromEnv } from './notify';
 import { execSync } from 'child_process';
@@ -1275,12 +1275,25 @@ gemini
     .option('-s, --session <id>', 'Session ID')
     .option('--model <name>', 'Gemini Model (e.g. "Gemini 3 Pro", "Gemini 3 Flash")')
     .option('-f, --file <path...>', 'File(s) to attach')
+    .option('--url <url...>', 'URL(s) to inject')
+    .option('--inject-text <text>', 'Text to inject (context)')
     .action(async (message, opts, cmdObj) => {
         const options = getOptionsWithGlobals(cmdObj);
         const sessionId = options.session;
         const model = options.model;
         const useServer = !options.local;
         let files = options.file || [];
+        const sources: Source[] = [];
+
+        // Build sources from CLI options
+        if (options.url) {
+            const urls = Array.isArray(options.url) ? options.url : [options.url];
+            urls.forEach((u: string) => sources.push({ type: 'url', content: u }));
+        }
+
+        if (options.injectText) {
+            sources.push({ type: 'text', content: options.injectText });
+        }
 
         if (useServer) {
             // If files attached, upload them first to get server-side paths
@@ -1308,18 +1321,17 @@ gemini
                 }
             }
 
-            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model, files });
+            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model, files, sources });
         } else {
             const path = await import('node:path');
-            // Resolve local paths if needed, though gemini-client probably resolves them or expects absolute?
-            // gemini-client expects absolute usually.
             const absFiles = files.map((f: string) => path.resolve(f));
 
             await runLocalGeminiAction(async (client, gemini) => {
-                if (model) await gemini.setModel(model);
                 const response = await gemini.sendMessage(message, {
                     onProgress: (text: string) => process.stdout.write(text),
-                    files: absFiles
+                    model,
+                    files: absFiles,
+                    sources
                 });
                 console.log('\n');
             }, sessionId);
