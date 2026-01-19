@@ -95,6 +95,13 @@ export interface GeminiSelectors {
         signIn: string;
         welcome: string;
     };
+    model: {
+        trigger: string;
+        menu: string;
+        item: string;
+        advanced: string;
+    };
+
     chat: {
         app: string;
         input: string;
@@ -223,6 +230,13 @@ const defaultSelectors: NotebookLMSelectors = {
             signIn: 'button:has-text("Sign in")',
             welcome: 'button:has-text("Got it")',
         },
+        model: {
+            trigger: 'button[aria-label*="Model"]',
+            menu: '[role="menu"]',
+            item: '[role="menuitem"]',
+            advanced: 'button:has-text("Advanced")',
+        },
+
         chat: {
             app: 'chat-app',
             input: 'div[contenteditable="true"]',

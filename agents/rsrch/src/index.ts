@@ -1209,24 +1209,61 @@ gemini.command('research <query>')
         }
     });
 
-gemini.command('chat <message>')
-    .description('Chat with Google Gemini')
-    .option('--session <id>', 'Existing session ID')
-    .action(async (message, opts) => {
-        // Enforce remote Windmill execution
-        console.log(`[CLI] 🚀 Dispatching 'chat' to Windmill...`);
-        const client = new WindmillClient();
-        try {
-            const result = await client.executeJob('rsrch/execute', {
-                command: 'chat',
-                args: { message, sessionId: opts.session }
+gemini
+    .command('upload <files...>', 'Upload files to Gemini')
+    .action(async (files, cmdObj) => {
+        const options = cmdObj.optsWithGlobals();
+
+        console.log(`Uploading ${files.length} files...`);
+        // Check if we should use server (default) or local
+        const useServer = !options.local; // Assuming 'local' flag flips this
+
+        if (useServer) {
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+            for (const file of files) {
+                const absPath = path.resolve(file);
+                if (!fs.existsSync(absPath)) {
+                    console.error(`File not found: ${absPath}`);
+                    continue;
+                }
+                const content = fs.readFileSync(absPath, 'utf8');
+                // For now, let's assume text files.
+                await sendServerRequest('/gemini/upload-file', {
+                    content,
+                    filename: path.basename(absPath)
+                });
+                console.log(`Uploaded: ${file}`);
+            }
+        } else {
+            // Local mode
+            await runLocalGeminiAction(async (client, gemini) => {
+                await gemini.uploadFiles(files.map((f: string) => path.resolve(f)));
             });
-            console.log('\n--- Windmill Response ---\n');
-            console.log(result?.data || result);
-            console.log('\n-----------------------\n');
-        } catch (e: any) {
-            console.error(`[CLI] Windmill execution failed: ${e.message}`);
-            process.exit(1);
+        }
+        console.log('Upload complete.');
+    });
+
+gemini
+    .command('chat <message>', 'Chat with Gemini')
+    .option('-s, --session <id>', 'Session ID')
+    .option('--model <name>', 'Gemini Model (e.g. "Gemini 2.0 Flash", "Gemini Advanced")')
+    .action(async (message, cmdObj) => {
+        const options = cmdObj.optsWithGlobals();
+        const sessionId = options.session;
+        const model = options.model;
+        const useServer = !options.local;
+
+        if (useServer) {
+            await sendServerRequestWithSSE('/gemini/chat', { message, sessionId, stream: true, model });
+        } else {
+            await runLocalGeminiAction(async (client, gemini) => {
+                if (model) await gemini.setModel(model);
+                const response = await gemini.sendMessage(message, {
+                    onProgress: (text: string) => process.stdout.write(text)
+                });
+                console.log('\n');
+            }, sessionId);
         }
     });
 
@@ -1360,6 +1397,39 @@ gemini.command('list-sessions')
     .argument('[offset]', 'Offset', parseInt, 0)
     .action(async (limit, offset, opts, cmd) => {
         const globalOpts = cmd.optsWithGlobals();
+
+        gemini.command('research <query>')
+            .description('Research a topic with Gemini')
+            .option('--model <name>', 'Gemini Model')
+            .option('-d, --deep', 'Enable Deep Research mode')
+            .option('-s, --session <id>', 'Session ID')
+            .action(async (query, cmdObj) => {
+                const options = cmdObj.optsWithGlobals();
+                const model = options.model;
+                const useServer = !options.local;
+
+                if (useServer) {
+                    // Use sendServerRequest with SSE if supported, or just wait?
+                    // server.ts /gemini/research uses SSE if header present.
+                    await sendServerRequestWithSSE('/gemini/research', {
+                        query,
+                        model,
+                        deepResearch: options.deep,
+                        sessionId: options.session
+                    });
+                } else {
+                    await runLocalGeminiAction(async (client, gemini) => {
+                        const response = await gemini.research(query, {
+                            model,
+                            deepResearch: options.deep,
+                            sessionId: options.session
+                        });
+                        console.log('\nResult:\n', response);
+                    });
+                }
+            });
+
+        gemini.command('list-sessions')
 
         if (globalOpts.local) {
             // Dev mode: direct browser

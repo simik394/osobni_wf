@@ -1,5 +1,5 @@
 
-import { Page } from 'playwright';
+import { Page, Locator } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
@@ -143,6 +143,7 @@ export class GeminiClient extends EventEmitter {
         }
 
         // Handle "Stay in the loop" / "Try Gemini Advanced" / "Ne, díky" popups
+
         const dismissButtons = this.page.locator(selectors.gemini.auth.dismiss);
         if (await dismissButtons.count() > 0) {
             this.progress('Advertising/promo popup detected, clicking dismiss...', 'init');
@@ -186,6 +187,23 @@ export class GeminiClient extends EventEmitter {
         }
 
         this.progress('Ready.', 'init');
+    }
+
+    /**
+     * Check authentication status and handle basic popups
+     */
+    async checkAuth(): Promise<void> {
+        // If sign in button is visible, we are definitely not logged in
+        if (await this.page.locator(selectors.gemini.auth.signIn).count() > 0) {
+            throw new Error('Gemini requires authentication.');
+        }
+
+        // Handle occasional popups that might appear during session
+        const dismissButtons = this.page.locator(selectors.gemini.auth.dismiss);
+        if (await dismissButtons.count() > 0) {
+            await dismissButtons.first().click().catch(() => { });
+            await this.page.waitForTimeout(500);
+        }
     }
 
     /**
@@ -1140,6 +1158,76 @@ export class GeminiClient extends EventEmitter {
         return successCount;
     }
 
+    // ==================== MODEL SELECTION ====================
+
+    /**
+     * Set the Gemini model (e.g., "Gemini 2.0 Flash", "Gemini Advanced").
+     * This interacts with the UI model picker.
+     */
+    async setModel(modelName: string): Promise<boolean> {
+        console.log(`[Gemini] Setting model to: ${modelName}`);
+        try {
+            // 1. Check if model selector is visible
+            const modelTrigger = this.page.locator(selectors.gemini.model.trigger).first();
+
+            // If not found, maybe we are in a state where it's not visible?
+            if (await modelTrigger.count() === 0) {
+                console.warn('[Gemini] Model selector trigger not found. Are we in a chat?');
+                return false;
+            }
+
+            // Check current model (often displayed in the button text)
+            const currentText = await modelTrigger.innerText();
+            if (currentText.includes(modelName)) {
+                console.log(`[Gemini] Model is already set to ${modelName}`);
+                return true;
+            }
+
+            // 2. Open model menu
+            await modelTrigger.click();
+            await this.page.waitForTimeout(500);
+
+            // 3. Find and click the model option
+            // Strategies: exact text, partial text, or looking inside the menu
+            const menu = this.page.locator(selectors.gemini.model.menu);
+            if (await menu.count() > 0) {
+                // Look for menu item with model name
+                const option = menu.locator(selectors.gemini.model.item).filter({ hasText: modelName }).first();
+                if (await option.count() > 0) {
+                    await option.click();
+                    console.log(`[Gemini] Selected model: ${modelName}`);
+                    await this.page.waitForTimeout(1000); // Wait for switch
+                    return true;
+                }
+
+                // Try looking for "Advanced" toggle if requesting Advanced/Pro
+                if (modelName.includes('Advanced') || modelName.includes('Ultra')) {
+                    const advancedBtn = menu.locator(selectors.gemini.model.advanced).first();
+                    if (await advancedBtn.count() > 0) {
+                        await advancedBtn.click();
+                        console.log(`[Gemini] Switched to Advanced/Ultra`);
+                        return true;
+                    }
+                }
+            }
+
+            console.warn(`[Gemini] Model option '${modelName}' not found in menu.`);
+            // Close menu
+            await this.page.keyboard.press('Escape');
+            return false;
+
+        } catch (e: any) {
+            console.error(`[Gemini] Failed to set model: ${e.message}`);
+            return false;
+        }
+    }
+
+    /**
+     * Send a message to the current chat session.
+     */
+
+
+
     // ==================== GEMS SUPPORT ====================
 
     /**
@@ -1403,16 +1491,34 @@ export class GeminiClient extends EventEmitter {
     }
 
 
-    async sendMessage(message: string, options: { waitForResponse?: boolean, resetSession?: boolean, onProgress?: (text: string) => void } = {}): Promise<string | null> {
-        console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${options.resetSession})`);
+    async sendMessage(message: string, options: {
+        waitForResponse?: boolean,
+        resetSession?: boolean,
+        onProgress?: (text: string) => void,
+        files?: string[],
+        model?: string
+    } = {}): Promise<string | null> {
+        const { waitForResponse = true, resetSession, onProgress, files = [], model } = options;
+
+        console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
+
+        await this.checkAuth();
+
+        if (model) {
+            await this.setModel(model);
+        }
+
+        if (files.length > 0) {
+            await this.uploadFiles(files);
+        }
 
         // Handle Session Reset (NEW functionality for isolation)
-        if (options.resetSession) {
+        if (resetSession) {
             await this.resetToNewChat();
         }
 
         // Start trace for this message exchange
-        const waitForResponse = options.waitForResponse ?? true;
+        // Start trace for this message exchange
         const trace = telemetry.startTrace('gemini:send-message', {
             messageLength: message.length,
             waitForResponse
@@ -1735,7 +1841,7 @@ export class GeminiClient extends EventEmitter {
         }
     }
 
-    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean, resetSession?: boolean } = {}): Promise<string> {
+    async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean, resetSession?: boolean, model?: string } = {}): Promise<string> {
         this.progress(`Researching: "${query}" (Session: ${options.sessionId || 'current'}, Deep: ${options.deepResearch}, Reset: ${options.resetSession})`, 'research');
         try {
             // Handle Session Reset (NEW functionality for isolation)
@@ -1754,6 +1860,11 @@ export class GeminiClient extends EventEmitter {
                 // This is expensive (crawls list), so use sparingly or if we implement caching
                 // For now, if name matches current title, we might be good.
                 // But generally, we rely on OpenAI API usage passing the ID if it knows it.
+            }
+
+            // Set model if specified
+            if (options.model) {
+                await this.setModel(options.model);
             }
 
             // Handle Deep Research Toggle

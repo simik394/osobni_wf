@@ -142,6 +142,12 @@ chat:
 # GEMINI SELECTORS
 # ============================================================
 gemini:
+  model:
+    trigger: 'button[aria-label*="Model"], button[aria-label*="model"], [data-testid="model-selector-button"], button:has-text("Gemini")'
+    menu: '[role="menu"], [role="listbox"]'
+    item: '[role="menuitem"], [role="option"]'
+    advanced: 'button:has-text("Advanced"), button:has-text("Pokročilé")'
+
   auth:
     acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
     dismiss: 'button:has-text("Ne, díky"), button:has-text("No thanks"), button:has-text("Not now"), button:has-text("Close"), button:has-text("Zavřít"), button:has-text("Později")'
