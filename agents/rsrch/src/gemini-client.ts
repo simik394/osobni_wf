@@ -1191,13 +1191,31 @@ export class GeminiClient extends EventEmitter {
             // Strategies: exact text, partial text, or looking inside the menu
             const menu = this.page.locator(selectors.gemini.model.menu);
             if (await menu.count() > 0) {
-                // Look for menu item with model name
-                const option = menu.locator(selectors.gemini.model.item).filter({ hasText: modelName }).first();
-                if (await option.count() > 0) {
-                    await option.click();
-                    console.log(`[Gemini] Selected model: ${modelName}`);
-                    await this.page.waitForTimeout(1000); // Wait for switch
-                    return true;
+                // Map common model aliases to potential UI text patterns (including Czech)
+                const modelMappings: Record<string, string[]> = {
+                    'flash': ['Flash', 'Rychlý', 'Fast', 'Rychle'],
+                    'pro': ['Pro', 'Ultra', 'Advanced'],
+                    'thinking': ['Thinking', 'Reasoning', 'S myšlením', 'Chain of Thought'],
+                    'deep': ['Deep Research', 'Hloubkový průzkum']
+                };
+
+                // Determine search terms: use direct input + mapped aliases
+                let searchTerms = [modelName];
+                for (const [key, aliases] of Object.entries(modelMappings)) {
+                    if (modelName.toLowerCase().includes(key)) {
+                        searchTerms = [...searchTerms, ...aliases];
+                    }
+                }
+
+                // Look for menu item matching any search term
+                for (const term of searchTerms) {
+                    const option = menu.locator(selectors.gemini.model.item).filter({ hasText: term }).first();
+                    if (await option.count() > 0) {
+                        await option.click();
+                        console.log(`[Gemini] Selected model: ${term} (requested: ${modelName})`);
+                        await this.page.waitForTimeout(1000); // Wait for switch
+                        return true;
+                    }
                 }
 
                 // Try looking for "Advanced" toggle if requesting Advanced/Pro
