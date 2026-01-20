@@ -54,7 +54,8 @@ type Session struct {
 
 // sessionsResponse wraps the sessions list from API
 type sessionsResponse struct {
-	Sessions []*Session `json:"sessions"`
+	Sessions      []*Session `json:"sessions"`
+	NextPageToken string     `json:"nextPageToken,omitempty"`
 }
 
 // Activity represents a Jules activity.
@@ -100,19 +101,37 @@ func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, er
 	return &session, nil
 }
 
-// ListSessions lists Jules sessions.
+// ListSessions lists ALL Jules sessions (handles pagination automatically).
 func (c *Client) ListSessions(ctx context.Context) ([]*Session, error) {
-	req, err := c.newRequest(ctx, "GET", c.baseURL+"/sessions", nil)
-	if err != nil {
-		return nil, err
+	var allSessions []*Session
+	pageToken := ""
+
+	for {
+		url := c.baseURL + "/sessions"
+		if pageToken != "" {
+			url = url + "?pageToken=" + pageToken
+		}
+
+		req, err := c.newRequest(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var resp sessionsResponse
+		if _, err := c.do(req, &resp); err != nil {
+			return nil, err
+		}
+
+		allSessions = append(allSessions, resp.Sessions...)
+
+		// If no nextPageToken, we've fetched all pages
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
-	var resp sessionsResponse
-	if _, err := c.do(req, &resp); err != nil {
-		return nil, err
-	}
-
-	return resp.Sessions, nil
+	return allSessions, nil
 }
 
 // ListActivities lists Jules activities for a session.

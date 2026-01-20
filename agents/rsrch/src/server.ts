@@ -2113,6 +2113,192 @@ Focus on depth, nuance, and covering aspects that might be missing above.
     }
 });
 
+// ============================================================================
+// Jules Session Publishing Endpoints
+// ============================================================================
+
+/**
+ * Publish selected Jules sessions by session ID.
+ * POST /jules/publish-selected
+ * Body: { sessionIds: string[], mode?: 'branch' | 'pr' }
+ */
+/**
+ * Internal helper to publish a single Jules session via browser
+ */
+async function performJulesPublish(sessionId: string, mode: 'pr' | 'branch' = 'pr'): Promise<{ success: boolean; error?: string }> {
+    console.log(`[Jules Automation] Publishing session ${sessionId} (mode: ${mode})...`);
+
+    // Create a temporary client for this purpose if one isn't active
+    // We MUST use the 'personal' profile for Jules auth
+    const julesClient = new PerplexityClient({ profileId: 'personal', headless: true });
+
+    try {
+        await julesClient.init();
+        const notebook = await julesClient.createNotebookClient();
+        const page = notebook.page;
+
+        await page.goto(`https://jules.google.com/session/${sessionId}`, {
+            waitUntil: 'networkidle',
+            timeout: 60000
+        });
+
+        // SlowMo for less detection
+        await page.waitForTimeout(2000);
+
+        // 1. Find and click Publish button
+        const publishButton = page.locator('button').filter({ hasText: /^Publish$/i }).first();
+        if (!(await publishButton.isVisible())) {
+            // Check if already published
+            const alreadyPublished = await page.locator('a[href*="github.com"][href*="/pull/"]').isVisible();
+            if (alreadyPublished) {
+                return { success: true };
+            }
+            throw new Error('Publish button not found');
+        }
+
+        await publishButton.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Click PR or Branch option
+        if (mode === 'pr') {
+            const prOption = page.locator('button, div, li').filter({ hasText: /Publish PR/i }).first();
+            await prOption.click();
+        } else {
+            const branchOption = page.locator('button, div, li').filter({ hasText: /Publish Branch/i }).first();
+            await branchOption.click();
+        }
+        await page.waitForTimeout(1000);
+
+        // 3. Confirm
+        const confirmButton = page.locator('button').filter({ hasText: /Confirm|Submit|Publish/i }).first();
+        await confirmButton.click();
+
+        // Wait for PR link to appear as confirmation
+        await page.waitForSelector('a[href*="github.com"][href*="/pull/"]', { timeout: 30000 });
+
+        console.log(`[Jules Automation] Session ${sessionId} published successfully.`);
+        return { success: true };
+
+    } catch (e: any) {
+        console.error(`[Jules Automation] Publish failed for ${sessionId}:`, e.message);
+        return { success: false, error: e.message };
+    } finally {
+        await julesClient.shutdown().catch(() => { });
+    }
+}
+
+/**
+ * Endpoint for automated Jules publishing (triggered by Windmill)
+ */
+app.post('/jules/publish-session', async (req, res) => {
+    const { sessionId, mode = 'pr', waitForCompletion = true } = req.body;
+
+    if (!sessionId) {
+        return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    if (!waitForCompletion) {
+        // Run in background
+        performJulesPublish(sessionId, mode).catch(e => {
+            console.error(`[Server] Background Jules publish failed for ${sessionId}:`, e);
+        });
+        return res.status(202).json({ success: true, message: 'Publishing started in background' });
+    }
+
+    const result = await performJulesPublish(sessionId, mode);
+    if (result.success) {
+        res.json({ success: true, message: 'Session published' });
+    } else {
+        res.status(500).json({ success: false, error: result.error });
+    }
+});
+
+/**
+ * Publish selected Jules sessions (Orchestrator endpoint)
+ */
+app.post('/jules/publish-selected', async (req, res) => {
+    try {
+        const { sessionIds, mode = 'pr' } = req.body;
+
+        if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'sessionIds array is required'
+            });
+        }
+
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        if (windmill.isConfigured()) {
+            console.log(`[Server] Queueing ${sessionIds.length} Jules sessions via Windmill...`);
+            const { queued, failed } = await windmill.queueSessionPublishing(sessionIds, mode);
+
+            return res.status(202).json({
+                success: queued.length > 0,
+                message: `Queued ${queued.length} publishing job(s)`,
+                jobs: queued,
+                failed: failed.length > 0 ? failed : undefined
+            });
+        }
+
+        // Fallback to local execution
+        console.warn('[Server] Windmill not configured, executing Jules publish locally...');
+        const results = [];
+        for (const id of sessionIds) {
+            results.push({ sessionId: id, ...await performJulesPublish(id, mode) });
+        }
+
+        res.json({
+            success: results.some(r => r.success),
+            results
+        });
+
+    } catch (e: any) {
+        console.error('[Server] Jules publish-selected failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * Publish all Jules sessions in AWAITING_USER_FEEDBACK state.
+ */
+app.post('/jules/publish-all', async (req, res) => {
+    try {
+        const { mode = 'pr' } = req.body;
+        console.log(`[Server] Publishing all awaiting Jules sessions (mode: ${mode})`);
+
+        return res.status(501).json({
+            success: false,
+            error: 'publish-all requires listing sessions first. Use /jules/publish-selected with specific session IDs.'
+        });
+
+    } catch (e: any) {
+        console.error('[Server] Jules publish-all failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * Get Jules session status (lightweight wrapper around MCP).
+ * GET /jules/sessions/:sessionId
+ */
+app.get('/jules/sessions/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // This would require calling the Jules MCP get_session tool
+        // For now, redirect to the Jules UI
+        res.json({
+            sessionId,
+            url: `https://jules.google.com/session/${sessionId}`,
+            hint: 'Use Jules MCP get_session for detailed status'
+        });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing browser...');
