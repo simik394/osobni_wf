@@ -1,10 +1,17 @@
 package browser
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 )
 
@@ -16,7 +23,22 @@ type JulesSession struct {
 
 // NewJulesSession creates a new Jules session.
 func NewJulesSession(headless bool) (*JulesSession, error) {
-	browser := rod.New().MustConnect()
+	if os.Getenv("JULES_USE_WINDMILL") == "true" {
+		// Return empty session for remote execution
+		return &JulesSession{}, nil
+	}
+
+	// Use user data directory for persistent auth
+	homeDir, _ := os.UserHomeDir()
+	userDataDir := filepath.Join(homeDir, ".config", "google-chrome")
+
+	l := launcher.New()
+	if _, err := os.Stat(userDataDir); err == nil {
+		l = l.UserDataDir(userDataDir)
+	}
+
+	url := l.MustLaunch()
+	browser := rod.New().ControlURL(url).MustConnect()
 	page := browser.MustPage()
 
 	return &JulesSession{
@@ -25,36 +47,158 @@ func NewJulesSession(headless bool) (*JulesSession, error) {
 	}, nil
 }
 
-// Close closes the browser session.
+// NewJulesSessionFromBrowser creates a new Jules session using an existing browser.
+func NewJulesSessionFromBrowser(browser *rod.Browser) (*JulesSession, error) {
+	page := browser.MustPage()
+	return &JulesSession{
+		browser: browser,
+		page:    page,
+	}, nil
+}
+
+// Close closes the browser session (tab).// Close closes the browser session.
 func (s *JulesSession) Close() {
-	s.browser.MustClose()
+	s.CloseBrowser()
+}
+
+// CloseBrowser closes the underlying browser.
+func (s *JulesSession) CloseBrowser() {
+	if s.browser != nil {
+		s.browser.MustClose()
+	}
+}
+
+// ClosePage closes the current page (tab).
+func (s *JulesSession) ClosePage() {
+	s.page.Close()
 }
 
 // NavigateToSession navigates to a Jules session URL.
 func (s *JulesSession) NavigateToSession(sessionURL string) error {
+	if s.page == nil {
+		return fmt.Errorf("browser not initialized")
+	}
 	return s.page.Navigate(sessionURL)
 }
 
-// ClickPublishBranch clicks the "Publish branch" button.
+// StartPublish triggers the publishing process (local or remote).
+func (s *JulesSession) StartPublish(sessionID string, mode string) error {
+	if os.Getenv("JULES_USE_WINDMILL") == "true" {
+		return s.triggerWindmillPublish(sessionID, mode)
+	}
+	return fmt.Errorf("local publishing not implemented for this command, use JULES_USE_WINDMILL=true")
+}
+
+func (s *JulesSession) triggerWindmillPublish(sessionID string, mode string) error {
+	token := os.Getenv("WINDMILL_TOKEN")
+	url := os.Getenv("WINDMILL_URL")
+	workspace := os.Getenv("WINDMILL_WORKSPACE")
+
+	if token == "" || url == "" || workspace == "" {
+		return fmt.Errorf("WINDMILL_TOKEN, WINDMILL_URL, and WINDMILL_WORKSPACE env vars required")
+	}
+
+	endpoint := fmt.Sprintf("%s/api/w/%s/jobs/run/p/f/jules/click_publish_session", url, workspace)
+
+	if mode == "" {
+		mode = "pr"
+	}
+
+	data := map[string]string{
+		"session_id": sessionID,
+		"mode":       mode,
+	}
+	jsonData, _ := json.Marshal(data)
+
+	req, _ := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to trigger windmill: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("windmill error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	fmt.Printf("Windmill Job Triggered: %s\n", string(body))
+	return nil
+}
+
+// ClickPublishBranch clicks the "Publish branch" button (Local only).
 func (s *JulesSession) ClickPublishBranch() error {
-	// Placeholder for the actual selector
+	if s.page == nil {
+		return fmt.Errorf("browser not initialized")
+	}
 	publishButton := s.page.MustElementR("button", "Publish branch")
 	return publishButton.Click(proto.InputMouseButtonLeft, 1)
 }
 
-// ApprovePlan approves the current plan.
+// ApprovePlan approves the current plan (Local only).
 func (s *JulesSession) ApprovePlan() error {
-	// Placeholder for the actual selector
+	if s.page == nil {
+		return fmt.Errorf("browser not initialized")
+	}
 	approveButton := s.page.MustElementR("button", "Approve")
 	return approveButton.Click(proto.InputMouseButtonLeft, 1)
 }
 
 // MonitorSession monitors the session for changes.
 func (s *JulesSession) MonitorSession() {
-	// Placeholder for monitoring logic
+	if s.page == nil {
+		return
+	}
 	fmt.Println("Monitoring session...")
 	for {
-		// Add logic to check for changes
 		time.Sleep(5 * time.Second)
 	}
+}
+
+// PublishJob represents an async publish job.
+type PublishJob struct {
+	SessionID string
+	Tab       *rod.Page
+	Working   bool
+	StartTime time.Time
+}
+
+// Poll checks if the publish job is complete (PR link available).
+func (j *PublishJob) Poll() (done bool, prURL string) {
+	el, err := j.Tab.Timeout(100*time.Millisecond).ElementR("a", "View PR")
+	if err == nil {
+		j.Working = false
+		href, err := el.Attribute("href")
+		if err == nil && href != nil {
+			return true, *href
+		}
+		// Found element but no href? Should not happen for <a>.
+		return true, ""
+	}
+	return false, ""
+}
+
+// StartLocalPublish navigates to the session and clicks publish, returning a job.
+func (s *JulesSession) StartLocalPublish(sessionID, url string) (*PublishJob, error) {
+	if err := s.NavigateToSession(url); err != nil {
+		return nil, fmt.Errorf("failed to navigate: %w", err)
+	}
+
+	// Wait for page to load?
+	// rod.Navigate waits for load event by default.
+
+	if err := s.ClickPublishBranch(); err != nil {
+		return nil, fmt.Errorf("failed to click publish: %w", err)
+	}
+
+	return &PublishJob{
+		SessionID: sessionID,
+		Tab:       s.page,
+		Working:   true,
+		StartTime: time.Now(),
+	}, nil
 }

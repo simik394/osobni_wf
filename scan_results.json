@@ -1,0 +1,16 @@
+Scanning sessions pages...
+Page 1: Found 100 sessions
+FOUND PENDING: sessions/4324009622645823838 - PM Orchestration Phase 1
+FOUND PENDING: sessions/17909672099881343750 - Finalize PR #65 (Angrav History). Review branch 'bundle-11-angrav-enhanced-history-scraping-11481867437687337743', verify scraping logic, ensure tests pass, and mark ready for merge.
+FOUND PENDING: sessions/3984337718161282780 - Implement PROJ-4: Tests. Create agents/proj/tests/ for ProjStore (JSON/FalkorDB). See https://napoveda.youtrack.cloud/issue/PROJ-4
+FOUND PENDING: sessions/16026028798065658100 - TOOLS-60: Workflow Engine
+FOUND PENDING: sessions/15034901540554752472 - Fix PR #21 Conflicts
+FOUND PENDING: sessions/6388280359394264421 - Fix PR #51 Conflicts
+FOUND PENDING: sessions/15197890044463410384 - Bundle 10 test
+Page 2: Found 92 sessions
+FOUND PENDING: sessions/3280881156582590012 - NEW: Create YouTrack sync for jules-go to update issue states.
+FOUND PENDING: sessions/5105910593560402895 - TOOLS-81: Create Makefile for jules-go at agents/jules-go/Makefile. Targets: build, test (with coverage), lint (golangci-lint), fmt, clean, docker, run. Include help target.
+FOUND PENDING: sessions/5809005873698851176 - TOOLS-77: Add unit tests for jules-go API client at agents/jules-go/client_test.go. Test NewClient, CreateSession, GetSession, ListActivities. Use httptest for mocking. Table-driven tests following Go best practices.
+FOUND PENDING: sessions/12986847442003090445 - TOOLS-48: Improve error handling and add retry logic in agents/rsrch/src/
+
+Total Pending Sessions: 11

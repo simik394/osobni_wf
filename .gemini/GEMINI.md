@@ -25,10 +25,13 @@ The rsrch agent running at `http://localhost:3001` provides Gemini-powered analy
 
 ### Jules Delegation Pattern
 When delegating work to Jules:
-1. Use `jules-mcp` tools (NOT browser subagent) - they're 10x faster
-2. Include YouTrack issue links in prompts: `See https://napoveda.youtrack.cloud/issue/TOOLS-XXX`
-3. Link sessions back to YouTrack with comments after creation
-4. Specify exact file paths and requirements in prompts
+1. Use `jules-mcp` tools for session management (create, list, get, send_message, approve_plan, wait)
+2. Use `jules-go CLI` for browser operations: `jules publish <id>`, `jules retry <id>`
+3. Do NOT use browser_subagent for Jules - use the tools above instead
+4. **Avoid Blocking Waits**: Do not use `wait_for_session_completion` if other tasks can be performed in parallel. Poll periodically instead.
+5. Indent sub-tasks clearly.
+
+See [jules-go/docs/TECHNICAL.md](file:///home/sim/Obsi/Prods/01-pwf/agents/jules-go/docs/TECHNICAL.md) for full CLI reference and architecture.
 
 ### Concurrent Analysis
 Launch multiple rsrch requests in parallel for faster processing:

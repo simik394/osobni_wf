@@ -31,3 +31,14 @@ history_dump/
 cdp_targets*.json
 infrastruct/utils/libs/
 exp/
+
+# Environment files
+.env
+**/.env
+
+# Compiled binaries
+*-cli-bin
+
+# Temporary files
+*.patch
+sessions_list.txt

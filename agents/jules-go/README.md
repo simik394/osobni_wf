@@ -1,3 +1,87 @@
+# jules-go: Automation Infrastructure
+
+`jules-go` is the backend automation infrastructure for the Jules AI Agent. It is **not** used for creating or managing sessions directly. For session creation, plan approval, and other user-facing interactions, use `jules-mcp`.
+
+This module provides the essential backend services that monitor, route, and handle events related to Jules sessions.
+
+## Architecture
+
+The following diagram illustrates the components of the `jules-go` ecosystem and their interactions.
+
+```mermaid
+graph TD
+    subgraph "External Systems"
+        A[Jules API] -->|Callbacks| B(Webhook Server)
+        C[YouTrack] <-->|Sync| D(YouTrack Sync)
+        E[User] -->|Notifications| F(ntfy)
+        G[Prometheus] -->|Scrape| H(Metrics Endpoint)
+    end
+
+    subgraph "jules-go Internals"
+        B --> I(Queue)
+        D --> I
+        I --> J(Worker Pool)
+        J --> B
+        J --> D
+        J --> F
+        H --> K(Prometheus Metrics)
+    end
+
+    subgraph "User Tools"
+        L(jules-cli) --> B
+    end
+
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#ccf,stroke:#333,stroke-width:2px
+    style F fill:#cfc,stroke:#333,stroke-width:2px
+    style H fill:#ffc,stroke:#333,stroke-width:2px
+    style I fill:#f99,stroke:#333,stroke-width:2px
+    style L fill:#9cf,stroke:#333,stroke-width:2px
+```
+
+## Components
+
+| Component | Path | Description |
+|---|---|---|
+| **Webhook Server** | `cmd/jules/main.go`, `internal/webhook/` | Listens for session state callbacks from the Jules API. |
+| **YouTrack Sync** | `internal/youtrack/` | Two-way synchronization between Jules sessions and YouTrack issues. |
+| **ntfy Notifications**| `internal/ntfy/` | Pushes real-time notifications about session events to a ntfy topic. |
+| **Prometheus Metrics**| `internal/metrics/` | Exposes internal metrics for monitoring and alerting. |
+| **Queue/Worker Pool**| `internal/queue/` | Manages and processes background tasks with persistence. |
+| **CLI** | `cmd/jules-cli/` | A command-line tool for listing and monitoring sessions. |
+
+## Configuration
+
+`jules-go` is configured entirely through environment variables.
+
+| Variable | Required | Description |
+|---|---|---|
+| `JULES_API_KEY` | **Yes** | API key from [jules.google.com/settings/api](https://jules.google.com/settings/api). |
+| `YOUTRACK_URL` | **Yes** | Base URL for the YouTrack instance. |
+| `YOUTRACK_TOKEN`| **Yes** | Permanent token for YouTrack API access. |
+| `NTFY_URL` | **Yes** | URL of the ntfy server. |
+| `NTFY_TOPIC` | **Yes** | The ntfy topic to publish notifications to. |
+| `VAULT_ADDR` | No | HashiCorp Vault address for fetching secrets. |
+| `PORT` | No | Port for the webhook server (default: `8080`). |
+
+## Webhook Endpoints
+
+The webhook server exposes the following endpoints:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/webhook/session`| `POST` | Receives session state callbacks from the Jules API. |
+| `/metrics` | `GET` | Exposes Prometheus metrics. |
+| `/health` | `GET` | Health check endpoint. |
+
+## When to Use What
+
+| Task | Use |
+|---|---|
+| Create a new session | `jules-mcp` |
+| Approve a session plan | `jules-mcp` |
+| List or monitor sessions | `jules-cli` |
+| Receive system callbacks | `jules-go` webhook server |
 # jules-go
 
 A Go module providing a CLI and programmatic client for the **Jules AI Agent** API, enabling efficient session management without resource-heavy browser automation.
