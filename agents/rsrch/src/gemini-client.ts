@@ -29,7 +29,7 @@ export interface ResearchInfo {
 }
 
 // === Parsed Research Types ===
-export interface Citation {
+export interface GeminiCitation {
     id: number;
     text: string;
     url: string;
@@ -57,7 +57,7 @@ export interface ParsedResearch {
     contentHtml: string;       // HTML with structure
     contentMarkdown: string;   // Converted to markdown
     headings: string[];
-    citations: Citation[];
+    citations: GeminiCitation[];
     reasoningSteps: ReasoningStep[];
     researchFlow: FlowNode[];
     createdAt: string;
@@ -2906,8 +2906,8 @@ export class GeminiClient extends EventEmitter {
      * DOM research showed: Source URLs are regular <a href> elements,
      * NOT hidden behind button clicks. Filter out Google/internal URLs.
      */
-    async extractCitations(): Promise<Citation[]> {
-        const citations: Citation[] = [];
+    async extractCitations(): Promise<GeminiCitation[]> {
+        const citations: GeminiCitation[] = [];
 
         // Domains to exclude (internal/boilerplate)
         const excludeDomains = [
@@ -3009,7 +3009,7 @@ export class GeminiClient extends EventEmitter {
     /**
      * Build research flow diagram data
      */
-    private buildResearchFlow(citations: Citation[], steps: ReasoningStep[], query: string): FlowNode[] {
+    private buildResearchFlow(citations: GeminiCitation[], steps: ReasoningStep[], query: string): FlowNode[] {
         const nodes: FlowNode[] = [];
 
         // Query node
@@ -3056,7 +3056,7 @@ export class GeminiClient extends EventEmitter {
     /**
      * Convert HTML content to Markdown with citation references
      */
-    private htmlToMarkdown(html: string, citations: Citation[]): string {
+    private htmlToMarkdown(html: string, citations: GeminiCitation[]): string {
         let md = html;
 
         // Convert headings
