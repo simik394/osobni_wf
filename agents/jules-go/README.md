@@ -54,6 +54,9 @@ go build -o jules-cli-bin ./cmd/jules-cli/main.go
 | `list --format json` | JSON output for scripting | `./jules-cli-bin list --format json` |
 | `get <id>` | Get full session details | `./jules-cli-bin get 12345` |
 | `retry <id> [--max N]` | Retry a failed session | `./jules-cli-bin retry 12345 --max 3` |
+| `diff <id>` | Show session diff | `./jules-cli-bin diff 12345` |
+| `delegate <issue>` | Delegate from YouTrack | `./jules-cli-bin delegate ISSUE-123` |
+| `env push` | Push environment config | `./jules-cli-bin env push` |
 | `status` | Show system status | `./jules-cli-bin status` |
 | `version` | Show version | `./jules-cli-bin version` |
 

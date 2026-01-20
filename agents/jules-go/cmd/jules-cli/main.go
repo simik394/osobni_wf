@@ -12,6 +12,9 @@ import (
 	jules "jules-go"
 	"jules-go/internal/browser"
 	"jules-go/internal/logging"
+
+	"github.com/alecthomas/chroma/quick"
+	"os/exec"
 )
 
 var (
@@ -39,6 +42,12 @@ func main() {
 	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
+
+	diffCmd := flag.NewFlagSet("diff", flag.ExitOnError)
+
+	delegateCmd := flag.NewFlagSet("delegate", flag.ExitOnError)
+
+	envCmd := flag.NewFlagSet("env", flag.ExitOnError)
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
@@ -157,6 +166,92 @@ func main() {
 		fmt.Printf("Supervisor Config: MaxRetries=%d, BufferSize=%d\n", cfg.MaxRetries, cfg.BufferSize)
 		fmt.Printf("API Base: https://jules.googleapis.com/v1alpha\n")
 
+	case "diff":
+		diffCmd.Parse(os.Args[2:])
+		if diffCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli diff <session-id>")
+			os.Exit(1)
+		}
+		sessionID := diffCmd.Arg(0)
+
+		// Attempt to read repo URL from config or use default
+		// For this implementation we'll look for an environment variable or flag,
+		// but since flags are already parsed, we'll use a safe default or checking env.
+		repoURL := os.Getenv("JULES_REPO_URL")
+		if repoURL == "" {
+			// This is a placeholder default, but users should provide it.
+			// Ideally we would add a --repo flag to the diff command.
+			repoURL = "https://github.com/google/jules"
+		}
+
+		fmt.Printf("Fetching diff for session %s (repo: %s)...\n", sessionID, repoURL)
+
+		// Execute local Windmill script using Deno if available, or print instruction
+		// In a real deployment, this would be an HTTP POST to the Windmill webhook
+		output, err := executeWindmillScript("get_session_diff.ts", map[string]string{
+			"session_id": sessionID,
+			"repo_url": repoURL,
+		})
+
+		if err != nil {
+			slog.Error("failed to execute diff script", "err", err)
+			os.Exit(1)
+		}
+
+		err = quick.Highlight(os.Stdout, output, "diff", "terminal256", "monokai")
+		if err != nil {
+			fmt.Println(output)
+		}
+
+	case "delegate":
+		delegateCmd.Parse(os.Args[2:])
+		if delegateCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli delegate <issue-id>")
+			os.Exit(1)
+		}
+		issueID := delegateCmd.Arg(0)
+		fmt.Printf("Delegating task for issue %s...\n", issueID)
+
+		res, err := executeWindmillScript("delegate_task_from_youtrack.ts", map[string]string{
+			"issue_id": issueID,
+		})
+		if err != nil {
+			slog.Error("failed to delegate task", "err", err)
+			os.Exit(1)
+		}
+		fmt.Println("Task delegated successfully. Session created:", res)
+
+	case "env":
+		envCmd.Parse(os.Args[2:])
+		if envCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli env <push>")
+			os.Exit(1)
+		}
+		subCmd := envCmd.Arg(0)
+		if subCmd == "push" {
+			fmt.Println("Pushing environment configuration...")
+
+			// Read jules.yaml
+			content, err := os.ReadFile("jules.yaml")
+			if err != nil {
+				slog.Error("failed to read jules.yaml", "err", err)
+				os.Exit(1)
+			}
+			setupScript := string(content)
+
+			_, err = executeWindmillScript("update_repo_env.ts", map[string]string{
+				"setup_script": setupScript,
+			})
+			if err != nil {
+				slog.Error("failed to update environment", "err", err)
+				os.Exit(1)
+			}
+			fmt.Println("Environment updated successfully.")
+		} else {
+			fmt.Fprintf(os.Stderr, "Unknown env command: %s\n", subCmd)
+			os.Exit(1)
+		}
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -181,6 +276,9 @@ Commands:
   get          Get session details <session-id>
   retry        Retry a failed session <session-id> [--max N]
   publish      Publish a session <session-id> [--pr=true|false]
+  diff         Show session diff <session-id>
+  delegate     Delegate task from YouTrack issue <issue-id>
+  env push     Push environment configuration from jules.yaml
   status       Show system status
   version      Show version information
   help         Show this help message
@@ -212,4 +310,47 @@ func printJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(v)
+}
+
+func executeWindmillScript(scriptName string, args map[string]string) (string, error) {
+	// Construct JSON argument
+	jsonArgs, err := json.Marshal(args)
+	if err != nil {
+		return "", err
+	}
+
+	// Determine script directory
+	scriptDir := os.Getenv("JULES_SCRIPTS_DIR")
+	if scriptDir == "" {
+		scriptDir = "agents/jules-go/scripts/windmill"
+	}
+	scriptPath := fmt.Sprintf("%s/%s", scriptDir, scriptName)
+
+	// Create a temporary wrapper to call the main function with args
+	wrapper := fmt.Sprintf(`
+import { main } from "./%s";
+const args = %s;
+main(args).then(res => console.log(typeof res === 'string' ? res : JSON.stringify(res))).catch(err => { console.error(err); Deno.exit(1); });
+`, scriptPath, string(jsonArgs))
+
+	// Create temp file for wrapper not easy in Go without imports, so we'll just try to run deno eval
+	// But imports need to be resolvable.
+
+	// Simpler approach: verify Deno exists first
+	if _, err := exec.LookPath("deno"); err != nil {
+		return "", fmt.Errorf("deno not found")
+	}
+
+	// Because of import complexity with 'deno run' and local files,
+	// we will try to just run the file if it was a standalone script, but they export main.
+	// So we need a wrapper.
+
+	// We need --allow-all because these scripts perform net, run, env operations.
+	// In a real sandbox this would be more restricted.
+	cmd := exec.Command("deno", "eval", "--allow-all", wrapper)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("script execution failed: %v, output: %s", err, string(out))
+	}
+	return string(out), nil
 }
