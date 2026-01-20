@@ -47,11 +47,13 @@ func TestListSessions(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 
 		w.Header().Set("Content-Type", "application/json")
+		// Return wrapped response matching real API format
 		json.NewEncoder(w).Encode(sessionsResponse{
 			Sessions: []*Session{
 				{ID: "session-1", Name: "Session 1"},
 				{ID: "session-2", Name: "Session 2"},
 			},
+			NextPageToken: "", // No more pages
 		})
 	}))
 	defer server.Close()
@@ -67,6 +69,46 @@ func TestListSessions(t *testing.T) {
 	assert.Equal(t, "Session 1", sessions[0].Name)
 	assert.Equal(t, "session-2", sessions[1].ID)
 	assert.Equal(t, "Session 2", sessions[1].Name)
+}
+
+func TestListSessionsPagination(t *testing.T) {
+	pageCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.Header().Set("Content-Type", "application/json")
+
+		pageCount++
+		if pageCount == 1 {
+			// First page
+			json.NewEncoder(w).Encode(sessionsResponse{
+				Sessions: []*Session{
+					{ID: "session-1", Name: "Session 1"},
+					{ID: "session-2", Name: "Session 2"},
+				},
+				NextPageToken: "page2token",
+			})
+		} else {
+			// Second page (last)
+			json.NewEncoder(w).Encode(sessionsResponse{
+				Sessions: []*Session{
+					{ID: "session-3", Name: "Session 3"},
+				},
+				NextPageToken: "",
+			})
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient(t)
+	client.httpClient = server.Client()
+	client.baseURL = server.URL
+
+	sessions, err := client.ListSessions(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 3, "Should have sessions from both pages")
+	assert.Equal(t, "session-1", sessions[0].ID)
+	assert.Equal(t, "session-3", sessions[2].ID)
+	assert.Equal(t, 2, pageCount, "Should have made 2 API calls")
 }
 
 func TestCreateSession(t *testing.T) {

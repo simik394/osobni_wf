@@ -14,6 +14,7 @@ import (
 
 	jules "jules-go"
 	"jules-go/internal/github"
+	"jules-go/internal/browser"
 	"jules-go/internal/logging"
 )
 
@@ -31,11 +32,15 @@ func main() {
 	// Define subcommands
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listFormat := listCmd.String("format", "table", "Output format: table, json")
+	listState := listCmd.String("state", "", "Filter by state: AWAITING_USER_FEEDBACK, COMPLETED, etc")
 
 	getCmd := flag.NewFlagSet("get", flag.ExitOnError)
 
 	retryCmd := flag.NewFlagSet("retry", flag.ExitOnError)
 	retryMax := retryCmd.Int("max", 3, "Maximum retry attempts")
+
+	publishCmd := flag.NewFlagSet("publish", flag.ExitOnError)
+	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 
@@ -69,6 +74,16 @@ func main() {
 		if err != nil {
 			slog.Error("failed to list sessions", "err", err)
 			os.Exit(1)
+		}
+		// Filter by state if specified
+		if *listState != "" {
+			filtered := []*jules.Session{}
+			for _, s := range sessions {
+				if s.State == *listState {
+					filtered = append(filtered, s)
+				}
+			}
+			sessions = filtered
 		}
 		printSessions(sessions, *listFormat)
 
@@ -111,6 +126,33 @@ func main() {
 			os.Exit(1)
 		}
 		printJSON(result)
+
+	case "publish":
+		publishCmd.Parse(os.Args[2:])
+		if publishCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli publish <session-id> [--pr=true|false]")
+			os.Exit(1)
+		}
+		sessionID := publishCmd.Arg(0)
+		mode := "branch"
+		if *publishPR {
+			mode = "pr"
+		}
+
+		fmt.Printf("Publishing session %s (mode=%s)...\n", sessionID, mode)
+
+		sess, err := browser.NewJulesSession(false)
+		if err != nil {
+			slog.Error("failed to create session", "err", err)
+			os.Exit(1)
+		}
+		defer sess.Close()
+
+		if err := sess.StartPublish(sessionID, mode); err != nil {
+			slog.Error("publish failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Println("Done!")
 
 	case "status":
 		statusCmd.Parse(os.Args[2:])
@@ -224,12 +266,13 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
-  list    List all sessions [--format table|json]
-  get     Get session details <session-id>
-  retry   Retry a failed session <session-id> [--max N]
-  status  Show system status
-  version Show version information
-  help    Show this help message
+  list         List all sessions [--format table|json] [--state STATE]
+  get          Get session details <session-id>
+  retry        Retry a failed session <session-id> [--max N]
+  publish      Publish a session <session-id> [--pr=true|false]
+  status       Show system status
+  version      Show version information
+  help         Show this help message
 
 Environment:
   JULES_API_KEY  Required API key for Jules API`)

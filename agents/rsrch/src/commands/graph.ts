@@ -43,10 +43,10 @@ graph.command('status')
                 await store.connect(graphHost, config.falkor.port);
                 console.log('✅ FalkorDB connection: OK');
                 const jobs = await store.listJobs();
-                const queued = jobs.filter(j => j.status === 'queued').length;
-                const running = jobs.filter(j => j.status === 'running').length;
-                const completed = jobs.filter(j => j.status === 'completed').length;
-                const failed = jobs.filter(j => j.status === 'failed').length;
+                const queued = jobs.filter((j) => j.status === 'queued').length;
+                const running = jobs.filter((j) => j.status === 'running').length;
+                const completed = jobs.filter((j) => j.status === 'completed').length;
+                const failed = jobs.filter((j) => j.status === 'failed').length;
                 console.log(`\nJobs: ${jobs.length} total`);
                 console.log(`  Queued: ${queued}`);
                 console.log(`  Running: ${running}`);
