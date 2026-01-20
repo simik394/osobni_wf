@@ -47,11 +47,30 @@ func NewJulesSession(headless bool) (*JulesSession, error) {
 	}, nil
 }
 
-// Close closes the browser session.
+// NewJulesSessionFromBrowser creates a new Jules session using an existing browser.
+func NewJulesSessionFromBrowser(browser *rod.Browser) (*JulesSession, error) {
+	page := browser.MustPage()
+	return &JulesSession{
+		browser: browser,
+		page:    page,
+	}, nil
+}
+
+// Close closes the browser session (tab).// Close closes the browser session.
 func (s *JulesSession) Close() {
+	s.CloseBrowser()
+}
+
+// CloseBrowser closes the underlying browser.
+func (s *JulesSession) CloseBrowser() {
 	if s.browser != nil {
 		s.browser.MustClose()
 	}
+}
+
+// ClosePage closes the current page (tab).
+func (s *JulesSession) ClosePage() {
+	s.page.Close()
 }
 
 // NavigateToSession navigates to a Jules session URL.
@@ -138,4 +157,48 @@ func (s *JulesSession) MonitorSession() {
 	for {
 		time.Sleep(5 * time.Second)
 	}
+}
+
+// PublishJob represents an async publish job.
+type PublishJob struct {
+	SessionID string
+	Tab       *rod.Page
+	Working   bool
+	StartTime time.Time
+}
+
+// Poll checks if the publish job is complete (PR link available).
+func (j *PublishJob) Poll() (done bool, prURL string) {
+	el, err := j.Tab.Timeout(100*time.Millisecond).ElementR("a", "View PR")
+	if err == nil {
+		j.Working = false
+		href, err := el.Attribute("href")
+		if err == nil && href != nil {
+			return true, *href
+		}
+		// Found element but no href? Should not happen for <a>.
+		return true, ""
+	}
+	return false, ""
+}
+
+// StartLocalPublish navigates to the session and clicks publish, returning a job.
+func (s *JulesSession) StartLocalPublish(sessionID, url string) (*PublishJob, error) {
+	if err := s.NavigateToSession(url); err != nil {
+		return nil, fmt.Errorf("failed to navigate: %w", err)
+	}
+
+	// Wait for page to load?
+	// rod.Navigate waits for load event by default.
+
+	if err := s.ClickPublishBranch(); err != nil {
+		return nil, fmt.Errorf("failed to click publish: %w", err)
+	}
+
+	return &PublishJob{
+		SessionID: sessionID,
+		Tab:       s.page,
+		Working:   true,
+		StartTime: time.Now(),
+	}, nil
 }

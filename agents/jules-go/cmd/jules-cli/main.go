@@ -12,11 +12,14 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	jules "jules-go"
-	"jules-go/internal/github"
 	"jules-go/internal/browser"
+	"jules-go/internal/github"
 	"jules-go/internal/logging"
+
+	"github.com/go-rod/rod"
 )
 
 var (
@@ -52,6 +55,9 @@ func main() {
 	prStatusRepo := prStatusCmd.String("repo", "", "Filter by repository")
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
+
+	publishAllCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
+	publishAsync := publishAllCmd.Bool("async", false, "Run publish jobs asynchronously")
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -231,6 +237,115 @@ func main() {
 		fmt.Printf("Supervisor Config: MaxRetries=%d, BufferSize=%d\n", cfg.MaxRetries, cfg.BufferSize)
 		fmt.Printf("API Base: https://jules.googleapis.com/v1alpha\n")
 
+	case "publish-all":
+		publishAllCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		// Filter for sessions that might be ready to publish (e.g., COMPLETED)
+		var eligibleSessions []*jules.Session
+		for _, s := range sessions {
+			if s.State == "COMPLETED" {
+				eligibleSessions = append(eligibleSessions, s)
+			}
+		}
+		fmt.Printf("Found %d completed sessions out of %d total.\n", len(eligibleSessions), len(sessions))
+
+		if *publishAsync {
+			fmt.Println("Starting async publish...")
+			// Create a shared browser for all tabs
+			b := rod.New().MustConnect()
+			defer b.MustClose()
+
+			var jobs []*browser.PublishJob
+			for _, s := range eligibleSessions {
+				sess, err := browser.NewJulesSessionFromBrowser(b)
+				if err != nil {
+					slog.Error("failed to create browser session", "session_id", s.ID, "err", err)
+					continue
+				}
+
+				fmt.Printf("Starting publish for %s...\n", s.ID)
+				job, err := sess.StartLocalPublish(s.ID, s.URL)
+				if err != nil {
+					slog.Warn("failed to start publish (skipping)", "session_id", s.ID, "err", err)
+					sess.ClosePage()
+					continue
+				}
+				jobs = append(jobs, job)
+			}
+
+			fmt.Printf("Polling %d jobs...\n", len(jobs))
+			doneCount := 0
+			// Simple polling loop
+			for doneCount < len(jobs) {
+				workingCount := 0
+				for _, job := range jobs {
+					if job.Working {
+						done, prURL := job.Poll()
+						if done {
+							if prURL != "" {
+								fmt.Printf("Session %s Published: %s\n", job.SessionID, prURL)
+							} else {
+								fmt.Printf("Session %s Finished (No PR link found)\n", job.SessionID)
+							}
+							job.Tab.Close()
+							doneCount++
+						} else {
+							workingCount++
+						}
+					}
+				}
+				if workingCount > 0 {
+					time.Sleep(1 * time.Second)
+				}
+			}
+			fmt.Println("All async jobs completed.")
+
+		} else {
+			// Blocking mode
+			fmt.Println("Starting blocking publish...")
+			for _, s := range eligibleSessions {
+				fmt.Printf("Processing session %s...\n", s.ID)
+				sess, err := browser.NewJulesSession(false)
+				if err != nil {
+					slog.Error("failed to create browser", "session_id", s.ID, "err", err)
+					continue
+				}
+
+				job, err := sess.StartLocalPublish(s.ID, s.URL)
+				if err != nil {
+					slog.Warn("failed to start publish", "session_id", s.ID, "err", err)
+					sess.CloseBrowser()
+					continue
+				}
+
+				for job.Working {
+					done, prURL := job.Poll()
+					if done {
+						if prURL != "" {
+							fmt.Printf("Session %s Published: %s\n", s.ID, prURL)
+						} else {
+							fmt.Printf("Session %s Finished (No PR link)\n", s.ID)
+						}
+					} else {
+						time.Sleep(500 * time.Millisecond)
+					}
+				}
+				sess.CloseBrowser()
+			}
+			fmt.Println("All blocking jobs completed.")
+		}
+
 	case "pr-status":
 		prStatusCmd.Parse(os.Args[2:])
 		client, err := jules.NewClient(apiKey, logger)
@@ -245,37 +360,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Initialize GitHub monitor
-		// Assuming repo owner/name is passed or configured.
-		// For now, defaulting to current repo or from flags?
-		// User requirement says: Optional --repo filter.
-		// But Monitor needs to be initialized with owner/repo.
-		// If sessions have PR URLs, we can extract repo from there?
-		// But Monitor is initialized once.
-		// Let's assume a default or require env vars, or parse from first PR?
-		// The original Monitor NewMonitor takes owner, repo.
-		// Let's assume we monitor the current repo or "jules-go" by default if not specified?
-		// Wait, Monitor.GetPRStatus takes just PR number.
-		// This implies all PRs are in the same repo, or Monitor is misdesigned for multiple repos.
-		// The user snippet `ghClient.GetPRStatus(prNum)` implies single repo context or `ghClient` handles it.
-		// But `NewMonitor` takes owner/repo.
-		// So `ghClient` is tied to a specific repo.
-		// We should probably allow specifying repo via flag, or default to something.
-		// I'll default to "jules-go" or similar if not provided, but better yet, read from ENV or args.
-		// The user code snippet didn't show Monitor initialization.
-		// I'll use "jules-go" as default repo name if not provided.
-
 		repoName := *prStatusRepo
 		if repoName == "" {
-			// Try to guess from environment or default?
-			// Let's default to a placeholder or error if we can't determine.
-			// But for this task I'll assume we are monitoring "jules-go".
-			// Or maybe we should extract from the first PR we see?
 			repoName = "jules-go"
 		}
 
-		// We need owner too.
-		owner := "agent-company" // Placeholder
+		owner := "agent-company"
 		if strings.Contains(repoName, "/") {
 			parts := strings.Split(repoName, "/")
 			owner = parts[0]
@@ -293,16 +383,13 @@ func main() {
 
 		for _, s := range sessions {
 			if s.PR != "" {
-				// Parse PR number from URL
 				prNum := extractPRNumber(s.PR)
 				if prNum == 0 {
 					continue
 				}
 
-				// Check GitHub API
 				status := ghClient.GetPRStatus(prNum)
 
-				// Truncate title
 				title := s.Title
 				if len(title) > 40 {
 					title = title[:37] + "..."
@@ -337,8 +424,10 @@ Commands:
   get             Get session details <session-id>
   retry           Retry a failed session <session-id> [--max N]
   publish         Publish a session <session-id> [--pr=true|false]
+  publish-all     Publish all completed sessions [--async]
   status          Show system status
   status-sessions Show session status dashboard [--json]
+  pr-status       Show PR status for sessions [--repo owner/repo]
   version         Show version information
   help            Show this help message
 
@@ -372,7 +461,6 @@ func printJSON(v interface{}) {
 }
 
 func extractPRNumber(url string) int {
-	// Remove trailing slash if present
 	url = strings.TrimSuffix(url, "/")
 	parts := strings.Split(url, "/")
 	if len(parts) > 0 {
@@ -385,7 +473,6 @@ func extractPRNumber(url string) int {
 }
 
 func extractIssue(prompt string) string {
-	// Simple regex to find issue key like PROJ-123 or TOOLS-56
 	re := regexp.MustCompile(`[A-Z]+-\d+`)
 	match := re.FindString(prompt)
 	if match != "" {
