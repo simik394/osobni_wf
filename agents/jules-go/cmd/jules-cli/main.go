@@ -7,11 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	jules "jules-go"
 	"jules-go/internal/browser"
+	"jules-go/internal/github"
 	"jules-go/internal/logging"
 )
 
@@ -43,6 +47,9 @@ func main() {
 	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
+
+	prStatusCmd := flag.NewFlagSet("pr-status", flag.ExitOnError)
+	prStatusRepo := prStatusCmd.String("repo", "", "Filter by repository")
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
@@ -224,6 +231,63 @@ func main() {
 		fmt.Printf("Supervisor Config: MaxRetries=%d, BufferSize=%d\n", cfg.MaxRetries, cfg.BufferSize)
 		fmt.Printf("API Base: https://jules.googleapis.com/v1alpha\n")
 
+	case "pr-status":
+		prStatusCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		repoName := *prStatusRepo
+		if repoName == "" {
+			repoName = "jules-go"
+		}
+
+		owner := "agent-company" // Placeholder
+		if strings.Contains(repoName, "/") {
+			parts := strings.Split(repoName, "/")
+			owner = parts[0]
+			repoName = parts[1]
+		}
+
+		ghClient, err := github.NewMonitor(owner, repoName)
+		if err != nil {
+			slog.Error("failed to create github monitor", "err", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("PR #  Issue      Status        Title\n")
+		fmt.Printf("-------------------------------------------\n")
+
+		for _, s := range sessions {
+			if s.PR != "" {
+				// Parse PR number from URL
+				prNum := extractPRNumber(s.PR)
+				if prNum == 0 {
+					continue
+				}
+
+				// Check GitHub API
+				status := ghClient.GetPRStatus(prNum)
+
+				// Truncate title
+				title := s.Title
+				if len(title) > 40 {
+					title = title[:37] + "..."
+				}
+
+				fmt.Printf("#%-4d %-12s %-15s %s\n",
+					prNum, extractIssue(s.Prompt), status, title)
+			}
+		}
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -250,6 +314,7 @@ Commands:
   publish         Publish a session <session-id> [--pr=true|false]
   status          Show system status
   status-sessions Show session status dashboard [--json]
+  pr-status       Show PR status for sessions [--repo owner/name]
   version         Show version information
   help            Show this help message
 
@@ -280,4 +345,27 @@ func printJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(v)
+}
+
+func extractPRNumber(url string) int {
+	// Remove trailing slash if present
+	url = strings.TrimSuffix(url, "/")
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		last := parts[len(parts)-1]
+		if num, err := strconv.Atoi(last); err == nil {
+			return num
+		}
+	}
+	return 0
+}
+
+func extractIssue(prompt string) string {
+	// Simple regex to find issue key like PROJ-123 or TOOLS-56
+	re := regexp.MustCompile(`[A-Z]+-\d+`)
+	match := re.FindString(prompt)
+	if match != "" {
+		return match
+	}
+	return "N/A"
 }

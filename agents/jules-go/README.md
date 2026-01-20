@@ -1,13 +1,42 @@
-# jules-go
+# jules-go: Automation Infrastructure
 
-A Go module providing a CLI and programmatic client for the **Jules AI Agent** API, enabling efficient session management without resource-heavy browser automation.
+`jules-go` is the backend automation infrastructure for the Jules AI Agent. It provides a CLI (`jules-cli`) and programmatic client (`client.go`) for managing sessions, alongside backend services for webhooks and synchronization.
 
-## Why jules-go?
+## Architecture
 
-| Approach | Speed | Memory | Best For |
-|----------|-------|--------|----------|
-| `jules-cli` | ~2s per call | Minimal | Listing, monitoring, automation |
-| `browser_subagent` | ~60s per call | High (opens tabs) | Approvals, PR publishing (not in API yet) |
+The following diagram illustrates the components of the `jules-go` ecosystem and their interactions.
+
+```mermaid
+graph TD
+    subgraph "External Systems"
+        A[Jules API] -->|Callbacks| B(Webhook Server)
+        C[YouTrack] <-->|Sync| D(YouTrack Sync)
+        E[User] -->|Notifications| F(ntfy)
+        G[Prometheus] -->|Scrape| H(Metrics Endpoint)
+    end
+
+    subgraph "jules-go Internals"
+        B --> I(Queue)
+        D --> I
+        I --> J(Worker Pool)
+        J --> B
+        J --> D
+        J --> F
+        H --> K(Prometheus Metrics)
+    end
+
+    subgraph "User Tools"
+        L(jules-cli) --> B
+        L --> A
+    end
+
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#ccf,stroke:#333,stroke-width:2px
+    style F fill:#cfc,stroke:#333,stroke-width:2px
+    style H fill:#ffc,stroke:#333,stroke-width:2px
+    style I fill:#f99,stroke:#333,stroke-width:2px
+    style L fill:#9cf,stroke:#333,stroke-width:2px
+```
 
 ## Quick Start
 
@@ -55,6 +84,8 @@ go build -o jules-cli-bin ./cmd/jules-cli/main.go
 | `get <id>` | Get full session details | `./jules-cli-bin get 12345` |
 | `retry <id> [--max N]` | Retry a failed session | `./jules-cli-bin retry 12345 --max 3` |
 | `status` | Show system status | `./jules-cli-bin status` |
+| `status-sessions` | Show session dashboard | `./jules-cli-bin status-sessions` |
+| `pr-status` | Show PR status for sessions | `./jules-cli-bin pr-status` |
 | `version` | Show version | `./jules-cli-bin version` |
 
 ### Session States
@@ -70,63 +101,40 @@ go build -o jules-cli-bin ./cmd/jules-cli/main.go
 
 ---
 
-## API Operations
+## Components
 
-### What CLI Can Do (Fast, No Browser)
+| Component | Path | Description |
+|---|---|---|
+| **Webhook Server** | `cmd/jules/main.go`, `internal/webhook/` | Listens for session state callbacks from the Jules API. |
+| **YouTrack Sync** | `internal/youtrack/` | Two-way synchronization between Jules sessions and YouTrack issues. |
+| **ntfy Notifications**| `internal/ntfy/` | Pushes real-time notifications about session events to a ntfy topic. |
+| **Prometheus Metrics**| `internal/metrics/` | Exposes internal metrics for monitoring and alerting. |
+| **Queue/Worker Pool**| `internal/queue/` | Manages and processes background tasks with persistence. |
+| **CLI** | `cmd/jules-cli/` | A command-line tool for listing and monitoring sessions. |
 
-- ✅ List all sessions
-- ✅ Get session details
-- ✅ Retry failed sessions
-- ✅ Check system status
+## Configuration
 
-### What Still Needs Browser (Fallback)
+`jules-go` is configured entirely through environment variables.
 
-- ⚠️ Create new session
-- ⚠️ Approve plan
-- ⚠️ Answer clarification questions
-- ⚠️ Publish PR
+| Variable | Required | Description |
+|---|---|---|
+| `JULES_API_KEY` | **Yes** | API key from [jules.google.com/settings/api](https://jules.google.com/settings/api). |
+| `YOUTRACK_URL` | **Yes** | Base URL for the YouTrack instance. |
+| `YOUTRACK_TOKEN`| **Yes** | Permanent token for YouTrack API access. |
+| `NTFY_URL` | **Yes** | URL of the ntfy server. |
+| `NTFY_TOPIC` | **Yes** | The ntfy topic to publish notifications to. |
+| `VAULT_ADDR` | No | HashiCorp Vault address for fetching secrets. |
+| `PORT` | No | Port for the webhook server (default: `8080`). |
 
----
+## Webhook Endpoints
 
-## Architecture
+The webhook server exposes the following endpoints:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    jules-go Module                       │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐    ┌──────────────┐                   │
-│  │  jules-cli   │    │ jules-server │                   │
-│  │  (CLI Tool)  │    │  (Webhook)   │                   │
-│  └──────┬───────┘    └──────┬───────┘                   │
-│         │                   │                            │
-│         ▼                   ▼                            │
-│  ┌──────────────────────────────────────┐               │
-│  │           jules.Client               │               │
-│  │   (API Client - client.go)           │               │
-│  └──────────────────┬───────────────────┘               │
-│                     │                                    │
-│                     ▼                                    │
-│  ┌──────────────────────────────────────┐               │
-│  │    jules.googleapis.com/v1alpha      │               │
-│  │    (Header: x-goog-api-key)          │               │
-│  └──────────────────────────────────────┘               │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `client.go` | API client with session methods |
-| `cmd/jules-cli/main.go` | CLI tool entry point |
-| `cmd/jules/main.go` | Webhook server entry point |
-| `internal/webhook/` | Webhook handlers |
-| `internal/db/` | FalkorDB integration |
-| `internal/queue/` | Task queue with persistence |
-
----
+| Endpoint | Method | Description |
+|---|---|---|
+| `/webhook/session`| `POST` | Receives session state callbacks from the Jules API. |
+| `/metrics` | `GET` | Exposes Prometheus metrics. |
+| `/health` | `GET` | Health check endpoint. |
 
 ## Programmatic Usage
 
@@ -161,62 +169,3 @@ func main() {
     }
 }
 ```
-
-### Available Methods
-
-```go
-// List all sessions
-sessions, err := client.ListSessions(ctx)
-
-// Get specific session
-session, err := client.GetSession(ctx, "12345")
-
-// Get session activities
-activities, err := client.ListActivities(ctx, "12345")
-
-// Approve a plan
-err := client.ApprovePlan(ctx, "12345")
-```
-
----
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JULES_API_KEY` | Yes | API key from jules.google.com/settings/api |
-| `VAULT_ADDR` | No | HashiCorp Vault address (for fetching key) |
-
----
-
-## Development
-
-```bash
-# Build CLI
-go build -o jules-cli-bin ./cmd/jules-cli/main.go
-
-# Build webhook server
-go build -o jules-server ./cmd/jules/main.go
-
-# Run tests
-go test ./...
-
-# Run with verbose logging
-JULES_API_KEY=xxx ./jules-cli-bin list
-```
-
----
-
-## Troubleshooting
-
-### "API key not working"
-
-The Jules API uses `x-goog-api-key` header, NOT `Authorization: Bearer`. This is handled automatically by the client.
-
-### "Permission denied"
-
-Ensure `JULES_API_KEY` is set and valid. Get a new key from https://jules.google.com/settings/api
-
-### "Session not found"
-
-Session IDs are long numeric strings (e.g., `9464138654791526811`). Copy the full ID.

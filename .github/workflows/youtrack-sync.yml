@@ -1,0 +1,108 @@
+name: YouTrack Sync
+
+on:
+  pull_request:
+    types: [opened, closed, synchronize, reopened]
+
+jobs:
+  youtrack-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Sync with YouTrack
+        uses: actions/github-script@v6
+        env:
+          YOUTRACK_URL: ${{ secrets.YOUTRACK_URL }}
+          YOUTRACK_TOKEN: ${{ secrets.YOUTRACK_TOKEN }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) return;
+
+            const prTitle = pr.title;
+            const prBody = pr.body || "";
+            const prUrl = pr.html_url;
+            const isMerged = pr.merged;
+            const isClosed = context.payload.action === 'closed';
+
+            // Regex to find YouTrack issue IDs (e.g., QUEST-5, TOOLS-122)
+            const issueRegex = /([A-Z]+-\d+)/g;
+            const text = `${prTitle}\n${prBody}`;
+            const matches = [...new Set(text.match(issueRegex) || [])];
+
+            if (matches.length === 0) {
+              console.log("No YouTrack issue IDs found in PR title or body.");
+              return;
+            }
+
+            console.log(`Found issues: ${matches.join(', ')}`);
+
+            const youtrackUrl = process.env.YOUTRACK_URL;
+            const youtrackToken = process.env.YOUTRACK_TOKEN;
+
+            if (!youtrackUrl || !youtrackToken) {
+              console.log("YOUTRACK_URL or YOUTRACK_TOKEN not set. Skipping sync.");
+              return;
+            }
+
+            // Helper to call YouTrack
+            async function executeCommand(issueId, command) {
+               const url = `${youtrackUrl.replace(/\/$/, '')}/api/issues/${issueId}/executeCommand`;
+               const response = await fetch(url, {
+                 method: 'POST',
+                 headers: {
+                   'Authorization': `Bearer ${youtrackToken}`,
+                   'Content-Type': 'application/json',
+                   'Accept': 'application/json'
+                 },
+                 body: JSON.stringify({ query: command })
+               });
+               if (!response.ok) {
+                 const err = await response.text();
+                 console.error(`Failed to update ${issueId}: ${err}`);
+               } else {
+                 console.log(`Updated ${issueId} with command: "${command}"`);
+               }
+            }
+
+            async function addComment(issueId, comment) {
+               const url = `${youtrackUrl.replace(/\/$/, '')}/api/issues/${issueId}/comments`;
+               const response = await fetch(url, {
+                 method: 'POST',
+                 headers: {
+                   'Authorization': `Bearer ${youtrackToken}`,
+                   'Content-Type': 'application/json',
+                   'Accept': 'application/json'
+                 },
+                 body: JSON.stringify({ text: comment })
+               });
+               if (!response.ok) {
+                  console.error(`Failed to comment on ${issueId}`);
+               } else {
+                  console.log(`Commented on ${issueId}`);
+               }
+            }
+
+            for (const issueId of matches) {
+              try {
+                if (isMerged) {
+                  // PR Merged -> Fix issue
+                  await executeCommand(issueId, "State Fixed");
+                  await addComment(issueId, `PR Merged: ${prUrl}`);
+                } else if (isClosed && !isMerged) {
+                  // PR Closed without merge
+                  await addComment(issueId, `PR Closed (not merged): ${prUrl}`);
+                } else {
+                  // PR Open/Updated -> In Progress + Comment
+                  await executeCommand(issueId, "State In Progress");
+                  // Only add comment on open to avoid spam on every sync
+                  if (context.payload.action === 'opened') {
+                     await addComment(issueId, `PR Opened: ${prUrl}`);
+                  }
+                }
+              } catch (e) {
+                console.error(`Error processing ${issueId}: ${e.message}`);
+              }
+            }

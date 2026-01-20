@@ -124,6 +124,14 @@
     group: 999
     mode: "0750"
 
+- name: Create OpenWebUI data directory
+  ansible.builtin.file:
+    path: /opt/open-webui/data
+    state: directory
+    owner: 1000  # Default non-root user
+    group: 1000
+    mode: "0750"
+
 - name: Create Neo4j data directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -152,6 +160,12 @@
     - falkor.nomad.hcl.j2
     - goose.nomad.hcl.j2
     - neo4j.nomad.hcl.j2
+
+- name: Copy OpenWebUI Nomad job
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/nomad/jobs/openwebui.nomad.hcl"
+    dest: /opt/nomad/jobs/openwebui.nomad.hcl
+    mode: "0644"
 
 - name: Run Traefik
   ansible.builtin.command: nomad job run /opt/nomad/jobs/traefik.nomad.hcl
@@ -197,6 +211,12 @@
 
 - name: Run Neo4j
   ansible.builtin.command: nomad job run /opt/nomad/jobs/neo4j.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+
+- name: Run OpenWebUI
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/openwebui.nomad.hcl
   environment:
     NOMAD_ADDR: http://127.0.0.1:4646
   changed_when: false
