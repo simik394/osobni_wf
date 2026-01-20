@@ -13,8 +13,9 @@ from rich.panel import Panel
 from rich.markdown import Markdown
 from langchain_core.messages import HumanMessage
 
+from datetime import datetime
 from proj.agent import get_graph, create_proj_graph
-from proj.state import ProjState, Project
+from proj.state import ProjState, Project, TaskStatus
 from proj.persistence import get_store
 
 app = typer.Typer(help="Personal project management agent")
@@ -184,6 +185,46 @@ def status():
 📥 Inbox: {len(state.inbox)}
 🎯 Active: {state.active_project_id or 'None'}
     """.strip(), title="Status"))
+
+
+@app.command()
+def start(task_id: str):
+    """Start working on a task."""
+    state = get_state()
+
+    if task_id not in state.tasks:
+        console.print(f"❌ Task '{task_id}' not found.")
+        raise typer.Exit(1)
+
+    task = state.tasks[task_id]
+    task.status = TaskStatus.IN_PROGRESS
+    task.started_at = datetime.now()
+
+    save_state()
+
+    console.print(f"🚀 Started task: [bold]{task.title}[/bold]")
+
+
+@app.command()
+def complete(task_id: str):
+    """Complete a task."""
+    state = get_state()
+
+    if task_id not in state.tasks:
+        console.print(f"❌ Task '{task_id}' not found.")
+        raise typer.Exit(1)
+
+    task = state.tasks[task_id]
+    task.status = TaskStatus.DONE
+    task.completed_at = datetime.now()
+
+    if task.started_at:
+        duration = task.completed_at - task.started_at
+        task.actual_duration_minutes = round(duration.total_seconds() / 60)
+
+    save_state()
+
+    console.print(f"✅ Completed task: [bold]{task.title}[/bold]")
 
 
 if __name__ == "__main__":
