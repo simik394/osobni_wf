@@ -1,0 +1,77 @@
+local wezterm = require 'wezterm'
+local config = wezterm.config_builder()
+
+-- Font configuration
+config.font = wezterm.font('JetBrainsMono Nerd Font', {
+  weight = 'Regular',
+  stretch = 'Normal',
+  style = 'Normal',
+  harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0' }, -- Disable ligatures to match Ghostty
+})
+config.font_size = 12.0
+
+-- Ghostty has `adjust-cell-width = -25%`. WezTerm uses a multiplier (1.0 is default).
+-- 0.75 should roughly match the -25% reduction.
+config.cell_width = 0.75
+config.line_height = 1.0
+
+-- Appearance to match Ghostty "Tomorrow Night Bright"
+config.colors = {
+  foreground = '#d8d8d8',
+  background = '#181818',
+  cursor_bg = '#d8d8d8',
+  cursor_fg = '#181818',
+  
+  ansi = {
+    '#181818', -- Black
+    '#ac4242', -- Red
+    '#90a959', -- Green
+    '#f4bf75', -- Yellow
+    '#6a9fb5', -- Blue
+    '#aa759f', -- Magenta
+    '#75b5aa', -- Cyan
+    '#d8d8d8', -- White
+  },
+  brights = {
+    '#6b6b6b', -- Bright Black
+    '#c55555', -- Bright Red
+    '#aac474', -- Bright Green
+    '#feca88', -- Bright Yellow
+    '#82b8c8', -- Bright Blue
+    '#c28cb8', -- Bright Magenta
+    '#93d3c3', -- Bright Cyan
+    '#f8f8f8', -- Bright White
+  },
+}
+
+config.window_background_opacity = 0.95
+config.text_background_opacity = 1.0
+
+config.window_padding = {
+  left = 0,
+  right = 0,
+  top = 0,
+  bottom = 0,
+}
+
+-- Window decorations
+-- Ghostty config: window-decoration = true, gtk-titlebar = true (System Title Bar)
+config.window_decorations = "TITLE | RESIZE"
+
+-- Tab Bar
+config.enable_tab_bar = true
+config.hide_tab_bar_if_only_one_tab = false
+config.use_fancy_tab_bar = false
+config.tab_bar_at_bottom = true
+
+-- Cursor
+config.default_cursor_style = 'BlinkingBlock'
+config.cursor_blink_ease_in = 'Constant'
+config.cursor_blink_ease_out = 'Constant'
+config.cursor_blink_rate = 0 -- Disable blinking to match ghostty config `cursor-style-blink = false`
+
+-- Shell
+-- Use Nushell to match Ghostty configuration
+config.default_prog = { '/home/sim/.local/bin/nu' }
+
+return config

@@ -1,0 +1,7 @@
+name: Downloader Integration
+shortName: DOWN
+leader: simik394
+template: std-agent-v1
+description: |
+  Downloader: Intelligent content retrieval and caching subsystem.
+  Path: integrations/downloader

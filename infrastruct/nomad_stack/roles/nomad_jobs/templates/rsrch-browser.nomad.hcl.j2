@@ -12,6 +12,14 @@ job "rsrch-browser" {
 
     network {
       mode = "host"
+      
+      port "vnc" {
+        static = 5900
+      }
+      
+      port "cdp" {
+        static = 9223
+      }
     }
 
     constraint {
@@ -52,8 +60,8 @@ job "rsrch-browser" {
 
       service {
         name         = "rsrch-browser-vnc"
-        port         = 5900
-        address_mode = "driver"
+        port         = "vnc"
+        address_mode = "host"
         tags         = ["browser", "vnc"]
       }
     }
@@ -82,15 +90,14 @@ job "rsrch-browser" {
 
       service {
         name         = "rsrch-browser-cdp"
-        port         = 9223
-        address_mode = "driver"
+        port         = "cdp"
+        address_mode = "host"
         tags         = ["browser", "cdp", "rsrch"]
         
         check {
           name         = "cdp-health"
           type         = "http"
           path         = "/json/version"
-          address_mode = "driver"
           interval     = "30s"
           timeout      = "10s"
         }

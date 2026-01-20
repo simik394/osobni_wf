@@ -3,7 +3,7 @@ project:
   shortName: ANGRAV
   leader: admin
   template: std-agent-v1
-  description: "Playwright-based session scraper for Antigravity."
+  description: "Playwright-based automation suite for Antigravity IDE. Features CLI, OpenAI API Server, Context Injection (@menu), and Terminal Management."
 
 boards:
   - name: "ANGRAV Board"

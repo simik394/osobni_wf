@@ -2,7 +2,7 @@
 // Called by watcher when audio generation completes
 // Updates FalkorDB state and sends ntfy notification
 //
-// Architecture per GEMINI.md:
+// Architecture per agents/rsrch/AGENTS.md:
 // Watcher monitors page → calls this webhook → updates FalkorDB + ntfy
 
 import * as wmill from "windmill-client";

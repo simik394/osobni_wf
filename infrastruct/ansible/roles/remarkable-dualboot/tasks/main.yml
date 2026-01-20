@@ -1,0 +1,35 @@
+---
+# reMarkable Dual-Boot Role - Main Task Orchestration
+# Uses raw module since reMarkable has no Python
+
+- name: Include preflight checks
+  ansible.builtin.import_tasks: preflight.yml
+  tags: [remarkable, preflight]
+
+- name: Include backup tasks
+  ansible.builtin.import_tasks: backup.yml
+  when: remarkable_backup_before_flash | bool
+  tags: [remarkable, backup]
+
+- name: Include firmware download tasks
+  ansible.builtin.import_tasks: download_firmware.yml
+  tags: [remarkable, download]
+
+- name: Include firmware flash tasks
+  ansible.builtin.import_tasks: flash_firmware.yml
+  tags: [remarkable, flash]
+
+- name: Include dual-boot setup tasks
+  ansible.builtin.import_tasks: setup_dualboot.yml
+  tags: [remarkable, dualboot]
+
+- name: Include auto-update disable tasks
+  ansible.builtin.import_tasks: disable_updates.yml
+  when: remarkable_disable_auto_update | bool
+  tags: [remarkable, updates]
+
+- name: Mark installation complete
+  ansible.builtin.raw: |
+    echo "{{ remarkable_target_firmware }}" > {{ remarkable_marker_file }}
+  changed_when: true
+  tags: [remarkable]

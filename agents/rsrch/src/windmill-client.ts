@@ -1,14 +1,15 @@
 /**
  * Windmill Client - Trigger Windmill jobs from rsrch server
- * 
+ *
  * This centralizes all Windmill API calls to prevent race conditions
  * by routing audio generation through Windmill's job queue.
- * 
+ *
  * IMPORTANT: Every job trigger creates a PendingAudio in FalkorDB
- * for real-time state tracking (per GEMINI.md mandate).
+ * for real-time state tracking (per agents/rsrch/AGENTS.md mandate).
  */
 
 import { getGraphStore, type PendingAudio } from './graph-store';
+import { ApiError, AuthError, NetworkError } from './errors';
 
 export interface WindmillJobResult {
     jobId: string;
@@ -21,6 +22,11 @@ export interface AudioGenerationParams {
     notebookTitle: string;
     sourceTitle: string;
     customPrompt?: string;
+}
+
+export interface SessionPublishParams {
+    sessionId: string;
+    mode: 'pr' | 'branch';
 }
 
 export class WindmillClient {
@@ -46,14 +52,84 @@ export class WindmillClient {
     }
 
     /**
+     * A wrapper around fetch with timeout, retry, and exponential backoff.
+     */
+    private async fetchWithRetry(
+        url: string,
+        options: RequestInit,
+        maxRetries = 4,
+        timeout = 30000
+    ): Promise<Response> {
+        let lastError: Error | null = null;
+
+        for (let i = 0; i < maxRetries; i++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    return response;
+                }
+
+                // Handle non-ok responses
+                const status = response.status;
+                const statusText = response.statusText;
+                const errorText = await response.text();
+
+                if (status === 401 || status === 403) {
+                    throw new AuthError(`Authentication failed: ${errorText}`, status, statusText);
+                }
+
+                // Retry on transient server errors
+                if ([429, 500, 502, 503].includes(status)) {
+                    lastError = new ApiError(`API error (status ${status}): ${errorText}`, status, statusText);
+                    // Continue to retry logic below
+                } else {
+                    // For other client errors (4xx), don't retry
+                    throw new ApiError(`API error (status ${status}): ${errorText}`, status, statusText);
+                }
+            } catch (error: any) {
+                clearTimeout(timeoutId);
+
+                // If it's a specific non-retriable error, throw it immediately
+                if (error instanceof ApiError || error instanceof AuthError) {
+                    throw error;
+                }
+
+                if (error.name === 'AbortError') {
+                    lastError = new NetworkError('Request timed out');
+                } else {
+                    lastError = new NetworkError(`Network error: ${error.message}`);
+                }
+            }
+
+            // If we are here, it's a retriable error
+            if (i < maxRetries - 1) {
+                const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+                console.warn(`[WindmillClient] Retrying after ${delay}ms due to: ${lastError?.message}`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        throw lastError || new NetworkError('Request failed after all retries.');
+    }
+
+
+    /**
      * Trigger audio generation for a single source
-     * Returns immediately with job ID (non-blocking per GEMINI.md architecture)
+     * Returns immediately with job ID (non-blocking per agents/rsrch/AGENTS.md architecture)
      */
     async triggerAudioGeneration(params: AudioGenerationParams): Promise<WindmillJobResult> {
         const url = `${this.baseUrl}/api/w/${this.workspace}/jobs/run/p/f/audio/click_generate_audio`;
 
         try {
-            const response = await fetch(url, {
+            const response = await this.fetchWithRetry(url, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.token}`,
@@ -65,15 +141,6 @@ export class WindmillClient {
                     custom_prompt: params.customPrompt
                 })
             });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                return {
-                    jobId: '',
-                    success: false,
-                    error: `Windmill API error ${response.status}: ${errorText}`
-                };
-            }
 
             // Windmill returns job UUID as plain text
             const jobId = await response.text();
@@ -91,9 +158,42 @@ export class WindmillClient {
     }
 
     /**
+     * Trigger Jules session publishing
+     */
+    async triggerSessionPublishing(params: SessionPublishParams): Promise<WindmillJobResult> {
+        const url = `${this.baseUrl}/api/w/${this.workspace}/jobs/run/p/f/jules/click_publish_session`;
+
+        try {
+            const response = await this.fetchWithRetry(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: params.sessionId,
+                    mode: params.mode
+                })
+            });
+
+            const jobId = await response.text();
+            return {
+                jobId: jobId.trim().replace(/"/g, ''),
+                success: true
+            };
+        } catch (error: any) {
+            return {
+                jobId: '',
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
      * Queue multiple audio generations with FalkorDB state tracking
      * Each source gets its own Windmill job for parallel execution
-     * 
+     *
      * IMPORTANT: Creates PendingAudio in FalkorDB BEFORE triggering Windmill
      * This ensures state is tracked from the moment user requests generation
      */
@@ -190,13 +290,96 @@ export class WindmillClient {
         const url = `${this.baseUrl}/api/w/${this.workspace}/jobs_u/get/${jobId}`;
 
         try {
-            const response = await fetch(url, {
+            const response = await this.fetchWithRetry(url, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             return await response.json();
-        } catch (error) {
-            return { error: 'Failed to get job status' };
+        } catch (error: any) {
+            return { error: `Failed to get job status: ${error.message}` };
         }
+    }
+
+    /**
+     * Trigger a generic Windmill job (fire and forget or wait via polling in future)
+     */
+    async triggerJob(path: string, args: Record<string, any>): Promise<WindmillJobResult> {
+        const url = `${this.baseUrl}/api/w/${this.workspace}/jobs/run/p/${path}`;
+
+        try {
+            const response = await this.fetchWithRetry(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(args)
+            });
+
+            const jobId = await response.text();
+            return {
+                jobId: jobId.trim().replace(/"/g, ''),
+                success: true
+            };
+        } catch (error: any) {
+            return {
+                jobId: '',
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Trigger Gemini Chat via Windmill
+     */
+    async triggerGeminiChat(message: string, sessionId?: string, waitForResponse: boolean = true): Promise<WindmillJobResult> {
+        return this.triggerJob('f/rsrch/gemini_chat', {
+            message,
+            session_id: sessionId,
+            wait_for_response: waitForResponse
+        });
+    }
+
+    /**
+     * Wait for a job to complete (polling)
+     */
+    async waitForJob(jobId: string, timeout = 60000, interval = 1000): Promise<any> {
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout) {
+            const statusUrl = `${this.baseUrl}/api/w/${this.workspace}/jobs_u/completed/get_result/${jobId}`;
+            try {
+                const response = await this.fetchWithRetry(statusUrl, {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                }, 1, 5000); // 1 retry for status checks
+
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (e) {
+                // Ignore transient errors while polling
+            }
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+        throw new Error(`Job ${jobId} timed out`);
+    }
+
+    /**
+     * Queue multiple Jules session publishing jobs
+     */
+    async queueSessionPublishing(sessionIds: string[], mode: 'pr' | 'branch' = 'pr'): Promise<{ queued: WindmillJobResult[]; failed: WindmillJobResult[] }> {
+        const queued: WindmillJobResult[] = [];
+        const failed: WindmillJobResult[] = [];
+
+        for (const sessionId of sessionIds) {
+            const result = await this.triggerSessionPublishing({ sessionId, mode });
+            if (result.success) {
+                queued.push(result);
+            } else {
+                failed.push(result);
+            }
+        }
+
+        return { queued, failed };
     }
 }
 

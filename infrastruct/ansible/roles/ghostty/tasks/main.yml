@@ -1,0 +1,79 @@
+---
+# Ghostty Terminal Emulator - AppImage installation
+# Uses pkgforge-dev/ghostty-appimage which bundles newer GTK, fixing OpenGL issues on Pop!_OS 22.04
+
+- name: Set Ghostty version
+  set_fact:
+    ghostty_version: "1.2.3"
+
+- name: Create install directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ansible_env.HOME }}/.local/bin"
+    - "{{ ansible_env.HOME }}/.local/opt/ghostty-appimage"
+    - "{{ ansible_env.HOME }}/.config/ghostty"
+
+- name: Check if Ghostty AppImage is already installed
+  stat:
+    path: "{{ ansible_env.HOME }}/.local/opt/ghostty-appimage/Ghostty-{{ ghostty_version }}.AppImage"
+  register: ghostty_installed
+
+- name: Download Ghostty AppImage
+  get_url:
+    url: "https://github.com/pkgforge-dev/ghostty-appimage/releases/download/v{{ ghostty_version }}/Ghostty-{{ ghostty_version }}-x86_64.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/opt/ghostty-appimage/Ghostty-{{ ghostty_version }}.AppImage"
+    mode: "0755"
+  when: not ghostty_installed.stat.exists
+
+- name: Symlink Ghostty to bin
+  file:
+    src: "{{ ansible_env.HOME }}/.local/opt/ghostty-appimage/Ghostty-{{ ghostty_version }}.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/bin/ghostty"
+    state: link
+    force: yes
+
+- name: Remove old source-built Ghostty files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ ansible_env.HOME }}/.local/bin/ghostty.bin"
+    - "{{ ansible_env.HOME }}/.local/opt/ghostty-src"
+    - "{{ ansible_env.HOME }}/.local/opt/zig"
+    - "{{ ansible_env.HOME }}/.local/opt/zig-linux-x86_64-0.13.0"
+
+- name: Configure Ghostty
+  template:
+    src: config.j2
+    dest: "{{ ansible_env.HOME }}/.config/ghostty/config"
+    mode: "0644"
+
+- name: Create desktop entry for Ghostty AppImage
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/com.mitchellh.ghostty.desktop"
+    content: |
+      [Desktop Entry]
+      Name=Ghostty
+      Type=Application
+      Comment=A terminal emulator
+      Exec={{ ansible_env.HOME }}/.local/bin/ghostty
+      Icon=com.mitchellh.ghostty
+      Categories=System;TerminalEmulator;
+      Keywords=terminal;tty;pty;
+      StartupNotify=true
+      StartupWMClass=com.mitchellh.ghostty
+      Terminal=false
+      Actions=new-window;
+      X-GNOME-UsesNotifications=true
+
+      [Desktop Action new-window]
+      Name=New Window
+      Exec={{ ansible_env.HOME }}/.local/bin/ghostty
+    mode: "0644"
+
+- name: Update desktop database
+  command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications
+  changed_when: false

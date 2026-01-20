@@ -1,0 +1,41 @@
+---
+- name: Ensure Memgraph Lab Docker container is running
+  shell: |
+    {% raw %}
+    docker ps -a --format '{{.Names}}' | grep -w memgraph-lab || \
+    docker run -d --name memgraph-lab -p 3002:3000 --restart always memgraph/lab
+    {% endraw %}
+  register: docker_check
+  changed_when: "'memgraph-lab' not in docker_check.stdout"
+
+- name: Ensure Memgraph Lab is started
+  shell: docker start memgraph-lab
+  when: "'memgraph-lab' in docker_check.stdout"
+  changed_when: false
+
+- name: Create local applications directory
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/applications"
+    state: directory
+
+- name: Download Memgraph icon
+  get_url:
+    url: https://memgraph.com/images/memgraph-logo.png
+    dest: "{{ ansible_env.HOME }}/.local/share/icons/memgraph.png"
+    force: no
+  ignore_errors: yes
+
+- name: Create Memgraph Lab Desktop Shortcut
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/memgraph-lab.desktop"
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Memgraph Lab
+      Comment=Graph Database Visualization
+      Exec=xdg-open http://localhost:3002
+      Icon={{ ansible_env.HOME }}/.local/share/icons/memgraph.png
+      Terminal=false
+      Categories=Development;Database;
+    mode: '0755'

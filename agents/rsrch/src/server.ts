@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 import { PerplexityClient } from './client';
 import { config } from './config';
 
@@ -11,12 +14,16 @@ import { getRegistry } from './artifact-registry';
 
 // Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
-let shouldBypass: (headers: any) => boolean = () => false;
+// Define shouldBypass locally to ensure Windmill infinite loop protection works
+// even if @agents/shared is missing or fails to load.
+let shouldBypass: (headers: any) => boolean = (headers: any) => {
+    return headers['x-bypass-windmill'] === 'true' || headers['x-windmill-bypass'] === 'true';
+};
 let proxyChatCompletion: any = null;
 try {
     const shared = require('@agents/shared');
     getFalkorClient = shared.getFalkorClient;
-    shouldBypass = shared.shouldBypass || (() => false);
+    if (shared.shouldBypass) shouldBypass = shared.shouldBypass;
     proxyChatCompletion = shared.proxyChatCompletion;
 } catch (e) {
     console.log('[Server] @agents/shared not available, FalkorDB/Windmill logging disabled');
@@ -42,7 +49,7 @@ import {
 // Initialize graph store
 const graphStore = getGraphStore();
 
-const app = express();
+export const app = express();
 const PORT = config.port;
 
 // Middleware
@@ -55,7 +62,35 @@ let notebookClient: NotebookLMClient | null = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
+    const health = {
+        status: 'ok',
+        uptime: process.uptime(),
+        version: require('../package.json').version,
+        dependencies: {
+            falkordb: 'unknown',
+            browser: 'unknown',
+        }
+    };
+
+    // Check FalkorDB
+    const falkorStatus = graphStore.getIsConnected();
+    health.dependencies.falkordb = falkorStatus ? 'ok' : 'error';
+
+    // Check Browser
+    const browserStatus = client.isBrowserInitialized();
+    health.dependencies.browser = browserStatus ? 'ok' : 'warn'; // Warn if not connected yet
+
+    // Determine overall status
+    if (!falkorStatus) {
+        health.status = 'error'; // Hard dependency failure
+    } else if (!browserStatus) {
+        health.status = 'warn'; // Soft dependency failure (can connect lazily)
+    }
+
+    if (health.status === 'error') {
+        return res.status(503).json(health);
+    }
+    res.json(health);
 });
 
 // Shutdown endpoint
@@ -421,7 +456,7 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
         const safeFilename = audioName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
 
         // Define local output directory
-        const outputDir = process.env.AUDIO_OUTPUT_DIR || '/home/sim/Obsi/Audio';
+        const outputDir = config.paths.resultsDir;
         const fs = require('fs');
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
@@ -443,9 +478,8 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
 
         // 7. Track in Graph
         const audioNode = await graphStore.createResearchAudio({
-            researchDocId,
+            docId: researchDocId,
             path: localPath,
-            filename: localFilename,
             duration: 0
         });
 
@@ -473,6 +507,95 @@ app.get('/jobs', async (req, res) => {
     res.json({ success: true, jobs });
 });
 
+// ============================================================================
+// Async Deep Research Endpoints
+// ============================================================================
+
+// Start async deep research - returns job ID immediately
+app.post('/deep-research/start', async (req, res) => {
+    try {
+        const { query, gem, sessionId } = req.body;
+
+        if (!query) {
+            return res.status(400).json({ success: false, error: 'Query is required' });
+        }
+
+        // Create job in FalkorDB
+        const job = await graphStore.addJob('deepResearch', query, { gem, sessionId });
+        console.log(`[Server] Deep research job created: ${job.id}`);
+
+        // Fire and forget - run deep research in background
+        (async () => {
+            try {
+                await graphStore.updateJobStatus(job.id, 'running');
+
+                // Initialize Gemini client if not already
+                if (!geminiClient) {
+                    geminiClient = await client.createGeminiClient();
+                    await geminiClient.init();
+                }
+
+                // Run deep research
+                const result = await geminiClient.startDeepResearch(query, gem);
+
+                // Update job with result
+                await graphStore.updateJobStatus(job.id, 'completed', { result });
+                console.log(`[Server] Deep research job ${job.id} completed`);
+            } catch (e: any) {
+                console.error(`[Server] Deep research job ${job.id} failed:`, e);
+                await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+            }
+        })();
+
+        res.json({ success: true, jobId: job.id, status: 'queued' });
+    } catch (e: any) {
+        console.error('[Server] Failed to start deep research:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Get deep research job status
+app.get('/deep-research/status/:id', async (req, res) => {
+    const job = await graphStore.getJob(req.params.id);
+
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
+    res.json({
+        success: true,
+        jobId: job.id,
+        status: job.status,
+        query: job.query,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        error: job.error
+    });
+});
+
+// Get deep research result (only when completed)
+app.get('/deep-research/result/:id', async (req, res) => {
+    const job = await graphStore.getJob(req.params.id);
+
+    if (!job) {
+        return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
+    if (job.status !== 'completed') {
+        return res.status(202).json({
+            success: false,
+            error: 'Job not completed yet',
+            status: job.status
+        });
+    }
+
+    res.json({
+        success: true,
+        jobId: job.id,
+        result: job.result
+    });
+});
 
 app.post('/notebook/dump', async (req, res) => {
     try {
@@ -674,7 +797,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         const request = req.body as ChatCompletionRequest;
 
         // Windmill proxy check - route through Windmill unless bypassed
-        if (proxyChatCompletion && process.env.WINDMILL_TOKEN && !shouldBypass(req.headers)) {
+        if (proxyChatCompletion && config.windmill?.token && !shouldBypass(req.headers)) {
             console.log('[Server] Routing through Windmill proxy...');
             try {
                 const result = await proxyChatCompletion('rsrch', request);
@@ -915,7 +1038,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                                     streamCallback,
                                     {
                                         deepResearch: useDeepResearch,
-                                        sessionId: sessionId
+                                        sessionId: sessionId,
+                                        // Force reset if not using specific session ID
+                                        resetSession: !sessionId
                                     }
                                 );
                             } else {
@@ -946,7 +1071,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                     try {
                         responseText = await geminiClient.research(prompt, {
                             deepResearch: useDeepResearch,
-                            sessionId: sessionId
+                            sessionId: sessionId,
+                            // Force reset if not using specific session ID
+                            resetSession: !sessionId
                         });
                     } catch (e: any) {
                         if (e.message.includes('Context not initialized') || e.message.includes('Target closed')) {
@@ -955,7 +1082,8 @@ app.post('/v1/chat/completions', async (req, res) => {
                             await geminiClient.init();
                             responseText = await geminiClient.research(prompt, {
                                 deepResearch: useDeepResearch,
-                                sessionId: sessionId
+                                sessionId: sessionId,
+                                resetSession: !sessionId
                             });
                         } else {
                             throw e;
@@ -1026,16 +1154,54 @@ app.post('/gemini/research', async (req, res) => {
         const { query } = req.body;
         if (!query) return res.status(400).json({ error: 'Query is required' });
 
+        // Check if client wants SSE streaming
+        const wantsSSE = req.headers.accept?.includes('text/event-stream');
+
         if (!geminiClient) {
             console.log('[Server] Creating Gemini client...');
+            // Lazy browser init if startup failed
+            if (!client.isBrowserInitialized()) {
+                console.log('[Server] Browser not initialized - connecting now...');
+                await client.init();
+            }
             geminiClient = await client.createGeminiClient();
             await geminiClient.init();
         }
 
-        console.log(`[Server] Generating Gemini response for: "${query}"`);
-        const response = await geminiClient.research(query);
+        // Default to reset session for standard research queries
+        const options = { resetSession: req.body.resetSession ?? true, model: req.body.model };
 
-        res.json({ success: true, data: response });
+        if (wantsSSE) {
+            // SSE streaming mode
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
+
+            // Send progress events as they occur
+            const progressHandler = (data: any) => {
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            };
+            geminiClient.on('progress', progressHandler);
+
+            try {
+                console.log(`[Server] Generating Gemini response (SSE) for: "${query}"`);
+                // Note: research() doesn't officially support streaming callback in the legacy method, 
+                // but we pass options for future compatibility if research() signatures align
+                const response = await geminiClient.research(query, { deepResearch: false, ...options });
+
+                // Send final result
+                res.write(`data: ${JSON.stringify({ type: 'result', success: true, data: response })}\n\n`);
+                res.end();
+            } finally {
+                geminiClient.removeListener('progress', progressHandler);
+            }
+        } else {
+            // Traditional JSON response mode
+            console.log(`[Server] Generating Gemini response for: "${query}"`);
+            const response = await geminiClient.research(query);
+            res.json({ success: true, data: response });
+        }
     } catch (e: any) {
         console.error('[Server] Gemini research failed:', e);
         res.status(500).json({ success: false, error: e.message });
@@ -1055,6 +1221,23 @@ app.get('/gemini/sessions', async (req, res) => {
         }
 
         const sessions = await geminiClient.listSessions(limit, offset);
+
+        // Sync to graph in the background
+        if (sessions.length > 0) {
+            console.log(`[Server] Syncing ${sessions.length} Gemini sessions to FalkorDB...`);
+            (async () => {
+                for (const session of sessions) {
+                    await graphStore.createOrUpdateGeminiSession({
+                        sessionId: session.id || '',
+                        title: session.name
+                    });
+                }
+                console.log('[Server] Gemini session sync complete.');
+            })().catch(err => {
+                console.error('[Server] Background Gemini session sync failed:', err);
+            });
+        }
+
         res.json({ success: true, data: sessions });
     } catch (e: any) {
         console.error('[Server] Gemini list sessions failed:', e);
@@ -1122,10 +1305,9 @@ app.post('/gemini/sync-graph', async (req, res) => {
                 // Create session in FalkorDB (duplicates will fail silently)
                 const sessionId = `gemini-${docId}`;
                 await graphStore.createSession({
-                    id: sessionId,
+                    platformId: docId,
                     platform: 'gemini',
-                    externalId: docId,
-                    query: doc.title || doc.firstHeading || ''
+                    title: doc.title || doc.firstHeading || ''
                 });
 
                 syncedIds.push(docId);
@@ -1236,6 +1418,527 @@ app.post('/gemini/get-research-info', async (req, res) => {
         res.json({ success: true, data: info });
     } catch (e: any) {
         console.error('[Server] Gemini get info failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ============================================================================
+// Additional Gemini Endpoints (Production CLI Support)
+// ============================================================================
+
+app.get('/gemini/sources', async (req, res) => {
+    try {
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+        const sources = await geminiClient.getContextSources();
+        res.json({ success: true, sources });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/gemini/set-model', async (req, res) => {
+    try {
+        const { model } = req.body;
+        if (!model) return res.status(400).json({ error: 'Model name is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        console.log(`[Server] Setting Gemini model to: ${model}`);
+        const success = await geminiClient.setModel(model);
+
+        if (success) {
+            res.json({ success: true, model });
+        } else {
+            res.status(400).json({ success: false, error: `Failed to set model to ${model}` });
+        }
+    } catch (e: any) {
+        console.error('[Server] Set model failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/gemini/upload', async (req, res) => {
+    try {
+        const body = req.body;
+        let filesToUpload: string[] = [];
+
+        // 1. Handle new "files" array
+        if (body.files && Array.isArray(body.files)) {
+            for (const f of body.files) {
+                if (typeof f === 'string') {
+                    filesToUpload.push(f);
+                } else if (typeof f === 'object') {
+                    if (f.path) {
+                        filesToUpload.push(f.path);
+                    } else if (f.content && f.filename) {
+                        const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
+                        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                        const targetPath = path.join(tempDir, f.filename);
+                        fs.writeFileSync(targetPath, f.content, 'utf8');
+                        filesToUpload.push(targetPath);
+                    }
+                }
+            }
+        }
+        // 2. Handle legacy single file properties (filePath, content, filename)
+        else if (body.filePath || body.content) {
+            let targetPath = body.filePath;
+            if (body.content) {
+                if (!body.filename) return res.status(400).json({ error: 'Filename is required when providing content' });
+                const tempDir = path.join(os.tmpdir(), 'rsrch-uploads');
+                if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                targetPath = path.join(tempDir, body.filename);
+                fs.writeFileSync(targetPath, body.content, 'utf8');
+            }
+            if (targetPath) filesToUpload.push(targetPath);
+        }
+
+        if (filesToUpload.length === 0) {
+            return res.status(400).json({ error: 'No valid files provided' });
+        }
+
+        if (!geminiClient) {
+            console.log('[Server] Creating Gemini client for upload...');
+            if (!client.isBrowserInitialized()) await client.init();
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        console.log(`[Server] Uploading ${filesToUpload.length} files to Gemini...`);
+        const result = await geminiClient.uploadFiles(filesToUpload);
+
+        if (result) {
+            res.json({ success: true, count: filesToUpload.length, paths: filesToUpload });
+        } else {
+            res.status(500).json({ success: false, error: 'Upload process failed' });
+        }
+
+    } catch (e: any) {
+        console.error('[Server] Upload failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Chat endpoint
+// Chat endpoint
+app.post('/gemini/chat', async (req, res) => {
+    try {
+        const { message, sessionId, waitForResponse, model, files } = req.body;
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        // Windmill Proxy
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        const useWindmill = process.env.USE_WINDMILL !== 'false';
+
+        if (useWindmill && windmill.isConfigured() && !shouldBypass(req.headers)) {
+            console.log(`[Server] Routing chat to Windmill: "${message.substring(0, 50)}..."`);
+            const job = await windmill.triggerGeminiChat(message, sessionId, waitForResponse);
+
+            if (!job.success) {
+                return res.status(500).json({ success: false, error: job.error });
+            }
+
+            // If async requested without streaming, return job ID only
+            if (!waitForResponse && req.headers.accept !== 'text/event-stream') {
+                return res.json({
+                    success: true,
+                    data: {
+                        jobId: job.jobId,
+                        status: 'queued',
+                        message: 'Request queued on Windmill'
+                    }
+                });
+            }
+
+            // Wait for job result (including for SSE - Windmill doesn't support real streaming)
+            console.log(`[Server] Waiting for Windmill job ${job.jobId}...`);
+            const result = await windmill.waitForJob(job.jobId, 120000); // 2 min timeout
+            console.log(`[Server] Windmill result:`, JSON.stringify(result).substring(0, 500));
+
+            // Handle SSE mode - send result as stream events
+            if (req.headers.accept === 'text/event-stream') {
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+
+                if (result.success === false || (result.result && !result.result.success)) {
+                    const errorMsg = result.result?.error || result.error || 'Unknown Windmill error';
+                    res.write(`data: ${JSON.stringify({ type: 'error', error: errorMsg })}\n\n`);
+                } else {
+                    const scriptResult = result.result || result;
+                    res.write(`data: ${JSON.stringify({ type: 'result', response: scriptResult.response, sessionId: scriptResult.session_id })}\n\n`);
+                }
+                res.end();
+                return;
+            }
+
+            // Non-SSE blocking wait (JSON response)
+            const scriptResult2 = result.result || result;
+            if (!scriptResult2 || !scriptResult2.success) {
+                throw new Error(scriptResult2?.error || 'Unknown Windmill error');
+            }
+
+            return res.json({ success: true, data: { response: scriptResult2.response, sessionId: scriptResult2.session_id } });
+        }
+
+        // Fallback to Local Execution
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            await geminiClient.openSession(sessionId);
+        }
+
+        console.log(`[Server] Gemini chat (Local): "${message.substring(0, 50)}..." (Wait: ${waitForResponse})`);
+
+        if (req.headers.accept === 'text/event-stream') {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+
+            const response = await geminiClient.sendMessage(message, {
+                onProgress: (text: string) => {
+                    res.write(`data: ${JSON.stringify({ type: 'progress', text })}\n\n`);
+                },
+                model,
+                files
+            });
+
+            res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: geminiClient.getCurrentSessionId() })}\n\n`);
+            res.end();
+            return;
+        }
+
+        const response = await geminiClient.sendMessage(message, { waitForResponse, model, files });
+        res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+    } catch (e: any) {
+        console.error('[Server] Gemini chat failed:', e);
+        if (req.headers.accept === 'text/event-stream') {
+            res.write(`data: ${JSON.stringify({ type: 'error', error: e.message })}\n\n`);
+            res.end();
+        } else {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    }
+});
+
+// Send message (alias for chat with explicit session)
+// Send message (alias for chat with explicit session)
+app.post('/gemini/send-message', async (req, res) => {
+    try {
+        const { message, sessionId, model } = req.body;
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        // Windmill Proxy
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        const useWindmill = process.env.USE_WINDMILL !== 'false';
+
+        if (useWindmill && windmill.isConfigured() && !shouldBypass(req.headers)) {
+            console.log(`[Server] Routing send-message to Windmill: "${message.substring(0, 50)}..."`);
+            // send-message is typically blocking by default unless specified differently, 
+            // but the CLI might use this. We assume blocking for consistency with legacy, 
+            // unless async flag was passed (it isn't in body here usually).
+            // Actually, send-message endpoint signature in legacy doesn't take waitForResponse, 
+            // it assumes blocking/wait.
+
+            const job = await windmill.triggerGeminiChat(message, sessionId, true);
+
+            if (!job.success) {
+                return res.status(500).json({ success: false, error: job.error });
+            }
+
+            // Sync wait
+            console.log(`[Server] Waiting for Windmill job ${job.jobId}...`);
+            const result = await windmill.waitForJob(job.jobId);
+
+            if (!result.success && result.result?.error) {
+                throw new Error(result.result.error);
+            }
+            const scriptResult = result.result;
+            if (!scriptResult || !scriptResult.success) {
+                throw new Error(scriptResult?.error || 'Unknown Windmill error');
+            }
+
+            return res.json({ success: true, data: { response: scriptResult.response, sessionId: scriptResult.session_id } });
+        }
+
+        // Fallback
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            await geminiClient.openSession(sessionId);
+        }
+
+        // Send (blocking)
+        console.log(`[Server] Gemini send-message (Local): "${message.substring(0, 50)}..." (Model: ${model || 'default'})`);
+        const response = await geminiClient.sendMessage(message, { waitForResponse: true, model }); // Default to blocking/waiting
+        res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+
+    } catch (e: any) {
+        console.error('[Server] Gemini send-message failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Open session
+app.post('/gemini/open-session', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+        if (!sessionId) return res.status(400).json({ error: 'Session ID is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const success = await geminiClient.openSession(sessionId);
+        res.json({ success, sessionId: geminiClient.getCurrentSessionId() });
+    } catch (e: any) {
+        console.error('[Server] Gemini open-session failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Sync conversations to FalkorDB
+app.post('/gemini/sync-conversations', async (req, res) => {
+    try {
+        const { limit = 10, offset = 0, async = false } = req.body;
+        const wantsSSE = req.headers.accept?.includes('text/event-stream');
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        // --- 1. Immediate Return (Async Mode) ---
+        if (async && !wantsSSE) {
+            const job = await graphStore.addJob('syncConversations', `limit:${limit}, offset:${offset}`, { limit, offset });
+
+            // Execute in background
+            (async () => {
+                try {
+                    console.log(`[Server] Background sync job ${job.id} started...`);
+                    const conversations = await geminiClient!.scrapeConversations(limit, offset);
+                    let synced = 0, updated = 0;
+                    for (const conv of conversations) {
+                        const result = await graphStore.syncConversation({
+                            platform: 'gemini',
+                            platformId: conv.platformId,
+                            title: conv.title,
+                            type: conv.type,
+                            turns: conv.turns as any
+                        });
+                        if (result.isNew) synced++;
+                        else updated++;
+                    }
+                    await graphStore.updateJobStatus(job.id, 'completed', { result: { synced, updated, total: conversations.length } });
+                    console.log(`[Server] Background sync job ${job.id} complete.`);
+                } catch (e: any) {
+                    console.error(`[Server] Background sync job ${job.id} failed:`, e);
+                    await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+                }
+            })().catch(console.error);
+
+            return res.json({
+                success: true,
+                message: 'Sync job started in background',
+                jobId: job.id,
+                statusUrl: `/jobs/${job.id}`
+            });
+        }
+
+        // --- 2. SSE Streaming Mode ---
+        if (wantsSSE) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
+
+            const onProgress = (data: any) => {
+                res.write(`data: ${JSON.stringify({ type: 'progress', ...data })}\n\n`);
+            };
+
+            console.log(`[Server] Syncing Gemini conversations (SSE, limit: ${limit}, offset: ${offset})...`);
+            const conversations = await geminiClient.scrapeConversations(limit, offset, onProgress);
+
+            let synced = 0, updated = 0;
+            for (let i = 0; i < conversations.length; i++) {
+                const conv = conversations[i];
+                res.write(`data: ${JSON.stringify({
+                    type: 'progress',
+                    status: 'syncing',
+                    title: conv.title,
+                    current: i + 1,
+                    total: conversations.length
+                })}\n\n`);
+
+                const result = await graphStore.syncConversation({
+                    platform: 'gemini',
+                    platformId: conv.platformId,
+                    title: conv.title,
+                    type: conv.type,
+                    turns: conv.turns as any
+                });
+                if (result.isNew) synced++;
+                else updated++;
+            }
+
+            console.log(`[Server] Sync complete: ${synced} new, ${updated} updated`);
+            res.write(`data: ${JSON.stringify({
+                type: 'result',
+                success: true,
+                data: { synced, updated, total: conversations.length }
+            })}\n\n`);
+            res.end();
+            return;
+        }
+
+        // --- 3. Standard Blocking Mode ---
+        console.log(`[Server] Syncing Gemini conversations (limit: ${limit}, offset: ${offset})...`);
+        const conversations = await geminiClient.scrapeConversations(limit, offset);
+
+        let synced = 0, updated = 0;
+        for (const conv of conversations) {
+            const result = await graphStore.syncConversation({
+                platform: 'gemini',
+                platformId: conv.platformId,
+                title: conv.title,
+                type: conv.type,
+                turns: conv.turns as any
+            });
+            if (result.isNew) synced++;
+            else updated++;
+        }
+
+        console.log(`[Server] Sync complete: ${synced} new, ${updated} updated`);
+        res.json({ success: true, data: { synced, updated, total: conversations.length } });
+    } catch (e: any) {
+        console.error('[Server] Gemini sync-conversations failed:', e);
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, error: e.message });
+        } else {
+            res.write(`data: ${JSON.stringify({ type: 'error', error: e.message })}\n\n`);
+            res.end();
+        }
+    }
+});
+
+// Get responses from current session
+app.post('/gemini/get-responses', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        if (sessionId) {
+            await geminiClient.openSession(sessionId);
+        }
+
+        const responses = await geminiClient.getResponses();
+        res.json({ success: true, data: responses });
+    } catch (e: any) {
+        console.error('[Server] Gemini get-responses failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// List Gems
+app.get('/gemini/gems', async (req, res) => {
+    try {
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const gems = await geminiClient.listGems();
+        res.json({ success: true, data: gems });
+    } catch (e: any) {
+        console.error('[Server] Gemini list-gems failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Open Gem
+app.post('/gemini/open-gem', async (req, res) => {
+    try {
+        const { gemNameOrId } = req.body;
+        if (!gemNameOrId) return res.status(400).json({ error: 'Gem name or ID is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const success = await geminiClient.openGem(gemNameOrId);
+        res.json({ success });
+    } catch (e: any) {
+        console.error('[Server] Gemini open-gem failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Chat with Gem
+app.post('/gemini/chat-gem', async (req, res) => {
+    try {
+        const { gemNameOrId, message } = req.body;
+        if (!gemNameOrId) return res.status(400).json({ error: 'Gem name or ID is required' });
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        const response = await geminiClient.chatWithGem(gemNameOrId, message);
+        res.json({ success: true, data: { response } });
+    } catch (e: any) {
+        console.error('[Server] Gemini chat-gem failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// List Research Docs
+app.post('/gemini/list-research-docs', async (req, res) => {
+    try {
+        const { sessionId, limit } = req.body;
+        const limitNum = typeof limit === 'number' ? limit : 10;
+
+        if (!geminiClient) {
+            geminiClient = await client.createGeminiClient();
+            await geminiClient.init();
+        }
+
+        let docs: any[] = [];
+        if (sessionId) {
+            console.log(`[Server] Listing research docs for session: ${sessionId}`);
+            await geminiClient.openSession(sessionId);
+            docs = await geminiClient.getAllResearchDocsInSession();
+        } else {
+            console.log(`[Server] Listing research docs (limit ${limitNum})...`);
+            docs = await geminiClient.listDeepResearchDocuments(limitNum);
+        }
+
+        res.json({ success: true, data: docs });
+    } catch (e: any) {
+        console.error('[Server] Gemini list-research-docs failed:', e);
         res.status(500).json({ success: false, error: e.message });
     }
 });
@@ -1389,6 +2092,192 @@ Focus on depth, nuance, and covering aspects that might be missing above.
     }
 });
 
+// ============================================================================
+// Jules Session Publishing Endpoints
+// ============================================================================
+
+/**
+ * Publish selected Jules sessions by session ID.
+ * POST /jules/publish-selected
+ * Body: { sessionIds: string[], mode?: 'branch' | 'pr' }
+ */
+/**
+ * Internal helper to publish a single Jules session via browser
+ */
+async function performJulesPublish(sessionId: string, mode: 'pr' | 'branch' = 'pr'): Promise<{ success: boolean; error?: string }> {
+    console.log(`[Jules Automation] Publishing session ${sessionId} (mode: ${mode})...`);
+
+    // Create a temporary client for this purpose if one isn't active
+    // We MUST use the 'personal' profile for Jules auth
+    const julesClient = new PerplexityClient({ profileId: 'personal', headless: true });
+
+    try {
+        await julesClient.init();
+        const notebook = await julesClient.createNotebookClient();
+        const page = notebook.page;
+
+        await page.goto(`https://jules.google.com/session/${sessionId}`, {
+            waitUntil: 'networkidle',
+            timeout: 60000
+        });
+
+        // SlowMo for less detection
+        await page.waitForTimeout(2000);
+
+        // 1. Find and click Publish button
+        const publishButton = page.locator('button').filter({ hasText: /^Publish$/i }).first();
+        if (!(await publishButton.isVisible())) {
+            // Check if already published
+            const alreadyPublished = await page.locator('a[href*="github.com"][href*="/pull/"]').isVisible();
+            if (alreadyPublished) {
+                return { success: true };
+            }
+            throw new Error('Publish button not found');
+        }
+
+        await publishButton.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Click PR or Branch option
+        if (mode === 'pr') {
+            const prOption = page.locator('button, div, li').filter({ hasText: /Publish PR/i }).first();
+            await prOption.click();
+        } else {
+            const branchOption = page.locator('button, div, li').filter({ hasText: /Publish Branch/i }).first();
+            await branchOption.click();
+        }
+        await page.waitForTimeout(1000);
+
+        // 3. Confirm
+        const confirmButton = page.locator('button').filter({ hasText: /Confirm|Submit|Publish/i }).first();
+        await confirmButton.click();
+
+        // Wait for PR link to appear as confirmation
+        await page.waitForSelector('a[href*="github.com"][href*="/pull/"]', { timeout: 30000 });
+
+        console.log(`[Jules Automation] Session ${sessionId} published successfully.`);
+        return { success: true };
+
+    } catch (e: any) {
+        console.error(`[Jules Automation] Publish failed for ${sessionId}:`, e.message);
+        return { success: false, error: e.message };
+    } finally {
+        await julesClient.shutdown().catch(() => { });
+    }
+}
+
+/**
+ * Endpoint for automated Jules publishing (triggered by Windmill)
+ */
+app.post('/jules/publish-session', async (req, res) => {
+    const { sessionId, mode = 'pr', waitForCompletion = true } = req.body;
+
+    if (!sessionId) {
+        return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    if (!waitForCompletion) {
+        // Run in background
+        performJulesPublish(sessionId, mode).catch(e => {
+            console.error(`[Server] Background Jules publish failed for ${sessionId}:`, e);
+        });
+        return res.status(202).json({ success: true, message: 'Publishing started in background' });
+    }
+
+    const result = await performJulesPublish(sessionId, mode);
+    if (result.success) {
+        res.json({ success: true, message: 'Session published' });
+    } else {
+        res.status(500).json({ success: false, error: result.error });
+    }
+});
+
+/**
+ * Publish selected Jules sessions (Orchestrator endpoint)
+ */
+app.post('/jules/publish-selected', async (req, res) => {
+    try {
+        const { sessionIds, mode = 'pr' } = req.body;
+
+        if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'sessionIds array is required'
+            });
+        }
+
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        if (windmill.isConfigured()) {
+            console.log(`[Server] Queueing ${sessionIds.length} Jules sessions via Windmill...`);
+            const { queued, failed } = await windmill.queueSessionPublishing(sessionIds, mode);
+
+            return res.status(202).json({
+                success: queued.length > 0,
+                message: `Queued ${queued.length} publishing job(s)`,
+                jobs: queued,
+                failed: failed.length > 0 ? failed : undefined
+            });
+        }
+
+        // Fallback to local execution
+        console.warn('[Server] Windmill not configured, executing Jules publish locally...');
+        const results = [];
+        for (const id of sessionIds) {
+            results.push({ sessionId: id, ...await performJulesPublish(id, mode) });
+        }
+
+        res.json({
+            success: results.some(r => r.success),
+            results
+        });
+
+    } catch (e: any) {
+        console.error('[Server] Jules publish-selected failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * Publish all Jules sessions in AWAITING_USER_FEEDBACK state.
+ */
+app.post('/jules/publish-all', async (req, res) => {
+    try {
+        const { mode = 'pr' } = req.body;
+        console.log(`[Server] Publishing all awaiting Jules sessions (mode: ${mode})`);
+
+        return res.status(501).json({
+            success: false,
+            error: 'publish-all requires listing sessions first. Use /jules/publish-selected with specific session IDs.'
+        });
+
+    } catch (e: any) {
+        console.error('[Server] Jules publish-all failed:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+/**
+ * Get Jules session status (lightweight wrapper around MCP).
+ * GET /jules/sessions/:sessionId
+ */
+app.get('/jules/sessions/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // This would require calling the Jules MCP get_session tool
+        // For now, redirect to the Jules UI
+        res.json({
+            sessionId,
+            url: `https://jules.google.com/session/${sessionId}`,
+            hint: 'Use Jules MCP get_session for detailed status'
+        });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing browser...');
@@ -1407,7 +2296,7 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-export async function startServer() {
+export async function startServer(port: number = PORT) {
     try {
         // Try to connect browser, but don't fail startup if unavailable
         console.log('Initializing Perplexity client (browser connection)...');
@@ -1421,8 +2310,8 @@ export async function startServer() {
 
         // Connect to graph store (optional - can run without it)
         console.log('[Server] Connecting to FalkorDB...');
-        const graphHost = process.env.FALKORDB_HOST || 'localhost';
-        const graphPort = parseInt(process.env.FALKORDB_PORT || '6379');
+        const graphHost = config.falkor.host;
+        const graphPort = config.falkor.port;
         try {
             await graphStore.connect(graphHost, graphPort);
             console.log('[Server] FalkorDB connected successfully.');
@@ -1443,8 +2332,8 @@ export async function startServer() {
             console.warn('[Server] Job queue and graph features will be disabled.');
         }
 
-        app.listen(PORT, () => {
-            console.log(`\n✓ Perplexity Researcher server running on http://localhost:${PORT}`);
+        const server = app.listen(port, '0.0.0.0', () => {
+            console.log(`\n✓ Perplexity Researcher server running on http://localhost:${port}`);
             console.log(`\nEndpoints:`);
             console.log(`  GET  /health             - Health check`);
             console.log(`  POST /query              - Submit a query`);
@@ -1452,11 +2341,13 @@ export async function startServer() {
             console.log(`  GET  /v1/models          - List models (gemini-rsrch, perplexity)`);
             console.log(`  POST /v1/chat/completions - Chat completions`);
             console.log(`\nExample usage:`);
-            console.log(`  curl -X POST http://localhost:${PORT}/v1/chat/completions \\`);
+            console.log(`  curl -X POST http://localhost:${port}/v1/chat/completions \\`);
             console.log(`       -H "Content-Type: application/json" \\`);
             console.log(`       -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'`);
             console.log();
         });
+
+        return server;
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);

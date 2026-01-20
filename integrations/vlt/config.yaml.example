@@ -1,0 +1,20 @@
+databases:
+  falkordb:
+    host: "localhost"
+    port: 6379
+    graphs: 
+      - "vault"
+      - "rsrch"
+  memgraph:
+    uri: "bolt://localhost:7687"
+    username: ""
+    password: ""
+  neo4j:
+    uri: "bolt://halvarm:7687"
+    username: "neo4j"
+    password: "password_placeholder"
+
+sync:
+  mapObsi_path: "/home/sim/Obsi/Prods/01-pwf/integrations/mapObsi/implementations/go"
+  mapObsi_target: "/home/sim/Obsi/Prods/01-pwf"
+  rsrch_path: "/home/sim/Obsi/Prods/01-pwf/agents/rsrch"

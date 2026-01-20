@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  jules-go:
+    build: .
+    container_name: jules-go
+    ports:
+      - "8080:8080"
+    environment:
+      - JULES_API_KEY=${JULES_API_KEY}
+    volumes:
+      - ./config.yaml:/config.yaml
+    networks:
+      - jules-net
+    depends_on:
+      - falkordb
+
+  falkordb:
+    image: redis/redis-stack:latest
+    container_name: falkordb
+    ports:
+      - "6379:6379"
+    networks:
+      - jules-net
+
+networks:
+  jules-net:
+    driver: bridge
