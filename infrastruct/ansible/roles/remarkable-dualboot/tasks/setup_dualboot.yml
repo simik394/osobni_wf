@@ -1,0 +1,47 @@
+---
+# Setup dual-boot switching capability
+
+- name: Transfer switch.sh to device
+  ansible.builtin.command:
+    cmd: >
+      scp -o StrictHostKeyChecking=no -P {{ remarkable_ssh_port }}
+      {{ role_path }}/files/switch.sh
+      {{ remarkable_user }}@{{ remarkable_host }}:/home/root/switch.sh
+  delegate_to: localhost
+  register: switch_transfer
+  changed_when: true
+
+- name: Make switch.sh executable
+  ansible.builtin.raw: chmod +x /home/root/switch.sh
+  changed_when: false
+
+- name: Create dualboot info file
+  ansible.builtin.raw: |
+    cat > /home/root/dualboot_info.txt << 'EOF'
+    reMarkable Dual-Boot Configuration
+    ===================================
+
+    Current active partition: {{ rm_active_partition }}
+    Fallback partition: {{ rm_fallback_partition }}
+
+    Active firmware: {{ rm_current_firmware }}
+    Fallback firmware: {{ remarkable_target_firmware }}
+
+    To switch between versions:
+      ./switch.sh
+
+    This will reboot into the other partition.
+
+    Configured by Ansible on: {{ ansible_date_time.iso8601 | default(lookup('pipe', 'date -Iseconds')) }}
+    EOF
+  changed_when: true
+
+- name: Display dual-boot instructions
+  ansible.builtin.debug:
+    msg: |
+      Dual-boot setup complete!
+
+      Current: {{ rm_current_firmware }} (partition {{ rm_active_partition }})
+      Alternate: {{ remarkable_target_firmware }} (partition {{ rm_fallback_partition }})
+
+      To switch versions, SSH to device and run: ./switch.sh

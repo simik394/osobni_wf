@@ -1,0 +1,67 @@
+---
+# WezTerm Terminal Emulator - AppImage installation
+
+- name: Create install directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ansible_env.HOME }}/.local/bin"
+    - "{{ ansible_env.HOME }}/.local/opt/wezterm-appimage"
+    - "{{ ansible_env.HOME }}/.config/wezterm"
+    - "{{ ansible_env.HOME }}/.local/share/icons/hicolor/scalable/apps"
+
+- name: Check if WezTerm AppImage is already installed
+  stat:
+    path: "{{ ansible_env.HOME }}/.local/opt/wezterm-appimage/WezTerm.AppImage"
+  register: wezterm_installed
+
+# Using the nightly AppImage which is generally recommended for WezTerm features
+# Link: https://github.com/wez/wezterm/releases/download/nightly/WezTerm-nightly-Ubuntu20.04.AppImage
+- name: Download WezTerm AppImage
+  get_url:
+    url: "https://github.com/wez/wezterm/releases/download/nightly/WezTerm-nightly-Ubuntu20.04.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/opt/wezterm-appimage/WezTerm.AppImage"
+    mode: "0755"
+  when: not wezterm_installed.stat.exists
+
+- name: Download WezTerm Icon
+  get_url:
+    url: "https://raw.githubusercontent.com/wez/wezterm/main/assets/icon/wezterm-icon.svg"
+    dest: "{{ ansible_env.HOME }}/.local/share/icons/hicolor/scalable/apps/org.wezfurlong.wezterm.svg"
+    mode: "0644"
+
+- name: Symlink WezTerm to bin
+  file:
+    src: "{{ ansible_env.HOME }}/.local/opt/wezterm-appimage/WezTerm.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/bin/wezterm"
+    state: link
+    force: yes
+
+- name: Configure WezTerm
+  template:
+    src: wezterm.lua.j2
+    dest: "{{ ansible_env.HOME }}/.config/wezterm/wezterm.lua"
+    mode: "0644"
+
+- name: Create desktop entry for WezTerm AppImage
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/org.wezfurlong.wezterm.desktop"
+    content: |
+      [Desktop Entry]
+      Name=WezTerm
+      Comment=Wez's Terminal Emulator
+      Keywords=shell;prompt;command;commandline;cmd;
+      Icon=org.wezfurlong.wezterm
+      StartupWMClass=org.wezfurlong.wezterm
+      TryExec={{ ansible_env.HOME }}/.local/bin/wezterm
+      Exec={{ ansible_env.HOME }}/.local/bin/wezterm start --cwd .
+      Type=Application
+      Categories=System;TerminalEmulator;Utility;
+      Terminal=false
+    mode: "0644"
+
+- name: Update desktop database
+  command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications
+  changed_when: false

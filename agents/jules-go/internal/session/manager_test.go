@@ -1,13 +1,32 @@
 package session
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"sync"
 	"testing"
 )
 
+// mockNotifier is a mock implementation of the Notifier interface for testing.
+type mockNotifier struct {
+	SendFunc func(ctx context.Context, title, message, priority string) error
+}
+
+func (m *mockNotifier) Send(ctx context.Context, title, message, priority string) error {
+	if m.SendFunc != nil {
+		return m.SendFunc(ctx, title, message, priority)
+	}
+	return nil
+}
+
+func newTestManager(concurrencyLimit int64) *Manager {
+	return NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), &mockNotifier{}, concurrencyLimit)
+}
+
 func TestNewManager(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(5)
 	if m == nil {
 		t.Fatal("NewManager returned nil")
 	}
@@ -17,7 +36,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestCreateSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(5)
 	task := "test_task"
 
 	session, err := m.CreateSession(task)
@@ -37,7 +56,7 @@ func TestCreateSession(t *testing.T) {
 }
 
 func TestGetSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(5)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -52,7 +71,7 @@ func TestGetSession(t *testing.T) {
 }
 
 func TestDeleteSession(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(5)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -64,12 +83,16 @@ func TestDeleteSession(t *testing.T) {
 }
 
 func TestListSessions(t *testing.T) {
-	m := NewManager()
+	m := newTestManager(5)
 	task1 := "task1"
 	task2 := "task2"
 
-	m.CreateSession(task1)
-	m.CreateSession(task2)
+	if _, err := m.CreateSession(task1); err != nil {
+		t.Fatalf("CreateSession for task1 failed: %v", err)
+	}
+	if _, err := m.CreateSession(task2); err != nil {
+		t.Fatalf("CreateSession for task2 failed: %v", err)
+	}
 
 	sessions := m.ListSessions()
 	if len(sessions) != 2 {
@@ -78,7 +101,22 @@ func TestListSessions(t *testing.T) {
 }
 
 func TestUpdateSessionStatus(t *testing.T) {
-	m := NewManager()
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	mockN := &mockNotifier{
+		SendFunc: func(ctx context.Context, title, message, priority string) error {
+			if title == "Session Completed" {
+				defer wg.Done()
+				if priority != "high" {
+					t.Errorf("expected priority 'high', got '%s'", priority)
+				}
+			}
+			return nil
+		},
+	}
+
+	m := NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), mockN, 5)
 	task := "test_task"
 
 	session, _ := m.CreateSession(task)
@@ -91,11 +129,14 @@ func TestUpdateSessionStatus(t *testing.T) {
 	if updatedSession.Status != StatusCompleted {
 		t.Errorf("expected status %q, got %q", StatusCompleted, updatedSession.Status)
 	}
+
+	wg.Wait()
 }
 
 func TestConcurrencyLimit(t *testing.T) {
-	m := NewManager()
-	for i := 0; i < concurrencyLimit; i++ {
+	concurrencyLimit := int64(5)
+	m := newTestManager(concurrencyLimit)
+	for i := 0; i < int(concurrencyLimit); i++ {
 		_, err := m.CreateSession(fmt.Sprintf("task-%d", i))
 		if err != nil {
 			t.Fatalf("failed to create session %d: %v", i, err)
@@ -109,7 +150,8 @@ func TestConcurrencyLimit(t *testing.T) {
 }
 
 func TestThreadSafety(t *testing.T) {
-	m := NewManager()
+	concurrencyLimit := int64(15)
+	m := newTestManager(concurrencyLimit)
 	var wg sync.WaitGroup
 	numRoutines := 50
 
@@ -118,7 +160,7 @@ func TestThreadSafety(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			m.CreateSession("some_task")
+			_, _ = m.CreateSession("some_task")
 		}()
 	}
 
@@ -126,7 +168,7 @@ func TestThreadSafety(t *testing.T) {
 
 	// Validate that the number of created sessions does not exceed the limit
 	sessions := m.ListSessions()
-	if len(sessions) > concurrencyLimit {
+	if len(sessions) > int(concurrencyLimit) {
 		t.Errorf("expected at most %d sessions, got %d", concurrencyLimit, len(sessions))
 	}
 }

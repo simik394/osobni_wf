@@ -1,0 +1,55 @@
+---
+# Flash firmware to fallback partition
+# CRITICAL: This is the dangerous part - be extra careful
+
+- name: Verify fallback partition is valid
+  ansible.builtin.fail:
+    msg: "Invalid fallback partition: {{ rm_fallback_partition }}. Expected 2 or 3."
+  when: rm_fallback_partition not in ['2', '3']
+
+- name: Calculate firmware checksum on device
+  ansible.builtin.raw: md5sum {{ remarkable_tmp_dir }}/{{ remarkable_target_firmware }}.ext4 | cut -d' ' -f1
+  register: firmware_md5
+  changed_when: false
+
+- name: Display firmware checksum
+  ansible.builtin.debug:
+    msg: "Firmware MD5: {{ firmware_md5.stdout | trim }}"
+
+- name: Check if fallback already has target firmware
+  ansible.builtin.raw: |
+    PART_MD5=$(dd if=/dev/mmcblk1p{{ rm_fallback_partition }} bs=1M count=256 2>/dev/null | md5sum | cut -d' ' -f1)
+    echo "$PART_MD5"
+  register: partition_md5_sample
+  changed_when: false
+
+# Actual flash operation
+- name: Flash firmware to fallback partition
+  ansible.builtin.raw: |
+    sync
+    echo "Starting flash to /dev/mmcblk1p{{ rm_fallback_partition }}..."
+    dd if={{ remarkable_tmp_dir }}/{{ remarkable_target_firmware }}.ext4 \
+       of=/dev/mmcblk1p{{ rm_fallback_partition }} \
+       bs=4M conv=fsync status=none
+    sync
+    echo "Flash complete"
+  register: flash_result
+  changed_when: "'Flash complete' in flash_result.stdout"
+  when: not remarkable_dry_run | bool
+
+- name: Verify flash success
+  ansible.builtin.raw: |
+    VERIFY_MD5=$(dd if=/dev/mmcblk1p{{ rm_fallback_partition }} bs=1M count=256 2>/dev/null | md5sum | cut -d' ' -f1)
+    echo "$VERIFY_MD5"
+  register: verify_md5
+  changed_when: false
+  when: not remarkable_dry_run | bool
+
+- name: Display flash verification
+  ansible.builtin.debug:
+    msg: "Flashed partition sample MD5: {{ verify_md5.stdout | trim | default('(dry-run)') }}"
+  when: not remarkable_dry_run | bool
+
+- name: Cleanup firmware file on device
+  ansible.builtin.raw: rm -f {{ remarkable_tmp_dir }}/{{ remarkable_target_firmware }}.ext4
+  changed_when: false

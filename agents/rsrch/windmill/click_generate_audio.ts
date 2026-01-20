@@ -2,7 +2,7 @@
 // Triggers audio generation for a source and updates FalkorDB state
 // NON-BLOCKING: Returns immediately after clicking, does NOT wait for completion
 // 
-// Architecture per GEMINI.md:
+// Architecture per agents/rsrch/AGENTS.md:
 // 1. Click to generate → Update FalkorDB with pending audio → Return immediately
 // 2. Watcher (separate) monitors completion → Webhook updates FalkorDB + ntfy
 
@@ -67,7 +67,8 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
                 sources: [args.source_title],
                 customPrompt: args.custom_prompt,
                 waitForCompletion: false, // NON-BLOCKING!
-                dryRun: false
+                dryRun: false,
+                correlationId: pendingAudioId,
             }),
         });
 
@@ -95,7 +96,7 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         await fetch(`${ntfyServer}/${ntfyTopic}`, {
             method: "POST",
             headers: {
-                "Title": `🎵 Started: ${args.source_title.substring(0, 40)}`,
+                "Title": `Started: ${args.source_title.substring(0, 40)}`,
                 "Tags": "hourglass_flowing_sand,audio"
             },
             body: `Generating audio for: ${args.source_title}\nNotebook: ${args.notebook_title}`
@@ -111,6 +112,29 @@ export async function main(args: AudioGenerationRequest): Promise<AudioGeneratio
         };
 
     } catch (error) {
+        // Update FalkorDB status to "failed" if we created the pending node
+        // We attempt this only if pendingAudioId exists (which it does, as it's defined at start)
+        // But we really only want to do this if Step 1 succeeded.
+        // However, if Step 1 failed, this MATCH will just match nothing and do nothing, so it's safe.
+        try {
+            const errorMsg = String(error);
+            // Escape for Cypher string: handle backslashes and quotes
+            const escapedError = JSON.stringify(errorMsg).slice(1, -1);
+
+            await fetch(`${rsrchUrl}/graph/execute`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    query: `
+                      MATCH (pa:PendingAudio {id: "${pendingAudioId}"})
+                      SET pa.status = "failed", pa.error = "${escapedError}", pa.failedAt = ${Date.now()}
+                    `
+                })
+            });
+        } catch (updateErr) {
+            console.error("Failed to update PendingAudio status to failed:", updateErr);
+        }
+
         return {
             success: false,
             notebook_id: "unknown",

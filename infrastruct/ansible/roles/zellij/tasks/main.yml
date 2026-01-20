@@ -34,3 +34,15 @@
 - name: Display Zellij version
   debug:
     msg: "Installed Zellij version: {{ zellij_ver_check.stdout }}"
+
+- name: Ensure Zellij config directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/zellij"
+    state: directory
+    mode: '0755'
+
+- name: Deploy Zellij configuration
+  template:
+    src: config.kdl.j2
+    dest: "{{ ansible_env.HOME }}/.config/zellij/config.kdl"
+    mode: '0644'

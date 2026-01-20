@@ -1,0 +1,9 @@
+---
+postgres_version: "17"
+postgres_container_name: "postgres-local"
+postgres_data_dir: "{{ ansible_env.HOME }}/.local/share/postgres_"
+postgres_port: 5432
+# Default credentials for local development/JabRef
+postgres_user: "jabref"
+postgres_password: "jabref_password" # User should ideally change this but for local dev it's okay
+postgres_db: "jabref_db"

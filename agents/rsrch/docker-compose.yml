@@ -4,9 +4,9 @@ services:
   chromium:
     build: ./browser
     ports:
-      - "5900:5900"
+      - "5902:5900" # VNC (changed from 5900 to avoid conflict with local x11vnc)
       - "3005:3000"
-      - "9223:9223" # CDP port (socat proxy)
+      - "9225:9223" # CDP port (changed from 9223 to avoid conflict with angrav-browser)
     ipc: host
     volumes:
       - ${HOME}/.config/rsrch/user-data:/app/user-data
@@ -22,18 +22,30 @@ services:
     container_name: perplexity-server
     ports:
       - "${PORT:-3001}:${PORT:-3001}"
+      - "5905:5900" # Expose VNC from rsrch container (5901 in use)
     volumes:
       - ./data:/app/data
       - ./src:/app/src
+      - ./dist:/app/dist
       - ${HOME}/.config/rsrch:/app/config
+      - ${HOME}/.rsrch/profiles:/app/profiles
     environment:
       - PORT=${PORT:-3001}
-      - BROWSER_CDP_ENDPOINT=http://host.docker.internal:9223
+      - WINDMILL_TOKEN=${WINDMILL_TOKEN}
+      # - BROWSER_CDP_ENDPOINT=http://chromium:9223 # Disabled for Local Mode
+      - BROWSER_CDP_ENDPOINT=http://chromium:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
+      - PROFILES_DIR=/app/profiles
+      - FALKORDB_HOST=falkordb
+      - DISPLAY=:99
+    depends_on:
+      - chromium
+      - falkordb
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: npm run serve
+    ipc: host
+    command: sh -c "rm -f /tmp/.X99-lock && Xvfb :99 -screen 0 1280x1024x24 -ac & export DISPLAY=:99; node dist/index.js serve"
     restart: unless-stopped
 
   falkordb:

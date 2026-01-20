@@ -1,0 +1,22 @@
+---
+- name: Setup reMarkable 2 Dual Boot
+  hosts: remarkable
+  gather_facts: false
+
+  vars_prompt:
+    - name: confirm_flash
+      prompt: "This will flash firmware to your reMarkable. Type 'yes' to proceed"
+      private: false
+      default: "no"
+
+  pre_tasks:
+    - name: Confirm user intent
+      ansible.builtin.fail:
+        msg: "Aborted by user. Type 'yes' to confirm flash operation."
+      when: confirm_flash != "yes"
+      delegate_to: localhost
+      run_once: true
+
+  roles:
+    - role: remarkable-dualboot
+      tags: remarkable

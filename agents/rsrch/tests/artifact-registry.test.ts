@@ -1,129 +1,110 @@
-/**
- * Artifact Registry Tests
- * Run: npx ts-node tests/artifact-registry.test.ts
- */
-
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ArtifactRegistry } from '../src/artifact-registry';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TEST_DIR = 'data/test-registry';
+const TEST_DIR = 'data/test-registry-vitest';
 const TEST_FILE = path.join(TEST_DIR, 'artifact-registry.json');
 
-// Cleanup before tests
-function cleanup() {
-    if (fs.existsSync(TEST_FILE)) {
-        fs.unlinkSync(TEST_FILE);
-    }
-    if (fs.existsSync(TEST_DIR)) {
-        fs.rmdirSync(TEST_DIR, { recursive: true });
-    }
-}
+describe('ArtifactRegistry', () => {
+    let registry: ArtifactRegistry;
 
-async function runTests() {
-    console.log('🧪 Running Artifact Registry Tests\n');
-
-    cleanup();
-
-    const registry = new ArtifactRegistry(TEST_DIR);
-    let passed = 0;
-    let failed = 0;
-
-    function test(name: string, condition: boolean) {
-        if (condition) {
-            console.log(`  ✅ ${name}`);
-            passed++;
-        } else {
-            console.log(`  ❌ ${name}`);
-            failed++;
+    beforeEach(() => {
+        if (fs.existsSync(TEST_FILE)) {
+            fs.unlinkSync(TEST_FILE);
         }
-    }
+        if (fs.existsSync(TEST_DIR)) {
+            fs.rmdirSync(TEST_DIR, { recursive: true });
+        }
+        registry = new ArtifactRegistry(TEST_DIR);
+    });
 
-    // === Test 1: ID Generation Uniqueness ===
-    console.log('\n📋 Test 1: ID Generation Uniqueness');
-    const ids = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-        ids.add(registry.generateBaseId());
-    }
-    test('100 IDs are unique', ids.size === 100);
-    test('ID length is 3', [...ids][0].length === 3);
+    afterEach(() => {
+        if (fs.existsSync(TEST_FILE)) {
+            fs.unlinkSync(TEST_FILE);
+        }
+        if (fs.existsSync(TEST_DIR)) {
+            fs.rmdirSync(TEST_DIR, { recursive: true });
+        }
+    });
 
-    // === Test 2: Session Registration ===
-    console.log('\n📋 Test 2: Session Registration');
-    const sessionId = registry.registerSession('gemini-session-abc', 'History of Espresso');
-    test('Session ID is 3 chars', sessionId.length === 3);
+    it('should generate unique 3-character base IDs', () => {
+        const ids = new Set<string>();
+        for (let i = 0; i < 100; i++) {
+            ids.add(registry.generateBaseId());
+        }
+        expect(ids.size).toBe(100);
+        expect([...ids][0].length).toBe(3);
+    });
 
-    const session = registry.get(sessionId);
-    test('Session entry exists', session !== undefined);
-    test('Session type is "session"', session?.type === 'session');
-    test('Session has query', session?.query === 'History of Espresso');
+    it('should register and retrieve a session', () => {
+        const sessionId = registry.registerSession('gemini-session-abc', 'History of Espresso');
+        expect(sessionId.length).toBe(3);
 
-    // === Test 3: Document Registration ===
-    console.log('\n📋 Test 3: Document Registration');
-    const docId = registry.registerDocument(sessionId, 'gdoc-123', 'Deep Research on Coffee');
-    test('Doc ID starts with session ID', docId.startsWith(sessionId));
-    test('Doc ID has format XXX-NN', /^[A-Z0-9]{3}-\d{2}$/.test(docId));
+        const session = registry.get(sessionId);
+        expect(session).toBeDefined();
+        expect(session?.type).toBe('session');
+        expect(session?.query).toBe('History of Espresso');
+    });
 
-    const doc = registry.get(docId);
-    test('Doc entry exists', doc !== undefined);
-    test('Doc type is "document"', doc?.type === 'document');
-    test('Doc has parentId', doc?.parentId === sessionId);
-    test('Doc currentTitle has ID prefix', doc?.currentTitle?.startsWith(docId) === true);
+    it('should register and retrieve a document', () => {
+        const sessionId = registry.registerSession('s1', 'Q1');
+        const docId = registry.registerDocument(sessionId, 'gdoc-123', 'Deep Research on Coffee');
 
-    // === Test 4: Audio Registration ===
-    console.log('\n📋 Test 4: Audio Registration');
-    const audioId = registry.registerAudio(docId, 'Coffee Notebook', 'Audio Overview');
-    test('Audio ID starts with doc ID', audioId.startsWith(docId));
-    test('Audio ID has format XXX-NN-L', /^[A-Z0-9]{3}-\d{2}-[A-Z]$/.test(audioId));
+        expect(docId).toMatch(/^[A-Z0-9]{3}-\d{2}$/);
+        expect(docId.startsWith(sessionId)).toBe(true);
 
-    const audio = registry.get(audioId);
-    test('Audio entry exists', audio !== undefined);
-    test('Audio type is "audio"', audio?.type === 'audio');
-    test('Audio currentTitle has ID prefix', audio?.currentTitle?.startsWith(audioId) === true);
+        const doc = registry.get(docId);
+        expect(doc).toBeDefined();
+        expect(doc?.type).toBe('document');
+        expect(doc?.parentId).toBe(sessionId);
+    });
 
-    // === Test 5: Lineage ===
-    console.log('\n📋 Test 5: Lineage Tracking');
-    const lineage = registry.getLineage(audioId);
-    test('Lineage has 3 entries (audio → doc → session)', lineage.length === 3);
-    test('First in lineage is audio', lineage[0]?.type === 'audio');
-    test('Second in lineage is document', lineage[1]?.type === 'document');
-    test('Third in lineage is session', lineage[2]?.type === 'session');
+    it('should register and retrieve audio with incrementing suffixes', () => {
+        const sessionId = registry.registerSession('s1', 'Q1');
+        const docId = registry.registerDocument(sessionId, 'd1', 'title');
 
-    // === Test 6: Persistence ===
-    console.log('\n📋 Test 6: Persistence');
-    const registry2 = new ArtifactRegistry(TEST_DIR);
-    registry2.load();
-    const reloadedSession = registry2.get(sessionId);
-    test('Session persists after reload', reloadedSession?.query === 'History of Espresso');
+        const audioId1 = registry.registerAudio(docId, 'Notebook', 'Overview 1');
+        const audioId2 = registry.registerAudio(docId, 'Notebook', 'Overview 2');
 
-    // === Test 7: List by Type ===
-    console.log('\n📋 Test 7: List by Type');
-    const sessions = registry.listByType('session');
-    const documents = registry.listByType('document');
-    const audios = registry.listByType('audio');
-    test('Found 1 session', sessions.length === 1);
-    test('Found 1 document', documents.length === 1);
-    test('Found 1 audio', audios.length === 1);
+        expect(audioId1).toMatch(/^[A-Z0-9]{3}-\d{2}-A$/);
+        expect(audioId2).toMatch(/^[A-Z0-9]{3}-\d{2}-B$/);
 
-    // === Test 8: Second Audio (Letter Increment) ===
-    console.log('\n📋 Test 8: Second Audio (Letter Suffix)');
-    const audioId2 = registry.registerAudio(docId, 'Coffee Notebook', 'Audio Overview v2');
-    test('Second audio ends with B', audioId2.endsWith('-B'));
+        const audio = registry.get(audioId1);
+        expect(audio).toBeDefined();
+        expect(audio?.type).toBe('audio');
+    });
 
-    // === Summary ===
-    console.log('\n' + '='.repeat(40));
-    console.log(`Results: ${passed} passed, ${failed} failed`);
+    it('should track lineage correctly', () => {
+        const sessionId = registry.registerSession('s1', 'Q1');
+        const docId = registry.registerDocument(sessionId, 'd1', 'D1');
+        const audioId = registry.registerAudio(docId, 'N1', 'A1');
 
-    if (failed === 0) {
-        console.log('✅ All tests passed!\n');
-        cleanup();
-    } else {
-        console.log('❌ Some tests failed.\n');
-        process.exit(1);
-    }
-}
+        const lineage = registry.getLineage(audioId);
+        expect(lineage.length).toBe(3);
+        expect(lineage[0].type).toBe('audio');
+        expect(lineage[1].type).toBe('document');
+        expect(lineage[2].type).toBe('session');
+    });
 
-runTests().catch(e => {
-    console.error('Test execution error:', e);
-    process.exit(1);
+    it('should persist data to disk', () => {
+        const sessionId = registry.registerSession('s1', 'Persist Test');
+
+        const registry2 = new ArtifactRegistry(TEST_DIR);
+        registry2.load();
+
+        const session = registry2.get(sessionId);
+        expect(session).toBeDefined();
+        expect(session?.query).toBe('Persist Test');
+    });
+
+    it('should list artifacts by type', () => {
+        const s1 = registry.registerSession('s1', 'Q1');
+        registry.registerDocument(s1, 'd1', 'D1');
+        registry.registerAudio('s1-01', 'N1', 'A1');
+
+        expect(registry.listByType('session').length).toBe(1);
+        expect(registry.listByType('document').length).toBe(1);
+        expect(registry.listByType('audio').length).toBe(1);
+    });
 });

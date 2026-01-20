@@ -8,7 +8,7 @@ jules_api_key: ""
 browser_path: ""
 
 # The URL for the FalkorDB instance.
-falkordb_url: "redis://localhost:6379"
+falkordb_url: "localhost:6379"
 
 # The maximum number of concurrent browser sessions.
 max_concurrent_sessions: 15
@@ -16,6 +16,18 @@ max_concurrent_sessions: 15
 # The port for the webhook server to listen on.
 webhook_port: 8090
 
+# The port for the metrics server to listen on.
+metrics_port: 9090
+
 # The log level for the application.
 # Supported values: "debug", "info", "warn", "error"
 log_level: "info"
+
+# The log format for the application.
+# Supported values: "text", "json"
+log_format: "text"
+
+# ntfy configuration for sending notifications.
+ntfy:
+  server_url: "https://ntfy.sh"
+  topic: "jules-go-agent"

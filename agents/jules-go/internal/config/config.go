@@ -1,23 +1,36 @@
-
 package config
 
 import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
+// NtfyConfig holds the ntfy configuration.
+type NtfyConfig struct {
+	ServerURL string `yaml:"server_url"`
+	Topic     string `yaml:"topic"`
+}
+
 // Config holds the application configuration.
 type Config struct {
-	JulesAPIKey         string `yaml:"jules_api_key"`
-	BrowserPath         string `yaml:"browser_path"`
-	FalkorDBURL         string `yaml:"falkordb_url"`
-	MaxConcurrentSessions int    `yaml:"max_concurrent_sessions"`
-	WebhookPort         int    `yaml:"webhook_port"`
-	LogLevel            string `yaml:"log_level"`
+	JulesAPIKey           string     `yaml:"jules_api_key"`
+	BrowserPath           string     `yaml:"browser_path"`
+	FalkorDBURL           string     `yaml:"falkordb_url"`
+	MaxConcurrentSessions int        `yaml:"max_concurrent_sessions"`
+	WebhookPort           int        `yaml:"webhook_port"`
+	MetricsPort           int        `yaml:"metrics_port"`
+	LogLevel              string     `yaml:"log_level"`
+	LogFormat             string     `yaml:"log_format"`
+	Ntfy                  NtfyConfig `yaml:"ntfy"`
+	ShutdownTimeout       time.Duration `yaml:"shutdown_timeout"`
+	FalkorDB              struct {
+		Addr string `yaml:"addr"`
+	} `yaml:"falkordb"`
 }
 
 // Load loads the configuration from a YAML file and environment variables.
@@ -27,7 +40,8 @@ func Load(path string) (*Config, error) {
 
 	config := &Config{
 		MaxConcurrentSessions: 15,
-		WebhookPort:         8090,
+		WebhookPort:           8090,
+		MetricsPort:           9090,
 	}
 
 	// Read the YAML file
@@ -65,8 +79,22 @@ func Load(path string) (*Config, error) {
 			config.WebhookPort = val
 		}
 	}
+	if metricsPort, exists := os.LookupEnv("METRICS_PORT"); exists {
+		if val, err := strconv.Atoi(metricsPort); err == nil {
+			config.MetricsPort = val
+		}
+	}
 	if logLevel, exists := os.LookupEnv("LOG_LEVEL"); exists {
 		config.LogLevel = logLevel
+	}
+	if logFormat, exists := os.LookupEnv("LOG_FORMAT"); exists {
+		config.LogFormat = logFormat
+	}
+	if ntfyServerURL, exists := os.LookupEnv("NTFY_SERVER_URL"); exists {
+		config.Ntfy.ServerURL = ntfyServerURL
+	}
+	if ntfyTopic, exists := os.LookupEnv("NTFY_TOPIC"); exists {
+		config.Ntfy.Topic = ntfyTopic
 	}
 
 	// Validate required fields

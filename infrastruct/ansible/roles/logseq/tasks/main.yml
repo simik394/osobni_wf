@@ -1,0 +1,106 @@
+---
+- name: Create local directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ansible_env.HOME }}/.local/opt/logseq-src"
+    - "{{ ansible_env.HOME }}/.local/opt/logseq-db"
+    - "{{ ansible_env.HOME }}/.local/bin"
+
+- name: Clone Logseq repository (feat/db)
+  git:
+    repo: "https://github.com/logseq/logseq.git"
+    dest: "{{ ansible_env.HOME }}/.local/opt/logseq-src"
+    version: "feat/db"
+    force: yes
+    depth: 1
+
+- name: Copy Dockerfile to build context
+  copy:
+    src: Dockerfile
+    dest: "{{ ansible_env.HOME }}/.local/opt/logseq-src/Dockerfile.builder"
+    mode: "0644"
+
+- name: Build Logseq Builder Image
+  shell: |
+    docker build -t logseq-builder -f Dockerfile.builder .
+  args:
+    chdir: "{{ ansible_env.HOME }}/.local/opt/logseq-src"
+  changed_when: true
+
+- name: Build Logseq DB (Electron Release) inside Docker
+  shell: |
+    docker run --rm \
+      -v {{ ansible_env.HOME }}/.local/opt/logseq-src:/app \
+      -w /app \
+      logseq-builder \
+      bash -c "yarn install && yarn release-electron"
+  args:
+    chdir: "{{ ansible_env.HOME }}/.local/opt/logseq-src"
+    creates: "{{ ansible_env.HOME }}/.local/opt/logseq-src/static/out/Logseq-linux-x64.AppImage" # Heuristic path, check actual output
+  # Warning: This is a heavy task and may timeout or fail if network is flaky
+  async: 1200
+  poll: 30
+
+- name: Fix ownership of build artifacts (via Docker)
+  shell: |
+    docker run --rm \
+      -v {{ ansible_env.HOME }}/.local/opt/logseq-src:/app \
+      logseq-builder \
+      chown -R {{ ansible_user_uid }}:{{ ansible_user_gid | default(ansible_user_uid) }} /app
+  changed_when: false
+
+- name: Find generated AppImage
+  find:
+    paths: "{{ ansible_env.HOME }}/.local/opt/logseq-src/static/out"
+    patterns: "Logseq-*-linux-x64.AppImage"
+    recurse: yes
+  register: built_appimage
+
+- name: Fail if build failed
+  fail:
+    msg: "AppImage not found in expected output directory. Build likely failed."
+  when: built_appimage.matched == 0
+
+- name: Install AppImage
+  copy:
+    src: "{{ built_appimage.files[0].path }}"
+    dest: "{{ ansible_env.HOME }}/.local/opt/logseq-db/Logseq-DB.AppImage"
+    mode: "0755"
+    remote_src: yes
+
+- name: Symlink binary
+  file:
+    src: "{{ ansible_env.HOME }}/.local/opt/logseq-db/Logseq-DB.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/bin/logseq"
+    state: link
+    mode: "0755"
+    force: yes
+
+- name: Download Logseq Icon
+  get_url:
+    url: "https://raw.githubusercontent.com/logseq/logseq/master/resources/icons/logseq.png"
+    dest: "{{ ansible_env.HOME }}/.local/opt/logseq-db/logseq.png"
+    mode: "0644"
+
+- name: Install Desktop entry
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/logseq-db.desktop"
+    mode: "0644"
+    content: |
+      [Desktop Entry]
+      Name=Logseq DB (Alpha)
+      GenericName=Knowledge Base
+      Comment=Logseq DB Version (Built from feat/db)
+      Exec={{ ansible_env.HOME }}/.local/bin/logseq %u
+      Icon={{ ansible_env.HOME }}/.local/opt/logseq-db/logseq.png
+      Terminal=false
+      Type=Application
+      Categories=Office;Utility;
+      MimeType=x-scheme-handler/logseq;
+      StartupNotify=true
+
+- name: Update desktop database
+  command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications

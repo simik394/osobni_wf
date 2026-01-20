@@ -1,0 +1,7 @@
+name: MapObsi Integration
+shortName: MAP
+leader: simik394
+template: std-agent-v1
+description: |
+  MapObsi: Obsidian vault visualization and mapping tool.
+  Path: integrations/mapObsi

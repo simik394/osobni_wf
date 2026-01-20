@@ -49,7 +49,9 @@ func TestCheckPRs(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(cr)
+		if err := json.NewEncoder(w).Encode(cr); err != nil {
+			t.Fatalf("json.NewEncoder.Encode returned an error: %v", err)
+		}
 	})
 
 	monitor := &Monitor{
@@ -87,5 +89,94 @@ func TestNewMonitor(t *testing.T) {
 	_, err = NewMonitor("test-owner", "test-repo")
 	if err == nil {
 		t.Error("NewMonitor did not return an error when GITHUB_TOKEN was not set")
+	}
+}
+
+func TestGetPRStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		prNum        int
+		mockResponse func(w http.ResponseWriter, r *http.Request)
+		want         string
+	}{
+		{
+			name:  "Merged",
+			prNum: 1,
+			mockResponse: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/repos/o/r/pulls/1" {
+					fmt.Fprint(w, `{"merged": true}`)
+				}
+			},
+			want: "Merged",
+		},
+		{
+			name:  "Conflicts",
+			prNum: 2,
+			mockResponse: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/repos/o/r/pulls/2" {
+					fmt.Fprint(w, `{"mergeable": false}`)
+				}
+			},
+			want: "Conflicts!",
+		},
+		{
+			name:  "Pending CI",
+			prNum: 3,
+			mockResponse: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/repos/o/r/pulls/3" {
+					fmt.Fprint(w, `{"mergeable": true, "head": {"sha": "sha1"}}`)
+				} else if r.URL.Path == "/repos/o/r/commits/sha1/status" {
+					fmt.Fprint(w, `{"state": "pending"}`)
+				}
+			},
+			want: "Pending CI",
+		},
+		{
+			name:  "CI Failed",
+			prNum: 4,
+			mockResponse: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/repos/o/r/pulls/4" {
+					fmt.Fprint(w, `{"mergeable": true, "head": {"sha": "sha2"}}`)
+				} else if r.URL.Path == "/repos/o/r/commits/sha2/status" {
+					fmt.Fprint(w, `{"state": "failure"}`)
+				}
+			},
+			want: "CI Failed",
+		},
+		{
+			name:  "Ready",
+			prNum: 5,
+			mockResponse: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/repos/o/r/pulls/5" {
+					fmt.Fprint(w, `{"mergeable": true, "head": {"sha": "sha3"}}`)
+				} else if r.URL.Path == "/repos/o/r/commits/sha3/status" {
+					fmt.Fprint(w, `{"state": "success"}`)
+				}
+			},
+			want: "Ready",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/", tt.mockResponse)
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			client := github.NewClient(nil)
+			url := server.URL + "/"
+			client.BaseURL, _ = client.BaseURL.Parse(url)
+
+			m := &Monitor{
+				client: client,
+				owner:  "o",
+				repo:   "r",
+			}
+
+			if got := m.GetPRStatus(tt.prNum); got != tt.want {
+				t.Errorf("GetPRStatus() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

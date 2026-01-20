@@ -1,0 +1,46 @@
+---
+# KDiskMark - Native package installation from GitHub releases
+# This installs the native deb package instead of the sandboxed Flatpak/Snap
+
+- name: Set KDiskMark version
+  set_fact:
+    kdiskmark_version: "3.2.0"
+
+- name: Check if KDiskMark is already installed
+  command: dpkg-query -W -f='${Version}' kdiskmark
+  register: kdiskmark_installed
+  failed_when: false
+  changed_when: false
+
+- name: Remove sandboxed KDiskMark (Flatpak)
+  become: true
+  command: flatpak uninstall -y io.github.jonmagon.kdiskmark
+  register: flatpak_remove
+  failed_when: false
+  changed_when: flatpak_remove.rc == 0
+
+- name: Remove sandboxed KDiskMark (Snap)
+  become: true
+  snap:
+    name: kdiskmark
+    state: absent
+  failed_when: false
+
+- name: Download KDiskMark deb from GitHub
+  get_url:
+    url: "https://github.com/JonMagon/KDiskMark/releases/download/{{ kdiskmark_version }}/kdiskmark_{{ kdiskmark_version }}_amd64.deb"
+    dest: "/tmp/kdiskmark_{{ kdiskmark_version }}_amd64.deb"
+    mode: "0644"
+  when: kdiskmark_installed.rc != 0 or kdiskmark_version not in kdiskmark_installed.stdout
+
+- name: Install KDiskMark deb package
+  become: true
+  apt:
+    deb: "/tmp/kdiskmark_{{ kdiskmark_version }}_amd64.deb"
+    state: present
+  when: kdiskmark_installed.rc != 0 or kdiskmark_version not in kdiskmark_installed.stdout
+
+- name: Clean up downloaded deb
+  file:
+    path: "/tmp/kdiskmark_{{ kdiskmark_version }}_amd64.deb"
+    state: absent
