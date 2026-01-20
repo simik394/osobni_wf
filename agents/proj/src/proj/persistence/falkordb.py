@@ -11,7 +11,7 @@ from typing import Any
 
 from falkordb import FalkorDB
 
-from proj.state import ProjState, Project, Task, InboxItem, TaskStatus, ProjectStatus, EnergyLevel
+from proj.state import ProjState, Project, Task, InboxItem, Context, Decision, TaskStatus, ProjectStatus, EnergyLevel
 
 
 # FalkorDB connection
@@ -49,6 +49,8 @@ class ProjStore:
             self._graph.query("CREATE INDEX FOR (p:Project) ON (p.id)")
             self._graph.query("CREATE INDEX FOR (t:Task) ON (t.id)")
             self._graph.query("CREATE INDEX FOR (i:InboxItem) ON (i.id)")
+            self._graph.query("CREATE INDEX FOR (c:Context) ON (c.id)")
+            self._graph.query("CREATE INDEX FOR (d:Decision) ON (d.id)")
         except Exception:
             pass  # Indexes may already exist
     
@@ -135,12 +137,33 @@ class ProjStore:
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         })
         
-        # Create relationship to project if exists
+        # Update project relationship (BELONGS_TO)
+        # First delete existing relationship to ensure consistency
+        graph.query("""
+            MATCH (t:Task {id: $task_id})-[r:BELONGS_TO]->()
+            DELETE r
+        """, {"task_id": task.id})
+
         if task.project_id:
             graph.query("""
                 MATCH (t:Task {id: $task_id}), (p:Project {id: $project_id})
-                MERGE (p)-[:HAS_TASK]->(t)
+                MERGE (t)-[:BELONGS_TO]->(p)
             """, {"task_id": task.id, "project_id": task.project_id})
+
+        # Update blocker relationship (DEPENDS_ON)
+        # First delete existing relationship
+        graph.query("""
+            MATCH (t:Task {id: $task_id})-[r:DEPENDS_ON]->()
+            DELETE r
+        """, {"task_id": task.id})
+
+        if task.blocked_by:
+             # Just checking if it looks like a task ID
+             if task.blocked_by.startswith("task_"):
+                 graph.query("""
+                    MATCH (t:Task {id: $task_id}), (b:Task {id: $blocker_id})
+                    MERGE (t)-[:DEPENDS_ON]->(b)
+                 """, {"task_id": task.id, "blocker_id": task.blocked_by})
         
         return task.id
     
@@ -166,6 +189,88 @@ class ProjStore:
             "context": json.dumps(item.context),
         })
         return item.id
+
+    def save_context(self, context: Context) -> str:
+        """Save a context node."""
+        if not self._use_falkor:
+            return self._json_save_context(context)
+
+        graph = self._get_db()
+        query = """
+        MERGE (c:Context {id: $id})
+        SET c.content = $content,
+            c.project_id = $project_id,
+            c.created_at = $created_at
+        RETURN c.id
+        """
+        graph.query(query, {
+            "id": context.id,
+            "content": context.content,
+            "project_id": context.project_id,
+            "created_at": context.created_at.isoformat()
+        })
+
+        # Relationship (CONTEXT_FOR)
+        # Clear existing
+        graph.query("""
+            MATCH (c:Context {id: $id})-[r:CONTEXT_FOR]->()
+            DELETE r
+        """, {"id": context.id})
+
+        if context.project_id:
+            graph.query("""
+                MATCH (c:Context {id: $id}), (p:Project {id: $project_id})
+                MERGE (c)-[:CONTEXT_FOR]->(p)
+            """, {"id": context.id, "project_id": context.project_id})
+
+        return context.id
+
+    def save_decision(self, decision: Decision) -> str:
+        """Save a decision node."""
+        if not self._use_falkor:
+            return self._json_save_decision(decision)
+
+        graph = self._get_db()
+        query = """
+        MERGE (d:Decision {id: $id})
+        SET d.title = $title,
+            d.rationale = $rationale,
+            d.project_id = $project_id,
+            d.task_id = $task_id,
+            d.status = $status,
+            d.created_at = $created_at
+        RETURN d.id
+        """
+        graph.query(query, {
+            "id": decision.id,
+            "title": decision.title,
+            "rationale": decision.rationale,
+            "project_id": decision.project_id,
+            "task_id": decision.task_id,
+            "status": decision.status,
+            "created_at": decision.created_at.isoformat()
+        })
+
+        # Update relationships
+        # Clear existing BELONGS_TO
+        graph.query("""
+            MATCH (d:Decision {id: $id})-[r:BELONGS_TO]->()
+            DELETE r
+        """, {"id": decision.id})
+
+        if decision.project_id:
+            graph.query("""
+                MATCH (d:Decision {id: $id}), (p:Project {id: $project_id})
+                MERGE (d)-[:BELONGS_TO]->(p)
+            """, {"id": decision.id, "project_id": decision.project_id})
+
+        if decision.task_id:
+            graph.query("""
+                MATCH (d:Decision {id: $id}), (t:Task {id: $task_id})
+                MERGE (d)-[:BELONGS_TO]->(t)
+            """, {"id": decision.id, "task_id": decision.task_id})
+
+        return decision.id
     
     def delete_inbox_item(self, item_id: str) -> bool:
         """Delete an inbox item."""
@@ -242,6 +347,35 @@ class ProjStore:
                 context=json.loads(props.get("context", "{}")),
             )
             state.inbox.append(item)
+
+        # Load contexts
+        result = graph.query("MATCH (c:Context) RETURN c")
+        for record in result.result_set:
+            node = record[0]
+            props = node.properties
+            context = Context(
+                id=props["id"],
+                content=props["content"],
+                project_id=props["project_id"],
+                created_at=datetime.fromisoformat(props["created_at"]),
+            )
+            state.contexts[context.id] = context
+
+        # Load decisions
+        result = graph.query("MATCH (d:Decision) RETURN d")
+        for record in result.result_set:
+            node = record[0]
+            props = node.properties
+            decision = Decision(
+                id=props["id"],
+                title=props["title"],
+                rationale=props["rationale"],
+                project_id=props.get("project_id"),
+                task_id=props.get("task_id"),
+                status=props.get("status", "proposed"),
+                created_at=datetime.fromisoformat(props["created_at"]),
+            )
+            state.decisions[decision.id] = decision
         
         return state
     
@@ -253,6 +387,10 @@ class ProjStore:
             self.save_task(task)
         for item in state.inbox:
             self.save_inbox_item(item)
+        for context in state.contexts.values():
+            self.save_context(context)
+        for decision in state.decisions.values():
+            self.save_decision(decision)
     
     # =========================================================================
     # JSON Fallback Operations
@@ -275,6 +413,12 @@ class ProjStore:
             
             for idata in data.get("inbox", []):
                 state.inbox.append(InboxItem(**idata))
+
+            for cid, cdata in data.get("contexts", {}).items():
+                state.contexts[cid] = Context(**cdata)
+
+            for did, ddata in data.get("decisions", {}).items():
+                state.decisions[did] = Decision(**ddata)
             
             return state
         except Exception as e:
@@ -289,6 +433,8 @@ class ProjStore:
             "projects": {pid: p.model_dump(mode="json") for pid, p in state.projects.items()},
             "tasks": {tid: t.model_dump(mode="json") for tid, t in state.tasks.items()},
             "inbox": [i.model_dump(mode="json") for i in state.inbox],
+            "contexts": {cid: c.model_dump(mode="json") for cid, c in state.contexts.items()},
+            "decisions": {did: d.model_dump(mode="json") for did, d in state.decisions.items()},
         }
         
         JSON_STATE_PATH.write_text(json.dumps(data, indent=2, default=str))
@@ -310,6 +456,18 @@ class ProjStore:
         state.inbox.append(item)
         self._json_save_state(state)
         return item.id
+
+    def _json_save_context(self, context: Context) -> str:
+        state = self._json_load_state()
+        state.contexts[context.id] = context
+        self._json_save_state(state)
+        return context.id
+
+    def _json_save_decision(self, decision: Decision) -> str:
+        state = self._json_load_state()
+        state.decisions[decision.id] = decision
+        self._json_save_state(state)
+        return decision.id
     
     def _json_delete_inbox_item(self, item_id: str) -> bool:
         state = self._json_load_state()
