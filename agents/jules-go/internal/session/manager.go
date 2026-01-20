@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"jules-go/internal/metrics"
 )
 
@@ -23,8 +24,6 @@ const (
 	// StatusMerged indicates that the PR has been merged.
 	StatusMerged = "merged"
 )
-
-const concurrencyLimit = 15
 
 // Notifier is an interface for sending notifications.
 type Notifier interface {
@@ -42,18 +41,22 @@ type Session struct {
 // Manager is responsible for managing the lifecycle of sessions.
 // It is thread-safe.
 type Manager struct {
-	sessions map[string]*Session
-	mutex    sync.RWMutex
-	logger   *slog.Logger
-	notifier Notifier
+	sessions         map[string]*Session
+	mutex            sync.RWMutex
+	logger           *slog.Logger
+	notifier         Notifier
+	sem              *semaphore.Weighted
+	concurrencyLimit int64
 }
 
 // NewManager creates and returns a new session Manager.
-func NewManager(logger *slog.Logger, notifier Notifier) *Manager {
+func NewManager(logger *slog.Logger, notifier Notifier, concurrencyLimit int64) *Manager {
 	return &Manager{
-		sessions: make(map[string]*Session),
-		logger:   logger.With("component", "session-manager"),
-		notifier: notifier,
+		sessions:         make(map[string]*Session),
+		logger:           logger.With("component", "session-manager"),
+		notifier:         notifier,
+		sem:              semaphore.NewWeighted(concurrencyLimit),
+		concurrencyLimit: concurrencyLimit,
 	}
 }
 
@@ -69,14 +72,14 @@ func generateID() (string, error) {
 // CreateSession creates a new session for a given task.
 // It returns an error if the concurrency limit is reached.
 func (m *Manager) CreateSession(task string) (*Session, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if len(m.sessions) >= concurrencyLimit {
-		m.logger.Warn("concurrency limit reached", "limit", concurrencyLimit)
+	if !m.sem.TryAcquire(1) {
+		m.logger.Warn("concurrency limit reached", "limit", m.concurrencyLimit)
 		m.notifyError("Session creation failed", errors.New("concurrency limit reached"))
 		return nil, errors.New("concurrency limit reached")
 	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	id, err := generateID()
 	if err != nil {
@@ -132,9 +135,12 @@ func (m *Manager) DeleteSession(id string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	if _, ok := m.sessions[id]; ok {
+	if session, ok := m.sessions[id]; ok {
 		delete(m.sessions, id)
 		m.logger.Info("session deleted", "session_id", id)
+		if session.Status == StatusActive {
+			m.sem.Release(1)
+		}
 	}
 
 	go func() {
@@ -156,6 +162,11 @@ func (m *Manager) UpdateSessionStatus(id, status string) error {
 	if !ok {
 		m.logger.Warn("attempted to update non-existent session", "session_id", id)
 		return errors.New("session not found")
+	}
+
+	// Release semaphore if the session is no longer active
+	if session.Status == StatusActive && (status == StatusCompleted || status == StatusFailed) {
+		m.sem.Release(1)
 	}
 
 	session.Status = status

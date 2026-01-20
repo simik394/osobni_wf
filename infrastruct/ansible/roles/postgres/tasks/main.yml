@@ -1,0 +1,30 @@
+---
+- name: Ensure Postgres data directory exists
+  file:
+    path: "{{ postgres_data_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Check if Postgres container exists
+  shell: "docker ps -a --format '{{ '{{' }}.Names{{ '}}' }}' | grep -w {{ postgres_container_name }}"
+  register: postgres_container_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Run Postgres container
+  shell: >
+    docker run -d 
+    --name {{ postgres_container_name }}
+    --restart unless-stopped
+    -p {{ postgres_port }}:5432
+    -e POSTGRES_USER={{ postgres_user }}
+    -e POSTGRES_PASSWORD={{ postgres_password }}
+    -e POSTGRES_DB={{ postgres_db }}
+    -v {{ postgres_data_dir }}:/var/lib/postgresql/data
+    postgres:{{ postgres_version }}
+  when: postgres_container_check.rc != 0
+
+- name: Start Postgres container if stopped
+  shell: "docker start {{ postgres_container_name }}"
+  when: postgres_container_check.rc == 0
+  changed_when: false

@@ -1,0 +1,15 @@
+project:
+  name: "Project Management Agent"
+  shortName: PROJ
+  leader: admin
+  template: std-agent-v1
+  description: "Personal project management agent for frictionless capture, intelligent resurfacing, and adaptive structure."
+
+boards:
+  - name: "PROJ Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: PROJ #Unresolved"

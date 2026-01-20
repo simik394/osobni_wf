@@ -1,0 +1,7 @@
+name: Yousidian
+shortName: YOUS
+leader: simik394
+template: std-agent-v1
+description: |
+  Yousidian: YouTrack <-> Obsidian sync integration.
+  Path: integrations/yousidian

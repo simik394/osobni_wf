@@ -60,3 +60,20 @@ The project agent should integrate with:
 - **Knowledge base**: Connect projects to relevant notes and references
 - **Calendar/Time**: Understand availability and deadlines
 - **File system**: Track associated files, repos, and artifacts
+
+## Backend
+
+The agent uses a dual-layer persistence strategy:
+
+1.  **FalkorDB** (Primary): High-performance graph database.
+2.  **JSON** (Fallback): Local file storage (`~/.proj/state.json`) used if FalkorDB is unavailable.
+
+### Configuration
+
+The agent connects to FalkorDB using environment variables:
+
+-   `FALKORDB_HOST`: Hostname (default: `localhost`)
+-   `FALKORDB_PORT`: Port (default: `6379`)
+
+To run using only the JSON backend, simply ensure FalkorDB is not reachable.
+

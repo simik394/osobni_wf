@@ -1,3 +1,8 @@
 jules
 jules-app
 cmd/jules/jules
+
+jules-cli
+jules-cli-bin
+
+.env

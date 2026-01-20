@@ -29,6 +29,10 @@ from .tools.priority_tools import (
     explain_priority,
     get_ready_to_work,
 )
+from .tools.rsrch_tools import (
+    dispatch_deep_research,
+    check_research_status,
+)
 
 load_dotenv()
 
@@ -94,6 +98,9 @@ def create_questDiscov_agent(model: Optional[str] = None):
         search_notes,
         write_priorities,
         sync_priorities_to_obsidian,
+        # RSRCH tools
+        dispatch_deep_research,
+        check_research_status,
     ]
 
     agent = create_react_agent(

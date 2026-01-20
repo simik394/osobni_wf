@@ -41,4 +41,28 @@ var (
 			Buckets: prometheus.DefBuckets,
 		},
 	)
+
+	// SessionConcurrencyGauge is a gauge for the number of active sessions.
+	SessionConcurrencyGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "jules_sessions_active",
+			Help: "Number of active sessions.",
+		},
+	)
+
+	// SessionWaitingGauge is a gauge for the number of sessions waiting on the semaphore.
+	SessionWaitingGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "jules_sessions_waiting",
+			Help: "Number of sessions waiting for the semaphore.",
+		},
+	)
+
+	// SessionConcurrencyLimitGauge is a gauge for the concurrency limit.
+	SessionConcurrencyLimitGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "jules_sessions_concurrency_limit",
+			Help: "Concurrency limit for sessions.",
+		},
+	)
 )

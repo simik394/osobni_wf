@@ -1,0 +1,15 @@
+project:
+  name: "Integrations"
+  shortName: INTEG
+  leader: admin
+  template: std-agent-v1
+  description: "External integrations including MapObsi, Downloader, and Perplexity."
+
+boards:
+  - name: "INTEG Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: INTEG #Unresolved"

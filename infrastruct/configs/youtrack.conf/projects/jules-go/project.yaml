@@ -1,0 +1,7 @@
+name: Jules Go
+shortName: JULESG
+leader: simik394
+template: std-agent-v1
+description: |
+  Jules-Go Agent: High-performance Go implementation of the Jules capabilities.
+  Path: agents/jules-go

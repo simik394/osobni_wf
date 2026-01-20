@@ -19,7 +19,7 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load("config.yaml")
 	if err != nil {
-		slog.Error("failed to load configuration", "err",err)
+		slog.Error("failed to load configuration", "err", err)
 		return
 	}
 
@@ -39,7 +39,7 @@ func main() {
 
 	// Start servers
 	webhookErrChan := make(chan error, 1)
-	webhookServer := webhook.StartServer(webhookErrChan)
+	webhookServer := webhook.StartServer(cfg, webhookErrChan)
 	shutdownManager.Add(func(ctx context.Context) error {
 		slog.Info("shutting down webhook server")
 		return webhookServer.Shutdown(ctx)
