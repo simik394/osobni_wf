@@ -20,6 +20,17 @@ This document defines the project structure in YouTrack for the `01-pwf` ecosyst
 ## Other Projects (Contextual)
 - **SAM**, **SS** (Smart System), **SKOLA** (School), **SKAUT** (Scout), **DOMA** (Home), **napoveda69_online**, **GWRKSPC** (Google Workspace).
 
+## Configuration as Code (IaC)
+All projects, fields, and workflows are defined declaratively in the repository:
+`infrastruct/configs/youtrack.conf/`
+
+**Key Principles**:
+1.  **Not Hardlocked**: You are not restricted by the current project settings. If you need a new State, Field, or Workflow rule, you can modify it in the code.
+2.  **Workflow as JS**: Workflows are written in JavaScript in `workflows/` and attached via `project.yaml`.
+3.  **Self-Evolution**: Agents (and devs) should propose changes to this configuration when implementing features that require process changes (e.g., Auto-Close workflows).
+
+See [infrastruct/configs/youtrack.conf/README.md](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/README.md) for usage.
+
 ## Data Integrity / Duplicates Report (2026-01-20)
 
 A review of the `TOOLS` project revealed that newer tasks for specific agents have been inadvertently created in `TOOLS` instead of their dedicated projects.
