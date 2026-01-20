@@ -37,10 +37,6 @@ func main() {
 
 	publishCmd := flag.NewFlagSet("publish", flag.ExitOnError)
 	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
-	publishHeadless := publishCmd.Bool("headless", false, "Run in headless mode")
-
-	publishAllCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
-	publishAllHeadless := publishAllCmd.Bool("headless", false, "Run in headless mode")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 
@@ -52,7 +48,7 @@ func main() {
 	}
 
 	apiKey := os.Getenv("JULES_API_KEY")
-	if apiKey == "" && os.Args[1] != "version" && os.Args[1] != "help" && os.Args[1] != "publish" && os.Args[1] != "publish-all" {
+	if apiKey == "" && os.Args[1] != "version" && os.Args[1] != "help" {
 		fmt.Fprintln(os.Stderr, "Error: JULES_API_KEY environment variable required")
 		os.Exit(1)
 	}
@@ -127,98 +123,27 @@ func main() {
 	case "publish":
 		publishCmd.Parse(os.Args[2:])
 		if publishCmd.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "Usage: jules-cli publish <session-id> [--pr=true|false] [--headless]")
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli publish <session-id> [--pr=true|false]")
 			os.Exit(1)
 		}
 		sessionID := publishCmd.Arg(0)
-		sessionURL := fmt.Sprintf("https://jules.google.com/session/%s", sessionID)
-
-		fmt.Printf("Publishing session %s...\n", sessionID)
-		bs, err := browser.NewJulesSession(*publishHeadless)
-		if err != nil {
-			slog.Error("failed to create browser session", "err", err)
-			os.Exit(1)
-		}
-		defer bs.Close()
-
-		if err := bs.NavigateToSession(sessionURL); err != nil {
-			slog.Error("failed to navigate to session", "err", err)
-			os.Exit(1)
-		}
-
+		mode := "branch"
 		if *publishPR {
-			if err := bs.ClickPublishPR(); err != nil {
-				slog.Error("failed to click publish PR", "err", err)
-				os.Exit(1)
-			}
-		} else {
-			if err := bs.ClickPublishBranch(); err != nil {
-				slog.Error("failed to click publish branch", "err", err)
-				os.Exit(1)
-			}
+			mode = "pr"
 		}
 
-		fmt.Println("Waiting for publish to complete...")
-		if err := bs.WaitForPublishComplete(); err != nil {
-			slog.Error("publish did not complete", "err", err)
-			os.Exit(1)
-		}
-		fmt.Printf("✅ Session %s published successfully!\n", sessionID)
+		fmt.Printf("Publishing session %s (mode=%s)...\n", sessionID, mode)
 
-	case "publish-all":
-		publishAllCmd.Parse(os.Args[2:])
-		client, err := jules.NewClient(apiKey, logger)
+		sess, err := browser.NewJulesSession(false)
 		if err != nil {
-			slog.Error("failed to create client", "err", err)
+			slog.Error("failed to create session", "err", err)
 			os.Exit(1)
 		}
-		sessions, err := client.ListSessions(ctx)
-		if err != nil {
-			slog.Error("failed to list sessions", "err", err)
+		defer sess.Close()
+
+		if err := sess.StartPublish(sessionID, mode); err != nil {
+			slog.Error("publish failed", "err", err)
 			os.Exit(1)
-		}
-
-		// Filter to AWAITING_USER_FEEDBACK (Ready for review)
-		waiting := []*jules.Session{}
-		for _, s := range sessions {
-			if s.State == "AWAITING_USER_FEEDBACK" {
-				waiting = append(waiting, s)
-			}
-		}
-
-		fmt.Printf("Found %d sessions waiting for review\n", len(waiting))
-
-		bs, err := browser.NewJulesSession(*publishAllHeadless)
-		if err != nil {
-			slog.Error("failed to create browser session", "err", err)
-			os.Exit(1)
-		}
-		defer bs.Close()
-
-		for i, s := range waiting {
-			sessionURL := fmt.Sprintf("https://jules.google.com/session/%s", s.ID)
-			fmt.Printf("[%d/%d] Publishing %s: %s\n", i+1, len(waiting), s.ID, s.Title)
-
-			if err := bs.NavigateToSession(sessionURL); err != nil {
-				fmt.Printf("  ❌ Failed to navigate: %v\n", err)
-				continue
-			}
-
-			if !bs.IsReadyForReview() {
-				fmt.Printf("  ⏭️ Not ready for review, skipping\n")
-				continue
-			}
-
-			if err := bs.ClickPublishPR(); err != nil {
-				fmt.Printf("  ❌ Failed to publish: %v\n", err)
-				continue
-			}
-
-			if err := bs.WaitForPublishComplete(); err != nil {
-				fmt.Printf("  ⚠️ Publish may still be in progress: %v\n", err)
-			} else {
-				fmt.Printf("  ✅ Published!\n")
-			}
 		}
 		fmt.Println("Done!")
 
@@ -255,8 +180,7 @@ Commands:
   list         List all sessions [--format table|json] [--state STATE]
   get          Get session details <session-id>
   retry        Retry a failed session <session-id> [--max N]
-  publish      Publish a session's branch/PR <session-id> [--pr=true|false] [--headless]
-  publish-all  Publish ALL waiting sessions [--headless]
+  publish      Publish a session <session-id> [--pr=true|false]
   status       Show system status
   version      Show version information
   help         Show this help message

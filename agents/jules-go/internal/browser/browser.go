@@ -1,7 +1,11 @@
 package browser
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,31 +21,22 @@ type JulesSession struct {
 	page    *rod.Page
 }
 
-// NewJulesSession creates a new Jules session with authentication support.
+// NewJulesSession creates a new Jules session.
 func NewJulesSession(headless bool) (*JulesSession, error) {
+	if os.Getenv("JULES_USE_WINDMILL") == "true" {
+		// Return empty session for remote execution
+		return &JulesSession{}, nil
+	}
+
 	// Use user data directory for persistent auth
 	homeDir, _ := os.UserHomeDir()
 	userDataDir := filepath.Join(homeDir, ".config", "google-chrome")
-	
-	// Check for alternative paths
-	if _, err := os.Stat(userDataDir); os.IsNotExist(err) {
-		userDataDir = filepath.Join(homeDir, ".config", "chromium")
-	}
-	if _, err := os.Stat(userDataDir); os.IsNotExist(err) {
-		// Fall back to rod's default profile
-		userDataDir = ""
-	}
 
 	l := launcher.New()
-	if userDataDir != "" {
+	if _, err := os.Stat(userDataDir); err == nil {
 		l = l.UserDataDir(userDataDir)
 	}
-	if headless {
-		l = l.Headless(true)
-	} else {
-		l = l.Headless(false)
-	}
-	
+
 	url := l.MustLaunch()
 	browser := rod.New().ControlURL(url).MustConnect()
 	page := browser.MustPage()
@@ -54,80 +49,91 @@ func NewJulesSession(headless bool) (*JulesSession, error) {
 
 // Close closes the browser session.
 func (s *JulesSession) Close() {
-	s.browser.MustClose()
+	if s.browser != nil {
+		s.browser.MustClose()
+	}
 }
 
-// NavigateToSession navigates to a Jules session URL and waits for load.
+// NavigateToSession navigates to a Jules session URL.
 func (s *JulesSession) NavigateToSession(sessionURL string) error {
-	err := s.page.Navigate(sessionURL)
-	if err != nil {
-		return err
+	if s.page == nil {
+		return fmt.Errorf("browser not initialized")
 	}
-	// Wait for page to be stable
-	s.page.MustWaitLoad()
-	time.Sleep(2 * time.Second) // Extra wait for dynamic content
+	return s.page.Navigate(sessionURL)
+}
+
+// StartPublish triggers the publishing process (local or remote).
+func (s *JulesSession) StartPublish(sessionID string, mode string) error {
+	if os.Getenv("JULES_USE_WINDMILL") == "true" {
+		return s.triggerWindmillPublish(sessionID, mode)
+	}
+	return fmt.Errorf("local publishing not implemented for this command, use JULES_USE_WINDMILL=true")
+}
+
+func (s *JulesSession) triggerWindmillPublish(sessionID string, mode string) error {
+	token := os.Getenv("WINDMILL_TOKEN")
+	url := os.Getenv("WINDMILL_URL")
+	workspace := os.Getenv("WINDMILL_WORKSPACE")
+
+	if token == "" || url == "" || workspace == "" {
+		return fmt.Errorf("WINDMILL_TOKEN, WINDMILL_URL, and WINDMILL_WORKSPACE env vars required")
+	}
+
+	endpoint := fmt.Sprintf("%s/api/w/%s/jobs/run/p/f/jules/click_publish_session", url, workspace)
+
+	if mode == "" {
+		mode = "pr"
+	}
+
+	data := map[string]string{
+		"session_id": sessionID,
+		"mode":       mode,
+	}
+	jsonData, _ := json.Marshal(data)
+
+	req, _ := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to trigger windmill: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("windmill error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	fmt.Printf("Windmill Job Triggered: %s\n", string(body))
 	return nil
 }
 
-// ClickPublishBranch clicks the "Publish branch" button.
+// ClickPublishBranch clicks the "Publish branch" button (Local only).
 func (s *JulesSession) ClickPublishBranch() error {
-	// Wait for button to be visible
-	publishButton, err := s.page.Timeout(10 * time.Second).ElementR("button", "Publish branch")
-	if err != nil {
-		return fmt.Errorf("publish branch button not found: %w", err)
+	if s.page == nil {
+		return fmt.Errorf("browser not initialized")
 	}
+	publishButton := s.page.MustElementR("button", "Publish branch")
 	return publishButton.Click(proto.InputMouseButtonLeft, 1)
 }
 
-// ClickPublishPR clicks "Publish PR" from the dropdown.
-func (s *JulesSession) ClickPublishPR() error {
-	// First, find and click the dropdown arrow next to Publish branch
-	dropdown, err := s.page.Timeout(10 * time.Second).ElementR("button", "Publish branch")
-	if err != nil {
-		return fmt.Errorf("publish button not found: %w", err)
-	}
-	
-	// Click the dropdown to open menu
-	dropdown.MustClick()
-	time.Sleep(500 * time.Millisecond)
-	
-	// Look for "Publish PR" option
-	publishPR, err := s.page.Timeout(5 * time.Second).ElementR("div", "Publish PR")
-	if err != nil {
-		// Might already be on "Publish PR" - try clicking directly
-		return s.ClickPublishBranch()
-	}
-	
-	return publishPR.Click(proto.InputMouseButtonLeft, 1)
-}
-
-// WaitForPublishComplete waits for publishing to complete.
-func (s *JulesSession) WaitForPublishComplete() error {
-	// Wait for "View branch" or "View PR" to appear
-	_, err := s.page.Timeout(60 * time.Second).ElementR("button", "View")
-	if err != nil {
-		return fmt.Errorf("publish did not complete: %w", err)
-	}
-	return nil
-}
-
-// ApprovePlan approves the current plan.
+// ApprovePlan approves the current plan (Local only).
 func (s *JulesSession) ApprovePlan() error {
-	approveButton, err := s.page.Timeout(10 * time.Second).ElementR("button", "Approve")
-	if err != nil {
-		return fmt.Errorf("approve button not found: %w", err)
+	if s.page == nil {
+		return fmt.Errorf("browser not initialized")
 	}
+	approveButton := s.page.MustElementR("button", "Approve")
 	return approveButton.Click(proto.InputMouseButtonLeft, 1)
-}
-
-// IsReadyForReview checks if session is ready for review.
-func (s *JulesSession) IsReadyForReview() bool {
-	_, err := s.page.Timeout(2 * time.Second).ElementR("button", "Publish")
-	return err == nil
 }
 
 // MonitorSession monitors the session for changes.
 func (s *JulesSession) MonitorSession() {
+	if s.page == nil {
+		return
+	}
 	fmt.Println("Monitoring session...")
 	for {
 		time.Sleep(5 * time.Second)
