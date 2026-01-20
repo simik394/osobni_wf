@@ -7,6 +7,17 @@ import (
 )
 
 func TestLoad(t *testing.T) {
+	// Save current env and restore after test
+	originalKey := os.Getenv("JULES_API_KEY")
+	defer func() {
+		if originalKey != "" {
+			os.Setenv("JULES_API_KEY", originalKey)
+		} else {
+			os.Unsetenv("JULES_API_KEY")
+		}
+	}()
+	os.Unsetenv("JULES_API_KEY")
+
 	// Create a temporary directory for the test
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")

@@ -183,7 +183,7 @@ func TestApprovePlan(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/sessions/session-123/plan:approve", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-api-key", r.Header.Get("x-goog-api-key"))
 
 		var plan Plan
 		err := json.NewDecoder(r.Body).Decode(&plan)
