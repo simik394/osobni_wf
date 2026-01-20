@@ -210,6 +210,22 @@ func (c *Client) GetIssue(ctx context.Context, issueID string) (*Issue, error) {
 	return &issue, nil
 }
 
+// GetComments retrieves all comments for an issue.
+func (c *Client) GetComments(ctx context.Context, issueID string) ([]Comment, error) {
+	path := fmt.Sprintf("/api/issues/%s/comments?fields=text", url.PathEscape(issueID))
+	req, err := c.newRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var comments []Comment
+	if err := c.do(req, &comments); err != nil {
+		return nil, fmt.Errorf("failed to get comments: %w", err)
+	}
+
+	return comments, nil
+}
+
 func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
 	fullURL := c.baseURL + path
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)

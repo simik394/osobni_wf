@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
+	"strings"
 	"text/tabwriter"
 
 	jules "jules-go"
 	"jules-go/internal/logging"
+	"jules-go/internal/youtrack"
 )
 
 var (
@@ -34,6 +37,9 @@ func main() {
 	retryMax := retryCmd.Int("max", 3, "Maximum retry attempts")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
+
+	syncCmd := flag.NewFlagSet("sync-youtrack", flag.ExitOnError)
+	dryRun := syncCmd.Bool("dry-run", false, "Preview changes without applying them")
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
@@ -105,6 +111,92 @@ func main() {
 		}
 		printJSON(result)
 
+	case "sync-youtrack":
+		syncCmd.Parse(os.Args[2:])
+
+		// Initialize YouTrack client
+		ytURL := os.Getenv("YOUTRACK_URL")
+		ytToken := os.Getenv("YOUTRACK_TOKEN")
+		if ytURL == "" || ytToken == "" {
+			fmt.Fprintln(os.Stderr, "Error: YOUTRACK_URL and YOUTRACK_TOKEN environment variables required")
+			os.Exit(1)
+		}
+
+		ytConfig := youtrack.ClientConfig{
+			BaseURL: ytURL,
+			Token:   ytToken,
+		}
+		ytClient, err := youtrack.NewClient(ytConfig, logger)
+		if err != nil {
+			slog.Error("failed to create YouTrack client", "err", err)
+			os.Exit(1)
+		}
+
+		// Initialize Jules client
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		issuePattern := regexp.MustCompile(`([A-Z]+-\d+)`)
+
+		for _, s := range sessions {
+			// Check for COMPLETED state and URL (which we assume is the PR link)
+			if s.State == "COMPLETED" && s.URL != "" {
+				issues := issuePattern.FindAllString(s.Prompt, -1)
+
+				// Deduplicate issues
+				uniqueIssues := make(map[string]bool)
+				for _, i := range issues {
+					uniqueIssues[i] = true
+				}
+
+				for issueID := range uniqueIssues {
+					if *dryRun {
+						fmt.Printf("[Dry Run] Would update issue %s: State -> Fixed, Comment -> ✅ Merged via %s\n", issueID, s.URL)
+						continue
+					}
+
+					// Check for existing comments to be idempotent
+					comments, err := ytClient.GetComments(ctx, issueID)
+					if err != nil {
+						slog.Error("failed to get comments", "issue", issueID, "err", err)
+						continue
+					}
+
+					alreadyCommented := false
+					targetComment := "✅ Merged via " + s.URL
+					for _, c := range comments {
+						if strings.Contains(c.Text, targetComment) {
+							alreadyCommented = true
+							break
+						}
+					}
+
+					if !alreadyCommented {
+						if err := ytClient.UpdateIssueState(ctx, issueID, "Fixed"); err != nil {
+							slog.Error("failed to update issue state", "issue", issueID, "err", err)
+						}
+						if err := ytClient.AddComment(ctx, issueID, targetComment); err != nil {
+							slog.Error("failed to add comment", "issue", issueID, "err", err)
+						} else {
+							fmt.Printf("Updated issue %s\n", issueID)
+						}
+					} else {
+						// Optionally log that it's already updated
+						slog.Debug("issue already updated", "issue", issueID)
+					}
+				}
+			}
+		}
+
 	case "status":
 		statusCmd.Parse(os.Args[2:])
 		budget := jules.DefaultRetryBudget()
@@ -135,15 +227,18 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
-  list    List all sessions [--format table|json]
-  get     Get session details <session-id>
-  retry   Retry a failed session <session-id> [--max N]
-  status  Show system status
-  version Show version information
-  help    Show this help message
+  list          List all sessions [--format table|json]
+  get           Get session details <session-id>
+  retry         Retry a failed session <session-id> [--max N]
+  sync-youtrack Sync completed sessions to YouTrack [--dry-run]
+  status        Show system status
+  version       Show version information
+  help          Show this help message
 
 Environment:
-  JULES_API_KEY  Required API key for Jules API`)
+  JULES_API_KEY   Required API key for Jules API
+  YOUTRACK_URL    Required for sync-youtrack
+  YOUTRACK_TOKEN  Required for sync-youtrack`)
 }
 
 func printSessions(sessions []*jules.Session, format string) {
