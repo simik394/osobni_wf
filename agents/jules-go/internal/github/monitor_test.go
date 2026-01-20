@@ -94,10 +94,10 @@ func TestNewMonitor(t *testing.T) {
 
 func TestGetPRStatus(t *testing.T) {
 	tests := []struct {
-		name           string
-		prNum          int
-		mockResponse   func(w http.ResponseWriter, r *http.Request)
-		want           string
+		name         string
+		prNum        int
+		mockResponse func(w http.ResponseWriter, r *http.Request)
+		want         string
 	}{
 		{
 			name:  "Merged",
