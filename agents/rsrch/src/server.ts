@@ -10,7 +10,10 @@ import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
+import { notifyResearchComplete } from './notify';
 import { getRegistry } from './artifact-registry';
+import { setMaxTabs, markTabBusy, markTabFree, getMaxTabs } from '@agents/shared/tab-pool';
+import { discordService } from './services/notification';
 
 // Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
@@ -59,6 +62,7 @@ app.use(express.json({ limit: '10mb' }));
 // Initialize the client
 const client = new PerplexityClient();
 let notebookClient: NotebookLMClient | null = null;
+let geminiClient: GeminiClient | null = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -111,6 +115,16 @@ app.post('/shutdown', async (req, res) => {
     process.exit(0);
 });
 
+// Config Endpoint
+app.post('/config/max-tabs', (req, res) => {
+    const { maxTabs } = req.body;
+    if (typeof maxTabs !== 'number' || maxTabs <= 0) {
+        return res.status(400).json({ error: 'maxTabs must be a positive number' });
+    }
+    setMaxTabs(maxTabs);
+    res.json({ success: true, maxTabs: getMaxTabs() });
+});
+
 // Query endpoint
 app.post('/query', async (req, res) => {
     try {
@@ -129,16 +143,36 @@ app.post('/query', async (req, res) => {
 
             // Process async
             (async () => {
+                let jobClient: GeminiClient | null = null;
+                let page: any = null;
                 try {
                     await graphStore.updateJobStatus(job.id, 'running');
-                    const result = await client.query(query, { sessionId: session, sessionName: name, deepResearch: true });
+
+                    // Acquire fresh client/tab from pool
+                    jobClient = await client.createGeminiClient();
+                    page = (jobClient as any).page; // Access page to mark busy
+                    await markTabBusy(page, job.id);
+                    await jobClient.init();
+                    await jobClient.resetToNewChat();
+
+                    const result = await jobClient.startDeepResearch(query);
+
                     await graphStore.updateJobStatus(job.id, 'completed', { result });
                     console.log(`[Server] Deep research job ${job.id} completed.`);
-                    notifyJobCompleted(job.id, 'Deep Research', query, true, result?.answer?.substring(0, 100));
+
+                    // Notifications
+                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl);
+                    notifyJobCompleted(job.id, 'Deep Research', query, true, result.googleDocTitle);
+
                 } catch (err: any) {
                     console.error(`[Server] Deep research job ${job.id} failed:`, err);
                     await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
+                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, false, err.message);
                     notifyJobCompleted(job.id, 'Deep Research', query, false, err.message);
+                } finally {
+                    if (page) {
+                        await markTabFree(page);
+                    }
                 }
             })();
 
@@ -375,119 +409,84 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
 
         // 2. Get ResearchDoc lineage
         const lineage = await graphStore.getLineage(researchDocId);
-        const docNode = lineage.find(n => n.type === 'ResearchDoc' || n.type === 'Document'); // Support legacy node type
+        const docNode = lineage.find(n => n.type === 'ResearchDoc' || n.type === 'Document');
 
         if (!docNode) {
-            // Fallback: try direct lookup if lineage fails (e.g. if graph is disconnected fragments)
-            // But we don't have direct lookup exposed yet. 
-            // For now, assume if lineage fails, doc doesn't exist or is orphan.
             return res.status(404).json({ error: 'ResearchDoc not found' });
         }
 
         const title = docNode.title;
-        const content = docNode.content || ''; // Legacy Document nodes might not have content stored?
-        // Note: ResearchDoc has content. Document (legacy) might not.
 
-        if (!content && !docNode.url) {
-            return res.status(400).json({ error: 'Document has no content or URL to process' });
-        }
+        // Async Architecture: Queue via Windmill
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
 
-        console.log(`[Server] Converting ResearchDoc to Audio: ${title} (${content.length} chars)`);
+        if (windmill.isConfigured()) {
+            console.log(`[Server] Queueing audio generation for: ${title} via Windmill`);
 
-        if (!notebookClient) {
-            // Lazy init: ensure browser is initialized before creating client
-            try {
-                await client.init({ local: true });
-            } catch (initErr: any) {
-                console.warn(`[Server] Browser lazy init failed: ${initErr.message}`);
-                return res.status(503).json({ error: 'Browser not available', details: initErr.message });
-            }
-            notebookClient = await client.createNotebookClient();
-        }
+            // Queue via Windmill
+            const { queued, failed, pendingAudios } = await windmill.queueAudioGenerations(
+                notebookTitle || `Research Audio: ${title}`,
+                [title], // Source is the title, Windmill script should handle lookup/content
+                undefined, // Custom prompt
+            );
 
-        // 3. Create or Open Notebook
-        // Use a dedicated notebook for research audio? Or per session?
-        // Let's use a "Research Audio" notebook default if not provided
-        const targetNotebook = notebookTitle || `Research Audio: ${new Date().toISOString().split('T')[0]}`;
-
-        // 4. Try to open notebook, create if not exists
-        try {
-            await notebookClient.openNotebook(targetNotebook);
-            console.log(`[Server] Opened existing notebook: ${targetNotebook}`);
-        } catch (openErr: any) {
-            if (openErr.message?.includes('not found')) {
-                console.log(`[Server] Notebook not found, creating: ${targetNotebook}`);
-                await notebookClient.createNotebook(targetNotebook);
+            if (queued.length > 0) {
+                 // Return PendingAudio ID
+                 return res.status(202).json({
+                     success: true,
+                     message: 'Audio generation queued via Windmill',
+                     jobId: queued[0].jobId,
+                     pendingAudioId: pendingAudios[0]?.id
+                 });
             } else {
-                throw openErr;
+                 return res.status(500).json({ success: false, error: failed[0]?.error || 'Failed to queue job' });
             }
         }
 
-        // 5. Add Source
-        // If content is available, paste it. If only URL (legacy), add URL.
-        if (content) {
-            // We prepend title to content to give context
-            const fullText = `# ${title}\n\n${content}`;
-            // Don't pass notebookTitle since we already opened it
-            await notebookClient.addSourceText(fullText, title);
-        } else if (docNode.url) {
-            await notebookClient.addSourceUrl(docNode.url);
-        }
-
-        // 5. Generate Audio
-        // We trigger generation and wait for it
-        if (notebookClient.isBusy) {
-            return res.status(409).json({ error: 'NotebookLM client is busy' });
-        }
-
-        console.log(`[Server] Triggering audio generation for: ${title}`);
-        const result = await notebookClient.generateAudioOverview(targetNotebook, [title], undefined, true, dryRun);
-
-        if (!result.success) {
-            throw new Error('Audio generation failed or timed out');
-        }
-
-        if (dryRun) {
-            return res.json({ success: true, dryRun: true });
-        }
-
-        // 6. Download Audio
-        const audioName = result.artifactTitle || `Audio Overview - ${title}`;
-        const safeFilename = audioName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-
-        // Define local output directory
-        const outputDir = config.paths.resultsDir;
-        const fs = require('fs');
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
-
-        const localFilename = `${safeFilename}__${Date.now()}.mp3`;
-        const localPath = `${outputDir}/${localFilename}`;
-
-        console.log(`[Server] Downloading audio to: ${localPath}`);
-
-        const downloadSuccess = await notebookClient.downloadAudio(targetNotebook, localPath, {
-            audioTitlePattern: result.artifactTitle, // Explicitly target the one we just made
-            latestOnly: true
-        });
-
-        if (!downloadSuccess) {
-            console.warn('[Server] Download reported failure, but proceeding to record in graph just in case.');
-        }
-
-        // 7. Track in Graph
-        const audioNode = await graphStore.createResearchAudio({
-            docId: researchDocId,
-            path: localPath,
-            duration: 0
-        });
-
-        res.json({ success: true, audio: audioNode, downloaded: downloadSuccess, localPath });
+        // Fallback to synchronous (Legacy)
+        console.warn('[Server] Windmill not configured. Falling back to legacy blocking audio generation.');
+        // ... (Old legacy logic could be kept here if needed, but for now we error or just reimplement)
+        return res.status(503).json({ error: 'Windmill not configured and async architecture is required.' });
 
     } catch (e: any) {
         console.error('[Server] Create audio from doc failed:', e);
         res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Webhook for Windmill/Watcher completion
+app.post('/webhook/audio-complete', async (req, res) => {
+    try {
+        const { jobId, status, audioPath, error, notebookTitle, resultAudioId } = req.body;
+        console.log(`[Webhook] Audio complete received: ${status} for job ${jobId}`);
+
+        // Find PendingAudio by Windmill Job ID
+        const pendingAudio = await graphStore.getPendingAudioByWindmillJobId(jobId);
+
+        if (!pendingAudio) {
+            console.warn(`[Webhook] No PendingAudio found for Windmill Job ID: ${jobId}`);
+            return res.status(404).json({ error: 'PendingAudio not found' });
+        }
+
+        // Update status in FalkorDB
+        await graphStore.updatePendingAudioStatus(pendingAudio.id, status, {
+            error,
+            resultAudioId
+        });
+
+        // Notify
+        if (status === 'completed') {
+            await notifyResearchComplete(notebookTitle || pendingAudio.notebookTitle, audioPath);
+            console.log(`[Webhook] Notification sent for ${pendingAudio.id}`);
+        } else if (status === 'failed') {
+            await notifyResearchComplete(`${notebookTitle || pendingAudio.notebookTitle} (Failed)`, undefined);
+        }
+
+        res.json({ success: true });
+    } catch (e: any) {
+        console.error('[Webhook] Failed:', e);
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -526,6 +525,8 @@ app.post('/deep-research/start', async (req, res) => {
 
         // Fire and forget - run deep research in background
         (async () => {
+            let jobClient: GeminiClient | null = null;
+            let page: any = null;
             try {
                 await graphStore.updateJobStatus(job.id, 'running');
 
@@ -535,15 +536,37 @@ app.post('/deep-research/start', async (req, res) => {
                     await geminiClient.init();
                 }
 
+                // For non-blocking, we should ideally use a new pooled client
+                // But preserving existing logic structure with upgrades:
+
+                // Acquire fresh client/tab from pool
+                jobClient = await client.createGeminiClient();
+                page = (jobClient as any).page;
+                await markTabBusy(page, job.id);
+
+                await jobClient.init();
+                await jobClient.resetToNewChat();
+
                 // Run deep research
-                const result = await geminiClient.startDeepResearch(query, gem);
+                const result = await jobClient.startDeepResearch(query, gem);
 
                 // Update job with result
                 await graphStore.updateJobStatus(job.id, 'completed', { result });
                 console.log(`[Server] Deep research job ${job.id} completed`);
+
+                // Notifications
+                await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl);
+                notifyJobCompleted(job.id, 'Deep Research', query, true, result.googleDocTitle);
+
             } catch (e: any) {
                 console.error(`[Server] Deep research job ${job.id} failed:`, e);
                 await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+                await discordService.notifyJobCompletion(job.id, 'Deep Research', query, false, e.message);
+                notifyJobCompleted(job.id, 'Deep Research', query, false, e.message);
+            } finally {
+                if (page) {
+                    await markTabFree(page);
+                }
             }
         })();
 
@@ -940,27 +963,6 @@ app.post('/v1/chat/completions', async (req, res) => {
 
         // Get last user message for logging
         const lastMessage = request.messages.filter(m => m.role === 'user').pop();
-
-        /*
-        const falkor = getFalkorClient();
-        // Log query
-        if (request.session && lastMessage) {
-            console.log(`[FalkorDB] Logging query for session: ${request.session}`);
-            try {
-                // Resolve session name to ID if needed
-                const sessionNode = await falkor.findSession(request.session);
-
-                if (sessionNode) {
-                    await falkor.logInteraction(sessionNode.id, 'user', 'query', lastMessage.content);
-                    console.log(`[FalkorDB] Query logged successfully to session ${sessionNode.id}`);
-                } else {
-                    console.warn(`[FalkorDB] Session '${request.session}' not found, skipping log`);
-                }
-            } catch (e: any) {
-                console.error('[FalkorDB] Failed to log query:', e);
-            }
-        }
-        */
 
         // Start observability trace
         const traceCtx = startChatCompletionTrace(request);

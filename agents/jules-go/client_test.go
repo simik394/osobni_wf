@@ -183,6 +183,7 @@ func TestApprovePlan(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/sessions/session-123/plan:approve", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
+		// The client uses x-goog-api-key, not Authorization Bearer
 		assert.Equal(t, "test-api-key", r.Header.Get("x-goog-api-key"))
 
 		var plan Plan
