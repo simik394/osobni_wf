@@ -47,9 +47,11 @@ func TestListSessions(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]*Session{
-			{ID: "session-1", Name: "Session 1"},
-			{ID: "session-2", Name: "Session 2"},
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"sessions": []*Session{
+				{ID: "session-1", Name: "Session 1"},
+				{ID: "session-2", Name: "Session 2"},
+			},
 		})
 	}))
 	defer server.Close()
@@ -139,7 +141,7 @@ func TestApprovePlan(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/sessions/session-123/plan:approve", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
+		assert.Equal(t, "test-api-key", r.Header.Get("x-goog-api-key"))
 
 		var plan Plan
 		err := json.NewDecoder(r.Body).Decode(&plan)

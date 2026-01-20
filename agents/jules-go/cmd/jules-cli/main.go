@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"text/tabwriter"
 
 	jules "jules-go"
@@ -32,6 +33,9 @@ func main() {
 
 	retryCmd := flag.NewFlagSet("retry", flag.ExitOnError)
 	retryMax := retryCmd.Int("max", 3, "Maximum retry attempts")
+
+	statusSessionsCmd := flag.NewFlagSet("status-sessions", flag.ExitOnError)
+	statusSessionsJSON := statusSessionsCmd.Bool("json", false, "Output as JSON")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 
@@ -105,6 +109,69 @@ func main() {
 		}
 		printJSON(result)
 
+	case "status-sessions":
+		statusSessionsCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		stateMap := map[string]string{
+			"AWAITING_PLAN_APPROVAL": "Ready for review",
+			"AWAITING_USER_FEEDBACK": "Ready for review",
+			"FAILED":                 "Failed",
+			"IN_PROGRESS":            "In progress",
+			"PLANNING":               "In progress",
+			"COMPLETED":              "Completed",
+		}
+
+		counts := make(map[string]int)
+		total := 0
+		for _, s := range sessions {
+			displayState, ok := stateMap[s.State]
+			if !ok {
+				displayState = s.State
+			}
+			counts[displayState]++
+			total++
+		}
+
+		if *statusSessionsJSON {
+			printJSON(counts)
+			return
+		}
+
+		fmt.Println("Jules Session Status")
+		fmt.Println("====================")
+
+		order := []string{"Ready for review", "Failed", "In progress", "Completed"}
+		printed := make(map[string]bool)
+
+		for _, state := range order {
+			if count, ok := counts[state]; ok {
+				fmt.Printf("%s: %d\n", state, count)
+				printed[state] = true
+			}
+		}
+
+		var otherStates []string
+		for state := range counts {
+			if !printed[state] {
+				otherStates = append(otherStates, state)
+			}
+		}
+		sort.Strings(otherStates)
+		for _, state := range otherStates {
+			fmt.Printf("%s: %d\n", state, counts[state])
+		}
+		fmt.Printf("Total: %d\n", total)
+
 	case "status":
 		statusCmd.Parse(os.Args[2:])
 		budget := jules.DefaultRetryBudget()
@@ -135,10 +202,11 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
-  list    List all sessions [--format table|json]
-  get     Get session details <session-id>
-  retry   Retry a failed session <session-id> [--max N]
-  status  Show system status
+  list            List all sessions [--format table|json]
+  get             Get session details <session-id>
+  retry           Retry a failed session <session-id> [--max N]
+  status          Show system status
+  status-sessions Show session status dashboard [--json]
   version Show version information
   help    Show this help message
 
