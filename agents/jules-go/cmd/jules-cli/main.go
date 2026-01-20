@@ -8,8 +8,11 @@ import (
 	"log/slog"
 	"os"
 	"text/tabwriter"
+	"time"
 
+	"github.com/go-rod/rod"
 	jules "jules-go"
+	"jules-go/internal/browser"
 	"jules-go/internal/logging"
 )
 
@@ -36,6 +39,9 @@ func main() {
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
+
+	publishCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
+	publishAsync := publishCmd.Bool("async", false, "Run publish jobs asynchronously")
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -115,6 +121,115 @@ func main() {
 		fmt.Printf("Supervisor Config: MaxRetries=%d, BufferSize=%d\n", cfg.MaxRetries, cfg.BufferSize)
 		fmt.Printf("API Base: https://jules.googleapis.com/v1alpha\n")
 
+	case "publish-all":
+		publishCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		// Filter for sessions that might be ready to publish (e.g., COMPLETED)
+		// Assuming we only try to publish COMPLETED sessions
+		var eligibleSessions []*jules.Session
+		for _, s := range sessions {
+			if s.State == "COMPLETED" {
+				eligibleSessions = append(eligibleSessions, s)
+			}
+		}
+		fmt.Printf("Found %d completed sessions out of %d total.\n", len(eligibleSessions), len(sessions))
+
+		if *publishAsync {
+			fmt.Println("Starting async publish...")
+			// Create a shared browser for all tabs
+			b := rod.New().MustConnect()
+			defer b.MustClose()
+
+			var jobs []*browser.PublishJob
+			for _, s := range eligibleSessions {
+				sess, err := browser.NewJulesSessionFromBrowser(b)
+				if err != nil {
+					slog.Error("failed to create browser session", "session_id", s.ID, "err", err)
+					continue
+				}
+
+				fmt.Printf("Starting publish for %s...\n", s.ID)
+				job, err := sess.StartPublish(s.ID, s.URL)
+				if err != nil {
+					slog.Warn("failed to start publish (skipping)", "session_id", s.ID, "err", err)
+					sess.ClosePage()
+					continue
+				}
+				jobs = append(jobs, job)
+			}
+
+			fmt.Printf("Polling %d jobs...\n", len(jobs))
+			doneCount := 0
+			// Simple polling loop
+			for doneCount < len(jobs) {
+				workingCount := 0
+				for _, job := range jobs {
+					if job.Working {
+						done, prURL := job.Poll()
+						if done {
+							if prURL != "" {
+								fmt.Printf("Session %s Published: %s\n", job.SessionID, prURL)
+							} else {
+								fmt.Printf("Session %s Finished (No PR link found)\n", job.SessionID)
+							}
+							job.Tab.Close()
+							doneCount++
+						} else {
+							workingCount++
+						}
+					}
+				}
+				if workingCount > 0 {
+					time.Sleep(1 * time.Second)
+				}
+			}
+			fmt.Println("All async jobs completed.")
+
+		} else {
+			// Blocking mode
+			fmt.Println("Starting blocking publish...")
+			for _, s := range eligibleSessions {
+				fmt.Printf("Processing session %s...\n", s.ID)
+				sess, err := browser.NewJulesSession(false)
+				if err != nil {
+					slog.Error("failed to create browser", "session_id", s.ID, "err", err)
+					continue
+				}
+
+				job, err := sess.StartPublish(s.ID, s.URL)
+				if err != nil {
+					slog.Warn("failed to start publish", "session_id", s.ID, "err", err)
+					sess.CloseBrowser()
+					continue
+				}
+
+				for job.Working {
+					done, prURL := job.Poll()
+					if done {
+						if prURL != "" {
+							fmt.Printf("Session %s Published: %s\n", s.ID, prURL)
+						} else {
+							fmt.Printf("Session %s Finished (No PR link)\n", s.ID)
+						}
+					} else {
+						time.Sleep(500 * time.Millisecond)
+					}
+				}
+				sess.CloseBrowser()
+			}
+			fmt.Println("All blocking jobs completed.")
+		}
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -135,12 +250,13 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
-  list    List all sessions [--format table|json]
-  get     Get session details <session-id>
-  retry   Retry a failed session <session-id> [--max N]
-  status  Show system status
-  version Show version information
-  help    Show this help message
+  list        List all sessions [--format table|json]
+  get         Get session details <session-id>
+  retry       Retry a failed session <session-id> [--max N]
+  publish-all Publish all completed sessions [--async]
+  status      Show system status
+  version     Show version information
+  help        Show this help message
 
 Environment:
   JULES_API_KEY  Required API key for Jules API`)

@@ -47,9 +47,11 @@ func TestListSessions(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]*Session{
-			{ID: "session-1", Name: "Session 1"},
-			{ID: "session-2", Name: "Session 2"},
+		json.NewEncoder(w).Encode(sessionsResponse{
+			Sessions: []*Session{
+				{ID: "session-1", Name: "Session 1"},
+				{ID: "session-2", Name: "Session 2"},
+			},
 		})
 	}))
 	defer server.Close()
