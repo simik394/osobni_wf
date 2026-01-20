@@ -11,17 +11,22 @@
 import type { Browser, Page, BrowserContext } from 'playwright';
 
 // Configuration
-export const DEFAULT_MAX_TABS = 5;
+export const DEFAULT_MAX_TABS = 10;
+let currentMaxTabs = process.env.MAX_TABS ? parseInt(process.env.MAX_TABS, 10) : DEFAULT_MAX_TABS;
+
+if (isNaN(currentMaxTabs) || currentMaxTabs <= 0) {
+    currentMaxTabs = DEFAULT_MAX_TABS;
+}
 
 export function getMaxTabs(): number {
-    const envVal = process.env.DYNAMIC_MAX_TABS;
-    if (envVal) {
-        const parsed = parseInt(envVal, 10);
-        if (!isNaN(parsed) && parsed > 0) {
-            return parsed;
-        }
+    return currentMaxTabs;
+}
+
+export function setMaxTabs(max: number): void {
+    if (max > 0) {
+        currentMaxTabs = max;
+        console.log(`[TabPool] Max tabs set to ${currentMaxTabs}`);
     }
-    return DEFAULT_MAX_TABS;
 }
 
 export const BUSY_FLAG = '__WINDMILL_BUSY';
@@ -48,11 +53,12 @@ function generateTabId(): string {
  */
 export async function markTabBusy(page: Page, jobId?: string): Promise<string> {
     const tabId = generateTabId();
-    await page.evaluate(({ busy, tabId, jobId }) => {
+    // Ensure flags are set in the browser context
+    await page.evaluate(({ busy, tabId, jobId, tabIdFlag }) => {
         (window as any)[busy] = true;
-        (window as any)[tabId] = tabId;
+        (window as any)[tabIdFlag] = tabId;
         (window as any).__WINDMILL_JOB_ID = jobId;
-    }, { busy: BUSY_FLAG, tabId: TAB_ID_FLAG, jobId: jobId || tabId });
+    }, { busy: BUSY_FLAG, tabId, jobId: jobId || tabId, tabIdFlag: TAB_ID_FLAG });
 
     console.log(`🔒 Tab ${tabId} marked as busy`);
     return tabId;

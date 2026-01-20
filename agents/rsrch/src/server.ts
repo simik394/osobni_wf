@@ -11,6 +11,8 @@ import { GeminiClient } from './gemini-client';
 import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { getRegistry } from './artifact-registry';
+import { setMaxTabs, markTabBusy, markTabFree, getMaxTabs } from '@agents/shared/tab-pool';
+import { discordService } from './services/notification';
 
 // Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
@@ -59,6 +61,7 @@ app.use(express.json({ limit: '10mb' }));
 // Initialize the client
 const client = new PerplexityClient();
 let notebookClient: NotebookLMClient | null = null;
+let geminiClient: GeminiClient | null = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -111,6 +114,16 @@ app.post('/shutdown', async (req, res) => {
     process.exit(0);
 });
 
+// Config Endpoint
+app.post('/config/max-tabs', (req, res) => {
+    const { maxTabs } = req.body;
+    if (typeof maxTabs !== 'number' || maxTabs <= 0) {
+        return res.status(400).json({ error: 'maxTabs must be a positive number' });
+    }
+    setMaxTabs(maxTabs);
+    res.json({ success: true, maxTabs: getMaxTabs() });
+});
+
 // Query endpoint
 app.post('/query', async (req, res) => {
     try {
@@ -129,16 +142,36 @@ app.post('/query', async (req, res) => {
 
             // Process async
             (async () => {
+                let jobClient: GeminiClient | null = null;
+                let page: any = null;
                 try {
                     await graphStore.updateJobStatus(job.id, 'running');
-                    const result = await client.query(query, { sessionId: session, sessionName: name, deepResearch: true });
+
+                    // Acquire fresh client/tab from pool
+                    jobClient = await client.createGeminiClient();
+                    page = (jobClient as any).page; // Access page to mark busy
+                    await markTabBusy(page, job.id);
+                    await jobClient.init();
+                    await jobClient.resetToNewChat();
+
+                    const result = await jobClient.startDeepResearch(query);
+
                     await graphStore.updateJobStatus(job.id, 'completed', { result });
                     console.log(`[Server] Deep research job ${job.id} completed.`);
-                    notifyJobCompleted(job.id, 'Deep Research', query, true, result?.answer?.substring(0, 100));
+
+                    // Notifications
+                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl);
+                    notifyJobCompleted(job.id, 'Deep Research', query, true, result.googleDocTitle);
+
                 } catch (err: any) {
                     console.error(`[Server] Deep research job ${job.id} failed:`, err);
                     await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
+                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, false, err.message);
                     notifyJobCompleted(job.id, 'Deep Research', query, false, err.message);
+                } finally {
+                    if (page) {
+                        await markTabFree(page);
+                    }
                 }
             })();
 
@@ -526,6 +559,8 @@ app.post('/deep-research/start', async (req, res) => {
 
         // Fire and forget - run deep research in background
         (async () => {
+            let jobClient: GeminiClient | null = null;
+            let page: any = null;
             try {
                 await graphStore.updateJobStatus(job.id, 'running');
 
@@ -535,15 +570,37 @@ app.post('/deep-research/start', async (req, res) => {
                     await geminiClient.init();
                 }
 
+                // For non-blocking, we should ideally use a new pooled client
+                // But preserving existing logic structure with upgrades:
+
+                // Acquire fresh client/tab from pool
+                jobClient = await client.createGeminiClient();
+                page = (jobClient as any).page;
+                await markTabBusy(page, job.id);
+
+                await jobClient.init();
+                await jobClient.resetToNewChat();
+
                 // Run deep research
-                const result = await geminiClient.startDeepResearch(query, gem);
+                const result = await jobClient.startDeepResearch(query, gem);
 
                 // Update job with result
                 await graphStore.updateJobStatus(job.id, 'completed', { result });
                 console.log(`[Server] Deep research job ${job.id} completed`);
+
+                // Notifications
+                await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl);
+                notifyJobCompleted(job.id, 'Deep Research', query, true, result.googleDocTitle);
+
             } catch (e: any) {
                 console.error(`[Server] Deep research job ${job.id} failed:`, e);
                 await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
+                await discordService.notifyJobCompletion(job.id, 'Deep Research', query, false, e.message);
+                notifyJobCompleted(job.id, 'Deep Research', query, false, e.message);
+            } finally {
+                if (page) {
+                    await markTabFree(page);
+                }
             }
         })();
 
