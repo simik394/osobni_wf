@@ -17,6 +17,40 @@ Multi-objective task planning using OR-Tools CP-SAT solver.
 pip install -r requirements.txt
 ```
 
+## Deployment
+
+For active development, it's recommended to do an "editable" install. This lets you modify the Python source files and have the changes immediately reflected in your command-line tools without reinstalling.
+
+```bash
+pip install -e .
+```
+
+### Shell Aliases
+
+To make it easier to run from anywhere, add these aliases to your `.bashrc` or `.zshrc`:
+
+```bash
+# Make sure to replace this path with your actual project location
+export PLANNER_PATH="/path/to/your/project/agents/planner"
+
+# Alias to run the solver
+alias planner-solve="python $PLANNER_PATH/cli.py solve"
+
+# Alias to get the next batch
+alias planner-batch="python $PLANNER_PATH/cli.py batch"
+
+# Alias to see value-blocking tasks
+alias planner-value="python $PLANNER_PATH/cli.py value"
+```
+
+Then you can run commands like this:
+
+```bash
+planner-solve --input my_tasks.json
+```
+
+
+
 ## Usage
 
 ### CLI

@@ -1,0 +1,60 @@
+---
+- name: Set Draw.io version
+  set_fact:
+    drawio_version: "29.3.0"
+
+- name: Create local directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ansible_env.HOME }}/.local/opt/drawio-{{ drawio_version }}"
+    - "{{ ansible_env.HOME }}/.local/bin"
+
+- name: Download Draw.io AppImage
+  get_url:
+    url: "https://github.com/jgraph/drawio-desktop/releases/download/v{{ drawio_version }}/drawio-x86_64-{{ drawio_version }}.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/opt/drawio-{{ drawio_version }}/drawio.AppImage"
+    mode: "0755"
+
+- name: Create version-agnostic symlink
+  file:
+    src: "{{ ansible_env.HOME }}/.local/opt/drawio-{{ drawio_version }}"
+    dest: "{{ ansible_env.HOME }}/.local/opt/drawio"
+    state: link
+    force: yes
+
+- name: Symlink binary to ~/.local/bin
+  file:
+    src: "{{ ansible_env.HOME }}/.local/opt/drawio/drawio.AppImage"
+    dest: "{{ ansible_env.HOME }}/.local/bin/drawio"
+    state: link
+    force: yes
+
+- name: Download Draw.io Icon
+  get_url:
+    url: "https://raw.githubusercontent.com/jgraph/drawio/master/src/main/webapp/images/drawlogo256.png"
+    dest: "{{ ansible_env.HOME }}/.local/opt/drawio/drawio.png"
+    mode: "0644"
+
+- name: Install Desktop entry
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/drawio.desktop"
+    mode: "0644"
+    content: |
+      [Desktop Entry]
+      Name=Draw.io
+      GenericName=Diagram Editor
+      Comment=Create and edit diagrams
+      Exec={{ ansible_env.HOME }}/.local/bin/drawio %U
+      Icon={{ ansible_env.HOME }}/.local/opt/drawio/drawio.png
+      Terminal=false
+      Type=Application
+      Categories=Graphics;Office;
+      MimeType=application/vnd.jgraph.mxfile;application/vnd.visio;
+      StartupNotify=true
+
+- name: Update desktop database
+  command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications
+  changed_when: false

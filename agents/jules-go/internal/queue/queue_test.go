@@ -110,16 +110,25 @@ func TestPriorityHandling(t *testing.T) {
 
 	// Dequeue and check order
 	high, _ := q.Dequeue(ctx)
+	if high == nil {
+		t.Fatal("expected high priority task, got nil")
+	}
 	if high.Priority != PriorityHigh {
 		t.Errorf("expected high priority, got %d", high.Priority)
 	}
 
 	normal, _ := q.Dequeue(ctx)
+	if normal == nil {
+		t.Fatal("expected normal priority task, got nil")
+	}
 	if normal.Priority != PriorityNormal {
 		t.Errorf("expected normal priority, got %d", normal.Priority)
 	}
 
 	low, _ := q.Dequeue(ctx)
+	if low == nil {
+		t.Fatal("expected low priority task, got nil")
+	}
 	if low.Priority != PriorityLow {
 		t.Errorf("expected low priority, got %d", low.Priority)
 	}

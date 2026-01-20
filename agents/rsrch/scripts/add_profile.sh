@@ -8,7 +8,15 @@ set -e
 PROFILE_NAME="${1:-personal}"
 REMOTE_HOST="halvarm"
 CDP_PORT="9223"
-RSRCH_CONTAINER="rsrch-server-f0c3c02c-b28a-1efb-acda-49c9e3125c15"
+# Find the container ID on the remote host
+echo "🔍 Finding rsrch-server container..."
+RSRCH_CONTAINER=$(ssh ${REMOTE_HOST} "docker ps -qf name=rsrch-server | head -n 1")
+
+if [ -z "$RSRCH_CONTAINER" ]; then
+    echo "   ❌ Could not find a running rsrch-server container on ${REMOTE_HOST}"
+    exit 1
+fi
+echo "   ✅ Found container: ${RSRCH_CONTAINER}"
 
 echo "========================================"
 echo "Add rsrch Profile: ${PROFILE_NAME}"

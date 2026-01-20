@@ -1,0 +1,30 @@
+---
+# remarkable-dualboot role defaults
+
+# Target firmware version for dual-boot
+remarkable_target_firmware: "2.8.0.307"
+
+# Safety settings
+remarkable_backup_before_flash: true
+remarkable_disable_auto_update: true
+remarkable_dry_run: false
+
+# Connection settings (override in inventory or via -e)
+remarkable_host: "10.11.99.1"
+remarkable_user: "root"
+remarkable_ssh_port: 22
+
+# Paths on host (ntb)
+remarkable_backup_dir: "{{ playbook_dir }}/backups/remarkable"
+codexctl_bin: "{{ playbook_dir }}/files/codexctl"
+
+# Paths on device
+remarkable_tmp_dir: "/home/root/dualboot_tmp"
+remarkable_marker_file: "/home/root/.dualboot_installed"
+
+# Tool versions
+codexctl_version: "0.2.3"
+codexctl_url: "https://github.com/Jayy001/codexctl/releases/download/{{ codexctl_version }}/codexctl-linux-x86_64"
+
+# reMarkable 2 hardware identifier
+remarkable_hardware: "rm2"

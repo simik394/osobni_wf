@@ -1,95 +1,84 @@
 # Perplexity Researcher - Quick Start Guide
 
-## Docker (Recommended)
+The `rsrch` agent is a powerful CLI for automated research using Perplexity, Gemini, and NotebookLM.
 
-**One-time setup:**
+**🚀 [Full Command Reference (CLI.md)](./CLI.md)**
+
+## Setup
+
 ```bash
-# 1. Build
-docker-compose build
-```
+# 1. Install
+npm install && npm run build
 
-## Authentication
-
-Authentication is handled via a unified session file stored at `~/.config/perplexity-researcher/auth.json`. This allows you to authenticate once and use the session across CLI, local server, and Docker.
-
-### Option 1: CLI Authentication (Recommended)
-Run the following command locally:
-```bash
-npm run auth
-```
-This will launch a browser window. Log in to Perplexity, then close the window or press Enter in the terminal to save the session.
-
-### Option 2: Docker Authentication
-If you cannot run the CLI locally, you can authenticate via Docker (requires VNC):
-```bash
+# 2. Authenticate (Headless or VNC)
 rsrch auth
 ```
-Connect to `localhost:5900` with a VNC viewer to see the browser and log in.
 
-### Option 3: Manual Token
-You can also manually place your `auth.json` file in `~/.config/perplexity-researcher/auth.json`.
+## 🌟 Hero Workflows
+
+### 🧠 Deep Research (Gemini)
+Perform comprehensive deep research on a topic using Gemini.
 
 ```bash
-# 3. Start
-docker-compose up -d
+# Start Deep Research
+rsrch gemini deep-research "Future of Quantum Computing" --local --headed
+
+# Export Findings to Google Docs
+rsrch gemini export-to-docs --local
 ```
 
-**Usage:**
+### 🎙️ Research-to-Podcast (NotebookLM)
+Turn a research topic into an audio overview (podcast).
+
 ```bash
-# Interactive Login (Docker)
-rsrch login
-# Then open VNC at localhost:5900 to log in manually
+# 1. Create Notebook
+rsrch notebook create "Quantum Computing Overview"
 
-# Send query
-# Note: This automatically starts the server if not running, 
-# and keeps it running for faster subsequent queries.
-rsrch query "What is conceptual mapping?" --name=concept-map
+# 2. Add Sources (URL or text)
+rsrch notebook add-source "https://en.wikipedia.org/wiki/Quantum_computing" --notebook "Quantum Computing Overview"
+rsrch notebook add-text "Quantum Computing Overview" "Key notes..." --source-title "My Notes"
 
-# Follow up in the same session
-rsrch query "How is it used in education?" --session=concept-map
+# 3. Generate Audio
+rsrch notebook audio --notebook "Quantum Computing Overview" --wet
 
-# Use the latest session
-rsrch query "Give me an example" --session=latest
-
-# Batch queries from file
-rsrch batch queries.txt
-
-# View browser (VNC)
-vncviewer localhost:5900
-
-# NotebookLM Automations
-rsrch notebook create "My Research Project"
-rsrch notebook add-source "https://example.com/article" --notebook "My Research Project"
-rsrch notebook audio --notebook "My Research Project"
-
-# Gemini Deep Research
-rsrch gemini deep-research "Quantum Computing Future"
-rsrch gemini list-sessions
-rsrch gemini list-research-docs 5
-rsrch gemini list-research-docs <session-id>
-rsrch gemini export-to-docs <session-id>
-
-# OpenAI-Compatible API (use with any OpenAI client)
-curl -X POST http://localhost:3000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}]}'
-
-# Streaming (SSE)
-curl -N -X POST http://localhost:3000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"Hello!"}],"stream":true}'
-
-# Available models: gemini-rsrch (streaming), perplexity (no streaming)
-
-# Stop
-docker-compose down
+# 4. Download
+rsrch notebook download-audio "quantum_podcast.mp3" --notebook "Quantum Computing Overview"
 ```
 
-## Complete Documentation
+### 🔄 Unified Pipeline
+Run the entire flow (Research -> Podcast) in one command:
+
+```bash
+rsrch unified "Impact of AI on Healthcare" --prompt "Focus on ethics"
+```
+
+### 💎 Custom Assistants (Gems)
+Create and chat with specialized agents.
+
+```bash
+# Create a coding assistant Gem
+rsrch gemini create-gem "CodeBuddy" --instructions "You are an expert TypeScript engineer." --local
+
+# Chat
+rsrch gemini chat-gem "CodeBuddy" "Explain standard IO in Node.js" --local
+```
+
+### 🕸️ Knowledge Graph
+Track your research journey.
+
+```bash
+# View recent conversations across platforms
+rsrch graph conversations --limit=5
+
+# See lineage of an artifact (what job created this audio?)
+rsrch graph lineage <AudioID>
+```
+
+## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [CLI.md](./CLI.md) | Complete CLI command reference |
-| [API.md](./API.md) | HTTP API reference for server endpoints |
-| [USER_GUIDE.md](./USER_GUIDE.md) | User workflows and examples |
-| [AGENTS.md](./AGENTS.md) | AI agent integration guide |
+| [CLI.md](./CLI.md) | **Complete Command Reference** |
+| [API.md](./API.md) | HTTP API Endpoints |
+| [USER_GUIDE.md](./USER_GUIDE.md) | Detailed Workflows & Guides |
+| [AGENTS.md](./AGENTS.md) | Integration with other Agents |

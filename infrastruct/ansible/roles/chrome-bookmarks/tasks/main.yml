@@ -1,0 +1,69 @@
+---
+# Chrome URL Handler - Enables opening chrome:// URLs from text files
+# Chrome blocks chrome:// URLs from command line, so we register a custom handler
+
+- name: Ensure ~/.local/bin exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+# URL Handler - allows clicking chrome:// links in text files
+- name: Create chrome-handler.desktop for URL scheme
+  copy:
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/chrome-handler.desktop"
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Chrome Internal URL Handler
+      Comment=Opens chrome:// URLs in Google Chrome
+      Exec={{ ansible_env.HOME }}/.local/bin/open-chrome-url %u
+      Icon=google-chrome
+      Terminal=false
+      NoDisplay=true
+      MimeType=x-scheme-handler/chrome;
+    mode: "0644"
+
+- name: Install chrome URL handler script
+  copy:
+    content: |
+      #!/bin/bash
+      # Opens any chrome:// URL in Google Chrome using xdotool
+      URL="${1:-chrome://bookmarks}"
+
+      google-chrome &
+      sleep 0.5
+
+      CHROME_WID=$(xdotool search --onlyvisible --class "google-chrome" | head -1)
+
+      if [ -n "$CHROME_WID" ]; then
+          xdotool windowactivate "$CHROME_WID"
+          sleep 0.2
+          xdotool key ctrl+t
+          sleep 0.2
+          xdotool type --clearmodifiers "$URL"
+          xdotool key Return
+      fi
+    dest: "{{ ansible_env.HOME }}/.local/bin/open-chrome-url"
+    mode: "0755"
+
+- name: Register chrome:// URL handler
+  command: xdg-mime default chrome-handler.desktop x-scheme-handler/chrome
+  changed_when: true
+
+# Cleanup old files
+- name: Remove app menu shortcut (not needed)
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/applications/chrome-bookmarks.desktop"
+    state: absent
+
+- name: Remove old bookmarks script (replaced by generic handler)
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin/open-chrome-bookmarks"
+    state: absent
+
+- name: Update desktop database
+  command: update-desktop-database "{{ ansible_env.HOME }}/.local/share/applications"
+  changed_when: false
+  failed_when: false

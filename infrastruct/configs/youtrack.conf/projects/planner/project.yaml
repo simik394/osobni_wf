@@ -1,15 +1,7 @@
-project:
-  name: "Planner Agent"
-  shortName: PLAN
-  leader: admin
-  template: std-agent-v1
-  description: "Python solver for question routing, PM Agent, and YouTrack integration."
-
-boards:
-  - name: "PLAN Board"
-    column_field: "State"
-    columns:
-      - "Open"
-      - "In Progress"
-      - "Done"
-    backlog_query: "project: PLAN #Unresolved"
+name: Planner Agent
+shortName: PLAN
+leader: simik394
+template: std-agent-v1
+description: |
+  Planner Agent: Autonomous planning and reasoning service.
+  Path: agents/planner

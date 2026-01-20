@@ -11,7 +11,7 @@ export interface FalkorDBNode {
 
 export interface GraphJob {
     id: string;
-    type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast';
+    type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast' | 'syncConversations';
     status: 'queued' | 'running' | 'completed' | 'failed';
     query: string;
     options?: Record<string, unknown>;
@@ -100,4 +100,10 @@ export interface Citation {
     domain: string;
     text: string;
     firstSeenAt: number;
+}
+
+export interface ResearchInfo {
+    title: string | null;        // Session title (short name)
+    firstHeading: string | null; // First heading in the document
+    sessionId: string | null;
 }

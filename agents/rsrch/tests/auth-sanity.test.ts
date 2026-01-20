@@ -3,12 +3,16 @@
  * 
  * Verifies that the agents can actually interact with the underlying services
  * (Gemini, Perplexity) which confirms that the browser sessions/auth are valid.
+ * 
+ * INTEGRATION TEST: Requires running server on port 3001
+ * Run with: TEST_INTEGRATION=1 npm test -- --run tests/auth-sanity.test.ts
  */
 import { describe, it, expect } from 'vitest';
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3001';
+const SKIP_INTEGRATION = !process.env.TEST_INTEGRATION;
 
-describe('Auth Sanity: rsrch', () => {
+describe.skipIf(SKIP_INTEGRATION)('Auth Sanity: rsrch', () => {
 
     it('should be able to get a response from Gemini (confirms Google Auth)', async () => {
         const response = await fetch(`${BASE_URL}/v1/chat/completions`, {

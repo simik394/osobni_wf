@@ -21,6 +21,7 @@ const chromeArgs = [
     `--user-data-dir=${userDataDir}`,
     `--remote-debugging-port=${cdpPort}`,
     '--remote-debugging-address=0.0.0.0',
+    '--remote-allow-origins=*',
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
@@ -161,21 +162,98 @@ proxyServer.listen(3000, '0.0.0.0', async () => {
     try {
         await waitForCDP();
 
-        // Start socat to proxy CDP from 127.0.0.1:9222 to 0.0.0.0:9222
-        console.log('Starting socat proxy for CDP...');
-        const socat = spawn('socat', [
-            'TCP-LISTEN:9223,fork,reuseaddr,bind=0.0.0.0',
-            `TCP:127.0.0.1:${cdpPort}`
-        ], { stdio: 'inherit' });
+        // Create HTTP proxy that rewrites Host header to 'localhost'
+        // This is necessary because Chrome's CDP server rejects non-localhost Host headers
+        console.log('Starting HTTP proxy for CDP on port 9223...');
 
-        socat.on('error', (err) => {
-            console.error('Socat failed:', err.message);
+        const cdpProxy = http.createServer((req, res) => {
+            // Rewrite the Host header to localhost
+            const options = {
+                hostname: '127.0.0.1',
+                port: cdpPort,
+                path: req.url,
+                method: req.method,
+                headers: {
+                    ...req.headers,
+                    host: 'localhost'  // Critical: rewrite Host header
+                }
+            };
+
+            const proxyReq = http.request(options, (proxyRes) => {
+                // For JSON endpoints, we need to rewrite localhost URLs to chromium:9223
+                const contentType = proxyRes.headers['content-type'] || '';
+                if (contentType.includes('application/json') || req.url.includes('/json/')) {
+                    let data = '';
+                    proxyRes.on('data', chunk => data += chunk);
+                    proxyRes.on('end', () => {
+                        // Rewrite localhost references to chromium:9223
+                        const rewritten = data
+                            .replace(/ws:\/\/localhost\//g, 'ws://chromium:9223/')
+                            .replace(/ws:\/\/localhost:9222\//g, 'ws://chromium:9223/')
+                            .replace(/ws:\/\/0\.0\.0\.0:9223\//g, 'ws://chromium:9223/')
+                            .replace(/ws:\/\/127\.0\.0\.1:9222\//g, 'ws://chromium:9223/');
+
+                        const headers = { ...proxyRes.headers };
+                        headers['content-length'] = Buffer.byteLength(rewritten);
+                        res.writeHead(proxyRes.statusCode || 200, headers);
+                        res.end(rewritten);
+                    });
+                } else {
+                    res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+                    proxyRes.pipe(res);
+                }
+            });
+
+            proxyReq.on('error', (err) => {
+                console.error('CDP proxy error:', err.message);
+                res.writeHead(502);
+                res.end('Bad Gateway');
+            });
+
+            req.pipe(proxyReq);
         });
 
-        console.log(`\n✓ Browser ready!`);
-        console.log(`  CDP available at: ws://0.0.0.0:9223 (proxied)`);
-        console.log(`  Using persistent profile: ${userDataDir}`);
-        console.log(`  Connect via CDP: http://chromium:9223`);
+        // Handle WebSocket upgrade for CDP
+        cdpProxy.on('upgrade', (req, socket, head) => {
+            const options = {
+                port: cdpPort,
+                hostname: '127.0.0.1',
+                method: 'GET',
+                path: req.url,
+                headers: {
+                    ...req.headers,
+                    host: 'localhost'  // Critical: rewrite Host header
+                }
+            };
+
+            const proxyReq = http.request(options);
+            proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+                socket.write('HTTP/1.1 101 Switching Protocols\r\n');
+                for (const [key, value] of Object.entries(proxyRes.headers)) {
+                    socket.write(`${key}: ${value}\r\n`);
+                }
+                socket.write('\r\n');
+                if (proxyHead.length > 0) {
+                    socket.write(proxyHead);
+                }
+                proxySocket.pipe(socket);
+                socket.pipe(proxySocket);
+            });
+
+            proxyReq.on('error', (err) => {
+                console.error('CDP WebSocket proxy error:', err.message);
+                socket.end();
+            });
+
+            proxyReq.end();
+        });
+
+        cdpProxy.listen(9223, '0.0.0.0', () => {
+            console.log(`\\n✓ Browser ready!`);
+            console.log(`  CDP available at: ws://0.0.0.0:9223 (Host header rewritten to localhost)`);
+            console.log(`  Using persistent profile: ${userDataDir}`);
+            console.log(`  Connect via CDP: http://chromium:9223`);
+        });
     } catch (e) {
         console.error('Failed to start:', e.message);
         process.exit(1);

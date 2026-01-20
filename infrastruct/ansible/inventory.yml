@@ -23,3 +23,15 @@ workstations:
       ansible_connection: ssh
       ansible_shell_type: powershell
       ansible_become: false
+
+# reMarkable tablet (connected via USB)
+remarkable:
+  hosts:
+    rm2:
+      ansible_host: 10.11.99.1
+      ansible_user: root
+      ansible_connection: ssh
+      ansible_shell_type: sh
+      remarkable_ssh_port: 22
+      # Override ansible_host if using WiFi:
+      # ansible_host: 192.168.1.xxx

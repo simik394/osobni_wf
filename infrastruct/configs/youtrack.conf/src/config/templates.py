@@ -21,14 +21,17 @@ class TemplateExpander:
         
         # 1. Mandatory Global Fields
         mandatory_fields = [
-            FieldConfig(name="Complexity", type="enum", bundle="ComplexityBundle", 
+            FieldConfig(name="Agent Complexity", type="enum", bundle="ComplexityBundle", 
                        values=["Low", "Medium", "High"], default_value="Medium"),
-            FieldConfig(name="Effort", type="period"),
-            FieldConfig(name="Tech Stack", type="enum", bundle="TechStackBundle",
+            FieldConfig(name="Agent Effort", type="period"),
+            FieldConfig(name="Agent Tech Stack", type="enum", bundle="TechStackBundle",
                        values=["TypeScript", "Python", "Go", "Prolog", "Ansible"], can_be_empty=True),
-            FieldConfig(name="Layer", type="enum", bundle="LayerBundle",
+            FieldConfig(name="Agent Layer", type="enum", bundle="LayerBundle",
                        values=["Agent", "Infra", "Integration", "Docs"], default_value="Agent"),
-            FieldConfig(name="Maturity", type="integer", default_value="0"),
+            FieldConfig(name="Agent Maturity", type="integer", default_value="0"),
+            # Enforce Vision/Goal hierarchy support
+            FieldConfig(name="Type", type="enum", bundle="Types",
+                       values=["Task", "Bug", "Epic", "Vision", "Goal-LT", "Goal-ST"], default_value="Task"),
         ]
 
         # Merge fields (preserve project-specific overrides if they exist)

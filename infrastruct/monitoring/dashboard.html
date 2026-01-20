@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure Monitoring Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 20px; }
+        .widget { border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
+        h2 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>Infrastructure Monitoring Dashboard</h1>
+    <div class="container">
+        <div class="widget">
+            <h2>Nomad Status</h2>
+            <pre id="nomad-status">Loading...</pre>
+        </div>
+        <div class="widget">
+            <h2>Vault Health</h2>
+            <pre id="vault-health">Loading...</pre>
+        </div>
+        <div class="widget">
+            <h2>ntfy Alerts</h2>
+            <div id="ntfy-alerts">Loading...</div>
+        </div>
+        <div class="widget">
+            <h2>CLI Commands</h2>
+            <ul>
+                <li><button onclick="runCommand('nomad status')">Run Nomad Status</button></li>
+                <li><button onclick="runCommand('vault status')">Run Vault Status</button></li>
+            </ul>
+            <pre id="command-output"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Placeholder for future JavaScript functionality
+        function runCommand(command) {
+            document.getElementById('command-output').textContent = `Running "${command}"...`;
+            // In a real application, this would make an API call to a backend to execute the command.
+        }
+    </script>
+</body>
+</html>

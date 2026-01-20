@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE preferences SYSTEM "http://java.sun.com/dtd/preferences.dtd">
+<preferences EXTERNAL_XML_VERSION="1.0">
+  <root type="user">
+    <map/>
+    <node name="org">
+      <map/>
+      <node name="jabref">
+        <map>
+            <!-- Valid keys found in JabRef source/docs often refer to dbType, dbHost etc. -->
+            <!-- Setting both common variations to increase chance of success -->
+            <entry key="dbType" value="PostgreSQL"/>
+            <entry key="dbHost" value="localhost"/>
+            <entry key="dbPort" value="5432"/>
+            <entry key="dbName" value="{{ postgres_db | default('jabref_db') }}"/>
+            <entry key="dbUser" value="{{ postgres_user | default('jabref') }}"/>
+            
+            <!-- Specific default keys used in some versions -->
+            <entry key="defaultSharedDatabaseType" value="PostgreSQL"/>
+            <entry key="defaultSharedDatabaseHost" value="localhost"/>
+            <entry key="defaultSharedDatabasePort" value="5432"/>
+            <entry key="defaultSharedDatabaseName" value="{{ postgres_db | default('jabref_db') }}"/>
+            <entry key="defaultSharedDatabaseUser" value="{{ postgres_user | default('jabref') }}"/>
+        </map>
+      </node>
+    </node>
+  </root>
+</preferences>

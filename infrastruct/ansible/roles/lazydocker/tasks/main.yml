@@ -1,0 +1,36 @@
+---
+- name: Get latest Lazydocker release info
+  uri:
+    url: https://api.github.com/repos/jesseduffield/lazydocker/releases/latest
+    return_content: true
+  register: lazydocker_release
+
+- name: Set lazydocker download url
+  set_fact:
+    lazydocker_tarball_url: "{{ lazydocker_release.json.assets | selectattr('name', 'search', 'Linux_x86_64.tar.gz') | map(attribute='browser_download_url') | first }}"
+    lazydocker_version: "{{ lazydocker_release.json.tag_name }}"
+
+- name: Ensure .local/bin exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin"
+    state: directory
+    mode: '0755'
+
+- name: Download and unarchive Lazydocker
+  unarchive:
+    src: "{{ lazydocker_tarball_url }}"
+    dest: "{{ ansible_env.HOME }}/.local/bin"
+    remote_src: yes
+    mode: '0755'
+    extra_opts:
+      - --no-anchored
+      - lazydocker
+
+- name: Verify Lazydocker installation
+  command: "{{ ansible_env.HOME }}/.local/bin/lazydocker --version"
+  register: lazydocker_ver_check
+  changed_when: false
+
+- name: Display Lazydocker version
+  debug:
+    msg: "Installed Lazydocker version: {{ lazydocker_ver_check.stdout }}"

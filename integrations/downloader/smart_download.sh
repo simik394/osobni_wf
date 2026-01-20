@@ -41,6 +41,10 @@ FLAT=false
 DEEP=false
 QUIET=false
 NOTIFY=false
+DEEP=false
+QUIET=false
+NOTIFY=false
+REMOTE=false
 INPUT_FILE=""
 
 while getopts "vfdqni:" opt; do
@@ -49,9 +53,11 @@ while getopts "vfdqni:" opt; do
         f) FLAT=true ;;
         d) DEEP=true ;;
         q) QUIET=true ;;
+        q) QUIET=true ;;
         n) NOTIFY=true ;;
+        r) REMOTE=true ;;
         i) INPUT_FILE="$OPTARG" ;;
-        *) echo "Usage: $0 [-v] [-f] [-d] [-q] [-n] [-i file] [folder_name]"; exit 1 ;;
+        *) echo "Usage: $0 [-v] [-f] [-d] [-q] [-n] [-r] [-i file] [folder_name]"; exit 1 ;;
     esac
 done
 shift $((OPTIND-1))
@@ -95,6 +101,60 @@ else
         fi
     }
     get_clipboard > "$URLS_FILE"
+fi
+
+# Remote Offloading Logic
+if $REMOTE; then
+    log "🚀 Dispatching to Remote Downloader (Windmill @ Halvarm)..."
+    
+    # Read auth token
+    WM_TOKEN=$WINDMILL_TOKEN
+    if [[ -z "$WM_TOKEN" ]] && [[ -f "$HOME/.gemini/auth.json" ]]; then
+        WM_TOKEN=$(grep -o '"token": *"[^"]*"' "$HOME/.gemini/auth.json" | cut -d'"' -f4)
+    fi
+    
+    if [[ -z "$WM_TOKEN" ]]; then
+        echo "❌ Error: WINDMILL_TOKEN not set and could not be read from ~/.gemini/auth.json"
+        exit 1
+    fi
+
+    # Prepare Payload
+    # Read URLs into a JSON array
+    URL_LIST=$(python3 -c "import sys, json; print(json.dumps([l.strip() for l in sys.stdin.readlines() if l.strip()]))" < "$URLS_FILE")
+    
+    # Construct JSON Payload
+    JSON_PAYLOAD=$(cat <<EOF
+{
+    "folder_name": "$FOLDER_NAME",
+    "urls": $URL_LIST,
+    "options": {
+        "deep": $DEEP,
+        "flat": $FLAT
+    }
+}
+EOF
+)
+
+    # Dispatch Request
+    # Assuming Workspace 'hub' and Script Path 'infra/downloader'
+    RESPONSE=$(curl -s -X POST "http://halvarm:3030/api/w/hub/jobs/run/f/infra/downloader" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $WM_TOKEN" \
+        -d "$JSON_PAYLOAD")
+
+    if echo "$RESPONSE" | grep -q "job_uuid"; then
+        JOB_ID=$(echo "$RESPONSE" | grep -o '"job_uuid":"[^"]*"' | cut -d'"' -f4)
+        log "✅ Job Dispatched: $JOB_ID"
+        log "   Monitor at: http://halvarm:3030/run/$JOB_ID"
+    else
+        echo "❌ Dispatch Failed:"
+        echo "$RESPONSE"
+        exit 1
+    fi
+
+    # Cleanup and Exit
+    rm -f "$URLS_FILE"
+    exit 0
 fi
 
 # Categorize URLs

@@ -3,7 +3,7 @@ project:
   shortName: RSRCH
   leader: admin
   template: std-agent-v1
-  description: "NotebookLM & Gemini automation, API server, and deep research capabilities."
+  description: "Automated research CLI & API using Perplexity, Gemini Deep Research, and NotebookLM (Audio Gen). Features unified pipelines and graph tracking."
 
 boards:
   - name: "RSRCH Board"
