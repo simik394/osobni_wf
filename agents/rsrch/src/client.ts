@@ -1,17 +1,12 @@
 import { chromium } from 'playwright-extra';
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
-import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'playwright';
-// import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { BrowserContext, Page, Browser } from 'playwright';
 import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
 import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
-
-// Add stealth plugin - DISABLED for debugging browser closure issue
-// chromium.use(StealthPlugin());
 
 interface Session {
     id: string;
