@@ -10,10 +10,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/go-rod/rod"
 	jules "jules-go"
 	"jules-go/internal/browser"
 	"jules-go/internal/logging"
+
+	"github.com/go-rod/rod"
 )
 
 var (
@@ -30,18 +31,22 @@ func main() {
 	// Define subcommands
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listFormat := listCmd.String("format", "table", "Output format: table, json")
+	listState := listCmd.String("state", "", "Filter by state: AWAITING_USER_FEEDBACK, COMPLETED, etc")
 
 	getCmd := flag.NewFlagSet("get", flag.ExitOnError)
 
 	retryCmd := flag.NewFlagSet("retry", flag.ExitOnError)
 	retryMax := retryCmd.Int("max", 3, "Maximum retry attempts")
 
+	publishCmd := flag.NewFlagSet("publish", flag.ExitOnError)
+	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
+
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
-	publishCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
-	publishAsync := publishCmd.Bool("async", false, "Run publish jobs asynchronously")
+	publishAllCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
+	publishAsync := publishAllCmd.Bool("async", false, "Run publish jobs asynchronously")
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -68,6 +73,16 @@ func main() {
 		if err != nil {
 			slog.Error("failed to list sessions", "err", err)
 			os.Exit(1)
+		}
+		// Filter by state if specified
+		if *listState != "" {
+			filtered := []*jules.Session{}
+			for _, s := range sessions {
+				if s.State == *listState {
+					filtered = append(filtered, s)
+				}
+			}
+			sessions = filtered
 		}
 		printSessions(sessions, *listFormat)
 
@@ -111,6 +126,33 @@ func main() {
 		}
 		printJSON(result)
 
+	case "publish":
+		publishCmd.Parse(os.Args[2:])
+		if publishCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli publish <session-id> [--pr=true|false]")
+			os.Exit(1)
+		}
+		sessionID := publishCmd.Arg(0)
+		mode := "branch"
+		if *publishPR {
+			mode = "pr"
+		}
+
+		fmt.Printf("Publishing session %s (mode=%s)...\n", sessionID, mode)
+
+		sess, err := browser.NewJulesSession(false)
+		if err != nil {
+			slog.Error("failed to create session", "err", err)
+			os.Exit(1)
+		}
+		defer sess.Close()
+
+		if err := sess.StartPublish(sessionID, mode); err != nil {
+			slog.Error("publish failed", "err", err)
+			os.Exit(1)
+		}
+		fmt.Println("Done!")
+
 	case "status":
 		statusCmd.Parse(os.Args[2:])
 		budget := jules.DefaultRetryBudget()
@@ -122,7 +164,7 @@ func main() {
 		fmt.Printf("API Base: https://jules.googleapis.com/v1alpha\n")
 
 	case "publish-all":
-		publishCmd.Parse(os.Args[2:])
+		publishAllCmd.Parse(os.Args[2:])
 		client, err := jules.NewClient(apiKey, logger)
 		if err != nil {
 			slog.Error("failed to create client", "err", err)
@@ -159,7 +201,7 @@ func main() {
 				}
 
 				fmt.Printf("Starting publish for %s...\n", s.ID)
-				job, err := sess.StartPublish(s.ID, s.URL)
+				job, err := sess.StartLocalPublish(s.ID, s.URL)
 				if err != nil {
 					slog.Warn("failed to start publish (skipping)", "session_id", s.ID, "err", err)
 					sess.ClosePage()
@@ -206,7 +248,7 @@ func main() {
 					continue
 				}
 
-				job, err := sess.StartPublish(s.ID, s.URL)
+				job, err := sess.StartLocalPublish(s.ID, s.URL)
 				if err != nil {
 					slog.Warn("failed to start publish", "session_id", s.ID, "err", err)
 					sess.CloseBrowser()
@@ -250,6 +292,7 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
+<<<<<<< HEAD
   list        List all sessions [--format table|json]
   get         Get session details <session-id>
   retry       Retry a failed session <session-id> [--max N]
@@ -257,6 +300,15 @@ Commands:
   status      Show system status
   version     Show version information
   help        Show this help message
+=======
+  list         List all sessions [--format table|json] [--state STATE]
+  get          Get session details <session-id>
+  retry        Retry a failed session <session-id> [--max N]
+  publish      Publish a session <session-id> [--pr=true|false]
+  status       Show system status
+  version      Show version information
+  help         Show this help message
+>>>>>>> main
 
 Environment:
   JULES_API_KEY  Required API key for Jules API`)

@@ -4,3 +4,5 @@ cmd/jules/jules
 
 jules-cli
 jules-cli-bin
+
+.env

@@ -8,7 +8,7 @@ export class NotebookLMClient {
     public isBusy: boolean = false;
     private verbose: boolean = false;
 
-    constructor(private page: Page, options: { verbose?: boolean } = {}) {
+    constructor(public page: Page, options: { verbose?: boolean } = {}) {
         this.verbose = options.verbose || false;
     }
 
