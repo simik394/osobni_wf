@@ -583,6 +583,27 @@ export class GraphStore {
         return null;
     }
 
+    async getPendingAudioByWindmillJobId(windmillJobId: string): Promise<PendingAudio | null> {
+        const result = await this._executeQuery<any[]>(`MATCH (pa:PendingAudio {windmillJobId: '${escapeString(windmillJobId)}'}) RETURN pa`);
+        if (result.data && result.data.length > 0) {
+            const props = result.data[0][0].properties;
+            return {
+                id: props.id,
+                notebookTitle: props.notebookTitle,
+                sources: JSON.parse(props.sources || '[]'),
+                status: props.status,
+                windmillJobId: props.windmillJobId,
+                customPrompt: props.customPrompt,
+                createdAt: props.createdAt,
+                startedAt: props.startedAt,
+                completedAt: props.completedAt,
+                error: props.error,
+                resultAudioId: props.resultAudioId
+            };
+        }
+        return null;
+    }
+
     // --- Pending Audio ---
     async createPendingAudio(
         notebookTitle: string,
