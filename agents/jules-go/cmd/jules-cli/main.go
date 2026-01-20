@@ -18,6 +18,7 @@ import (
 	"jules-go/internal/browser"
 	"jules-go/internal/github"
 	"jules-go/internal/logging"
+	"jules-go/internal/youtrack"
 
 	"github.com/go-rod/rod"
 )
@@ -58,6 +59,9 @@ func main() {
 
 	publishAllCmd := flag.NewFlagSet("publish-all", flag.ExitOnError)
 	publishAsync := publishAllCmd.Bool("async", false, "Run publish jobs asynchronously")
+
+	syncCmd := flag.NewFlagSet("sync-youtrack", flag.ExitOnError)
+	dryRun := syncCmd.Bool("dry-run", false, "Preview changes without applying them")
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -400,6 +404,91 @@ func main() {
 			}
 		}
 
+	case "sync-youtrack":
+		syncCmd.Parse(os.Args[2:])
+
+		// Initialize YouTrack client
+		ytURL := os.Getenv("YOUTRACK_URL")
+		ytToken := os.Getenv("YOUTRACK_TOKEN")
+		if ytURL == "" || ytToken == "" {
+			fmt.Fprintln(os.Stderr, "Error: YOUTRACK_URL and YOUTRACK_TOKEN environment variables required")
+			os.Exit(1)
+		}
+
+		ytConfig := youtrack.ClientConfig{
+			BaseURL: ytURL,
+			Token:   ytToken,
+		}
+		ytClient, err := youtrack.NewClient(ytConfig, logger)
+		if err != nil {
+			slog.Error("failed to create YouTrack client", "err", err)
+			os.Exit(1)
+		}
+
+		// Initialize Jules client
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		issuePattern := regexp.MustCompile(`([A-Z]+-\d+)`)
+
+		for _, s := range sessions {
+			// Check for COMPLETED state and URL (which we assume is the PR link)
+			if s.State == "COMPLETED" && s.URL != "" {
+				issues := issuePattern.FindAllString(s.Prompt, -1)
+
+				// Deduplicate issues
+				uniqueIssues := make(map[string]bool)
+				for _, i := range issues {
+					uniqueIssues[i] = true
+				}
+
+				for issueID := range uniqueIssues {
+					if *dryRun {
+						fmt.Printf("[Dry Run] Would update issue %s: State -> Fixed, Comment -> ✅ Merged via %s\n", issueID, s.URL)
+						continue
+					}
+
+					// Check for existing comments to be idempotent
+					comments, err := ytClient.GetComments(ctx, issueID)
+					if err != nil {
+						slog.Error("failed to get comments", "issue", issueID, "err", err)
+						continue
+					}
+
+					alreadyCommented := false
+					targetComment := "✅ Merged via " + s.URL
+					for _, c := range comments {
+						if strings.Contains(c.Text, targetComment) {
+							alreadyCommented = true
+							break
+						}
+					}
+
+					if !alreadyCommented {
+						if err := ytClient.UpdateIssueState(ctx, issueID, "Fixed"); err != nil {
+							slog.Error("failed to update issue state", "issue", issueID, "err", err)
+						}
+						if err := ytClient.AddComment(ctx, issueID, targetComment); err != nil {
+							slog.Error("failed to add comment", "issue", issueID, "err", err)
+						} else {
+							fmt.Printf("Updated issue %s\n", issueID)
+						}
+					} else {
+						slog.Debug("issue already updated", "issue", issueID)
+					}
+				}
+			}
+		}
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -425,6 +514,7 @@ Commands:
   retry           Retry a failed session <session-id> [--max N]
   publish         Publish a session <session-id> [--pr=true|false]
   publish-all     Publish all completed sessions [--async]
+  sync-youtrack   Sync completed sessions to YouTrack [--dry-run]
   status          Show system status
   status-sessions Show session status dashboard [--json]
   pr-status       Show PR status for sessions [--repo owner/repo]
@@ -432,7 +522,9 @@ Commands:
   help            Show this help message
 
 Environment:
-  JULES_API_KEY  Required API key for Jules API`)
+  JULES_API_KEY   Required API key for Jules API
+  YOUTRACK_URL    Required for sync-youtrack command
+  YOUTRACK_TOKEN  Required for sync-youtrack command`)
 }
 
 func printSessions(sessions []*jules.Session, format string) {
