@@ -48,6 +48,7 @@ type Session struct {
 	State      string `json:"state"`
 	Prompt     string `json:"prompt"`
 	URL        string `json:"url"`
+	PR         string `json:"pr"`
 	CreateTime string `json:"createTime"`
 	UpdateTime string `json:"updateTime"`
 }
