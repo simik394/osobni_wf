@@ -1,0 +1,15 @@
+project:
+  name: "Quest Discovery Agent"
+  shortName: QUEST
+  leader: admin
+  template: std-agent-v1
+  description: "Research question prioritization agent using LangGraph + Gemini + FalkorDB."
+
+boards:
+  - name: "QUEST Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: QUEST #Unresolved"

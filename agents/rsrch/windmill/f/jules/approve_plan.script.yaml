@@ -1,0 +1,12 @@
+summary: "Approve a pending Jules session plan"
+description: |
+  Approves the pending plan for a Jules session that requires plan approval.
+lock: []
+schema:
+  properties:
+    session_id:
+      type: string
+      description: "The session ID to approve the plan for"
+  required:
+    - session_id
+  type: object

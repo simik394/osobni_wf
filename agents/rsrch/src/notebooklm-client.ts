@@ -1,13 +1,14 @@
 import { Page } from 'playwright';
 import * as path from 'path';
 import { config } from './config';
+import { selectors } from './selectors';
 
 
 export class NotebookLMClient {
     public isBusy: boolean = false;
     private verbose: boolean = false;
 
-    constructor(private page: Page, options: { verbose?: boolean } = {}) {
+    constructor(public page: Page, options: { verbose?: boolean } = {}) {
         this.verbose = options.verbose || false;
     }
 
@@ -39,14 +40,14 @@ export class NotebookLMClient {
             await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
 
             // Wait for "New Notebook" button
-            const createBtnSelector = '.create-new-button';
+            const createBtnSelector = selectors.home.createNewButton;
             await this.page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });
 
             // Click and wait for navigation
             await this.page.click(createBtnSelector);
 
             // Wait for title input
-            const titleInputSelector = 'input.title-input';
+            const titleInputSelector = selectors.notebook.titleInput;
             await this.page.waitForSelector(titleInputSelector, { state: 'visible', timeout: 15000 });
 
             // Set title
@@ -80,6 +81,69 @@ export class NotebookLMClient {
         } catch (e) {
             console.error('[NotebookLM] Failed to dump state:', e);
             // Don't throw here to avoid masking original error
+        }
+    }
+
+    async query(message: string): Promise<string> {
+        console.log(`[NotebookLM] Sending query: "${message}"`);
+
+        try {
+            // Wait for input to be visible AND enabled (sources may still be processing)
+            const inputSelector = selectors.chat.input;
+            console.log('[NotebookLM] Waiting for chat input to be enabled...');
+
+            // First wait for element to appear
+            await this.page.waitForSelector(inputSelector, { state: 'visible', timeout: 60000 });
+
+            // Then wait specifically for it to become enabled (not disabled)
+            await this.page.waitForFunction(
+                (sel: string) => {
+                    const el = document.querySelector(sel) as HTMLTextAreaElement | null;
+                    return el && !el.disabled;
+                },
+                inputSelector,
+                { timeout: 60000 }
+            );
+
+            console.log('[NotebookLM] Chat input enabled. Filling query...');
+            await this.page.fill(inputSelector, message);
+            await this.humanDelay(800);
+
+            // Click send
+            const sendSelector = selectors.chat.submitButton;
+            await this.page.click(sendSelector);
+
+            // Wait for thinking indicator (short timeout as it appears quickly)
+            // Then wait for it to disappear (long timeout for generation)
+            try {
+                const indicator = selectors.chat.thinkingIndicator;
+                await this.page.waitForSelector(indicator, { timeout: 5000 });
+                await this.page.waitForSelector(indicator, { state: 'hidden', timeout: 60000 });
+            } catch (e) {
+                console.log('[NotebookLM] Warning: Thinking indicator flow timed out or skipped. Checking for message anyway.');
+            }
+
+            // Small settle delay
+            await this.humanDelay(1000);
+
+            // Get response
+            // We want the last message that is NOT the user message if possible,
+            // or just the last message and assume it's the model.
+            // In NotebookLM, model messages usually have specific classes like 'model-message' or 'message-bubble' 
+            // vs 'user-message'.
+
+            // Using a generic approach: fetch last message content
+            const lastMsgSelector = selectors.chat.lastMessage;
+            await this.page.waitForSelector(lastMsgSelector, { timeout: 10000 });
+            const response = await this.page.textContent(lastMsgSelector);
+
+            console.log(`[NotebookLM] Response received (${response?.length} chars)`);
+            return response || '';
+
+        } catch (e) {
+            console.error('[NotebookLM] Query failed:', e);
+            await this.dumpState('query_failure');
+            throw e;
         }
     }
 
@@ -141,17 +205,17 @@ export class NotebookLMClient {
 
         try {
             // Wait for any project button to appear to ensure list is loaded
-            await this.page.waitForSelector('project-button, mat-card', { timeout: 20000 });
+            await this.page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: 20000 });
 
             console.log(`[DEBUG] Searching for notebook: ${title}`);
             // Use specific locator for the project card
             // We look for a project-button that contains the title element with exact text
-            const cardLocator = this.page.locator(`project-button`).filter({ has: this.page.locator(`.project-button-title`, { hasText: title }) }).first();
+            const cardLocator = this.page.locator(selectors.home.projectButton).filter({ has: this.page.locator(selectors.home.projectButtonTitle, { hasText: title }) }).first();
 
             // Fallback: loose text match if exact structure fails
             if (await cardLocator.count() === 0) {
                 console.log('[DEBUG] Exact locator failed, trying loose text match...');
-                const looseLocator = this.page.locator(`project-button, mat-card`).filter({ hasText: title }).first();
+                const looseLocator = this.page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`).filter({ hasText: title }).first();
                 if (await looseLocator.count() > 0) {
                     console.log('[DEBUG] Found via loose match. Clicking...');
                     await looseLocator.click();
@@ -160,7 +224,7 @@ export class NotebookLMClient {
                 }
             } else {
                 console.log('[DEBUG] Found notebook card. Clicking primary action button...');
-                const actionBtn = cardLocator.locator('.primary-action-button');
+                const actionBtn = cardLocator.locator(selectors.home.primaryActionButton);
                 if (await actionBtn.count() > 0 && await actionBtn.isVisible()) {
                     await actionBtn.click();
                 } else {
@@ -169,7 +233,7 @@ export class NotebookLMClient {
             }
 
             // Wait for navigation to notebook URL
-            await this.page.waitForURL('**/notebook/**', { timeout: 15000 });
+            await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 15000 });
             console.log('[DEBUG] Notebook opened successfully (URL match).');
 
         } catch (e) {
@@ -185,7 +249,7 @@ export class NotebookLMClient {
         console.log(`Adding source URL: ${url}`);
 
         // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        const sourcesTab = this.page.locator(selectors.sources.tab).filter({ hasText: new RegExp(selectors.sources.tabTextPattern, 'i') }).first();
         if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
             const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
             if (!isSelected) {
@@ -197,12 +261,18 @@ export class NotebookLMClient {
 
         // Find the "Web" or "Website" button. 
         // It captures "Weby", "Website", "Link", etc.
-        const sourceBtn = await this.page.evaluateHandle(() => {
-            const buttons = Array.from(document.querySelectorAll('button.drop-zone-icon-button'));
+        // We pass the selector strings into the evaluate function context
+        const sourceBtn = await this.page.evaluateHandle((args) => {
+            const { buttonSelector, pattern } = args;
+            const buttons = Array.from(document.querySelectorAll(buttonSelector));
+            const regex = new RegExp(pattern, 'i');
             return buttons.find(b => {
                 const text = b.textContent?.toLowerCase() || '';
-                return text.includes('web') || text.includes('link') || text.includes('site');
+                return regex.test(text);
             });
+        }, {
+            buttonSelector: selectors.sources.dropZoneButton,
+            pattern: selectors.sources.webSourcePattern
         });
 
         if (!sourceBtn) {
@@ -212,13 +282,13 @@ export class NotebookLMClient {
         await sourceBtn.asElement()?.click();
 
         // The dialog uses a textarea for URLs
-        const urlInputSelector = 'mat-dialog-container textarea';
+        const urlInputSelector = selectors.sources.urlInputTextarea;
         try {
             await this.page.waitForSelector(urlInputSelector, { timeout: 5000 });
             await this.page.fill(urlInputSelector, url);
 
             // Wait for the "Insert" button to become enabled (remove disabled class/attr)
-            const submitSelector = 'mat-dialog-container button.mat-primary';
+            const submitSelector = selectors.sources.submitButton;
             await this.page.waitForFunction((sel: string) => {
                 const btn = document.querySelector(sel);
                 return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
@@ -227,7 +297,7 @@ export class NotebookLMClient {
             await this.page.click(submitSelector);
 
             // Wait for dialog to close
-            await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 5000 });
+            await this.page.waitForSelector(selectors.sources.dialogContainer, { state: 'hidden', timeout: 5000 });
 
         } catch (e) {
             console.error('Failed to fill URL source dialog', e);
@@ -417,6 +487,83 @@ export class NotebookLMClient {
         } else {
             console.warn('[DEBUG] Select button not found or disabled. No files selected?');
         }
+    }
+
+    async uploadLocalFile(filePath: string) {
+        console.log(`[NotebookLM] Uploading local file: ${filePath}`);
+
+        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                console.log('[DEBUG] Switching to Sources tab...');
+                await sourcesTab.click();
+                await this.humanDelay(1000);
+            }
+        }
+
+        // Check if "Add sources" dialog is already open (NotebookLM auto-opens after new notebook)
+        const dialogVisible = await this.page.locator('mat-dialog-container').filter({ hasText: /Přidat zdroje|Add sources/i }).count() > 0;
+
+        if (!dialogVisible) {
+            // Click "Add sources" button only if dialog not already open
+            const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
+            if (await addSourceBtn.count() === 0) {
+                throw new Error('"Add sources" button not found');
+            }
+            await addSourceBtn.click();
+            await this.humanDelay(1000);
+        } else {
+            console.log('[NotebookLM] Add sources dialog already open, skipping button click');
+        }
+
+        // Find the file input. Usually it's hidden or handled via a button that triggers file picker.
+        // In Playwright, we can handle the file chooser event.
+
+        const fileChooserPromise = this.page.waitForEvent('filechooser', { timeout: 10000 });
+
+        // The UI shows a drop zone with "vyberte" (select) link. Try multiple selectors:
+        // 1. Text link "vyberte" or "select" within the dialog
+        // 2. The drop zone button
+        // 3. Any clickable element with upload_file icon
+
+        const selectLink = this.page.locator('span.select-files-link, a:has-text("vyberte"), a:has-text("select"), span:has-text("vyberte"), span:has-text("select")').first();
+        const uploadBtn = this.page.locator('button.drop-zone-icon-button, .drop-zone').first();
+        const iconBtn = this.page.locator('mat-icon:has-text("upload_file")').locator('..').first();
+
+        if (await selectLink.count() > 0 && await selectLink.isVisible()) {
+            console.log('[NotebookLM] Clicking select link...');
+            await selectLink.click({ force: true });  // Force click to bypass overlay
+        } else if (await uploadBtn.count() > 0 && await uploadBtn.isVisible()) {
+            console.log('[NotebookLM] Clicking upload button...');
+            await uploadBtn.click({ force: true });
+        } else if (await iconBtn.count() > 0 && await iconBtn.isVisible()) {
+            console.log('[NotebookLM] Clicking icon button...');
+            await iconBtn.click({ force: true });
+        } else {
+            // Last resort: click anywhere in the drop zone area
+            const dropZone = this.page.locator('.drop-zone, [class*="drop-zone"], .file-upload-area').first();
+            if (await dropZone.count() > 0) {
+                console.log('[NotebookLM] Clicking drop zone...');
+                await dropZone.click({ force: true });
+            } else {
+                throw new Error('Upload source button/link not found');
+            }
+        }
+
+        const fileChooser = await fileChooserPromise;
+        await fileChooser.setFiles(filePath);
+        console.log('[NotebookLM] File selected.');
+
+        // Wait for upload to complete
+        // usually the dialog closes automatically or we verify the file appears in source list.
+        // Let's wait for dialog to close.
+        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 30000 });
+
+        // Verify in source list?
+        // Simple delay for now.
+        await this.humanDelay(2000);
     }
 
     private taskQueue: Promise<any> = Promise.resolve();

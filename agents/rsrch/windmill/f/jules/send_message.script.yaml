@@ -1,0 +1,17 @@
+summary: "Send a message to a Jules session"
+description: |
+  Sends a user message/prompt to an existing Jules session.
+  Use this to respond to questions or provide additional instructions.
+lock: []
+schema:
+  properties:
+    session_id:
+      type: string
+      description: "The session ID to send the message to"
+    prompt:
+      type: string
+      description: "The message/prompt to send"
+  required:
+    - session_id
+    - prompt
+  type: object

@@ -1,0 +1,15 @@
+project:
+  name: "Jules Agent (Go)"
+  shortName: JULES
+  leader: admin
+  template: std-agent-v1
+  description: "Go module providing a CLI and programmatic client for the Jules AI Agent API."
+
+boards:
+  - name: "JULES Board"
+    column_field: "State"
+    columns:
+      - "Open"
+      - "In Progress"
+      - "Done"
+    backlog_query: "project: JULES #Unresolved"

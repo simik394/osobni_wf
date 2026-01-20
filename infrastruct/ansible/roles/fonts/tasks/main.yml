@@ -1,0 +1,35 @@
+---
+# Install Nerd Fonts (JetBrains Mono)
+
+- name: Create fonts directory
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/fonts"
+    state: directory
+    mode: "0755"
+
+- name: Check if JetBrains Mono Nerd Font is installed
+  shell: fc-list | grep -i "JetBrainsMono Nerd Font"
+  register: font_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Download JetBrains Mono Nerd Font
+  get_url:
+    url: "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.zip"
+    dest: "/tmp/JetBrainsMono.zip"
+    mode: "0644"
+  when: font_check.rc != 0
+
+- name: Unzip font
+  unarchive:
+    src: "/tmp/JetBrainsMono.zip"
+    dest: "{{ ansible_env.HOME }}/.local/share/fonts"
+    remote_src: yes
+  when: font_check.rc != 0
+  notify: Update font cache
+
+- name: Cleanup zip file
+  file:
+    path: "/tmp/JetBrainsMono.zip"
+    state: absent
+  when: font_check.rc != 0

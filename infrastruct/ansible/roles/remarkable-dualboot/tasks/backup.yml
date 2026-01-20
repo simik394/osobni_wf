@@ -1,0 +1,35 @@
+---
+# Backup reMarkable /home directory to local machine
+
+- name: Ensure local backup directory exists
+  ansible.builtin.file:
+    path: "{{ remarkable_backup_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+
+- name: Get backup timestamp
+  ansible.builtin.set_fact:
+    backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+- name: Create timestamped backup directory
+  ansible.builtin.file:
+    path: "{{ remarkable_backup_dir }}/{{ backup_timestamp }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+
+- name: Backup /home/root from reMarkable
+  ansible.builtin.command:
+    cmd: >
+      rsync -avz --progress
+      -e "ssh -o StrictHostKeyChecking=no -p {{ remarkable_ssh_port }}"
+      {{ remarkable_user }}@{{ remarkable_host }}:/home/root/
+      {{ remarkable_backup_dir }}/{{ backup_timestamp }}/home_root/
+  delegate_to: localhost
+  register: backup_result
+  changed_when: "'total size is' in backup_result.stdout"
+
+- name: Display backup location
+  ansible.builtin.debug:
+    msg: "Backup saved to: {{ remarkable_backup_dir }}/{{ backup_timestamp }}"

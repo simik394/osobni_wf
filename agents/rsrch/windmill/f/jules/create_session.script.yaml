@@ -1,0 +1,25 @@
+summary: "Create a new Jules session"
+description: |
+  Creates a new Jules session with a prompt and source repository.
+  Returns the created session with its ID and URL.
+lock: []
+schema:
+  properties:
+    prompt:
+      type: string
+      description: "The task description/prompt for Jules"
+    source:
+      type: string
+      description: "The source ID (e.g., 'sources/github/owner/repo')"
+    starting_branch:
+      type: string
+      description: "Optional branch to start from"
+      default: ""
+    title:
+      type: string
+      description: "Optional human-readable title for the session"
+      default: ""
+  required:
+    - prompt
+    - source
+  type: object

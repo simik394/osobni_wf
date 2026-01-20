@@ -1,0 +1,29 @@
+summary: ''
+description: ''
+lock: '!inline f/rsrch/gemini_chat.script.lock'
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    message:
+      type: string
+      description: ''
+      default: null
+      originalType: string
+    rsrch_server_url:
+      type: string
+      description: ''
+      default: 'http://halvarm:3030'
+      originalType: string
+    session_id:
+      type: string
+      description: ''
+      default: null
+      originalType: string
+    wait_for_response:
+      type: boolean
+      description: ''
+      default: true
+  required:
+    - message

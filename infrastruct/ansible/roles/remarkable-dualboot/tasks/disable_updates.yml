@@ -1,0 +1,27 @@
+---
+# Disable automatic firmware updates
+
+- name: Check update service status
+  ansible.builtin.raw: systemctl is-enabled update-engine 2>/dev/null || echo "not-found"
+  register: update_service_status
+  changed_when: false
+
+- name: Disable update-engine service
+  ansible.builtin.raw: |
+    systemctl stop update-engine 2>/dev/null || true
+    systemctl disable update-engine 2>/dev/null || true
+    systemctl mask update-engine 2>/dev/null || true
+    echo "disabled"
+  register: disable_result
+  changed_when: "'disabled' in disable_result.stdout"
+  when: "'enabled' in update_service_status.stdout"
+
+- name: Create update block marker
+  ansible.builtin.raw: |
+    echo "# Auto-updates disabled by Ansible dual-boot role" > /home/root/.update_disabled
+    echo "# Date: $(date -Iseconds)" >> /home/root/.update_disabled
+  changed_when: true
+
+- name: Display update status
+  ansible.builtin.debug:
+    msg: "Automatic updates have been disabled. To re-enable: systemctl unmask update-engine && systemctl enable update-engine"

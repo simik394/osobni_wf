@@ -1,0 +1,69 @@
+---
+# Ghostty configuration defaults
+
+# Build settings (Docker-based)
+ghostty_version: "v1.1.3"
+ghostty_build_dir: "/tmp/ghostty-build"
+zig_version: "0.13.0"
+
+# Theme configuration
+ghostty_background: "#181818"
+ghostty_foreground: "#d8d8d8"
+
+# Palette colors (Alacritty Tomorrow Night Bright defaults)
+ghostty_palette:
+  - "0=#181818"
+  - "1=#ac4242"
+  - "2=#90a959"
+  - "3=#f4bf75"
+  - "4=#6a9fb5"
+  - "5=#aa759f"
+  - "6=#75b5aa"
+  - "7=#d8d8d8"
+  - "8=#6b6b6b"
+  - "9=#c55555"
+  - "10=#aac474"
+  - "11=#feca88"
+  - "12=#82b8c8"
+  - "13=#c28cb8"
+  - "14=#93d3c3"
+  - "15=#f8f8f8"
+
+# Font settings
+ghostty_font_family: "JetBrainsMono Nerd Font"
+ghostty_font_size: 12
+ghostty_font_thicken: false
+ghostty_font_feature: "-calt"
+
+# Rendering tweaks
+ghostty_freetype_load_flags: "no-autohint"
+ghostty_adjust_cell_height: "0%"
+ghostty_adjust_cell_width: "-10%"
+ghostty_window_colorspace: "srgb"
+
+# Window appearance
+ghostty_background_opacity: 1.0
+ghostty_background_blur: false
+ghostty_window_padding_x: 0
+ghostty_window_padding_y: 0
+ghostty_window_padding_balance: true
+ghostty_window_decoration: true
+
+# GTK settings (Linux specific)
+ghostty_gtk_single_instance: true
+ghostty_gtk_titlebar: false
+ghostty_gtk_tabs_location: "hidden"
+ghostty_gtk_wide_tabs: false
+
+# Cursor configuration
+ghostty_cursor_style: "block"
+ghostty_cursor_blink: false
+ghostty_cursor_style_blink: false
+
+# Shell integration
+ghostty_shell_integration: "detect"
+ghostty_term: "xterm-256color"
+ghostty_command: ""
+
+# Performance
+ghostty_scrollback_limit: 10000

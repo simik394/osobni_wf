@@ -1,0 +1,13 @@
+summary: "List all Jules sessions with optional state filtering"
+description: |
+  Lists all Jules sessions from the Jules API.
+  Handles pagination automatically - returns complete list.
+  Optionally filter by session state.
+lock: []
+schema:
+  properties:
+    state:
+      type: string
+      description: "Filter by state: COMPLETED, FAILED, IN_PROGRESS, AWAITING_USER_FEEDBACK, AWAITING_PLAN_APPROVAL"
+      default: ""
+  type: object

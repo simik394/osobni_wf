@@ -1,0 +1,80 @@
+{
+  "mcpServers": {
+{% if mcp_servers.napovedayt.enabled | default(true) %}
+    "napovedayt": {
+      "serverUrl": "{{ mcp_servers.napovedayt.serverUrl }}",
+      "headers": {
+        "Authorization": "Bearer {{ youtrack_token | mandatory }}",
+        "Content-Type": "application/json"
+      }{% if mcp_servers.napovedayt.disabledTools | default([]) | length > 0 %},
+      "disabledTools": {{ mcp_servers.napovedayt.disabledTools | to_json }}
+{% endif %}
+    }{% if mcp_servers.github.enabled | default(true) or mcp_servers.gitkraken.enabled | default(true) or mcp_servers.jules_mcp.enabled | default(false) %},{% endif %}
+
+{% endif %}
+{% if mcp_servers.sequential_thinking.enabled | default(false) %}
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "env": {},
+      "disabled": {{ (not mcp_servers.sequential_thinking.enabled) | lower }}
+    }{% if mcp_servers.github.enabled | default(true) or mcp_servers.gitkraken.enabled | default(true) %},{% endif %}
+
+{% endif %}
+{% if mcp_servers.github.enabled | default(true) %}
+    "github-mcp-server": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{{ github_token | mandatory }}"
+      }{% if mcp_servers.github.disabledTools | default([]) | length > 0 %},
+      "disabledTools": {{ mcp_servers.github.disabledTools | to_json }}
+{% endif %}
+    }{% if mcp_servers.jules_mcp.enabled | default(false) or mcp_servers.gitkraken.enabled | default(true) %},{% endif %}
+
+{% endif %}
+{% if mcp_servers.jules_mcp.enabled | default(false) %}
+    "jules-mcp": {
+      "command": "/home/sim/.local/bin/uv",
+      "args": [
+        "--directory",
+        "/home/sim/.local/share/jules-mcp-server",
+        "run",
+        "python",
+        "-m",
+        "jules_mcp"
+      ],
+      "env": {
+        "JULES_API_KEY": "{{ jules_api_key | default('') }}"
+      },
+      "disabled": {{ (not mcp_servers.jules_mcp.enabled) | lower }},
+      "_disabledReason": "{{ mcp_servers.jules_mcp._disabledReason | default('') }}"
+    }{% if mcp_servers.gitkraken.enabled | default(true) %},{% endif %}
+
+{% endif %}
+{% if mcp_servers.gitkraken.enabled | default(true) %}
+    "GitKraken": {
+      "args": [
+        "mcp",
+        "--host=antigravity",
+        "--source=gitlens",
+        "--scheme=antigravity"
+      ],
+      "command": "{{ ansible_env.HOME }}/.config/Antigravity/User/globalStorage/eamodio.gitlens/gk",
+      "type": "stdio"{% if mcp_servers.gitkraken.disabledTools | default([]) | length > 0 %},
+      "disabledTools": {{ mcp_servers.gitkraken.disabledTools | to_json }}
+{% endif %}
+    }
+{% endif %}
+  }
+}

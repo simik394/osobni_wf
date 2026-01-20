@@ -14,9 +14,8 @@ boards:
       - "In Progress"
       - "Done"
     backlog_query: "project: ROADMAP #Unresolved"
-
-fields:
-  # Epics often need a "Due Quarter" instead of specific dates
-  - name: "Target Quarter"
-    type: enum
-    values: ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"]
+# fields:
+#   # Epics often need a "Due Quarter" instead of specific dates
+#   - name: "Target Quarter"
+#     type: enum
+#     values: ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"]

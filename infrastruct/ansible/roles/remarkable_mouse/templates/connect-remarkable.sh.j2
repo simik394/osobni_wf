@@ -1,0 +1,46 @@
+#!/bin/bash
+# Helper script to connect reMarkable mouse and map to primary screen
+# Usage: connect-remarkable [options passed to remarkable-mouse]
+
+# Default values
+TABLET_IP="10.11.99.1"
+SSH_KEY="" 
+MONITOR=""
+
+# Load user configuration
+CONFIG_FILE="$HOME/.config/remarkable-mouse/config"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+fi
+
+# Detect primary monitor if not set in config
+if [ -z "$MONITOR" ]; then
+    MONITOR=$(xrandr | grep " connected primary" | cut -d' ' -f1)
+    # Fallback to first connected if no primary marked
+    if [ -z "$MONITOR" ]; then
+        MONITOR=$(xrandr | grep " connected" | head -n 1 | cut -d' ' -f1)
+    fi
+fi
+
+echo "Detected Monitor: $MONITOR"
+echo "Connecting to reMarkable at $TABLET_IP..."
+
+# Build arguments
+ARGS="--address $TABLET_IP --orientation right"
+if [ -n "$SSH_KEY" ]; then
+    ARGS="$ARGS --key $SSH_KEY"
+fi
+
+# Start remarkable-mouse in background
+remarkable-mouse $ARGS &
+PID=$!
+
+echo "remarkable-mouse started (PID: $PID)"
+sleep 2
+
+# Map input to specific monitor
+echo "Mapping 'reMarkable tablet' to $MONITOR..."
+xinput map-to-output "reMarkable tablet" "$MONITOR"
+
+echo "Setup complete. Press Ctrl+C to stop."
+wait $PID

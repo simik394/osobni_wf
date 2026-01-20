@@ -1,0 +1,6 @@
+---
+# Handlers for antigravity-mcp role
+
+- name: Validate MCP config
+  command: python3 -c "import json; json.load(open('{{ antigravity_config_dir }}/mcp_config.json'))"
+  changed_when: false

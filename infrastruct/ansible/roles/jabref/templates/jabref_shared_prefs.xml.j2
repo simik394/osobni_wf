@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE map SYSTEM "http://java.sun.com/dtd/preferences.dtd">
+<map MAP_XML_VERSION="1.0">
+  <!-- Shared Database configuration - password left blank for user to enter -->
+  <entry key="sharedDatabaseType" value="PostgreSQL"/>
+  <entry key="sharedDatabaseHost" value="localhost"/>
+  <entry key="sharedDatabasePort" value="5432"/>
+  <entry key="sharedDatabaseName" value="{{ postgres_db | default('jabref_db') }}"/>
+  <entry key="sharedDatabaseUser" value="{{ postgres_user | default('jabref') }}"/>
+  <!-- Password intentionally omitted - JabRef will prompt for it -->
+  
+  <!-- Alternative key variations -->
+  <entry key="dbType" value="PostgreSQL"/>
+  <entry key="dbHost" value="localhost"/>
+  <entry key="dbPort" value="5432"/>
+  <entry key="dbName" value="{{ postgres_db | default('jabref_db') }}"/>
+  <entry key="dbUser" value="{{ postgres_user | default('jabref') }}"/>
+</map>
