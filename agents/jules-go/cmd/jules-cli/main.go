@@ -7,11 +7,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 
 	jules "jules-go"
 	"jules-go/internal/browser"
+	"jules-go/internal/github"
 	"jules-go/internal/logging"
 
 	"github.com/go-rod/rod"
@@ -38,10 +43,16 @@ func main() {
 	retryCmd := flag.NewFlagSet("retry", flag.ExitOnError)
 	retryMax := retryCmd.Int("max", 3, "Maximum retry attempts")
 
+	statusSessionsCmd := flag.NewFlagSet("status-sessions", flag.ExitOnError)
+	statusSessionsJSON := statusSessionsCmd.Bool("json", false, "Output as JSON")
+
 	publishCmd := flag.NewFlagSet("publish", flag.ExitOnError)
 	publishPR := publishCmd.Bool("pr", true, "Publish as PR (true) or just branch (false)")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
+
+	prStatusCmd := flag.NewFlagSet("pr-status", flag.ExitOnError)
+	prStatusRepo := prStatusCmd.String("repo", "", "Filter by repository")
 
 	versionCmd := flag.NewFlagSet("version", flag.ExitOnError)
 
@@ -126,6 +137,69 @@ func main() {
 		}
 		printJSON(result)
 
+	case "status-sessions":
+		statusSessionsCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		stateMap := map[string]string{
+			"AWAITING_PLAN_APPROVAL": "Ready for review",
+			"AWAITING_USER_FEEDBACK": "Ready for review",
+			"FAILED":                 "Failed",
+			"IN_PROGRESS":            "In progress",
+			"PLANNING":               "In progress",
+			"COMPLETED":              "Completed",
+		}
+
+		counts := make(map[string]int)
+		total := 0
+		for _, s := range sessions {
+			displayState, ok := stateMap[s.State]
+			if !ok {
+				displayState = s.State
+			}
+			counts[displayState]++
+			total++
+		}
+
+		if *statusSessionsJSON {
+			printJSON(counts)
+			return
+		}
+
+		fmt.Println("Jules Session Status")
+		fmt.Println("====================")
+
+		order := []string{"Ready for review", "Failed", "In progress", "Completed"}
+		printed := make(map[string]bool)
+
+		for _, state := range order {
+			if count, ok := counts[state]; ok {
+				fmt.Printf("%s: %d\n", state, count)
+				printed[state] = true
+			}
+		}
+
+		var otherStates []string
+		for state := range counts {
+			if !printed[state] {
+				otherStates = append(otherStates, state)
+			}
+		}
+		sort.Strings(otherStates)
+		for _, state := range otherStates {
+			fmt.Printf("%s: %d\n", state, counts[state])
+		}
+		fmt.Printf("Total: %d\n", total)
+
 	case "publish":
 		publishCmd.Parse(os.Args[2:])
 		if publishCmd.NArg() < 1 {
@@ -170,6 +244,7 @@ func main() {
 			slog.Error("failed to create client", "err", err)
 			os.Exit(1)
 		}
+
 		sessions, err := client.ListSessions(ctx)
 		if err != nil {
 			slog.Error("failed to list sessions", "err", err)
@@ -177,7 +252,6 @@ func main() {
 		}
 
 		// Filter for sessions that might be ready to publish (e.g., COMPLETED)
-		// Assuming we only try to publish COMPLETED sessions
 		var eligibleSessions []*jules.Session
 		for _, s := range sessions {
 			if s.State == "COMPLETED" {
@@ -272,6 +346,60 @@ func main() {
 			fmt.Println("All blocking jobs completed.")
 		}
 
+	case "pr-status":
+		prStatusCmd.Parse(os.Args[2:])
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+
+		sessions, err := client.ListSessions(ctx)
+		if err != nil {
+			slog.Error("failed to list sessions", "err", err)
+			os.Exit(1)
+		}
+
+		repoName := *prStatusRepo
+		if repoName == "" {
+			repoName = "jules-go"
+		}
+
+		owner := "agent-company"
+		if strings.Contains(repoName, "/") {
+			parts := strings.Split(repoName, "/")
+			owner = parts[0]
+			repoName = parts[1]
+		}
+
+		ghClient, err := github.NewMonitor(owner, repoName)
+		if err != nil {
+			slog.Error("failed to create github monitor", "err", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("PR #  Issue      Status        Title\n")
+		fmt.Printf("-------------------------------------------\n")
+
+		for _, s := range sessions {
+			if s.PR != "" {
+				prNum := extractPRNumber(s.PR)
+				if prNum == 0 {
+					continue
+				}
+
+				status := ghClient.GetPRStatus(prNum)
+
+				title := s.Title
+				if len(title) > 40 {
+					title = title[:37] + "..."
+				}
+
+				fmt.Printf("#%-4d %-12s %-15s %s\n",
+					prNum, extractIssue(s.Prompt), status, title)
+			}
+		}
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -292,23 +420,16 @@ func printUsage() {
 Usage: jules-cli <command> [options]
 
 Commands:
-<<<<<<< HEAD
-  list        List all sessions [--format table|json]
-  get         Get session details <session-id>
-  retry       Retry a failed session <session-id> [--max N]
-  publish-all Publish all completed sessions [--async]
-  status      Show system status
-  version     Show version information
-  help        Show this help message
-=======
-  list         List all sessions [--format table|json] [--state STATE]
-  get          Get session details <session-id>
-  retry        Retry a failed session <session-id> [--max N]
-  publish      Publish a session <session-id> [--pr=true|false]
-  status       Show system status
-  version      Show version information
-  help         Show this help message
->>>>>>> main
+  list            List all sessions [--format table|json] [--state STATE]
+  get             Get session details <session-id>
+  retry           Retry a failed session <session-id> [--max N]
+  publish         Publish a session <session-id> [--pr=true|false]
+  publish-all     Publish all completed sessions [--async]
+  status          Show system status
+  status-sessions Show session status dashboard [--json]
+  pr-status       Show PR status for sessions [--repo owner/repo]
+  version         Show version information
+  help            Show this help message
 
 Environment:
   JULES_API_KEY  Required API key for Jules API`)
@@ -337,4 +458,25 @@ func printJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(v)
+}
+
+func extractPRNumber(url string) int {
+	url = strings.TrimSuffix(url, "/")
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		last := parts[len(parts)-1]
+		if num, err := strconv.Atoi(last); err == nil {
+			return num
+		}
+	}
+	return 0
+}
+
+func extractIssue(prompt string) string {
+	re := regexp.MustCompile(`[A-Z]+-\d+`)
+	match := re.FindString(prompt)
+	if match != "" {
+		return match
+	}
+	return "N/A"
 }
