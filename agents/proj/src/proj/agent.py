@@ -14,6 +14,7 @@ from proj.tools.capture import capture_tool
 from proj.tools.triage import triage_tool
 from proj.tools.estimate import update_estimates
 from proj.integrations.rsrch import query_rsrch
+from proj.intents.detector import detect_intent
 
 
 # System prompt for the supervisor
@@ -59,21 +60,12 @@ def supervisor_node(state: ProjState) -> dict:
         return {"next_agent": "respond"}
     
     last_message = messages[-1]
-    content = last_message.content.lower() if hasattr(last_message, 'content') else ""
+    content = last_message.content if hasattr(last_message, 'content') else str(last_message)
     
-    # Simple intent detection (can be enhanced with LLM)
-    if any(kw in content for kw in ["capture", "add", "note", "remember", "todo"]):
-        return {"next_agent": "capture"}
-    elif any(kw in content for kw in ["inbox", "triage", "process"]):
-        return {"next_agent": "triage"}
-    elif any(kw in content for kw in ["resume", "context", "where was i", "catch up"]):
-        return {"next_agent": "resume"}
-    elif any(kw in content for kw in ["review", "today", "priorities", "what's next"]):
-        return {"next_agent": "review"}
-    elif any(kw in content for kw in ["sync", "estimate"]):
-        return {"next_agent": "estimate"}
-    else:
-        return {"next_agent": "respond"}
+    # Use LLM-based intent detection
+    classification = detect_intent(content)
+
+    return {"next_agent": classification.intent}
 
 
 def capture_node(state: ProjState) -> dict:
@@ -151,7 +143,18 @@ def resume_node(state: ProjState) -> dict:
     response = f"""🔄 **Resuming: {project.name}**
 
 """
-    if project.last_context:
+    # Use context nodes if available
+    project_contexts = [
+        c for c in state.contexts.values()
+        if c.project_id == project.id
+    ]
+    # Sort by creation date desc
+    project_contexts.sort(key=lambda c: c.created_at, reverse=True)
+
+    if project_contexts:
+        latest_context = project_contexts[0]
+        response += f"_Context ({latest_context.created_at.strftime('%Y-%m-%d %H:%M')}): {latest_context.content}_\n\n"
+    elif project.last_context:
         response += f"_Last time: {project.last_context}_\n\n"
     
     if in_progress:
@@ -175,13 +178,58 @@ def resume_node(state: ProjState) -> dict:
 
 def review_node(state: ProjState) -> dict:
     """Generate daily/weekly review."""
+    from datetime import datetime, timedelta
+    
+    # Check if this is a weekly review request based on message content
+    last_msg = state.messages[-1].content.lower() if state.messages else ""
+    is_weekly = "week" in last_msg
+
+    now = datetime.now()
+    
+    if is_weekly:
+        response = "📅 **Weekly Review**\n\n"
+        start_date = now - timedelta(days=7)
+
+        completed = [
+            t for t in state.tasks.values()
+            if t.status == TaskStatus.DONE and t.completed_at and t.completed_at > start_date
+        ]
+
+        response += f"**Completed last 7 days:** {len(completed)}\n"
+        for t in completed[:5]:
+             response += f"✅ {t.title}\n"
+        if len(completed) > 5:
+            response += f"...and {len(completed)-5} more\n"
+
+    else:
+        response = "🎯 **Daily Standup**\n\n"
+        # Completed yesterday
+        yesterday = now - timedelta(days=1)
+        # Debugging
+        # print(f"DEBUG: Reviewing for date: {yesterday.date()}")
+        # for t in state.tasks.values():
+        #     if t.status == TaskStatus.DONE and t.completed_at:
+        #         print(f"DEBUG: Task {t.title} completed at {t.completed_at.date()} (Match? {t.completed_at.date() == yesterday.date()})")
+
+        # Ensure we look for tasks completed between yesterday start and end, or just check the date.
+        # Sometimes Pydantic datetime conversion might be tricky if one has tzinfo and other doesn't.
+        # Here we compare dates.
+
+        completed_yesterday = [
+            t for t in state.tasks.values()
+            if t.status == TaskStatus.DONE and t.completed_at and t.completed_at.date() == yesterday.date()
+        ]
+        if completed_yesterday:
+             response += "**Yesterday's Wins:**\n"
+             for t in completed_yesterday:
+                 response += f"✅ {t.title}\n"
+             response += "\n"
+    
+    # Active tasks (Plan for today/next)
     active_tasks = [t for t in state.tasks.values() if t.status == TaskStatus.TODO]
-    
-    # Sort by priority
     active_tasks.sort(key=lambda t: (t.priority, t.created_at))
-    
-    response = "🎯 **Today's Focus**\n\n"
-    
+
+    response += "**Focus:**\n"
     if not active_tasks:
         response += "No active tasks. Time to capture some work?\n"
     else:
@@ -191,6 +239,13 @@ def review_node(state: ProjState) -> dict:
                 project_name = f"[{state.projects[task.project_id].name}] "
             response += f"{i}. {project_name}{task.title}\n"
     
+    # Blockers
+    blocked_tasks = [t for t in state.tasks.values() if t.status == TaskStatus.BLOCKED]
+    if blocked_tasks:
+        response += "\n**Blockers:**\n"
+        for t in blocked_tasks:
+             response += f"⛔ {t.title} ({t.blocked_by})\n"
+
     inbox_count = len(state.inbox)
     if inbox_count > 0:
         response += f"\n📥 {inbox_count} item(s) in inbox to triage"

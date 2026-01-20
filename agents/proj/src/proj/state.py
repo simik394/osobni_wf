@@ -83,6 +83,27 @@ class Project(BaseModel):
     last_context: str | None = None  # Breadcrumb for resuming
 
 
+import uuid
+
+class Context(BaseModel):
+    """A context node representing a working session or state snapshot."""
+    id: str = Field(default_factory=lambda: f"ctx_{uuid.uuid4().hex[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    content: str
+    project_id: str
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class Decision(BaseModel):
+    """A decision record."""
+    id: str = Field(default_factory=lambda: f"dec_{uuid.uuid4().hex[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    title: str
+    rationale: str
+    project_id: str | None = None
+    task_id: str | None = None
+    status: str = "proposed" # proposed, accepted, rejected
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
 class ContextBriefing(BaseModel):
     """Context restoration for project resume."""
     project_id: str
@@ -102,6 +123,8 @@ class ProjState(BaseModel):
     projects: dict[str, Project] = Field(default_factory=dict)
     tasks: dict[str, Task] = Field(default_factory=dict)
     inbox: list[InboxItem] = Field(default_factory=list)
+    contexts: dict[str, Context] = Field(default_factory=dict)
+    decisions: dict[str, Decision] = Field(default_factory=dict)
     
     # Current context
     active_project_id: str | None = None

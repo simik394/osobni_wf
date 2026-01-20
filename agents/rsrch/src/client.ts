@@ -1,16 +1,12 @@
 import { chromium } from 'playwright-extra';
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
-import { chromium as playwrightChromium, BrowserContext, Page, Browser } from 'playwright';
-// import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { BrowserContext, Page, Browser } from 'playwright';
 import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
-
-// Add stealth plugin - DISABLED for debugging browser closure issue
-// chromium.use(StealthPlugin());
+import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
 
 interface Session {
     id: string;
@@ -765,21 +761,12 @@ export class PerplexityClient extends BaseClient {
     }
 
     async createGeminiClient(): Promise<GeminiClient> {
-        if (!this.context) throw new Error('Context not initialized');
+        if (!this.browser) throw new Error('Browser not initialized');
 
-        // Check if there's already a Gemini page we can reuse
-        const existingPages = this.context.pages();
-        for (const page of existingPages) {
-            const url = page.url();
-            if (url.includes('gemini.google.com')) {
-                console.log('[Client] Reusing existing Gemini page');
-                return new GeminiClient(page);
-            }
-        }
+        console.log('[Client] Acquiring Gemini tab from pool...');
+        // Use shared TabPool to respect global limits and efficient reuse
+        const page = await getTab(this.browser, 'gemini');
 
-        // No existing page, create new one
-        console.log('[Client] Creating new Gemini page');
-        const page = await this.context.newPage();
         return new GeminiClient(page);
     }
 
