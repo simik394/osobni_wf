@@ -185,6 +185,30 @@ func handleRequest(req JSONRPCRequest) {
 						"required": []string{"session_id"},
 					},
 				},
+				map[string]interface{}{
+					"name":        "rsrch_gemini_fast",
+					"description": "Quick text processing via rsrch Gemini (fast model)",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"prompt":        map[string]interface{}{"type": "string", "description": "The prompt to send"},
+							"system_prompt": map[string]interface{}{"type": "string", "description": "Optional system prompt"},
+						},
+						"required": []string{"prompt"},
+					},
+				},
+				map[string]interface{}{
+					"name":        "rsrch_gemini_pro",
+					"description": "Thorough analysis via rsrch Gemini Pro (deep research model)",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"prompt":        map[string]interface{}{"type": "string", "description": "The prompt to send"},
+							"system_prompt": map[string]interface{}{"type": "string", "description": "Optional system prompt"},
+						},
+						"required": []string{"prompt"},
+					},
+				},
 			},
 		}
 	case "tools/call":
@@ -206,6 +230,8 @@ func handleRequest(req JSONRPCRequest) {
 			"get_activity":                "f/jules/get_activity",
 			"wait_for_session_completion": "f/jules/wait_for_completion",
 			"publish_session":             "f/jules/publish_single_jules_session",
+			"rsrch_gemini_fast":           "f/rsrch/gemini_fast",
+			"rsrch_gemini_pro":            "f/rsrch/gemini_pro",
 		}
 
 		scriptPath, ok := scriptMap[params.Name]
