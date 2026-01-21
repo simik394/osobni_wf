@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	wmill "github.com/windmill-labs/windmill-go-client"
 )
@@ -25,7 +26,28 @@ type sessionsResponse struct {
 	NextPageToken string    `json:"nextPageToken"`
 }
 
-// main lists all Jules sessions, optionally filtered by state
+type StateSummary struct {
+	Completed            int `json:"completed"`
+	Failed               int `json:"failed"`
+	AwaitingUserFeedback int `json:"awaiting_user_feedback"`
+	Active               int `json:"active"`
+	Paused               int `json:"paused"`
+	Other                int `json:"other"`
+}
+
+type SourceSummary struct {
+	Source string `json:"source"`
+	Count  int    `json:"count"`
+}
+
+type SessionsResult struct {
+	Total     int             `json:"total"`
+	ByState   StateSummary    `json:"by_state"`
+	BySources []SourceSummary `json:"by_sources"`
+	Sessions  []Session       `json:"sessions"`
+}
+
+// main lists all Jules sessions with summary statistics
 func main(state string) (interface{}, error) {
 	apiKey, err := wmill.GetVariable("u/admin/JULES_API_KEY")
 	if err != nil {
@@ -79,6 +101,7 @@ func main(state string) (interface{}, error) {
 	}
 
 	// Filter by state if specified
+	sessions := allSessions
 	if state != "" {
 		filtered := []Session{}
 		for _, s := range allSessions {
@@ -86,8 +109,82 @@ func main(state string) (interface{}, error) {
 				filtered = append(filtered, s)
 			}
 		}
-		return filtered, nil
+		sessions = filtered
 	}
 
-	return allSessions, nil
+	// Compute statistics
+	var stats StateSummary
+	sourceCounts := make(map[string]int)
+
+	for _, s := range sessions {
+		switch s.State {
+		case "COMPLETED":
+			stats.Completed++
+		case "FAILED":
+			stats.Failed++
+		case "AWAITING_USER_FEEDBACK":
+			stats.AwaitingUserFeedback++
+		case "ACTIVE":
+			stats.Active++
+		case "PAUSED":
+			stats.Paused++
+		default:
+			stats.Other++
+		}
+
+		// Extract source from prompt or name (look for github/owner/repo pattern)
+		source := extractSource(s.Prompt)
+		if source != "" {
+			sourceCounts[source]++
+		}
+	}
+
+	// Convert source counts to sorted list
+	var sources []SourceSummary
+	for src, count := range sourceCounts {
+		sources = append(sources, SourceSummary{Source: src, Count: count})
+	}
+
+	return SessionsResult{
+		Total:     len(sessions),
+		ByState:   stats,
+		BySources: sources,
+		Sessions:  sessions,
+	}, nil
+}
+
+// extractSource tries to find github/owner/repo pattern in text
+func extractSource(text string) string {
+	// Look for common patterns
+	patterns := []string{
+		"simik394/osobni_wf",
+		"simik394/DP",
+		"simik394/rentman_tasks_connector",
+		"simik394/dev",
+		"simik394/Research",
+		"simik394/myConfigs",
+		"simik394/moje",
+		"simik394/Invent--",
+		"simik394/.obsidian",
+		"simik394/tabmgr2md",
+		"simik394/updownmonitor",
+	}
+
+	lower := strings.ToLower(text)
+	for _, p := range patterns {
+		if strings.Contains(lower, strings.ToLower(p)) {
+			return p
+		}
+	}
+
+	// Try generic github pattern
+	if idx := strings.Index(text, "github/"); idx != -1 {
+		end := idx + 7
+		for end < len(text) && text[end] != ' ' && text[end] != '.' && text[end] != ')' {
+			end++
+		}
+		return text[idx:end]
+	}
+
+	return "unknown"
 }
