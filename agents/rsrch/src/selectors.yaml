@@ -137,6 +137,7 @@ chat:
   messageContainer: "conversation-view"
   lastMessage: "message-bubble:last-of-type .message-content, user-message:last-of-type .message-content"
   thinkingIndicator: "mat-progress-bar, mat-spinner"
+  thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Zobrazit uvažování"], button:has-text("Show reasoning"), button:has-text("Zobrazit uvažování")'
 
 # ============================================================
 # GEMINI SELECTORS
@@ -181,6 +182,8 @@ gemini:
     documentTitle: ".title"
     toolbarTitle: "h2.title-text"
     immersiveTitle: "h1"
+    toggle: 'button[aria-label*="Deep Research"], button[aria-label*="Hloubkový výzkum"], div:has-text("Deep Research") > button'
+    closeButton: 'button[aria-label*="Close Deep Research"], button[aria-label*="Zavřít hloubkový výzkum"], [aria-label*="Deep Research"] button:has(mat-icon), [aria-label*="Deep Research"] svg'
   gems:
     card: '[class*="gem-card"], .bot-row, [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
     name: ".title, .bot-title, .gem-title, .gem-name"

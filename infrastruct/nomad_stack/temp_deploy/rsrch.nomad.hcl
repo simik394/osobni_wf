@@ -25,7 +25,7 @@ job "rsrch" {
             driver = "docker"
 
             config {
-                image = "ghcr.io/simik394/osobni_wf/rsrch:vnc"
+                image = "ghcr.io/simik394/osobni_wf/rsrch:vnc-v3"
                 network_mode = "host"
                 mounts = [
                     {

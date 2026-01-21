@@ -244,8 +244,35 @@ export class GeminiClient extends EventEmitter {
             const input = this.page.locator('div[contenteditable="true"], textarea').first();
             await input.waitFor({ state: 'visible', timeout: 5000 });
 
-            // Optional: Check if Deep Research toggle is off? 
-            // Hard to detect "off" state reliably, but new chat should default to off.
+            // Check if Deep Research toggle is active and disable it if so
+            try {
+                // The toggle usually appears as a chip/button in the input area
+                const toggleSelector = selectors.gemini.deepResearch.toggle || 'button:has-text("Deep Research")';
+                const drToggle = this.page.locator(toggleSelector).first();
+                if (await drToggle.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    console.log('[Gemini] Deep Research mode detected active. Disabling...');
+                    // Try to click the close button specifically if possible
+                    const closeSelector = selectors.gemini.deepResearch.closeButton;
+
+                    let closeClicked = false;
+                    if (closeSelector) {
+                        const closeBtn = this.page.locator(closeSelector).first();
+                        if (await closeBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+                            await closeBtn.click();
+                            closeClicked = true;
+                        }
+                    }
+
+                    if (!closeClicked) {
+                        // Fallback: Click the toggle itself (might open menu, or toggle off)
+                        await drToggle.click();
+                    }
+                    await this.page.waitForTimeout(500);
+                }
+            } catch (e) {
+                // Ignore errors disabling deep research
+            }
+
             this.deepResearchEnabled = false;
 
         } catch (e) {
