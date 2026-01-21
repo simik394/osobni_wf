@@ -161,7 +161,12 @@ gemini:
     app: 'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]'
     input: 'div[contenteditable="true"], textarea, input[type="text"]'
     send: 'button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"], button[type="submit"], button:has(svg[class*="send"]), button:has(path[d*="M2.01"]), div[contenteditable] ~ button'
-    response: "model-response"
+    # Response container - multiple fallbacks for UI changes
+    # model-response: Primary container element
+    # structured-content-container: Element containing formatted AI output
+    # .model-response-text: Class on the text content container
+    # .response-content: Wrapper div for response body
+    response: "model-response, structured-content-container, .model-response-text, .response-content"
     history: '.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]'
     newChat: 'button[aria-label*="New chat"], button[aria-label*="Nový chat"], button:has-text("New chat"), button:has-text("Nový chat"), [data-testid="new-chat-button"]'
   sidebar:

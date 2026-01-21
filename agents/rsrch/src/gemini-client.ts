@@ -1034,96 +1034,96 @@ export class GeminiClient extends EventEmitter {
     }
 
     /**
-     * Upload a file to the current Gemini chat session.
+     * Set the Gemini model via UI interaction.
      * 
-     * Supports: PDFs, images, text files, and other document types.
-     * Uses the attachment button (+ icon) near the input area.
-     * 
-     * @param filePath - Absolute path to the file to upload
-     * @returns true if upload succeeded, false otherwise
+     * @param modelName - Model identifier (e.g., "gemini-2.0-flash", "thinking", "pro")
+     * @returns true if switch succeeded
      */
     async setModel(modelName: string): Promise<boolean> {
         console.log(`[Gemini] Switching model to: ${modelName}`);
         try {
             // 1. Click model dropdown trigger
-            const trigger = this.page.locator(selectors.gemini.model.trigger).first();
-            if (!await trigger.isVisible()) {
-                console.warn('[Gemini] Primary model trigger selector failed, trying getByRole fallback...');
-                const fallbackTrigger = this.page.getByRole('button', { name: /Změnit model|Otevřít výběr|Change model|Open mode/i });
+            // Try explicit selectors first, then broad fallbacks
+            const triggers = [
+                selectors.gemini.model.trigger,
+                'button[aria-haspopup="menu"]',
+                'button:has-text("Gemini")',
+                '[data-test-id="model-selector"]'
+            ];
 
-                // Also try clicking the wrapper div if button fails
-                const wrapperDiv = this.page.locator('div[aria-label*="Otevřít výběr režimu" i], div[aria-label*="Změnit model" i]').first();
+            let triggerFound = false;
+            for (const selector of triggers) {
+                const el = this.page.locator(selector).first();
+                if (await el.isVisible().catch(() => false)) {
+                    console.log(`[Gemini] Found model trigger via: ${selector}`);
+                    await el.click();
+                    triggerFound = true;
+                    break;
+                }
+            }
 
-                if (await fallbackTrigger.isVisible()) {
-                    await fallbackTrigger.click();
-                } else if (await wrapperDiv.isVisible()) {
-                    console.log('[Gemini] Clicking model wrapper div...');
-                    await wrapperDiv.click();
+            if (!triggerFound) {
+                console.warn('[Gemini] Primary model triggers failed, trying layout-specific locations...');
+                // Try looking for the "Gemini Advanced" or model name badge that often acts as a dropdown
+                const headerBadge = this.page.locator('chat-app-bar button, .model-selector-button').first();
+                if (await headerBadge.isVisible()) {
+                    await headerBadge.click();
+                    triggerFound = true;
                 } else {
-                    console.warn('[Gemini] Model selector user trigger not found (primary and fallback)');
+                    console.warn('[Gemini] Model selector user trigger not found');
                     await this.dumpState('model_trigger_missing');
                     return false;
                 }
-            } else {
-                await trigger.click();
             }
+
             await this.page.waitForTimeout(1000);
 
             // 2. Select model based on name
-            let targetSelector = '';
             const name = modelName.toLowerCase();
+            let targetSelector = '';
 
-            if (name.includes('flash') || name.includes('rych')) {
+            // Map API/CLI names to UI labels
+            if (name.includes('flash') || name.includes('quick') || name.includes('rych')) {
+                // "Gemini 2.0 Flash" or "Rychlý"
                 targetSelector = selectors.gemini.model.flash;
-            } else if (name.includes('think') || name.includes('mysl')) {
+            } else if (name.includes('think') || name.includes('deep') || name.includes('mysl')) {
+                // "Gemini 2.0 Flash Thinking" or "S myšlením"
                 targetSelector = selectors.gemini.model.thinking;
-            } else if (name.includes('pro')) {
+            } else if (name.includes('pro') || name.includes('advanced')) {
+                // "Gemini Advanced" or "Pro"
                 targetSelector = selectors.gemini.model.pro;
             } else {
                 console.warn(`[Gemini] Unknown model nickname: ${modelName}, trying direct text match`);
                 targetSelector = `text="${modelName}"`;
             }
 
-            const modelOption = this.page.locator(targetSelector).first();
-            // Wait for option to appear
-            try { await modelOption.waitFor({ state: 'visible', timeout: 5000 }); } catch (e) { }
+            // Split selector by | to try multiple options
+            const options = targetSelector.split('|');
+            let optionClicked = false;
 
-            if (await modelOption.count() > 0) {
-                await modelOption.click();
+            for (const optSelector of options) {
+                const el = this.page.locator(optSelector).first();
+                // We use a short timeout because we're iterating checks
+                if (await el.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    console.log(`[Gemini] Found model option: ${optSelector}`);
+                    await el.click();
+                    optionClicked = true;
+                    break;
+                }
+            }
+
+            if (optionClicked) {
                 console.log(`[Gemini] Selected model: ${modelName}`);
-                await this.page.waitForTimeout(1000); // Wait for switch
+                await this.page.waitForTimeout(1000); // Wait for switch to take effect
                 return true;
             } else {
-                // Try JS Click as last resort
-                const jsClickSuccess = await this.page.evaluate((modelKey) => {
-                    // Try looking for data-test-id based on model name keywords
-                    if (modelKey.includes('flash') || modelKey.includes('rych')) {
-                        const el = document.querySelector('[data-test-id*="bard-mode-option-rychl"]') as HTMLElement;
-                        if (el) { el.click(); return true; }
-                    }
-                    if (modelKey.includes('think') || modelKey.includes('mysl')) {
-                        const el = document.querySelector('[data-test-id*="bard-mode-option-s"]') as HTMLElement;
-                        if (el) { el.click(); return true; }
-                    }
-                    if (modelKey.includes('pro')) {
-                        const el = document.querySelector('[data-test-id*="bard-mode-option-pro"]') as HTMLElement;
-                        if (el) { el.click(); return true; }
-                    }
-                    return false;
-                }, name);
-
-                if (jsClickSuccess) {
-                    console.log(`[Gemini] Selected model via JS: ${modelName}`);
-                    await this.page.waitForTimeout(1000);
-                    return true;
-                }
-
-                console.error(`[Gemini] Model option not found for: ${modelName}`);
+                console.error(`[Gemini] Model option not found for: ${modelName} (tried: ${targetSelector})`);
                 await this.dumpState('model_option_missing');
-                // Close menu if open
+                // Close menu if open by clicking body or Escape
                 await this.page.keyboard.press('Escape');
                 return false;
             }
+
         } catch (e: any) {
             console.error(`[Gemini] Error setting model: ${e.message}`);
             return false;
@@ -1933,7 +1933,7 @@ export class GeminiClient extends EventEmitter {
             }
 
             this.progress('Waiting for response...', 'research');
-            const responseSelector = 'model-response, .message-content, .response-container-content';
+            const responseSelector = 'model-response, structured-content-container, .model-response-text, .response-content';
             await this.page.waitForSelector(responseSelector, { timeout: 60000 }); // Longer timeout for standard response too
             await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => { });
 
@@ -2001,7 +2001,7 @@ export class GeminiClient extends EventEmitter {
             await input.waitFor({ state: 'visible', timeout: 20000 });
 
             // Count responses before
-            const responseSelector = 'model-response, .message-content, .response-container-content';
+            const responseSelector = 'model-response, structured-content-container, .model-response-text, .response-content';
             const responsesBefore = await this.page.locator(responseSelector).count();
 
             await input.fill(query);
