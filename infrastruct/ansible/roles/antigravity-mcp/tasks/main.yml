@@ -26,12 +26,18 @@
 
 - name: Ensure jules-go CLI is available
   stat:
-    path: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go/jules-cli"
+    path: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go/bin/jules"
   register: jules_cli
   changed_when: false
 
 - name: Build jules-go CLI if missing
-  command: go build -o jules-cli ./cmd/jules-cli/main.go
+  command: go build -o bin/jules ./cmd/jules
   args:
     chdir: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go"
   when: not jules_cli.stat.exists
+
+- name: Build jules-mcp-windmill bridge
+  command: go build -o bin/jules-mcp-windmill ./cmd/jules-mcp-windmill/main.go
+  args:
+    chdir: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go"
+  changed_when: true # Always rebuild to ensure up-to-date

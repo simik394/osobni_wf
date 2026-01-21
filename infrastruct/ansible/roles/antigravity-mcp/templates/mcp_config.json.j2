@@ -62,6 +62,14 @@
     }{% if mcp_servers.gitkraken.enabled | default(true) %},{% endif %}
 
 {% endif %}
+{% if mcp_servers.jules_windmill.enabled | default(true) %}
+    "jules-windmill": {
+      "command": "{{ mcp_servers.jules_windmill.command }}",
+      "args": {{ mcp_servers.jules_windmill.args | default([]) | to_json }},
+      "env": {{ mcp_servers.jules_windmill.env | default({}) | to_json }}
+    }{% if mcp_servers.gitkraken.enabled | default(true) %},{% endif %}
+
+{% endif %}
 {% if mcp_servers.gitkraken.enabled | default(true) %}
     "GitKraken": {
       "args": [

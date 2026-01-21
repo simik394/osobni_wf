@@ -53,6 +53,14 @@ mcp_servers:
     enabled: false
     _disabledReason: "Antigravity coerces numeric page_token to int, breaking pagination"
 
+  jules_windmill:
+    enabled: true
+    # Point to the compiled Go bridge
+    command: "/home/sim/Obsi/Prods/01-pwf/agents/jules-go/bin/jules-mcp-windmill"
+    args: []
+    env:
+      PATH: "/home/sim/.local/bin:{{ ansible_env.PATH }}"
+
   gitkraken:
     enabled: true
     disabledTools:
