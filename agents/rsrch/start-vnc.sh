@@ -2,25 +2,22 @@
 set -e
 
 # Defaults
-export DISPLAY=:99
-export RESOLUTION="${RESOLUTION:-1920x1080x24}"
+export DISPLAY=:20
+rm -f /tmp/.X20-lock
 
-echo "Starting Xvfb on $DISPLAY with resolution $RESOLUTION..."
-Xvfb $DISPLAY -screen 0 $RESOLUTION &
+# Start Xvfb
+echo "Starting Xvfb on $DISPLAY..."
+Xvfb $DISPLAY -screen 0 1920x1080x24 &
 XVFB_PID=$!
-
-echo "Waiting for Xvfb..."
 sleep 2
 
+# Start Window Manager
 echo "Starting Fluxbox..."
 fluxbox &
 
-echo "Starting x11vnc on port 5900..."
-# -forever: keep listening after client disconnects
-# -shared: allow multiple clients
-# -display: usage of specific display
-# -bg: run in background (but we want to see logs, so maybe not bg for main process? No, we need to run node too)
-x11vnc -display $DISPLAY -forever -shared -nopw -listen 0.0.0.0 -xkb &
+# Start x11vnc
+echo "Starting x11vnc..."
+x11vnc -display $DISPLAY -forever -usepw -create -rfbport 5900 &
 VNC_PID=$!
 
 echo "Starting Main Application..."
