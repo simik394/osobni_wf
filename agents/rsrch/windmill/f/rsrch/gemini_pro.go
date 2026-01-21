@@ -26,7 +26,7 @@ type ChatResponse struct {
 
 // main sends a prompt to rsrch Gemini Pro (deep research model)
 func main(prompt string, system_prompt string) (interface{}, error) {
-	rsrchURL := "http://localhost:3001/v1/chat/completions"
+	rsrchURL := "http://halvarm:3001/v1/chat/completions"
 
 	messages := []Message{}
 	if system_prompt != "" {
