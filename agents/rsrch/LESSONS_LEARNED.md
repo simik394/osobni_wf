@@ -70,7 +70,12 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 
 ---
 
-## Previous Lessons
+## Previous Lessons Learned
+
+- **Tool Definitions Mapping**: Windmill script schemas in YAML are primarily for the Windmill UI. The MCP server (`main.go`) has its own `inputSchema` definition which MUST be kept in sync with the underlying Go scripts to ensure parameters are correctly passed.
+- **MCP Descriptions**: Avoid naming tools after transient model names (e.g., "Gemini Pro") if they actually represent a specific capability/mode (e.g., "Deep Research"). This prevents user confusion when models evolve.
+- **Session Continuity**: For agents to effectively use multi-turn tools, the `session_id` must be explicitly exposed in the tool schema, even if the underlying API supports it implicitly or via conversation history.
+
 
 - **Local Mode & Auth Injection**: When using Playwright's `launchPersistentContext` in Local Mode (manual launch), cookies from `auth.json` are NOT automatically loaded. You MUST explicitly inject them using `context.addCookies` after context creation to restore authenticated sessions from synced profiles.
 
