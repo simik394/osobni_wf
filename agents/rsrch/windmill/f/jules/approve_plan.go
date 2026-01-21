@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	
-	wmill "github.com/windmill-labs/windmill-go-client"
+
 	"strings"
+
+	wmill "github.com/windmill-labs/windmill-go-client"
 )
 
 type ApproveResult struct {
@@ -18,9 +19,9 @@ type ApproveResult struct {
 // main approves the pending plan for a Jules session
 // session_id: The session ID to approve the plan for
 func main(session_id string) (ApproveResult, error) {
-	apiKey := wmill.GetVariable("u/admin/JULES_API_KEY")
+	apiKey, err := wmill.GetVariable("u/admin/JULES_API_KEY")
 	if err != nil {
-		return ApproveResult{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err")
+		return ApproveResult{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err)
 	}
 
 	if session_id == "" {

@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	
-	wmill "github.com/windmill-labs/windmill-go-client"
+
 	"strings"
+
+	wmill "github.com/windmill-labs/windmill-go-client"
 )
 
 type Session struct {
@@ -26,9 +27,9 @@ type Session struct {
 // main retrieves a single Jules session by ID
 // session_id: The session ID (e.g., "12345678901234567890")
 func main(session_id string) (Session, error) {
-	apiKey := wmill.GetVariable("u/admin/JULES_API_KEY")
+	apiKey, err := wmill.GetVariable("u/admin/JULES_API_KEY")
 	if err != nil {
-		return Session{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err")
+		return Session{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err)
 	}
 
 	if session_id == "" {

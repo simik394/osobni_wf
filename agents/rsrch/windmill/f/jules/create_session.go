@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	
+	"strings"
+
 	wmill "github.com/windmill-labs/windmill-go-client"
 )
 
@@ -40,9 +41,9 @@ type Session struct {
 // starting_branch: Optional branch to start from (default: repo's default branch)
 // title: Optional human-readable title for the session
 func main(prompt string, source string, starting_branch string, title string) (Session, error) {
-	apiKey := wmill.GetVariable("u/admin/JULES_API_KEY")
+	apiKey, err := wmill.GetVariable("u/admin/JULES_API_KEY")
 	if err != nil {
-		return Session{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err")
+		return Session{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err)
 	}
 
 	if prompt == "" {
@@ -52,10 +53,16 @@ func main(prompt string, source string, starting_branch string, title string) (S
 		return Session{}, fmt.Errorf("source is required")
 	}
 
+	// Normalize source to include sources/ prefix
+	normalizedSource := source
+	if !strings.HasPrefix(normalizedSource, "sources/") {
+		normalizedSource = "sources/" + normalizedSource
+	}
+
 	reqBody := CreateRequest{
 		Prompt: prompt,
 		SourceContext: SourceContext{
-			Source: source,
+			Source: normalizedSource,
 		},
 	}
 
@@ -73,6 +80,9 @@ func main(prompt string, source string, starting_branch string, title string) (S
 	if err != nil {
 		return Session{}, fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	// Debug: print request body
+	fmt.Printf("Request body: %s\n", string(jsonBody))
 
 	req, err := http.NewRequest("POST", "https://jules.googleapis.com/v1alpha/sessions", bytes.NewBuffer(jsonBody))
 	if err != nil {

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	
-	wmill "github.com/windmill-labs/windmill-go-client"
+
 	"strings"
+
+	wmill "github.com/windmill-labs/windmill-go-client"
 )
 
 type MessageRequest struct {
@@ -25,9 +26,9 @@ type SendResult struct {
 // session_id: The session ID to send the message to
 // prompt: The message/prompt to send
 func main(session_id string, prompt string) (SendResult, error) {
-	apiKey := wmill.GetVariable("u/admin/JULES_API_KEY")
+	apiKey, err := wmill.GetVariable("u/admin/JULES_API_KEY")
 	if err != nil {
-		return SendResult{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err")
+		return SendResult{}, fmt.Errorf("failed to get JULES_API_KEY: %w", err)
 	}
 
 	if session_id == "" {
