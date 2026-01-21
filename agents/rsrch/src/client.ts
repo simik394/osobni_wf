@@ -6,7 +6,7 @@ import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
-import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
+import { getTab, markTabBusy, markTabFree } from '@agents/shared';
 
 interface Session {
     id: string;
@@ -48,7 +48,7 @@ export abstract class BaseClient {
     protected profileId: string = 'default';
 
     constructor(options: ClientOptions = {}) {
-        this.options = { headless: true, ...options };
+        this.options = { headless: config.headless, ...options };
         this.profileId = options.profileId || 'default';
     }
 
@@ -63,7 +63,8 @@ export abstract class BaseClient {
     }
 
     isBrowserInitialized(): boolean {
-        return this.isInitialized;
+        // Check actual state, not just the flag
+        return this.isInitialized && (this.browser !== null || this.context !== null);
     }
 }
 
@@ -214,6 +215,7 @@ export class PerplexityClient extends BaseClient {
                     console.log('[Stealth] Advanced anti-detection scripts loaded');
                 });
             }
+            this.isInitialized = true;
 
         } else if (!options.local && (cdpEndpoint || config.browserCdpEndpoint || config.remoteDebuggingPort)) {
             try {
@@ -231,7 +233,7 @@ export class PerplexityClient extends BaseClient {
                 try {
                     // Method 1: Try connecting via standard CDP (http endpoint)
                     console.log(`Attempting connectOverCDP to ${endpoint}...`);
-                    this.browser = await (chromium.connectOverCDP(endpoint, { timeout: 5000 }) as unknown as Browser);
+                    this.browser = await (chromium.connectOverCDP(endpoint as string, { timeout: 5000 }) as unknown as Browser);
                     console.log('Connected via connectOverCDP');
                 } catch (e: any) {
                     console.log(`connectOverCDP failed: ${e.message}`);
@@ -300,6 +302,7 @@ export class PerplexityClient extends BaseClient {
                     });
                     console.log(`[Client] Created new browser context for profile: ${profileId}`);
                 }
+                this.isInitialized = true;
             } catch (e: any) {
                 throw new Error(`Could not acquire context from remote browser: ${e.message}`);
             }
@@ -316,8 +319,8 @@ export class PerplexityClient extends BaseClient {
 
             // Default to HEADED as per user preference ("NO HEADLESS")
             // In Local Mode inside Docker with Xvfb, we MUST set headless: false to use the display.
-            const headless = false;
-            console.log(`Headless: ${headless} (Forced for Local Mode verification)`);
+            const headless = this.options.headless;
+            console.log(`Headless: ${headless} (Configured via options)`);
 
             console.log(`Launching persistent context from: ${stateDir}`);
             // Force slowMo 100 for Google account safety (User Rule)
@@ -761,13 +764,23 @@ export class PerplexityClient extends BaseClient {
     }
 
     async createGeminiClient(): Promise<GeminiClient> {
-        if (!this.browser) throw new Error('Browser not initialized');
+        // In local persistent mode, this.browser is null but this.context exists
+        // Use context.browser() or create page directly from context
+        if (!this.browser && !this.context) throw new Error('Browser not initialized');
 
         console.log('[Client] Acquiring Gemini tab from pool...');
-        // Use shared TabPool to respect global limits and efficient reuse
-        const page = await getTab(this.browser, 'gemini');
 
-        return new GeminiClient(page);
+        // Try to get browser from context if direct browser is null
+        const browser = this.browser || this.context?.browser();
+        if (browser) {
+            const page = await getTab(browser, 'gemini');
+            return new GeminiClient(page);
+        } else {
+            // Fallback: create page directly from context (persistent context)
+            console.log('[Client] Creating Gemini page from persistent context (no browser object)');
+            const page = await this.context!.newPage();
+            return new GeminiClient(page);
+        }
     }
 
     async close() {
