@@ -770,7 +770,14 @@ export class PerplexityClient extends BaseClient {
 
         console.log('[Client] Acquiring Gemini tab from pool...');
 
-        // Try to get browser from context if direct browser is null
+        // IMPORTANT: Always prefer passing context to getTab to ensure auth cookies are shared
+        // If we pass browser, getTab might pick a different context without auth
+        if (this.context) {
+            const page = await getTab(this.context, 'gemini');
+            return new GeminiClient(page);
+        }
+
+        // Fallback: try to get browser from context if direct browser is null
         const browser = this.browser || this.context?.browser();
         if (browser) {
             const page = await getTab(browser, 'gemini');
