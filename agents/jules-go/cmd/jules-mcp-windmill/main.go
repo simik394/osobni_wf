@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -283,27 +284,42 @@ func runWindmillScript(scriptPath string, args map[string]interface{}) (string, 
 		return "", fmt.Errorf("windmill execution failed: %w, output: %s", err, string(output))
 	}
 
-	// Extract the JSON result from the output
-	lines := strings.Split(string(output), "\n")
-	var resultLines []string
-	inJSON := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
-			inJSON = true
-		}
-		if inJSON {
-			resultLines = append(resultLines, line)
-		}
-		// Basic check for end of JSON
-		if strings.HasSuffix(trimmed, "}") || strings.HasSuffix(trimmed, "]") {
-			// We can't easily tell if it's the FINAL JSON, but usually wmill output is structured.
-		}
+	// Strip ANSI escape codes from output
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	cleanOutput := ansiRegex.ReplaceAllString(string(output), "")
+
+	// Find the last JSON object or array in the output
+	// Look for the last occurrence of { followed by matching }
+	lastBrace := strings.LastIndex(cleanOutput, "{")
+	lastBracket := strings.LastIndex(cleanOutput, "[")
+
+	var jsonStart int
+	if lastBrace > lastBracket {
+		jsonStart = lastBrace
+	} else {
+		jsonStart = lastBracket
 	}
 
-	if len(resultLines) == 0 {
-		return "", fmt.Errorf("no JSON output found in windmill response: %s", string(output))
+	if jsonStart == -1 {
+		return "", fmt.Errorf("no JSON output found in windmill response: %s", cleanOutput)
 	}
 
-	return strings.Join(resultLines, "\n"), nil
+	// Extract from JSON start to end of output
+	jsonPart := cleanOutput[jsonStart:]
+
+	// Validate it's proper JSON by attempting to parse
+	var testParse interface{}
+	if err := json.Unmarshal([]byte(jsonPart), &testParse); err != nil {
+		// Try to find a valid JSON by trimming trailing garbage
+		lines := strings.Split(jsonPart, "\n")
+		for i := len(lines); i > 0; i-- {
+			candidate := strings.Join(lines[:i], "\n")
+			if json.Unmarshal([]byte(candidate), &testParse) == nil {
+				return strings.TrimSpace(candidate), nil
+			}
+		}
+		return "", fmt.Errorf("no valid JSON found in windmill response: %s", cleanOutput)
+	}
+
+	return strings.TrimSpace(jsonPart), nil
 }
