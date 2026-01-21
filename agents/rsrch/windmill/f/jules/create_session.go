@@ -66,10 +66,14 @@ func main(prompt string, source string, starting_branch string, title string) (S
 		},
 	}
 
-	if starting_branch != "" {
-		reqBody.SourceContext.GithubRepoContext = &GithubRepoContext{
-			StartingBranch: starting_branch,
-		}
+	// GithubRepoContext with startingBranch is REQUIRED by the API
+	// Default to "main" if not specified
+	branch := starting_branch
+	if branch == "" {
+		branch = "main"
+	}
+	reqBody.SourceContext.GithubRepoContext = &GithubRepoContext{
+		StartingBranch: branch,
 	}
 
 	if title != "" {
