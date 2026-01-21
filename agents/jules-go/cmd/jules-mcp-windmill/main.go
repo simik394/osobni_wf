@@ -173,7 +173,18 @@ func handleRequest(req JSONRPCRequest) {
 						"required": []string{"session_id"},
 					},
 				},
-				// End new tools
+				map[string]interface{}{
+					"name":        "publish_session",
+					"description": "Publish a completed Jules session as a Pull Request (requires browser automation)",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"session_id": map[string]interface{}{"type": "string", "description": "The session ID to publish"},
+							"mode":       map[string]interface{}{"type": "string", "description": "Publish mode: 'pr' or 'branch' (default: pr)"},
+						},
+						"required": []string{"session_id"},
+					},
+				},
 			},
 		}
 	case "tools/call":
@@ -194,6 +205,7 @@ func handleRequest(req JSONRPCRequest) {
 			"list_activities":             "f/jules/list_activities",
 			"get_activity":                "f/jules/get_activity",
 			"wait_for_session_completion": "f/jules/wait_for_completion",
+			"publish_session":             "f/jules/publish_single_jules_session",
 		}
 
 		scriptPath, ok := scriptMap[params.Name]
