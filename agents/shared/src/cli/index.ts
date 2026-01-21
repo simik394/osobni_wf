@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import * as chalk from 'chalk';
+const chalk = require('chalk');
 
 export class CLIUtils {
     /**
