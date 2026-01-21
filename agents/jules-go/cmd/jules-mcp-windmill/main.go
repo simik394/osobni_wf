@@ -1,14 +1,24 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
+
+// Setup logging to stderr
+func init() {
+	log.SetOutput(os.Stderr)
+	log.SetPrefix("[jules-windmill] ")
+	log.SetFlags(log.Ltime | log.Lmicroseconds | log.Lshortfile)
+}
 
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -25,25 +35,66 @@ type JSONRPCResponse struct {
 }
 
 type JSONRPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
 }
 
 func main() {
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	log.Println("Starting Jules Windmill MCP Server...")
+
+	// Use json.Decoder to stream decode, which handles large messages automatically
+	// unlike bufio.Scanner which has a default 64KB token limit
+	decoder := json.NewDecoder(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+
+	for {
 		var req JSONRPCRequest
-		if err := json.Unmarshal(line, &req); err != nil {
+		if err := decoder.Decode(&req); err != nil {
+			if err == io.EOF {
+				log.Println("Stdin closed, exiting")
+				return
+			}
+			log.Printf("Error decoding JSON-RPC request: %v", err)
+			// Try to recover or continue? Standard is to exit on fatal stream errors,
+			// but we can try to skip garbage if possible.
+			// For now, let's just log and continue loop if it's a transient error,
+			// but usually Decode error on stream means stream is broken or we need to resync.
+			// Re-creating decoder unlikely to help if underlying reader is same.
 			continue
 		}
 
-		handleRequest(req)
+		log.Printf("Received request: Method=%s ID=%v", req.Method, req.ID)
+
+		// Handle request in a function that returns the response object
+		resp := handleRequest(req)
+
+		if resp != nil {
+			if err := encoder.Encode(resp); err != nil {
+				log.Printf("Error encoding JSON-RPC response: %v", err)
+			}
+		}
 	}
 }
 
-func handleRequest(req JSONRPCRequest) {
-	resp := JSONRPCResponse{
+func handleRequest(req JSONRPCRequest) *JSONRPCResponse {
+	// Defer panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in handleRequest: %v", r)
+		}
+	}()
+
+	// If it's a notification (no ID) and we don't explicitly handle it as a request,
+	// we should generally not reply.
+	// But let's handle specific notifications we know about.
+
+	if req.Method == "notifications/initialized" || req.Method == "notifications/cancelled" {
+		log.Printf("Ignoring notification: %s", req.Method)
+		return nil
+	}
+
+	resp := &JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
 	}
@@ -55,7 +106,7 @@ func handleRequest(req JSONRPCRequest) {
 			"capabilities":    map[string]interface{}{},
 			"serverInfo": map[string]interface{}{
 				"name":    "Windmill Jules Bridge",
-				"version": "1.0.0",
+				"version": "1.0.1",
 			},
 		}
 	case "tools/list":
@@ -112,7 +163,8 @@ func handleRequest(req JSONRPCRequest) {
 					"inputSchema": map[string]interface{}{
 						"type": "object",
 						"properties": map[string]interface{}{
-							"prompt": map[string]interface{}{"type": "string", "description": "The message to send"},
+							"prompt":     map[string]interface{}{"type": "string", "description": "The message to send"},
+							"session_id": map[string]interface{}{"type": "string", "description": "The ID of the session"},
 						},
 						"required": []string{"session_id", "prompt"},
 					},
@@ -194,18 +246,20 @@ func handleRequest(req JSONRPCRequest) {
 						"properties": map[string]interface{}{
 							"prompt":        map[string]interface{}{"type": "string", "description": "The prompt to send"},
 							"system_prompt": map[string]interface{}{"type": "string", "description": "Optional system prompt"},
+							"session_id":    map[string]interface{}{"type": "string", "description": "Optional session ID for continuity"},
 						},
 						"required": []string{"prompt"},
 					},
 				},
 				map[string]interface{}{
 					"name":        "rsrch_gemini_pro",
-					"description": "Thorough analysis via rsrch Gemini Pro (deep research model)",
+					"description": "Comprehensive analysis via rsrch Gemini Deep Research (Thinking model)",
 					"inputSchema": map[string]interface{}{
 						"type": "object",
 						"properties": map[string]interface{}{
 							"prompt":        map[string]interface{}{"type": "string", "description": "The prompt to send"},
 							"system_prompt": map[string]interface{}{"type": "string", "description": "Optional system prompt"},
+							"session_id":    map[string]interface{}{"type": "string", "description": "Optional session ID for continuity"},
 						},
 						"required": []string{"prompt"},
 					},
@@ -217,7 +271,12 @@ func handleRequest(req JSONRPCRequest) {
 			Name      string                 `json:"name"`
 			Arguments map[string]interface{} `json:"arguments"`
 		}
-		json.Unmarshal(req.Params, &params)
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			resp.Error = JSONRPCError{Code: -32700, Message: "Parse error", Data: err.Error()}
+			return resp
+		}
+
+		log.Printf("Calling tool: %s", params.Name)
 
 		scriptMap := map[string]string{
 			"create_session":              "f/jules/create_session",
@@ -241,6 +300,7 @@ func handleRequest(req JSONRPCRequest) {
 		} else {
 			result, err := runWindmillScript(scriptPath, params.Arguments)
 			if err != nil {
+				log.Printf("Tool execution failed: %v", err)
 				resp.Result = map[string]interface{}{
 					"content": []interface{}{
 						map[string]interface{}{
@@ -251,6 +311,8 @@ func handleRequest(req JSONRPCRequest) {
 					"isError": true,
 				}
 			} else {
+				// Don't log full result as it might be huge
+				log.Printf("Tool execution successful")
 				resp.Result = map[string]interface{}{
 					"content": []interface{}{
 						map[string]interface{}{
@@ -263,13 +325,21 @@ func handleRequest(req JSONRPCRequest) {
 			}
 		}
 	case "notifications/initialized":
-		return // ignore
+		return nil
+	case "ping":
+		resp.Result = "pong"
 	default:
-		// respond with error or ignore
-		return
+		// If it's a notification (no ID), do not send error response
+		if req.ID == nil {
+			log.Printf("Ignoring unknown notification: %s", req.Method)
+			return nil
+		}
+		// Unknown method
+		log.Printf("Unknown method: %s", req.Method)
+		resp.Error = JSONRPCError{Code: -32601, Message: fmt.Sprintf("Method %s not found", req.Method)}
 	}
 
-	json.NewEncoder(os.Stdout).Encode(resp)
+	return resp
 }
 
 func runWindmillScript(scriptPath string, args map[string]interface{}) (string, error) {
@@ -278,8 +348,16 @@ func runWindmillScript(scriptPath string, args map[string]interface{}) (string, 
 		return "", fmt.Errorf("failed to marshal args: %w", err)
 	}
 
-	cmd := exec.Command("wmill", "script", "run", scriptPath, "-d", string(argsJSON))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "wmill", "script", "run", scriptPath, "-d", string(argsJSON))
 	output, err := cmd.CombinedOutput()
+
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("windmill execution timed out after 10 minutes")
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("windmill execution failed: %w, output: %s", err, string(output))
 	}
@@ -301,7 +379,14 @@ func runWindmillScript(scriptPath string, args map[string]interface{}) (string, 
 	}
 
 	if jsonStart == -1 {
-		return "", fmt.Errorf("no JSON output found in windmill response: %s", cleanOutput)
+		// Sometimes output is just a string or number, not JSON object
+		// But Windmill usually returns JSON. If not found, log what we got.
+		// If it's empty, return empty
+		trimmed := strings.TrimSpace(cleanOutput)
+		if trimmed == "" {
+			return "", nil
+		}
+		return trimmed, nil // Return as is if no JSON structure found
 	}
 
 	// Extract from JSON start to end of output
@@ -318,7 +403,7 @@ func runWindmillScript(scriptPath string, args map[string]interface{}) (string, 
 				return strings.TrimSpace(candidate), nil
 			}
 		}
-		return "", fmt.Errorf("no valid JSON found in windmill response: %s", cleanOutput)
+		return "", fmt.Errorf("no valid JSON found in windmill response (length %d): %s", len(cleanOutput), cleanOutput)
 	}
 
 	return strings.TrimSpace(jsonPart), nil

@@ -11,6 +11,7 @@ import (
 type ChatRequest struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
+	Session  string    `json:"session,omitempty"`
 }
 
 type Message struct {
@@ -25,7 +26,7 @@ type ChatResponse struct {
 }
 
 // main sends a prompt to rsrch Gemini (fast model)
-func main(prompt string, system_prompt string) (interface{}, error) {
+func main(prompt string, system_prompt string, session_id string) (interface{}, error) {
 	rsrchURL := "http://halvarm:3001/v1/chat/completions"
 
 	messages := []Message{}
@@ -37,6 +38,7 @@ func main(prompt string, system_prompt string) (interface{}, error) {
 	reqBody := ChatRequest{
 		Model:    "gemini-rsrch", // fast model
 		Messages: messages,
+		Session:  session_id,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
