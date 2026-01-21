@@ -3,6 +3,10 @@
     "version": "1.0.0",
     "description": "Shared utilities for agent infrastructure",
     "main": "dist/index.js",
+    "exports": {
+        ".": "./dist/index.js",
+        "./*": "./dist/*.js"
+    },
     "types": "dist/index.d.ts",
     "scripts": {
         "build": "tsc",
