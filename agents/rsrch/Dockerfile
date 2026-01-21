@@ -15,6 +15,7 @@ RUN echo "=== SHARED DIST INDEX.D.TS ===" && cat shared/dist/index.d.ts || echo 
 
 # Install dependencies (browsers are already in the image)
 # Install xvfb, x11vnc, and fluxbox for headed mode support with VNC
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y xvfb x11vnc fluxbox && rm -rf /var/lib/apt/lists/*
 RUN npm install
 
