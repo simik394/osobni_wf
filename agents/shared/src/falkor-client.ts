@@ -43,7 +43,7 @@ export interface Artifact {
 // FalkorDB Client
 // ============================================================================
 
-export class FalkorClient {
+export class LegacyFalkorClient {
     private redis: Redis;
     private graphName: string;
 
@@ -521,16 +521,16 @@ export class FalkorClient {
 // Singleton Instance
 // ============================================================================
 
-let _instance: FalkorClient | null = null;
+let _instance: LegacyFalkorClient | null = null;
 
 /**
  * Get or create the shared FalkorDB client instance
  */
-export function getFalkorClient(): FalkorClient {
+export function getFalkorClient(): LegacyFalkorClient {
     if (!_instance) {
-        _instance = new FalkorClient();
+        _instance = new LegacyFalkorClient();
     }
     return _instance;
 }
 
-export default FalkorClient;
+export default LegacyFalkorClient;
