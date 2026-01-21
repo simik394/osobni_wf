@@ -12,7 +12,7 @@ import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { notifyResearchComplete } from './notify';
 import { getRegistry } from './artifact-registry';
-import { setMaxTabs, markTabBusy, markTabFree, getMaxTabs } from '@agents/shared/tab-pool';
+import { setMaxTabs, markTabBusy, markTabFree, getMaxTabs } from '@agents/shared';
 import { discordService } from './services/notification';
 
 // Optional shared imports (may not be available in Docker)
@@ -62,7 +62,7 @@ app.use(express.json({ limit: '10mb' }));
 // Initialize the client
 const client = new PerplexityClient();
 let notebookClient: NotebookLMClient | null = null;
-let geminiClient: GeminiClient | null = null;
+let activeGeminiClient: GeminiClient | null = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -432,15 +432,15 @@ app.post('/notebooklm/create-audio-from-doc', async (req, res) => {
             );
 
             if (queued.length > 0) {
-                 // Return PendingAudio ID
-                 return res.status(202).json({
-                     success: true,
-                     message: 'Audio generation queued via Windmill',
-                     jobId: queued[0].jobId,
-                     pendingAudioId: pendingAudios[0]?.id
-                 });
+                // Return PendingAudio ID
+                return res.status(202).json({
+                    success: true,
+                    message: 'Audio generation queued via Windmill',
+                    jobId: queued[0].jobId,
+                    pendingAudioId: pendingAudios[0]?.id
+                });
             } else {
-                 return res.status(500).json({ success: false, error: failed[0]?.error || 'Failed to queue job' });
+                return res.status(500).json({ success: false, error: failed[0]?.error || 'Failed to queue job' });
             }
         }
 
@@ -531,9 +531,9 @@ app.post('/deep-research/start', async (req, res) => {
                 await graphStore.updateJobStatus(job.id, 'running');
 
                 // Initialize Gemini client if not already
-                if (!geminiClient) {
-                    geminiClient = await client.createGeminiClient();
-                    await geminiClient.init();
+                if (!activeGeminiClient) {
+                    activeGeminiClient = await client.createGeminiClient();
+                    await activeGeminiClient.init();
                 }
 
                 // For non-blocking, we should ideally use a new pooled client
@@ -887,10 +887,10 @@ app.post('/v1/chat/completions', async (req, res) => {
 
             try {
                 // Ensure Gemini client
-                if (!geminiClient) {
+                if (!activeGeminiClient) {
                     console.log('[OpenAI API] Creating Gemini client for streaming...');
-                    geminiClient = await client.createGeminiClient();
-                    await geminiClient.init();
+                    activeGeminiClient = await client.createGeminiClient();
+                    await activeGeminiClient.init();
                 }
 
                 // Extract prompt
@@ -913,7 +913,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                 });
 
                 // Stream using Gemini client
-                await geminiClient.researchWithStreaming(
+                await activeGeminiClient.researchWithStreaming(
                     prompt,
                     (chunk) => {
                         if (chunk.content) {
@@ -996,16 +996,21 @@ app.post('/v1/chat/completions', async (req, res) => {
                 console.log(`[OpenAI API] Using Gemini backend (Model: ${model}, Deep: ${useDeepResearch}, Session: ${sessionId || 'current'})`);
 
                 // Ensure client is initialized
-                if (!geminiClient) {
+                if (!activeGeminiClient) {
                     console.log('[OpenAI API] Creating Gemini client...');
-                    geminiClient = await client.createGeminiClient();
+                    // Ensure browser is initialized
+                    if (!client.isBrowserInitialized()) {
+                        console.log('[OpenAI API] Browser not initialized - connecting now...');
+                        await client.init();
+                    }
+                    activeGeminiClient = await client.createGeminiClient();
                     try {
-                        await geminiClient.init();
+                        await activeGeminiClient.init();
                     } catch (e) {
                         console.error('[OpenAI API] Initial Gemini init failed, retrying once...', e);
-                        geminiClient = null; // Reset
-                        geminiClient = await client.createGeminiClient();
-                        await geminiClient.init();
+                        activeGeminiClient = null; // Reset
+                        activeGeminiClient = await client.createGeminiClient();
+                        await activeGeminiClient.init();
                     }
                 }
 
@@ -1043,7 +1048,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
                         let text = '';
                         try {
-                            text = await geminiClient.researchWithStreaming(
+                            text = await activeGeminiClient.researchWithStreaming(
                                 prompt,
                                 streamCallback,
                                 {
@@ -1054,9 +1059,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                         } catch (e: any) {
                             if (e.message.includes('Context not initialized') || e.message.includes('Target closed') || e.message.includes('Session closed')) {
                                 console.warn('[OpenAI API] Gemini client stale/closed, re-initializing and retrying streaming...');
-                                geminiClient = await client.createGeminiClient();
-                                await geminiClient.init();
-                                text = await geminiClient.researchWithStreaming(
+                                activeGeminiClient = await client.createGeminiClient();
+                                await activeGeminiClient.init();
+                                text = await activeGeminiClient.researchWithStreaming(
                                     prompt,
                                     streamCallback,
                                     {
@@ -1092,7 +1097,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                 } else {
                     // Non-streaming response
                     try {
-                        responseText = await geminiClient.research(prompt, {
+                        responseText = await activeGeminiClient.research(prompt, {
                             deepResearch: useDeepResearch,
                             sessionId: sessionId,
                             // Force reset if not using specific session ID
@@ -1101,9 +1106,9 @@ app.post('/v1/chat/completions', async (req, res) => {
                     } catch (e: any) {
                         if (e.message.includes('Context not initialized') || e.message.includes('Target closed')) {
                             console.warn('[OpenAI API] Gemini client stale/closed, re-initializing and retrying...');
-                            geminiClient = await client.createGeminiClient();
-                            await geminiClient.init();
-                            responseText = await geminiClient.research(prompt, {
+                            activeGeminiClient = await client.createGeminiClient();
+                            await activeGeminiClient.init();
+                            responseText = await activeGeminiClient.research(prompt, {
                                 deepResearch: useDeepResearch,
                                 sessionId: sessionId,
                                 resetSession: !sessionId
@@ -1170,7 +1175,6 @@ app.post('/v1/chat/completions', async (req, res) => {
 // ============================================================================
 // Gemini Endpoints (Original)
 // ============================================================================
-let geminiClient: GeminiClient | null = null;
 
 app.post('/gemini/research', async (req, res) => {
     try {
@@ -1180,15 +1184,15 @@ app.post('/gemini/research', async (req, res) => {
         // Check if client wants SSE streaming
         const wantsSSE = req.headers.accept?.includes('text/event-stream');
 
-        if (!geminiClient) {
+        if (!activeGeminiClient) {
             console.log('[Server] Creating Gemini client...');
             // Lazy browser init if startup failed
             if (!client.isBrowserInitialized()) {
                 console.log('[Server] Browser not initialized - connecting now...');
                 await client.init();
             }
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         // Default to reset session for standard research queries
@@ -1205,24 +1209,24 @@ app.post('/gemini/research', async (req, res) => {
             const progressHandler = (data: any) => {
                 res.write(`data: ${JSON.stringify(data)}\n\n`);
             };
-            geminiClient.on('progress', progressHandler);
+            activeGeminiClient.on('progress', progressHandler);
 
             try {
                 console.log(`[Server] Generating Gemini response (SSE) for: "${query}"`);
                 // Note: research() doesn't officially support streaming callback in the legacy method, 
                 // but we pass options for future compatibility if research() signatures align
-                const response = await geminiClient.research(query, { deepResearch: false, ...options });
+                const response = await activeGeminiClient.research(query, { deepResearch: false, ...options });
 
                 // Send final result
                 res.write(`data: ${JSON.stringify({ type: 'result', success: true, data: response })}\n\n`);
                 res.end();
             } finally {
-                geminiClient.removeListener('progress', progressHandler);
+                activeGeminiClient.removeListener('progress', progressHandler);
             }
         } else {
             // Traditional JSON response mode
             console.log(`[Server] Generating Gemini response for: "${query}"`);
-            const response = await geminiClient.research(query);
+            const response = await activeGeminiClient.research(query);
             res.json({ success: true, data: response });
         }
     } catch (e: any) {
@@ -1238,12 +1242,12 @@ app.get('/gemini/sessions', async (req, res) => {
         const offsetStr = req.query.offset as string;
         const offset = offsetStr ? parseInt(offsetStr) : 0;
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
-        const sessions = await geminiClient.listSessions(limit, offset);
+        const sessions = await activeGeminiClient.listSessions(limit, offset);
 
         // Sync to graph in the background
         if (sessions.length > 0) {
@@ -1274,20 +1278,20 @@ app.get('/gemini/list-research-docs', async (req, res) => {
         const limit = limitStr ? parseInt(limitStr) : 10;
         const sessionId = req.query.sessionId as string;
 
-        if (!geminiClient) {
+        if (!activeGeminiClient) {
             console.log('[Server] Creating Gemini client...');
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         let docs;
         if (sessionId) {
             console.log(`[Server] Listing research docs for session: ${sessionId}`);
-            await geminiClient.openSession(sessionId);
-            docs = await geminiClient.getAllResearchDocsInSession();
+            await activeGeminiClient.openSession(sessionId);
+            docs = await activeGeminiClient.getAllResearchDocsInSession();
         } else {
             console.log(`[Server] Listing recent research docs (limit: ${limit})...`);
-            docs = await geminiClient.listDeepResearchDocuments(limit);
+            docs = await activeGeminiClient.listDeepResearchDocuments(limit);
         }
 
         res.json({ success: true, data: docs });
@@ -1302,16 +1306,16 @@ app.post('/gemini/sync-graph', async (req, res) => {
     try {
         const limit = req.body.limit || 50;
 
-        if (!geminiClient) {
+        if (!activeGeminiClient) {
             console.log('[Server] Creating Gemini client for sync...');
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         console.log(`[Server] Syncing Gemini research docs to FalkorDB (limit: ${limit})...`);
 
         // List research docs from Gemini
-        const docs = await geminiClient.listDeepResearchDocuments(limit);
+        const docs = await activeGeminiClient.listDeepResearchDocuments(limit);
         console.log(`[Server] Found ${docs.length} research documents`);
 
         let synced = 0;
@@ -1396,19 +1400,19 @@ app.post('/gemini/export-to-docs', async (req, res) => {
     try {
         const { sessionId } = req.body;
 
-        if (!geminiClient) {
+        if (!activeGeminiClient) {
             console.log('[Server] Creating Gemini client...');
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         if (sessionId) {
             console.log(`[Server] Navigating to session ${sessionId} for export...`);
-            await geminiClient.openSession(sessionId);
+            await activeGeminiClient.openSession(sessionId);
         }
 
         console.log('[Server] Exporting current session to Google Docs...');
-        const result = await geminiClient.exportCurrentToGoogleDocs();
+        const result = await activeGeminiClient.exportCurrentToGoogleDocs();
 
         if (result.docId) {
             console.log(`[Server] Export success: ${result.docTitle} (${result.docId})`);
@@ -1427,17 +1431,17 @@ app.post('/gemini/get-research-info', async (req, res) => {
     try {
         const { sessionId } = req.body;
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         if (sessionId) {
             console.log(`[Server] Navigating to session ${sessionId} for research extraction...`);
-            await geminiClient.openSession(sessionId);
+            await activeGeminiClient.openSession(sessionId);
         }
 
-        const info = await geminiClient.getResearchInfo();
+        const info = await activeGeminiClient.getResearchInfo();
         res.json({ success: true, data: info });
     } catch (e: any) {
         console.error('[Server] Gemini get info failed:', e);
@@ -1451,11 +1455,11 @@ app.post('/gemini/get-research-info', async (req, res) => {
 
 app.get('/gemini/sources', async (req, res) => {
     try {
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
-        const sources = await geminiClient.getContextSources();
+        const sources = await activeGeminiClient.getContextSources();
         res.json({ success: true, sources });
     } catch (e: any) {
         res.status(500).json({ success: false, error: e.message });
@@ -1467,13 +1471,13 @@ app.post('/gemini/set-model', async (req, res) => {
         const { model } = req.body;
         if (!model) return res.status(400).json({ error: 'Model name is required' });
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         console.log(`[Server] Setting Gemini model to: ${model}`);
-        const success = await geminiClient.setModel(model);
+        const success = await activeGeminiClient.setModel(model);
 
         if (success) {
             res.json({ success: true, model });
@@ -1526,15 +1530,15 @@ app.post('/gemini/upload', async (req, res) => {
             return res.status(400).json({ error: 'No valid files provided' });
         }
 
-        if (!geminiClient) {
+        if (!activeGeminiClient) {
             console.log('[Server] Creating Gemini client for upload...');
             if (!client.isBrowserInitialized()) await client.init();
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         console.log(`[Server] Uploading ${filesToUpload.length} files to Gemini...`);
-        const result = await geminiClient.uploadFiles(filesToUpload);
+        const result = await activeGeminiClient.uploadFiles(filesToUpload);
 
         if (result) {
             res.json({ success: true, count: filesToUpload.length, paths: filesToUpload });
@@ -1613,13 +1617,13 @@ app.post('/gemini/chat', async (req, res) => {
         }
 
         // Fallback to Local Execution
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         if (sessionId) {
-            await geminiClient.openSession(sessionId);
+            await activeGeminiClient.openSession(sessionId);
         }
 
         console.log(`[Server] Gemini chat (Local): "${message.substring(0, 50)}..." (Wait: ${waitForResponse})`);
@@ -1629,7 +1633,7 @@ app.post('/gemini/chat', async (req, res) => {
             res.setHeader('Cache-Control', 'no-cache');
             res.setHeader('Connection', 'keep-alive');
 
-            const response = await geminiClient.sendMessage(message, {
+            const response = await activeGeminiClient.sendMessage(message, {
                 onProgress: (text: string) => {
                     res.write(`data: ${JSON.stringify({ type: 'progress', text })}\n\n`);
                 },
@@ -1637,13 +1641,13 @@ app.post('/gemini/chat', async (req, res) => {
                 files
             });
 
-            res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: geminiClient.getCurrentSessionId() })}\n\n`);
+            res.write(`data: ${JSON.stringify({ type: 'result', response, sessionId: activeGeminiClient.getCurrentSessionId() })}\n\n`);
             res.end();
             return;
         }
 
-        const response = await geminiClient.sendMessage(message, { waitForResponse, model, files });
-        res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+        const response = await activeGeminiClient.sendMessage(message, { waitForResponse, model, files });
+        res.json({ success: true, data: { response, sessionId: activeGeminiClient.getCurrentSessionId() } });
     } catch (e: any) {
         console.error('[Server] Gemini chat failed:', e);
         if (req.headers.accept === 'text/event-stream') {
@@ -1698,19 +1702,19 @@ app.post('/gemini/send-message', async (req, res) => {
         }
 
         // Fallback
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         if (sessionId) {
-            await geminiClient.openSession(sessionId);
+            await activeGeminiClient.openSession(sessionId);
         }
 
         // Send (blocking)
         console.log(`[Server] Gemini send-message (Local): "${message.substring(0, 50)}..." (Model: ${model || 'default'})`);
-        const response = await geminiClient.sendMessage(message, { waitForResponse: true, model }); // Default to blocking/waiting
-        res.json({ success: true, data: { response, sessionId: geminiClient.getCurrentSessionId() } });
+        const response = await activeGeminiClient.sendMessage(message, { waitForResponse: true, model }); // Default to blocking/waiting
+        res.json({ success: true, data: { response, sessionId: activeGeminiClient.getCurrentSessionId() } });
 
     } catch (e: any) {
         console.error('[Server] Gemini send-message failed:', e);
@@ -1724,13 +1728,13 @@ app.post('/gemini/open-session', async (req, res) => {
         const { sessionId } = req.body;
         if (!sessionId) return res.status(400).json({ error: 'Session ID is required' });
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
-        const success = await geminiClient.openSession(sessionId);
-        res.json({ success, sessionId: geminiClient.getCurrentSessionId() });
+        const success = await activeGeminiClient.openSession(sessionId);
+        res.json({ success, sessionId: activeGeminiClient.getCurrentSessionId() });
     } catch (e: any) {
         console.error('[Server] Gemini open-session failed:', e);
         res.status(500).json({ success: false, error: e.message });
@@ -1743,9 +1747,9 @@ app.post('/gemini/sync-conversations', async (req, res) => {
         const { limit = 10, offset = 0, async = false } = req.body;
         const wantsSSE = req.headers.accept?.includes('text/event-stream');
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         // --- 1. Immediate Return (Async Mode) ---
@@ -1756,7 +1760,7 @@ app.post('/gemini/sync-conversations', async (req, res) => {
             (async () => {
                 try {
                     console.log(`[Server] Background sync job ${job.id} started...`);
-                    const conversations = await geminiClient!.scrapeConversations(limit, offset);
+                    const conversations = await activeGeminiClient!.scrapeConversations(limit, offset);
                     let synced = 0, updated = 0;
                     for (const conv of conversations) {
                         const result = await graphStore.syncConversation({
@@ -1797,7 +1801,7 @@ app.post('/gemini/sync-conversations', async (req, res) => {
             };
 
             console.log(`[Server] Syncing Gemini conversations (SSE, limit: ${limit}, offset: ${offset})...`);
-            const conversations = await geminiClient.scrapeConversations(limit, offset, onProgress);
+            const conversations = await activeGeminiClient.scrapeConversations(limit, offset, onProgress);
 
             let synced = 0, updated = 0;
             for (let i = 0; i < conversations.length; i++) {
@@ -1833,7 +1837,7 @@ app.post('/gemini/sync-conversations', async (req, res) => {
 
         // --- 3. Standard Blocking Mode ---
         console.log(`[Server] Syncing Gemini conversations (limit: ${limit}, offset: ${offset})...`);
-        const conversations = await geminiClient.scrapeConversations(limit, offset);
+        const conversations = await activeGeminiClient.scrapeConversations(limit, offset);
 
         let synced = 0, updated = 0;
         for (const conv of conversations) {
@@ -1866,16 +1870,16 @@ app.post('/gemini/get-responses', async (req, res) => {
     try {
         const { sessionId } = req.body;
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         if (sessionId) {
-            await geminiClient.openSession(sessionId);
+            await activeGeminiClient.openSession(sessionId);
         }
 
-        const responses = await geminiClient.getResponses();
+        const responses = await activeGeminiClient.getResponses();
         res.json({ success: true, data: responses });
     } catch (e: any) {
         console.error('[Server] Gemini get-responses failed:', e);
@@ -1886,12 +1890,12 @@ app.post('/gemini/get-responses', async (req, res) => {
 // List Gems
 app.get('/gemini/gems', async (req, res) => {
     try {
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
-        const gems = await geminiClient.listGems();
+        const gems = await activeGeminiClient.listGems();
         res.json({ success: true, data: gems });
     } catch (e: any) {
         console.error('[Server] Gemini list-gems failed:', e);
@@ -1905,12 +1909,12 @@ app.post('/gemini/open-gem', async (req, res) => {
         const { gemNameOrId } = req.body;
         if (!gemNameOrId) return res.status(400).json({ error: 'Gem name or ID is required' });
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
-        const success = await geminiClient.openGem(gemNameOrId);
+        const success = await activeGeminiClient.openGem(gemNameOrId);
         res.json({ success });
     } catch (e: any) {
         console.error('[Server] Gemini open-gem failed:', e);
@@ -1925,12 +1929,12 @@ app.post('/gemini/chat-gem', async (req, res) => {
         if (!gemNameOrId) return res.status(400).json({ error: 'Gem name or ID is required' });
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
-        const response = await geminiClient.chatWithGem(gemNameOrId, message);
+        const response = await activeGeminiClient.chatWithGem(gemNameOrId, message);
         res.json({ success: true, data: { response } });
     } catch (e: any) {
         console.error('[Server] Gemini chat-gem failed:', e);
@@ -1944,19 +1948,19 @@ app.post('/gemini/list-research-docs', async (req, res) => {
         const { sessionId, limit } = req.body;
         const limitNum = typeof limit === 'number' ? limit : 10;
 
-        if (!geminiClient) {
-            geminiClient = await client.createGeminiClient();
-            await geminiClient.init();
+        if (!activeGeminiClient) {
+            activeGeminiClient = await client.createGeminiClient();
+            await activeGeminiClient.init();
         }
 
         let docs: any[] = [];
         if (sessionId) {
             console.log(`[Server] Listing research docs for session: ${sessionId}`);
-            await geminiClient.openSession(sessionId);
-            docs = await geminiClient.getAllResearchDocsInSession();
+            await activeGeminiClient.openSession(sessionId);
+            docs = await activeGeminiClient.getAllResearchDocsInSession();
         } else {
             console.log(`[Server] Listing research docs (limit ${limitNum})...`);
-            docs = await geminiClient.listDeepResearchDocuments(limitNum);
+            docs = await activeGeminiClient.listDeepResearchDocuments(limitNum);
         }
 
         res.json({ success: true, data: docs });
@@ -2004,13 +2008,13 @@ app.post('/research-to-podcast', async (req, res) => {
 
                 // 2. Gemini Deep Research (Reasoning + Synthesis)
                 console.log(`[Job ${job.id}] Step 2: Gemini Deep Research`);
-                if (!geminiClient) {
-                    geminiClient = await client.createGeminiClient();
-                    await geminiClient.init();
+                if (!activeGeminiClient) {
+                    activeGeminiClient = await client.createGeminiClient();
+                    await activeGeminiClient.init();
                 }
 
                 // Register session in artifact registry
-                const geminiSessionId = geminiClient.getCurrentSessionId() || 'unknown';
+                const geminiSessionId = activeGeminiClient.getCurrentSessionId() || 'unknown';
                 const sessionId = registry.registerSession(geminiSessionId, query);
                 console.log(`[Job ${job.id}] Registered session: ${sessionId}`);
 
@@ -2025,12 +2029,12 @@ ${pxResult.answer}
 Please use your Deep Research capabilities to expand on this, verify the information, and produce a comprehensive, well-structured research report. 
 Focus on depth, nuance, and covering aspects that might be missing above.
 `;
-                await geminiClient.research(combinedQuery);
+                await activeGeminiClient.research(combinedQuery);
 
                 // 3. Export to Google Docs
                 console.log(`[Job ${job.id}] Step 3: Export to Google Docs`);
                 // Short wait for generation to ensure export button is ready handled in exportToGoogleDocs logic
-                const exportResult = await geminiClient.exportCurrentToGoogleDocs();
+                const exportResult = await activeGeminiClient.exportCurrentToGoogleDocs();
                 const { docTitle, docUrl, docId: googleDocId } = exportResult;
 
                 if (!docTitle) {
@@ -2045,7 +2049,7 @@ Focus on depth, nuance, and covering aspects that might be missing above.
                 // Rename Google Doc with registry ID prefix
                 if (googleDocId) {
                     const newDocTitle = `${docId} ${docTitle}`;
-                    await geminiClient.renameGoogleDoc(googleDocId, newDocTitle);
+                    await activeGeminiClient.renameGoogleDoc(googleDocId, newDocTitle);
                     registry.updateTitle(docId, newDocTitle);
                 }
 
