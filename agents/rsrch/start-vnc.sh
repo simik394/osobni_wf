@@ -24,7 +24,7 @@ echo "Starting Main Application..."
 # Pass all arguments to the main app, or default to serving
 # Using exec so node takes over PID 1 if possible, or just waits
 if [ "$#" -eq 0 ]; then
-    node dist/cli.js serve
+    exec node dist/cli.js serve
 else
     exec "$@"
 fi
