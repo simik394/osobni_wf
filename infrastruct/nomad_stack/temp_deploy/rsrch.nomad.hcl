@@ -10,6 +10,10 @@ job "rsrch" {
             port "http" {
                 static = 3030
             }
+            port "vnc" {
+                static = 5902
+                to = 5900
+            }
         }
 
         constraint {
@@ -21,7 +25,7 @@ job "rsrch" {
             driver = "docker"
 
             config {
-                image = "ghcr.io/simik394/osobni_wf/rsrch:latest"
+                image = "ghcr.io/simik394/osobni_wf/rsrch:vnc-v3"
                 network_mode = "host"
                 mounts = [
                     {
@@ -39,7 +43,7 @@ job "rsrch" {
                 PORT = "3030"
                 BROWSER_CDP_ENDPOINT = "http://localhost:9223"
                 AUTH_FILE = "/secrets/auth.json"
-                HEADLESS = "true" 
+                HEADLESS = "false" 
                 DEBUG = "rsrch:*"
                 FALKORDB_HOST = "localhost"
                 FALKORDB_PORT = "6379"

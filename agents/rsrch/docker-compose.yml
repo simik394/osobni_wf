@@ -21,7 +21,7 @@ services:
     image: perplexity-researcher:latest
     container_name: perplexity-server
     ports:
-      - "${PORT:-3001}:${PORT:-3001}"
+      - "${PORT:-3030}:${PORT:-3030}"
       - "5905:5900" # Expose VNC from rsrch container (5901 in use)
     volumes:
       - ./data:/app/data
@@ -30,7 +30,7 @@ services:
       - ${HOME}/.config/rsrch:/app/config
       - ${HOME}/.rsrch/profiles:/app/profiles
     environment:
-      - PORT=${PORT:-3001}
+      - PORT=${PORT:-3030}
       - WINDMILL_TOKEN=${WINDMILL_TOKEN}
       # - BROWSER_CDP_ENDPOINT=http://chromium:9223 # Disabled for Local Mode
       - BROWSER_CDP_ENDPOINT=http://chromium:9223

@@ -128,6 +128,8 @@ export interface GeminiSelectors {
         documentTitle: string;
         toolbarTitle: string;
         immersiveTitle: string;
+        toggle?: string;
+        closeButton?: string;
     };
     gems: {
         card: string;
@@ -238,13 +240,15 @@ const defaultSelectors: NotebookLMSelectors = {
             welcome: 'button:has-text("Got it")',
         },
         model: {
-            trigger: 'button[aria-label*="Model"]',
-            menu: '[role="menu"]',
-            item: '[role="menuitem"]',
+            // New UI often uses a button with "Gemini Advanced" or just the model name
+            trigger: '[data-test-id="bard-mode-menu-button"], [aria-label="Otevřít výběr režimu"], button[aria-label*="Model"], button[aria-label*="model"], button[data-test-id="model-selector"]',
+            menu: '[role="menu"], .mat-menu-panel',
+            item: '[role="menuitem"], button[role="menuitem"]',
             advanced: 'button:has-text("Advanced")',
-            flash: 'text="Rychlý"|text="Flash"',
-            thinking: 'text="S myšlením"|text="Deep Think"|text="Thinking"',
-            pro: 'text="Pro"|text="Gemini Pro"',
+            // Enhanced selectors for various languages and DOM structures
+            flash: 'text="Rychlý"|text="Flash"|[data-test-id*="flash"]',
+            thinking: 'text="S myšlením"|text="Deep Think"|text="Thinking"|[data-test-id*="thinking"]',
+            pro: 'text="Pro"|text="Gemini Pro"|[data-test-id*="pro"]',
         },
 
         chat: {
@@ -270,6 +274,8 @@ const defaultSelectors: NotebookLMSelectors = {
             documentTitle: '.title',
             toolbarTitle: 'h2.title-text',
             immersiveTitle: 'h1',
+            toggle: 'button[aria-label*="Deep Research"], button[aria-label*="Hloubkový výzkum"]',
+            closeButton: 'button[aria-label*="Close Deep Research"], button[aria-label*="Zavřít hloubkový výzkum"]',
         },
         gems: {
             card: '[class*="gem-card"]',

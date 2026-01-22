@@ -2,7 +2,7 @@
  * Test FalkorDB connectivity and basic operations
  */
 
-import { FalkorClient } from './falkor-client';
+import { LegacyFalkorClient as FalkorClient } from './falkor-client';
 
 async function main() {
     console.log('🧪 Testing FalkorDB connectivity...\n');
