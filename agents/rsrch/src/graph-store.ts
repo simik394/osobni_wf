@@ -210,6 +210,62 @@ export class GraphStore {
     }
 
     /**
+     * Creates or updates a GeminiSession node.
+     */
+    async trackGeminiSession(data: { sessionId: string; title: string }): Promise<void> {
+        const query = `
+            MERGE (gs:GeminiSession {sessionId: $sessionId})
+            ON CREATE SET
+                gs.title = $title,
+                gs.createdAt = $now,
+                gs.lastQueryAt = $now
+            ON MATCH SET
+                gs.title = $title,
+                gs.lastQueryAt = $now
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    sessionId: data.sessionId,
+                    title: data.title,
+                    now: Date.now(),
+                },
+            });
+        } catch (e) {
+            console.error('[GraphStore] trackGeminiSession error:', e);
+        }
+    }
+
+    /**
+     * Adds a GeminiQuery node and links it to a GeminiSession.
+     */
+    async addGeminiQuery(data: { sessionId: string; query: string }): Promise<void> {
+        const queryId = `gq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const query = `
+            MATCH (gs:GeminiSession {sessionId: $sessionId})
+            CREATE (gq:GeminiQuery {
+                queryId: $queryId,
+                sessionId: $sessionId,
+                query: $query,
+                createdAt: $now
+            })
+            CREATE (gs)-[:HAS_QUERY]->(gq)
+        `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    sessionId: data.sessionId,
+                    query: data.query,
+                    queryId: queryId,
+                    now: Date.now(),
+                },
+            });
+        } catch (e) {
+            console.error('[GraphStore] addGeminiQuery error:', e);
+        }
+    }
+
+    /**
      * Synchronize a Notebook node in the graph.
      * Uses MERGE to ensure idempotency.
      */

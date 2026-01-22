@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import { getRegistry } from './artifact-registry';
 import { getRsrchTelemetry } from '@agents/shared';
 import { selectors } from './selectors';
+import { getGraphStore } from './graph-store';
 
 // Get telemetry instance
 const telemetry = getRsrchTelemetry();
@@ -1628,6 +1629,17 @@ export class GeminiClient extends EventEmitter {
 
             const response = await this.getLatestResponse();
             console.log(`[Gemini] Response received (${response?.length || 0} chars)`);
+
+            // Track session in FalkorDB
+            const sessionId = this.getCurrentSessionId();
+            if (sessionId) {
+                const graphStore = getGraphStore();
+                if (graphStore.getIsConnected()) {
+                    const sessionTitle = await this.page.title().then(t => t.replace('Gemini - ', '').trim()).catch(() => message.substring(0, 50));
+                    await graphStore.trackGeminiSession({ sessionId, title: sessionTitle });
+                    await graphStore.addGeminiQuery({ sessionId, query: message });
+                }
+            }
 
             // End generation with response
             telemetry.endGeneration(generation, response || '');
