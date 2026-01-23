@@ -1,0 +1,12 @@
+summary: "Get details of a specific Jules session"
+description: |
+  Retrieves detailed information about a Jules session by ID.
+lock: []
+schema:
+  properties:
+    session_id:
+      type: string
+      description: "The session ID (e.g., '12345678901234567890')"
+  required:
+    - session_id
+  type: object

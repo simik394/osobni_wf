@@ -6,7 +6,7 @@ import { config } from './config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
-import { getTab, markTabBusy, markTabFree } from '@agents/shared';
+import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
 
 interface Session {
     id: string;
@@ -773,12 +773,11 @@ export class PerplexityClient extends BaseClient {
         // IMPORTANT: Always prefer passing context to getTab to ensure auth cookies are shared
         // If we pass browser, getTab might pick a different context without auth
         if (this.context) {
-            const page = await getTab(this.context, 'gemini');
+            const page = await getTab(this.context as any, 'gemini');
             return new GeminiClient(page);
         }
 
-        // Fallback: try to get browser from context if direct browser is null
-        const browser = this.browser || this.context?.browser();
+        const browser = this.browser || (this.context ? (this.context as any).browser() : null);
         if (browser) {
             const page = await getTab(browser, 'gemini');
             return new GeminiClient(page);

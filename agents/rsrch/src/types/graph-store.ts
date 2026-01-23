@@ -42,6 +42,7 @@ export interface Session {
     platform: 'gemini' | 'perplexity' | 'notebooklm';
     externalId: string;
     query: string;
+    title?: string;
     createdAt: number;
 }
 
@@ -106,32 +107,4 @@ export interface ResearchInfo {
     title: string | null;        // Session title (short name)
     firstHeading: string | null; // First heading in the document
     sessionId: string | null;
-}
-
-export interface GeminiSession {
-    sessionId: string;
-    title: string;
-    createdAt: number;
-    lastQueryAt: number;
-}
-
-export interface GeminiQuery {
-    queryId: string;
-    sessionId: string;
-    query: string;
-    createdAt: number;
-}
-
-export interface GeminiSession {
-    sessionId: string;
-    title: string;
-    createdAt: number;
-    lastQueryAt: number;
-}
-
-export interface GeminiQuery {
-    queryId: string;
-    sessionId: string;
-    query: string;
-    createdAt: number;
 }

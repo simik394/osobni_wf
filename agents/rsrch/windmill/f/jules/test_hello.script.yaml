@@ -1,0 +1,9 @@
+summary: "Test hello world Go script"
+description: "Minimal Go script to test Windmill Go runner"
+lock: []
+schema:
+  properties:
+    name:
+      type: string
+      default: "World"
+  type: object

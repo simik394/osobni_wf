@@ -573,8 +573,14 @@ This incident revealed missing documentation:
 - **Resource Consideration**: Each session consumes compute resources - monitor system load when running many parallel sessions.
 - **Independence**: Ensure delegated bundles are independent (different codebases or non-overlapping files) to avoid merge conflicts.
 
+
 ### Session Review Process
 - **Pagination**: Jules MCP returns 50 sessions per page - always check for `nextPageToken` to get full session list.
 - **Archived Sessions**: Some session IDs may return "not found" errors - these are likely archived or deleted. Skip and continue.
 - **State Filtering**: Focus on COMPLETED and AWAITING_USER_FEEDBACK states for actionable review work.
+
+## Study Material Generation & Git Workflows (2026-01-22)
+- **PDF Generation Alternatives**: When `pandoc` is unavailable, `npx md-to-pdf` is a robust and zero-config alternative for converting Markdown to PDF in CI/CD or restricted environments.
+- **GitHub CLI Auto-Merge**: `gh pr merge --auto` requires "Branch protection rules" to be configured on the repository. For personal/private repos without these rules, use direct merge methods or configure the rules first to avoiding confusing failures.
+- **Unified Study Materials**: Concatenating individual lesson files into a single "Unified" Markdown/PDF creates a far superior study resource than scattered files, enabling full-text search and better context retention for LLMs.
 

@@ -1,0 +1,43 @@
+---
+# Antigravity MCP Configuration Deployment
+
+- name: Ensure Antigravity config directory exists
+  file:
+    path: "{{ antigravity_config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Backup existing MCP config
+  copy:
+    src: "{{ antigravity_config_dir }}/mcp_config.json"
+    dest: "{{ antigravity_config_dir }}/mcp_config.json.bak.{{ ansible_date_time.epoch }}"
+    remote_src: yes
+    mode: "0600"
+  failed_when: false
+  changed_when: false
+
+- name: Deploy MCP configuration
+  template:
+    src: mcp_config.json.j2
+    dest: "{{ antigravity_config_dir }}/mcp_config.json"
+    mode: "0600"
+    backup: yes
+  notify: Validate MCP config
+
+- name: Ensure jules-go CLI is available
+  stat:
+    path: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go/bin/jules"
+  register: jules_cli
+  changed_when: false
+
+- name: Build jules-go CLI if missing
+  command: go build -o bin/jules ./cmd/jules
+  args:
+    chdir: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go"
+  when: not jules_cli.stat.exists
+
+- name: Build jules-mcp-windmill bridge
+  command: go build -o bin/jules-mcp-windmill ./cmd/jules-mcp-windmill/main.go
+  args:
+    chdir: "{{ ansible_env.HOME }}/Obsi/Prods/01-pwf/agents/jules-go"
+  changed_when: true # Always rebuild to ensure up-to-date

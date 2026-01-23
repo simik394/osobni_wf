@@ -3,7 +3,11 @@
 ## Rsrch Efficiency Best Practices
 
 ### Use rsrch to Boost Your Effectiveness
+<<<<<<< HEAD
 The rsrch agent running at `http://localhost:3030` provides Gemini-powered analysis. Use it for:
+=======
+The rsrch agent running at `http://localhost:3001` provides Gemini-powered analysis. Use it for:
+>>>>>>> origin/pr-20
 - **Code analysis**: Send repomix output for code review, bug finding, improvement suggestions
 - **Prompt generation**: Generate well-structured prompts for Jules or other agents
 - **Research tasks**: Use for background research while working on other tasks
@@ -16,7 +20,11 @@ The rsrch agent running at `http://localhost:3030` provides Gemini-powered analy
 
 2. **Send to rsrch for analysis** (supports concurrent requests):
    ```bash
+<<<<<<< HEAD
    curl -X POST http://localhost:3030/v1/chat/completions \
+=======
+   curl -X POST http://localhost:3001/v1/chat/completions \
+>>>>>>> origin/pr-20
      -H "Content-Type: application/json" \
      -d '{"model": "gemini-rsrch", "messages": [{"role": "user", "content": "Analyze this code..."}]}'
    ```

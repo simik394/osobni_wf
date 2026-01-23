@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import { getRegistry } from './artifact-registry';
-import { getRsrchTelemetry } from '@agents/shared';
+import { getRsrchTelemetry } from '../../shared/src';
 import { selectors } from './selectors';
 import { getGraphStore } from './graph-store';
 
@@ -1075,6 +1075,7 @@ export class GeminiClient extends EventEmitter {
             const triggers = [
                 selectors.gemini.model.trigger,
                 'button[aria-haspopup="menu"]',
+                'button[aria-label*="Model"]',
                 'button:has-text("Gemini")',
                 '[data-test-id="model-selector"]'
             ];
@@ -1089,6 +1090,10 @@ export class GeminiClient extends EventEmitter {
                     break;
                 }
             }
+
+            await this.page.waitForTimeout(1000);
+
+
 
             if (!triggerFound) {
                 console.warn('[Gemini] Primary model triggers failed, trying layout-specific locations...');
@@ -1151,7 +1156,6 @@ export class GeminiClient extends EventEmitter {
                 await this.page.keyboard.press('Escape');
                 return false;
             }
-
         } catch (e: any) {
             console.error(`[Gemini] Error setting model: ${e.message}`);
             return false;
@@ -1663,7 +1667,7 @@ export class GeminiClient extends EventEmitter {
                 const graphStore = getGraphStore();
                 if (graphStore.getIsConnected()) {
                     const sessionTitle = await this.page.title().then(t => t.replace('Gemini - ', '').trim()).catch(() => message.substring(0, 50));
-                    await graphStore.trackGeminiSession({ sessionId, title: sessionTitle });
+                    await graphStore.createOrUpdateGeminiSession({ sessionId, title: sessionTitle });
                     await graphStore.addGeminiQuery({ sessionId, query: message });
                 }
             }
@@ -1972,7 +1976,7 @@ export class GeminiClient extends EventEmitter {
             }
 
             this.progress('Waiting for response...', 'research');
-            const responseSelector = 'model-response, structured-content-container, .model-response-text, .response-content';
+            const responseSelector = 'model-response, structured-content-container, .model-response-text, .response-content, .message-content, .response-container-content';
             await this.page.waitForSelector(responseSelector, { timeout: 60000 }); // Longer timeout for standard response too
             await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => { });
 

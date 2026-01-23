@@ -2,6 +2,7 @@
 // Run: node dist/link-audios-to-sources.js
 
 const { getGraphStore } = require('./graph-store');
+import logger from './logger';
 
 async function main() {
     const store = getGraphStore();
@@ -14,7 +15,7 @@ async function main() {
         MATCH (n:Notebook {platformId: "${nbId}"})-[:HAS_SOURCE]->(s:Source) RETURN s.title as title
     `);
 
-    console.log(`Found ${sources.data?.length || 0} sources`);
+    logger.info(`Found ${sources.data?.length || 0} sources`);
 
     // For each source, try to link audio by matching title
     for (const row of sources.data || []) {
@@ -31,7 +32,7 @@ async function main() {
         `);
 
         if (result.data && result.data.length > 0) {
-            console.log(`Linked: ${sourceTitle}`);
+            logger.info(`Linked: ${sourceTitle}`);
         }
     }
 
@@ -42,12 +43,12 @@ async function main() {
         RETURN s.title as source, ao.title as audio
     `);
 
-    console.log('\nLinked audio-source pairs:');
+    logger.info('\nLinked audio-source pairs:');
     for (const row of linked.data || []) {
-        console.log(`  ${row.source} <- ${row.audio?.substring(0, 30)}`);
+        logger.info(`  ${row.source} <- ${row.audio?.substring(0, 30)}`);
     }
 
     await store.disconnect();
 }
 
-main().catch(console.error);
+main().catch(logger.error);

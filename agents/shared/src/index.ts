@@ -6,3 +6,4 @@ export * from './cli/index';
 
 export * from './telemetry';
 export * from './tab-pool';
+export * from './falkor-client'; // Backward compatibility

@@ -1,6 +1,6 @@
 ---
 - name: Setup Local Environment
-  hosts: local
+  hosts: all
   become: false
   roles:
     - role: julia
@@ -46,3 +46,5 @@
       tags: kdiskmark
     - role: chrome-bookmarks
       tags: chrome-bookmarks
+    - role: antigravity-mcp
+      tags: antigravity-mcp

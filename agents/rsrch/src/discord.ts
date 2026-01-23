@@ -3,6 +3,9 @@ import axios from 'axios';
 /**
  * Send a notification to Discord via Webhook
  */
+import { config } from './config';
+import logger from './logger';
+
 export async function notifyJobCompleted(
     jobId: string,
     type: string,
@@ -13,7 +16,7 @@ export async function notifyJobCompleted(
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
 
     if (!webhookUrl) {
-        console.warn('[Discord] DISCORD_WEBHOOK_URL not set. Skipping notification.');
+        logger.info('[Discord] No webhook URL configured, skipping notification');
         return;
     }
 
@@ -52,8 +55,8 @@ export async function notifyJobCompleted(
 
     try {
         await axios.post(webhookUrl, payload);
-        console.log(`[Discord] Notification sent for job ${jobId}`);
+        logger.info(`[Discord] Notification sent for job ${jobId}`);
     } catch (error: any) {
-        console.error(`[Discord] Failed to send notification: ${error.message}`);
+        logger.error(`[Discord] Failed to send notification: ${error.message}`);
     }
 }

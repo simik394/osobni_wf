@@ -12,7 +12,7 @@ import { getGraphStore, GraphJob } from './graph-store';
 import { notifyJobCompleted } from './discord';
 import { notifyResearchComplete } from './notify';
 import { getRegistry } from './artifact-registry';
-import { setMaxTabs, markTabBusy, markTabFree, getMaxTabs } from '@agents/shared';
+import { setMaxTabs, markTabBusy, markTabFree, getMaxTabs } from '@agents/shared/tab-pool';
 import { discordService } from './services/notification';
 
 // Optional shared imports (may not be available in Docker)
@@ -1265,6 +1265,7 @@ app.get('/gemini/sessions', async (req, res) => {
             });
         }
 
+
         res.json({ success: true, data: sessions });
     } catch (e: any) {
         console.error('[Server] Gemini list sessions failed:', e);
@@ -1332,9 +1333,11 @@ app.post('/gemini/sync-graph', async (req, res) => {
                 // Create session in FalkorDB (duplicates will fail silently)
                 const sessionId = `gemini-${docId}`;
                 await graphStore.createSession({
-                    platformId: docId,
+                    id: sessionId,
+                    externalId: docId,
                     platform: 'gemini',
-                    title: doc.title || doc.firstHeading || ''
+                    title: doc.title || doc.firstHeading || '',
+                    query: ''
                 });
 
                 syncedIds.push(docId);
