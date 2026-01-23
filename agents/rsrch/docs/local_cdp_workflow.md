@@ -93,9 +93,39 @@ rsrch gemini scrape-session
 *   **Override**: If you absolutely must launch a fresh temporary browser for testing, use `FORCE_LOCAL_BROWSER=true`.
 
 ## Integration with Windmill
-When running in Windmill:
-1.  The Windmill Worker is just a container running TypeScript code.
-2.  It cannot see "screen".
-3.  It creates a WebSocket connection to the `BROWSER_CDP_ENDPOINT`.
-4.  If that endpoint points to your machine (via a tunnel like ngrok or tailscale) or a shared browser container, Windmill drives that browser remotely.
-5.  This allows a cloud-based agent to perform actions using your locally authenticated credentials safely.
+
+The critical question is: **How does the Windmill Worker reach your Local Browser?**
+
+There are two main ways to set this up.
+
+### Scenario A: The Local Windmill Worker (Easiest)
+If you run a Windmill Worker on the **same machine** as your browser:
+1.  **Browser**: Running locally on port 9222.
+2.  **Worker**: Running locally (native binary or Docker with host networking).
+3.  **Connection**: The worker script simply connects to `http://localhost:9222`.
+4.  **Credentials**: It uses your open browser tabs. You are already logged in.
+
+*Advantage:* Zero network configuration.
+*Disadvantage:* You must keep a Windmill worker running on your laptop.
+
+### Scenario B: The Remote Cloud Worker (Advanced)
+If Windmill is running in the cloud (e.g., specific managed instance) but you want it to use your **Local Browser** credentials:
+1.  **Browser**: Running locally on port 9222.
+2.  **Tunnel**: You must expose port 9222 to the internet (securely).
+    *   **Ngrok**: `ngrok http 9222` -> gives you `https://random-id.ngrok-free.app`
+    *   **Tailscale**: Expose via Funnel or just Meshnet IP.
+    *   **Cloudflare Tunnel**: `cloudflared access ...`
+3.  **Worker**: Configured with `BROWSER_CDP_ENDPOINT=https://random-id.ngrok-free.app`.
+4.  **Connection**: The cloud worker sends commands through the tunnel to your local browser.
+
+*Advantage:* No specific worker process needed on your machine.
+*Disadvantage:* Latency can be higher; requires setting up a secure tunnel.
+
+### Does the Worker need my Password?
+**NO.** The worker never sees your Google password.
+*   It does **not** perform a login flow (typing email/password).
+*   It attaches to an **already authenticated session**.
+*   It Piggybacks on your existing cookies.
+*   If your local browser logs out, the agent fails. It cannot log you back in.
+
+This is a security feature: The credentials (cookies/tokens) never leave your local machine's memory/disk (except strictly as necessary for the CDP protocol traffic).
