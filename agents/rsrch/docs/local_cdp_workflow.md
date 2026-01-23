@@ -132,11 +132,9 @@ This is a security feature: The credentials (cookies/tokens) never leave your lo
 
 ## Server-Side / Fully Automated Workflow
 
-You noticed we removed/disabled `launchPersistentContext` (which spawns a browser). **"How does this run on a server without that?"**
+The architecture is designed as **"Browser as a Service"** (Two Containers).
 
-On a server (Docker/Kubernetes), we shift from **"Script Spawns Browser"** to **"Browser as a Service"**.
-
-Instead of the Node.js script starting a child Chrome process, you run Chrome as a **separate, persistent daemon (container)**.
+Instead of the Node.js script starting a child Chrome process, it relies on Chrome running as a **separate, persistent daemon (container)**. This was always the intended design for stability and state management.
 
 ### Architecture
 *   **Container A (`browser`)**: This is a **VNC-enabled Browser Container**. It runs Chrome *headed* inside Xvfb, exposing port 5900 (VNC) and 9222 (CDP).
