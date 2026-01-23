@@ -13,6 +13,9 @@ import { ResearchInfo } from '../gemini-client';
 import { cliContext } from '../cli-context';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { PerplexityClient } from '../client';
+import type { GeminiClient } from '../gemini-client';
+import { getGraphStore } from '../graph-store';
 
 const gemini = new Command('gemini').description('Gemini commands');
 
@@ -597,6 +600,214 @@ gemini.command('list-research-docs [arg]')
         } catch (e: any) {
             console.error(`[CLI] Error: ${e.message}`);
             process.exit(1);
+        }
+    });
+
+/**
+ * Enhanced helper to get Gemini client with smart tab reuse.
+ */
+async function ensureGeminiContext(
+    profileId: string | undefined,
+    cdpEndpoint: string | undefined,
+    reuseStrategy: 'reuse-any' | 'reuse-id' | 'force-new' = 'reuse-any',
+    targetId?: string
+): Promise<{ client: PerplexityClient, gemini: GeminiClient, cleanup: () => Promise<void> }> {
+    const { cliContext } = await import('../cli-context');
+    const { PerplexityClient: PClient } = await import('../client');
+    const { GeminiClient: GClient } = await import('../gemini-client');
+    const { getTab } = await import('@agents/shared/tab-pool');
+
+    const client = new PClient({ profileId: profileId || cliContext.get().profileId, cdpEndpoint });
+    await client.init({ local: !cdpEndpoint, profileId, cdpEndpoint });
+
+    let gemini: GeminiClient;
+
+    try {
+        if (reuseStrategy === 'reuse-any') {
+            // Check for ANY existing Gemini tab in context
+            // Access protected context if possible or use public method if available
+            // Since we are inside the module, we can access protected members if we were subclass or use 'any' cast
+            const context = (client as any).context;
+            if (context) {
+                const pages = context.pages();
+                const existing = pages.find((p: any) => p.url().includes('gemini.google.com'));
+                if (existing) {
+                    console.log('[CLI] Reusing existing Gemini tab (fast mode)');
+                    gemini = new GClient(existing);
+                } else {
+                    gemini = await client.createGeminiClient();
+                }
+            } else {
+                gemini = await client.createGeminiClient();
+            }
+        } else if (reuseStrategy === 'reuse-id' && targetId) {
+            // Try to find specific ID
+            try {
+                const browser = (client as any).browser || ((client as any).context?.browser());
+                const page = await getTab(browser || (client as any).context, 'gemini', targetId);
+                gemini = new GClient(page);
+            } catch (e) {
+                console.log(`[CLI] Could not find/reuse tab for ${targetId}, creating new...`);
+                gemini = await client.createGeminiClient();
+            }
+        } else {
+            // Force new
+            gemini = await client.createGeminiClient();
+        }
+    } catch (e) {
+        // Fallback
+        console.warn('[CLI] Enhanced context acquisition failed, falling back to standard create:', e);
+        gemini = await client.createGeminiClient();
+    }
+
+    return {
+        client,
+        gemini,
+        cleanup: async () => {
+            // Only close if we created a NEW one? 
+            // For now, let's just close client which closes browser if local
+            // or disconnects if remote. 
+            // BUT for 'list-updates', we want to keep it valid if we reused it?
+            // client.close() handles cleanup properly.
+            await client.close();
+        }
+    };
+}
+
+gemini.command('list-updates')
+    .description('List sessions that need syncing')
+    .option('--local', 'Use local execution', true) // Default strict local for now
+    .option('--force-new', 'Force opening a new tab', false)
+    .option('--limit <number>', 'Limit items to scan', (v) => parseInt(v), 50)
+    .action(async (opts, cmd) => {
+        const globalOpts = getOptionsWithGlobals(cmd);
+        const { getGraphStore } = await import('../graph-store');
+        const { config } = await import('../config');
+
+        // 1. Connect to GraphStore (read-only check mostly)
+        const store = getGraphStore();
+        await store.connect(config.falkor.host, config.falkor.port);
+
+        try {
+            // 2. Connect to Browser (Smart Reuse)
+            const reuseStrategy = opts.forceNew ? 'force-new' : 'reuse-any';
+            const { client, gemini, cleanup } = await ensureGeminiContext(
+                globalOpts.profileId,
+                globalOpts.cdpEndpoint,
+                reuseStrategy
+            );
+
+            try {
+                // 3. List Sessions from DOM
+                const sessions = await gemini.listSessions(opts.limit);
+                console.log(`[CLI] Scanned ${sessions.length} sessions from sidebar.`);
+
+                const updatesNeeded: string[] = [];
+
+                for (const session of sessions) {
+                    if (session.pinned) {
+                        // console.log(`[CLI] Skipping pinned session: ${session.name}`);
+                        continue;
+                    }
+                    if (!session.id) {
+                        // console.warn(`[CLI] Skipping session without ID: ${session.name}`);
+                        continue;
+                    }
+
+                    // Check DB state
+                    const state = await store.getConversationState(session.id, 'gemini');
+
+                    // Logic: If not exists OR (we can detect update time/turn count mismatch?)
+                    // Current listSessions doesn't get turn count from sidebar accurately.
+                    // But if it exists, we assume it's synced unless we have a specific reason.
+                    // WAIT: User said: "updated sessions...". Sidebar sorts by update.
+                    // If we find a session that is NOT in DB, we need to sync it.
+                    // If it IS in DB, and it's near the top, it MIGHT be updated.
+                    // BUT without opening it, we don't know turn count.
+                    // LIST-UPDATES strategy:
+                    // Return all sessions that are NOT in DB or (optional) lastUpdated is older?
+                    // GraphStore.getConversationState returns existence.
+
+                    if (!state.exists) {
+                        console.log(`[CLI] New/Missing: ${session.id} (${session.name})`);
+                        updatesNeeded.push(session.id);
+                    } else {
+                        // It exists. Stop condition?
+                        // "Iterates until it hits a non-pinned session that is already fully synced"
+                        // This implies we trust the order.
+                        console.log(`[CLI] Synced: ${session.id} (${session.name}) - Stopping scan.`);
+                        break;
+                    }
+                }
+
+                // Output JSON list for Windmill
+                console.log('\n--- Updates Needed ---');
+                console.log(JSON.stringify(updatesNeeded));
+                console.log('----------------------\n');
+
+            } finally {
+                await cleanup();
+            }
+        } finally {
+            await store.disconnect();
+        }
+    });
+
+gemini.command('scrape-session <id>')
+    .description('Scrape and sync a specific session')
+    .option('--local', 'Use local execution', true)
+    .action(async (id, opts, cmd) => {
+        const globalOpts = getOptionsWithGlobals(cmd);
+        const { getGraphStore } = await import('../graph-store');
+        const { config } = await import('../config');
+
+        const store = getGraphStore();
+        await store.connect(config.falkor.host, config.falkor.port);
+
+        try {
+            // Reuse if ID matches, else new/search
+            const { client, gemini, cleanup } = await ensureGeminiContext(
+                globalOpts.profileId,
+                globalOpts.cdpEndpoint,
+                'reuse-id',
+                id
+            );
+
+            try {
+                console.log(`[CLI] Scraping session ${id}...`);
+                // Add method to scrape specific ID in GeminiClient?
+                // Or just use openPage/waitFor?
+                // gemini.scrapeConversations uses list.
+                // We need scrapeSingleSession(id).
+                // Let's add it to GeminiClient via `scrapeConversation` which takes index,
+                // but better is to navigate directly: https://gemini.google.com/app/ID
+
+                await gemini.goto(`https://gemini.google.com/app/${id}`);
+                await gemini.wait(2000);
+
+                const conv = await gemini.extractCurrentConversation();
+                if (conv) {
+                    // Enrich with ID if missing (it should be in URL)
+                    if (!conv.platformId) conv.platformId = id;
+
+                    console.log(`[CLI] Extracted ${conv.turns.length} turns. Syncing...`);
+                    const result = await store.syncConversation({
+                        platform: 'gemini',
+                        platformId: conv.platformId!,
+                        title: conv.title,
+                        type: conv.type,
+                        turns: conv.turns
+                    });
+                    console.log(`[CLI] Sync Result: ${result.isNew ? 'New' : 'Updated'} (Turns updated: ${result.turnsUpdated})`);
+                } else {
+                    console.error(`[CLI] Failed to extract conversation ${id}`);
+                }
+
+            } finally {
+                await cleanup();
+            }
+        } finally {
+            await store.disconnect();
         }
     });
 

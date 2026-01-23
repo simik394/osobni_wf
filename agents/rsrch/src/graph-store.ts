@@ -734,6 +734,34 @@ export class GraphStore {
         }
     }
 
+    /**
+     * Get the current state (turn count) of a conversation to avoid redundant work.
+     */
+    async getConversationState(platformId: string, platform: 'gemini' | 'perplexity'): Promise<{ exists: boolean; turnCount: number; capturedAt: number }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {platformId: '${escapeString(platformId)}', platform: '${platform}'})
+            OPTIONAL MATCH (c)-[:HAS_TURN]->(t:Turn)
+            RETURN count(t) as turnCount, c.capturedAt as capturedAt
+        `);
+
+        if (!result.data || result.data.length === 0) {
+            return { exists: false, turnCount: 0, capturedAt: 0 };
+        }
+
+        const data = (result.data as any[])[0];
+        // If data exists, turnCount is returned even if 0
+        // If no match found, result.data is empty
+        // Wait, if MATCH fails, it returns empty? Yes.
+
+        return {
+            exists: true,
+            turnCount: Number(data?.turnCount || 0),
+            capturedAt: Number(data?.capturedAt || 0)
+        };
+    }
+
     private tripCircuit() {
         this.circuitState = CircuitBreakerState.OPEN;
         this.lastFailure = Date.now();
@@ -764,19 +792,19 @@ export class GraphStore {
         for (let i = 0; i < turns.length; i++) {
             const turn = turns[i];
             const ts = turn.timestamp || baseTimestamp + i;
-            const turnId = `turn_${conversationId}_${i}`;
+            const turnId = `turn_${conversationId}_${i} `;
 
             await this.graph!.query(`
-                MATCH(c: Conversation { id: '${conversationId}' })
-                CREATE(t: Turn {
-                    id: '${turnId}',
-                    role: '${turn.role}',
-                    content: '${escapeString(turn.content)}',
-                    timestamp: ${ts},
-                    idx: ${i}
+        MATCH(c: Conversation { id: '${conversationId}' })
+        CREATE(t: Turn {
+            id: '${turnId}',
+            role: '${turn.role}',
+            content: '${escapeString(turn.content)}',
+            timestamp: ${ts},
+            idx: ${i}
                 })
-                CREATE(c) - [: HAS_TURN] -> (t)
-            `);
+    CREATE(c) -[: HAS_TURN] -> (t)
+        `);
 
             // Extract URLs from assistant responses and link to Citation nodes
             if (turn.role === 'assistant') {
@@ -810,19 +838,19 @@ export class GraphStore {
         capturedAt: number
     ): Promise<void> {
         for (const doc of docs) {
-            const docId = `doc_${conversationId}_${Math.random().toString(36).substring(2, 8)}`;
+            const docId = `doc_${conversationId}_${Math.random().toString(36).substring(2, 8)} `;
             await this.graph!.query(`
-                MATCH(c: Conversation { id: '${conversationId}' })
-                CREATE(d: ResearchDoc {
-                    id: '${docId}',
-                    title: '${escapeString(doc.title)}',
-                    content: '${escapeString(doc.content)}',
-                    sources: '${escapeString(JSON.stringify(doc.sources || []))}',
-                    reasoningSteps: '${escapeString(JSON.stringify(doc.reasoningSteps || []))}',
-                    capturedAt: ${capturedAt}
+MATCH(c: Conversation { id: '${conversationId}' })
+CREATE(d: ResearchDoc {
+    id: '${docId}',
+    title: '${escapeString(doc.title)}',
+    content: '${escapeString(doc.content)}',
+    sources: '${escapeString(JSON.stringify(doc.sources || []))}',
+    reasoningSteps: '${escapeString(JSON.stringify(doc.reasoningSteps || []))}',
+    capturedAt: ${capturedAt}
                 })
-                CREATE(c) - [: HAS_RESEARCH_DOC] -> (d)
-            `);
+CREATE(c) - [: HAS_RESEARCH_DOC] -> (d)
+    `);
 
             // Create Citation nodes and CITES relationships (batch - was O(N*2), now O(2))
             const validSources = (doc.sources || []).filter(s => s.url);
@@ -842,7 +870,7 @@ export class GraphStore {
      */
     private async mergeCitation(url: string, text: string, domain: string): Promise<string> {
         if (!this.graph) throw new Error('Not connected');
-        const citationId = `cite_${createHash('md5').update(url).digest('hex').substring(0, 12)}`;
+        const citationId = `cite_${createHash('md5').update(url).digest('hex').substring(0, 12)} `;
         const now = Date.now();
 
         // Extract domain from URL if not provided
@@ -856,18 +884,18 @@ export class GraphStore {
         }
 
         await this.graph.query(`
-            MERGE (c:Citation {url: '${escapeString(url)}'})
+MERGE(c: Citation { url: '${escapeString(url)}' })
             ON CREATE SET
-                c.id = '${citationId.trim()}',
-                c.text = '${escapeString(text)}',
-                c.domain = '${escapeString(domainValue)}',
-                c.firstSeenAt = ${now},
-                c.lastSeenAt = ${now},
-                c.count = 1
+c.id = '${citationId.trim()}',
+    c.text = '${escapeString(text)}',
+    c.domain = '${escapeString(domainValue)}',
+    c.firstSeenAt = ${now},
+c.lastSeenAt = ${now},
+c.count = 1
             ON MATCH SET
-                c.lastSeenAt = ${now},
-                c.count = c.count + 1
-        `);
+c.lastSeenAt = ${now},
+c.count = c.count + 1
+    `);
 
         return citationId.trim();
     }
@@ -888,7 +916,7 @@ export class GraphStore {
                     domainValue = 'unknown';
                 }
             }
-            const citationId = `cite_${createHash('md5').update(c.url).digest('hex').substring(0, 12)}`;
+            const citationId = `cite_${createHash('md5').update(c.url).digest('hex').substring(0, 12)} `;
             return {
                 id: citationId.trim(),
                 url: c.url,
@@ -900,38 +928,40 @@ export class GraphStore {
 
         await this.graph.query(`
             UNWIND $batch as row
-            MERGE (c:Citation {url: row.url})
+MERGE(c: Citation { url: row.url })
             ON CREATE SET
-                c.id = row.id,
-                c.text = row.text,
-                c.domain = row.domain,
-                c.firstSeenAt = row.now,
-                c.lastSeenAt = row.now,
-                c.count = 1
+c.id = row.id,
+    c.text = row.text,
+    c.domain = row.domain,
+    c.firstSeenAt = row.now,
+    c.lastSeenAt = row.now,
+    c.count = 1
             ON MATCH SET
-                c.lastSeenAt = row.now,
-                c.count = c.count + 1
+c.lastSeenAt = row.now,
+    c.count = c.count + 1
         `, { params: { batch } });
     }
 
     async linkCitationsToTurn(turnId: string, urls: string[]): Promise<void> {
         if (!this.graph || urls.length === 0) return;
         await this.graph.query(`
-            MATCH (t:Turn {id: '${escapeString(turnId)}'})
+MATCH(t: Turn { id: '${escapeString(turnId)}' })
             UNWIND $urls as url
-            MATCH (c:Citation {url: url})
-            MERGE (t)-[:REFERENCES]->(c)
-        `, { params: { urls } });
+MATCH(c: Citation { url: url })
+MERGE(t) - [: REFERENCES] -> (c)
+    `, { params: { urls } });
     }
+
+
 
     async linkCitationsToDoc(docId: string, urls: string[]): Promise<void> {
         if (!this.graph || urls.length === 0) return;
         await this.graph.query(`
-            MATCH (d:ResearchDoc {id: '${escapeString(docId)}'})
+MATCH(d: ResearchDoc { id: '${escapeString(docId)}' })
             UNWIND $urls as url
-            MATCH (c:Citation {url: url})
-            MERGE (d)-[:CITES]->(c)
-        `, { params: { urls } });
+MATCH(c: Citation { url: url })
+MERGE(d) - [: CITES] -> (c)
+    `, { params: { urls } });
     }
 
     private async _executeQuery<T = any>(query: string, options?: { params?: Record<string, any> }): Promise<{ data?: T[] }> {
@@ -999,9 +1029,9 @@ export class GraphStore {
 
         // Find ResearchDocs that cite this URL
         const docResult = await this.graph.query<any[]>(`
-            MATCH(d: ResearchDoc) - [: CITES] -> (c:Citation { url: '${escapeString(url)}' })
+MATCH(d: ResearchDoc) - [: CITES] -> (c:Citation { url: '${escapeString(url)}' })
             RETURN d.id as id, d.title as title
-        `);
+`);
 
         for (const row of (docResult.data || []) as any[]) {
             results.push({ type: 'ResearchDoc', id: row.id, title: row.title });
@@ -1009,9 +1039,9 @@ export class GraphStore {
 
         // Find Turns that mention this URL
         const turnResult = await this.graph.query<any[]>(`
-            MATCH(t: Turn) - [: MENTIONS] -> (c:Citation { url: '${escapeString(url)}' })
+MATCH(t: Turn) - [: MENTIONS] -> (c:Citation { url: '${escapeString(url)}' })
             RETURN t.id as id
-        `);
+`);
 
         for (const row of (turnResult.data || []) as any[]) {
             results.push({ type: 'Turn', id: row.id });
@@ -1035,7 +1065,7 @@ export class GraphStore {
 
         // Get conversation
         const convResult = await this.graph.query<any[]>(`
-            MATCH(c: Conversation { id: '${escapeString(conversationId)}' })
+MATCH(c: Conversation { id: '${escapeString(conversationId)}' })
             RETURN c
         `);
 
@@ -1054,7 +1084,7 @@ export class GraphStore {
         };
 
         // Get turns
-        let turnQuery = `MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) -[: HAS_TURN] -> (t:Turn)`;
+        let turnQuery = `MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_TURN] -> (t:Turn)`;
         if (filters.questionsOnly) turnQuery += ` WHERE t.role = 'user'`;
         if (filters.answersOnly) turnQuery += ` WHERE t.role = 'assistant'`;
         turnQuery += ` RETURN t ORDER BY t.idx ASC`;
@@ -1073,9 +1103,9 @@ export class GraphStore {
         let researchDocs: any[] = [];
         if (filters.includeResearchDocs) {
             const docsResult = await this.graph.query<any[]>(`
-                MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) -[: HAS_RESEARCH_DOC] -> (d:ResearchDoc)
+MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_RESEARCH_DOC] -> (d:ResearchDoc)
                 RETURN d
-            `);
+    `);
             researchDocs = (docsResult.data || []).map((row: any) => {
                 const props = row.d?.properties || row.d || row;
                 return {
@@ -1103,15 +1133,15 @@ export class GraphStore {
         const createdAt = Date.now();
         const title = session.title ? escapeString(session.title) : '';
         await this.graph.query(`
-            CREATE (s:Session {
-                id: '${escapeString(session.id)}',
-                platform: '${session.platform}',
-                externalId: '${escapeString(session.externalId)}',
-                query: '${escapeString(session.query)}',
-                title: '${title}',
-                createdAt: ${createdAt}
+CREATE(s: Session {
+    id: '${escapeString(session.id)}',
+    platform: '${session.platform}',
+    externalId: '${escapeString(session.externalId)}',
+    query: '${escapeString(session.query)}',
+    title: '${title}',
+    createdAt: ${createdAt}
             })
-        `);
+    `);
 
         logger.info(`[GraphStore] Session created: ${session.id} (${session.platform})`);
         return { ...session, createdAt };
@@ -1126,15 +1156,15 @@ export class GraphStore {
         const createdAt = Date.now();
         const url = doc.url ? escapeString(doc.url) : '';
         await this.graph.query(`
-            CREATE (d:Document {
-                id: '${escapeString(doc.id)}',
-                title: '${escapeString(doc.title)}',
-                url: '${url}',
-                createdAt: ${createdAt}
+CREATE(d: Document {
+    id: '${escapeString(doc.id)}',
+    title: '${escapeString(doc.title)}',
+    url: '${url}',
+    createdAt: ${createdAt}
             })
-        `);
+    `);
 
-        logger.info(`[GraphStore] Document created: ${doc.id}`);
+        logger.info(`[GraphStore] Document created: ${doc.id} `);
         return { ...doc, createdAt };
     }
 
@@ -1146,15 +1176,15 @@ export class GraphStore {
 
         const createdAt = Date.now();
         await this.graph.query(`
-            CREATE (a:Audio {
-                id: '${escapeString(audio.id)}',
-                path: '${escapeString(audio.path)}',
-                duration: ${audio.duration || 0},
-                createdAt: ${createdAt}
+CREATE(a: Audio {
+    id: '${escapeString(audio.id)}',
+    path: '${escapeString(audio.path)}',
+    duration: ${audio.duration || 0},
+    createdAt: ${createdAt}
             })
-        `);
+    `);
 
-        logger.info(`[GraphStore] Audio created: ${audio.id}`);
+        logger.info(`[GraphStore] Audio created: ${audio.id} `);
         return { ...audio, createdAt };
     }
 
@@ -1165,9 +1195,9 @@ export class GraphStore {
         if (!this.graph) throw new Error('Not connected');
 
         await this.graph.query(`
-            MATCH(j: Job { id: '${escapeString(jobId)}' }), (s: Session { id: '${escapeString(sessionId)}'})
+MATCH(j: Job { id: '${escapeString(jobId)}' }), (s: Session { id: '${escapeString(sessionId)}'})
             CREATE (j) - [: STARTED { createdAt: ${Date.now()}}] -> (s)
-        `);
+    `);
 
         logger.info(`[GraphStore] Linked: Job ${jobId} -> Session ${sessionId} `);
     }
@@ -1179,9 +1209,9 @@ export class GraphStore {
         if (!this.graph) throw new Error('Not connected');
 
         await this.graph.query(`
-            MATCH(s: Session { id: '${escapeString(sessionId)}' }), (d: Document { id: '${escapeString(documentId)}'})
+MATCH(s: Session { id: '${escapeString(sessionId)}' }), (d: Document { id: '${escapeString(documentId)}'})
             CREATE (s) - [: EXPORTED_TO { createdAt: ${Date.now()}}] -> (d)
-        `);
+    `);
 
         logger.info(`[GraphStore] Linked: Session ${sessionId} -> Document ${documentId} `);
     }
@@ -1193,9 +1223,9 @@ export class GraphStore {
         if (!this.graph) throw new Error('Not connected');
 
         await this.graph.query(`
-            MATCH(d: Document { id: '${escapeString(documentId)}' }), (a: Audio { id: '${escapeString(audioId)}'})
+MATCH(d: Document { id: '${escapeString(documentId)}' }), (a: Audio { id: '${escapeString(audioId)}'})
             CREATE (d) - [: CONVERTED_TO { createdAt: ${Date.now()}}] -> (a)
-        `);
+    `);
 
         logger.info(`[GraphStore] Linked: Document ${documentId} -> Audio ${audioId} `);
     }
@@ -1239,17 +1269,17 @@ export class GraphStore {
         if (!sessionId) return;
 
         const query = `
-        MERGE(s: Session { platformId: $sessionId, platform: 'gemini' })
+MERGE(s: Session { platformId: $sessionId, platform: 'gemini' })
             ON CREATE SET
-        s.id = "session_gemini_" + $sessionId,
-            s.title = $title,
-            s.isDeepResearch = $isDeepResearch,
-            s.createdAt = $now
+s.id = "session_gemini_" + $sessionId,
+    s.title = $title,
+    s.isDeepResearch = $isDeepResearch,
+    s.createdAt = $now
             ON MATCH SET
-        s.title = $title,
-            s.isDeepResearch = $isDeepResearch,
-            s.updatedAt = $now
-                `;
+s.title = $title,
+    s.isDeepResearch = $isDeepResearch,
+    s.updatedAt = $now
+        `;
         try {
             await this._executeQuery(query, {
                 params: {
@@ -1270,15 +1300,15 @@ export class GraphStore {
     async addGeminiQuery(data: { sessionId: string; query: string }): Promise<void> {
         const queryId = `gq_${Date.now()}_${Math.random().toString(36).substring(2, 8)} `;
         const query = `
-        MATCH(gs: GeminiSession { sessionId: $sessionId })
-        CREATE(gq: GeminiQuery {
-            queryId: $queryId,
-            sessionId: $sessionId,
-            query: $query,
-            createdAt: $now
-        })
-        CREATE(gs) - [: HAS_QUERY] -> (gq)
-            `;
+MATCH(gs: GeminiSession { sessionId: $sessionId })
+CREATE(gq: GeminiQuery {
+    queryId: $queryId,
+    sessionId: $sessionId,
+    query: $query,
+    createdAt: $now
+})
+CREATE(gs) - [: HAS_QUERY] -> (gq)
+    `;
         try {
             await this._executeQuery(query, {
                 params: {
@@ -1300,20 +1330,20 @@ export class GraphStore {
     async syncNotebook(data: { platformId: string; title: string; url?: string }): Promise<{ isNew: boolean, id: string }> {
         const id = `nb_${data.platformId} `;
         const query = `
-        MERGE(n: Notebook { platformId: $platformId })
+MERGE(n: Notebook { platformId: $platformId })
             ON CREATE SET
-        n.id = $id,
-            n.title = $title,
-            n.url = $url,
-            n.createdAt = $now,
-            n._isNew = true
+n.id = $id,
+    n.title = $title,
+    n.url = $url,
+    n.createdAt = $now,
+    n._isNew = true
             ON MATCH SET
-        n.title = $title,
-            n.url = $url,
-            n.updatedAt = $now,
-            n._isNew = false
+n.title = $title,
+    n.url = $url,
+    n.updatedAt = $now,
+    n._isNew = false
             RETURN n.id as id, n._isNew as isNew
-        `;
+`;
 
         try {
             const result = await this._executeQuery<{ id: string, isNew: boolean }[]>(query, {
@@ -1356,10 +1386,10 @@ export class GraphStore {
 
     async getSourcesWithoutAudio(platformId: string): Promise<any[]> {
         const query = `
-        MATCH(n: Notebook { platformId: $platformId }) - [: CONTAINS] -> (s:Source)
+MATCH(n: Notebook { platformId: $platformId }) - [: CONTAINS] -> (s:Source)
             WHERE NOT(s) - [: HAS_AUDIO] -> ()
             RETURN s
-            `;
+    `;
         try {
             const result = await this._executeQuery<any[]>(query, { params: { platformId } });
             return (result.data || []).map(row => {
@@ -1374,9 +1404,9 @@ export class GraphStore {
 
     async getConversationsByPlatform(platform: string, limit = 50): Promise<any[]> {
         const query = `
-        MATCH(c: Conversation { platform: $platform })
+MATCH(c: Conversation { platform: $platform })
             RETURN c ORDER BY c.createdAt DESC LIMIT $limit
-            `;
+    `;
         try {
             const result = await this._executeQuery<any[]>(query, { params: { platform, limit } });
             return (result.data || []).map(row => {
@@ -1391,7 +1421,7 @@ export class GraphStore {
 
     async getChangedConversations(since: number): Promise<any[]> {
         const query = `
-            MATCH(c: Conversation)
+MATCH(c: Conversation)
             WHERE c.updatedAt > $since OR c.createdAt > $since
             RETURN c ORDER BY c.updatedAt DESC
         `;
@@ -1416,7 +1446,7 @@ export class GraphStore {
     // --- Lineage ---
     async getLineageChain(artifactId: string): Promise<any> {
         const query = `
-            MATCH(a { id: $id })
+MATCH(a { id: $id })
             OPTIONAL MATCH(j: Job) - [: GENERATED] -> (s:Session) -[: HAS_RESEARCH_DOC] -> (d:ResearchDoc) -[: HAS_AUDIO] -> (au:Audio)
             WHERE a.id IN[j.id, s.id, d.id, au.id]
             RETURN j, s, d, au
@@ -1440,8 +1470,8 @@ export class GraphStore {
 
     async getLineage(nodeId: string): Promise<any[]> {
         const query = `
-            MATCH(n { id: $id })
-            MATCH(n) < -[r * 1..5] - (m)
+MATCH(n { id: $id })
+MATCH(n) < -[r * 1..5] - (m)
             RETURN m, r
     `;
         try {
@@ -1465,9 +1495,9 @@ export class GraphStore {
         if (!docId) throw new Error('docId or researchDocId is required');
 
         const query = `
-            MATCH(d: ResearchDoc { id: $docId })
-            CREATE(au: Audio { id: $id, path: $path, duration: $duration, filename: $filename, createdAt: $now })
-            MERGE(d) - [: HAS_AUDIO] -> (au)
+MATCH(d: ResearchDoc { id: $docId })
+CREATE(au: Audio { id: $id, path: $path, duration: $duration, filename: $filename, createdAt: $now })
+MERGE(d) - [: HAS_AUDIO] -> (au)
             RETURN au.id as id
 `;
         try {

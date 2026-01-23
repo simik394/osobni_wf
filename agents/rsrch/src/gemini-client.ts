@@ -296,59 +296,24 @@ export class GeminiClient extends EventEmitter {
         await this.page.waitForTimeout(2000);
     }
 
-    async listSessions(limit: number = 20, offset: number = 0): Promise<{ name: string; id: string | null }[]> {
-        const sessions: { name: string; id: string | null }[] = [];
+    async listSessions(limit: number = 50, offset: number = 0): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
+        const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
         try {
-            // Ensure sidebar is visible - sometimes hidden
-            const menuButton = this.page.locator(selectors.gemini.sidebar.menu).first();
-            if (await menuButton.count() > 0) {
-                // Assuming visible for now
-            }
+            // Ensure sidebar is visible - robust check
+            await this.ensureSidebarVisible();
 
             // Wait for history loading spinner
             try {
-                await this.page.waitForSelector(selectors.gemini.chat.history, { timeout: 5000 }).catch(() => { });
                 const spinner = this.page.locator('.loading-history-spinner-container');
-                if (await spinner.count() > 0) {
-                    console.log('[Gemini] Waiting for history spinner to disappear...');
-                    await spinner.last().waitFor({ state: 'hidden', timeout: 15000 }).catch(() => console.log('[Gemini] Spinner wait timed out'));
+                if (await spinner.count() > 0 && await spinner.isVisible()) {
+                    await spinner.last().waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { });
                 }
-            } catch (e) {
-                // Ignore
-            }
+            } catch (e) { /* Ignore */ }
 
             const targetCount = offset + limit;
-            console.log(`[Gemini] listing sessions (limit: ${limit}, offset: ${offset}, target: ${targetCount})...`);
+            console.log(`[Gemini] listing sessions (limit: ${limit}, offset: ${offset})...`);
 
             let sessionItems = this.page.locator(selectors.gemini.sidebar.conversations);
-            if (await sessionItems.count() > 0) {
-                console.log(`[Gemini] Found sessions using selector: ${await sessionItems.first().evaluate(el => el.tagName.toLowerCase() + (el.className ? '.' + el.className.split(' ').join('.') : ''))} `);
-                await this.dumpState('debug_session_list');
-            }
-
-            // DEBUG: Dump sidebar HTML to debug missing sessions
-            const sidebarContainer = this.page.locator(selectors.gemini.chat.history).first();
-            if (await sidebarContainer.isVisible()) {
-                console.log('[Gemini] DEBUG: Sidebar Container HTML:');
-                console.log(await sidebarContainer.innerHTML().catch(() => 'Could not read sidebar HTML'));
-            } else {
-                console.log('[Gemini] DEBUG: Sidebar container not found using .chat-history-list or nav label.');
-                const nav = this.page.locator('nav').first();
-                if (await nav.isVisible()) {
-                    console.log('[Gemini] DEBUG: Generic nav HTML:');
-                    console.log(await nav.innerHTML().catch(() => 'Could not read nav HTML'));
-                }
-            }
-            console.log('[Gemini] DEBUG: DOM Dump for Sidebar:');
-            // Try to locate the sidebar container and dump its HTML
-            const sidebar = this.page.locator('nav, [role="navigation"]').first();
-            if (await sidebar.isVisible()) {
-                console.log(await sidebar.innerHTML().catch(() => 'Sidebar found but could not read HTML'));
-            } else {
-                console.log('No navigation/sidebar found visible.');
-            }
-
-
             let count = await sessionItems.count();
 
             // Scroll to load more if needed
@@ -364,16 +329,13 @@ export class GeminiClient extends EventEmitter {
                 // Check if "show more" button exists (for deep history)
                 const showMore = this.page.locator(selectors.gemini.sidebar.showMore).first();
                 if (await showMore.isVisible()) {
-                    console.log('[Gemini] Clicking "Show more"...');
                     await showMore.click();
                     await this.page.waitForTimeout(1000);
                 }
 
                 // Refresh selector count
                 sessionItems = this.page.locator(selectors.gemini.sidebar.conversations);
-
                 count = await sessionItems.count();
-                console.log(`[Gemini] Loaded ${count} sessions (Goal: ${targetCount})...`);
 
                 if (count === preCount) {
                     retries++;
@@ -382,59 +344,164 @@ export class GeminiClient extends EventEmitter {
                 }
             }
 
-            await this.dumpState('debug_session_list_final');
-
             // Define range to extract
             const start = Math.min(offset, count);
             const end = Math.min(offset + limit, count);
 
             if (start >= count) {
-                console.log('[Gemini] Offset beyond available sessions.');
                 return [];
             }
 
             for (let i = start; i < end; i++) {
                 const item = sessionItems.nth(i);
-                // Get name - often includes time or "Pinned", might need cleaning
+
+                // 1. Get Name
                 let name = await item.innerText().catch(() => '');
-                name = name.split('\n')[0]; // Take first line usually
+                name = name.split('\n')[0].trim();
 
-                // ID is hard to get without clicking. We might try to parse it if we can find a link
-                // But for now, we just list the names.
-                // If we really need IDs, we'd have to crawl.
-                // Let's see if there's an anchor tag nearby?
-                // Subagent found no anchors. So ID is null unless we are currently ON that page.
-
+                // 2. Get ID
                 let id: string | null = null;
 
-                // Try to extract ID from jslog attribute
-                // Format: ... ["c_ID", ...]
-                const jslog = await item.getAttribute('jslog').catch(() => null);
-                if (jslog) {
-                    const match = jslog.match(/\["c_([a-zA-Z0-9]+)"/);
-                    if (match) {
-                        id = match[1];
+                // Method A: Check href if it's an anchor or has one
+                const href = await item.getAttribute('href').catch(() => null);
+                if (href && href.includes('/app/')) {
+                    id = href.split('/app/')[1];
+                } else {
+                    // Start looking for ID in parent/children if item isn't the link itself
+                    const link = item.locator('a[href*="/app/"]').first();
+                    if (await link.count() > 0) {
+                        const linkHref = await link.getAttribute('href');
+                        if (linkHref) id = linkHref.split('/app/')[1];
                     }
                 }
 
-                // Fallback: Check if active/selected
+                // Method B: jslog attribute (backup)
                 if (!id) {
-                    const isActive = await item.getAttribute('class').then(c => c?.includes('selected')).catch(() => false);
-                    if (isActive) {
-                        id = this.getCurrentSessionId();
+                    const jslog = await item.getAttribute('jslog').catch(() => null);
+                    if (jslog) {
+                        // Format: ... ["c_ID", ...] or similar
+                        const match = jslog.match(/\["c_([a-zA-Z0-9]+)"/);
+                        if (match) {
+                            id = match[1];
+                        }
                     }
                 }
 
-                if (name.trim()) {
-                    sessions.push({ name: name.trim(), id });
+                // Method C: data-id attribute (common in SPA lists)
+                if (!id) {
+                    id = await item.getAttribute('data-id').catch(() => null);
+                }
+
+                // 3. Check Pinned Status
+                // Usually indicated by an icon or a specific section header "Pinned"
+                // Or a class like 'pinned' or aria-label
+                // We'll look for a pin icon svg within the item
+                const hasPinIcon = await item.locator('svg path[d*="M16 9V4l1"]').count() > 0; // Rough path check for pin
+                // Or check if it is under a specific list group? 
+                // Gemini usually puts Pinned at top. We can heuristic check if "Pinned" text is nearby header
+                // For now, let's assume if it has a pin icon or aria-label pinned
+                const isPinned = hasPinIcon || (await item.getAttribute('aria-label') || '').toLowerCase().includes('pinned');
+
+                if (name) {
+                    sessions.push({ name, id, pinned: isPinned });
                 }
             }
         } catch (e) {
             console.warn('[Gemini] Error listing sessions:', e);
         }
 
-        console.log(`[Gemini] Found ${sessions.length} sessions(Request: ${offset} - ${offset + limit})`);
+        console.log(`[Gemini] Found ${sessions.length} sessions`);
         return sessions;
+    }
+
+    /**
+     * Ensures the sidebar is expanded.
+     */
+    /**
+     * Navigate to a URL
+     */
+    async goto(url: string): Promise<void> {
+        await this.page.goto(url);
+    }
+
+    async wait(ms: number): Promise<void> {
+        await this.page.waitForTimeout(ms);
+    }
+
+    /**
+     * Extract full conversation history
+     */
+    async extractCurrentConversation(): Promise<ScrapedConversation> {
+        const url = this.page.url();
+        const platformId = this.getCurrentSessionId() || 'unknown'; // Derived from URL
+
+        // Wait for content to load
+        // Retry logic for selector
+        try {
+            await this.page.waitForSelector(selectors.gemini.chat.response, { timeout: 10000 });
+        } catch (e) {
+            console.warn('[GeminiClient] Timeout waiting for content, scraping what is available');
+        }
+
+        // Scrape title
+        let title = 'Untitled';
+        try {
+            title = await this.page.title();
+            title = title.replace('Gemini - ', '').trim();
+        } catch (e) { }
+
+        // Scrape messages
+        const scrapedTurns = await this.page.evaluate(() => {
+            const results: { role: 'user' | 'assistant', content: string }[] = [];
+
+            // Try to find main chat container first if necessary, but querySelectorAll on body often works
+            const elements = document.querySelectorAll('user-query, model-response');
+            elements.forEach((el) => {
+                const tagName = el.tagName.toLowerCase();
+                const role = tagName === 'user-query' ? 'user' : 'assistant';
+                // Clone and remove artifacts helper if present to avoid pollution?
+                // For now just innerText
+                const content = (el as HTMLElement).innerText;
+                if (content && content.trim()) {
+                    results.push({ role, content: content.trim() });
+                }
+            });
+            return results;
+        });
+
+        const turns: ScrapedTurn[] = [];
+        const now = Date.now();
+
+        scrapedTurns.forEach((t) => {
+            turns.push({
+                role: t.role,
+                content: t.content,
+                timestamp: now // Placeholder
+            });
+        });
+
+        return {
+            platformId,
+            title,
+            type: 'regular',
+            turns,
+            capturedAt: now
+        };
+    }
+
+    async ensureSidebarVisible(): Promise<void> {
+        // Check if sidebar container is visible
+        const sidebar = this.page.locator('nav').first();
+        const isVisible = await sidebar.isVisible().catch(() => false);
+
+        if (!isVisible) {
+            const menuButton = this.page.locator(selectors.gemini.sidebar.menu).first();
+            if (await menuButton.count() > 0 && await menuButton.isVisible()) {
+                console.log('[Gemini] Expanding sidebar...');
+                await menuButton.click();
+                await this.page.waitForTimeout(1000); // Animation wait
+            }
+        }
     }
 
     /**
