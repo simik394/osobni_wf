@@ -82,3 +82,4 @@ rsrch graph lineage <AudioID>
 | [API.md](./API.md) | HTTP API Endpoints |
 | [USER_GUIDE.md](./USER_GUIDE.md) | Detailed Workflows & Guides |
 | [AGENTS.md](./AGENTS.md) | Integration with other Agents |
+| [Local CDP Guide](./docs/local_cdp_workflow.md) | **How to use your local browser with Rsrch** |

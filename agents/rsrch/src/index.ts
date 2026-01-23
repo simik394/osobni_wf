@@ -467,9 +467,7 @@ async function main() {
                                 // We'll store a basic record
                                 const result = await store.syncNotebook({
                                     platformId: nb.platformId,
-                                    title: nb.title,
-                                    sources: [], // No details in list view
-                                    audioOverviews: [] // No details in list view
+                                    title: nb.title
                                 });
                                 logger.info(`  - ${nb.title} (${result.id}) [${nb.sourceCount} sources]`);
                             }
@@ -2238,6 +2236,7 @@ async function runLegacyMode() {
 }
 
 main().catch(logger.error);
+
 
 export * from './client';
 export {

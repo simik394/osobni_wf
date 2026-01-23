@@ -573,8 +573,20 @@ This incident revealed missing documentation:
 - **Resource Consideration**: Each session consumes compute resources - monitor system load when running many parallel sessions.
 - **Independence**: Ensure delegated bundles are independent (different codebases or non-overlapping files) to avoid merge conflicts.
 
+
 ### Session Review Process
 - **Pagination**: Jules MCP returns 50 sessions per page - always check for `nextPageToken` to get full session list.
 - **Archived Sessions**: Some session IDs may return "not found" errors - these are likely archived or deleted. Skip and continue.
 - **State Filtering**: Focus on COMPLETED and AWAITING_USER_FEEDBACK states for actionable review work.
 
+## Study Material Generation & Git Workflows (2026-01-22)
+- **PDF Generation Alternatives**: When `pandoc` is unavailable, `npx md-to-pdf` is a robust and zero-config alternative for converting Markdown to PDF in CI/CD or restricted environments.
+- **GitHub CLI Auto-Merge**: `gh pr merge --auto` requires "Branch protection rules" to be configured on the repository. For personal/private repos without these rules, use direct merge methods or configure the rules first to avoiding confusing failures.
+- **Unified Study Materials**: Concatenating individual lesson files into a single "Unified" Markdown/PDF creates a far superior study resource than scattered files, enabling full-text search and better context retention for LLMs.
+
+
+## Git & Test Consolidation (2026-01-22)
+- **Nested Merge Conflicts**: When resolving complex merges, look out for "nested" conflict markers (`<<<<<<<` inside `=======`). These occur when a previous merge was not resolved correctly. Always grep for markers across the entire codebase before committing.
+- **Vitest Peer Dependency Issues**: Incorrect peer dependency versions (e.g. `vite` vs `vitest`) can silently break tests or cause "module not found" errors. Ensure `package.json` dependencies are aligned, especially in monorepos.
+- **GraphStore Circuit Breaker Logic**: Empty blocks in logic flow (e.g. `else if (CLOSED) {}`) can mask critical state transitions. Always implement the intended state change (e.g. `tripCircuit()`) or explicitly comment why it's empty.
+- **Windmill Go Scripts**: Go scripts designed for Windmill might use non-standard signatures (e.g. `func main(args)`) that break standard `go test` builds. Use `//go:build ignore` build tags to exclude them from standard repository testing while keeping them available for the target platform.

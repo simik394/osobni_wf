@@ -42,6 +42,7 @@ export interface Session {
     platform: 'gemini' | 'perplexity' | 'notebooklm';
     externalId: string;
     query: string;
+    title?: string;
     createdAt: number;
 }
 

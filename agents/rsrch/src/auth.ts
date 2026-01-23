@@ -14,24 +14,42 @@ export async function login(userDataDir?: string) {
     logger.info('This browser will remember your login for future runs.');
 
     // Ensure profile dir exists
-    if (!fs.existsSync(finalDir)) {
-        fs.mkdirSync(finalDir, { recursive: true });
+    // Connect via CDP instead of local launch
+    let context;
+
+    // Priority: WS Endpoint > CDP Endpoint > Debugging Port
+    let endpoint = config.browserWsEndpoint || config.browserCdpEndpoint;
+
+    if (endpoint) {
+        logger.info(`Connecting to remote browser at ${endpoint}...`);
+        const browser = await chromium.connect(endpoint);
+        context = await browser.newContext(); // Or use contexts()[0] matches logic in client.ts
+    } else {
+        const port = config.remoteDebuggingPort || 9222;
+        const cdpUrl = `http://localhost:${port}`;
+        logger.info(`Connecting to remote browser via CDP at ${cdpUrl}...`);
+
+        try {
+            // Try connecting using the improved logic from client.ts (simplified here)
+            const browser = await chromium.connectOverCDP(cdpUrl);
+            const contexts = browser.contexts();
+            if (contexts.length > 0) {
+                context = contexts[0];
+                logger.info('Attached to existing browser session.');
+            } else {
+                context = await browser.newContext();
+                logger.info('Created new context in remote browser.');
+            }
+        } catch (e: any) {
+            throw new Error(`Failed to connect to browser service. STRICT POLICY prohibits local launch.
+             Ensure a browser is running with remote debugging enabled (e.g., port ${port}).
+             Error: ${e.message}`);
+        }
     }
 
-    // Use persistent context - this saves cookies, localStorage, etc. automatically
-    const context = await chromium.launchPersistentContext(finalDir, {
-        headless: false,
-        channel: 'chromium',
-        slowMo: 100, // USER RULE: Always use slowmo for Google accounts to avoid detection
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-blink-features=AutomationControlled'
-        ],
-        ignoreDefaultArgs: ['--enable-automation']
-    });
+    if (!context) throw new Error('Failed to acquire browser context.');
 
-    const page = context.pages()[0] || await context.newPage();
+    const page = await context.newPage();
 
     try {
         logger.info(`Navigating to ${config.url} ...`);
@@ -45,25 +63,15 @@ export async function login(userDataDir?: string) {
         console.log('\n=== INSTRUCTIONS ===');
         console.log('1. Log in to Perplexity manually in the first tab');
         console.log('2. Log in to Google/NotebookLM in the second tab');
-        console.log('3. Once logged in to BOTH, you can close this browser window');
-        console.log('4. Your login will be saved automatically');
+        console.log('3. Once logged in to BOTH, keep this window open or Ctrl+C if finished.');
+        console.log('   (Note: Auth state saving via CDP depends on the remote browser persistence)');
         console.log('====================\n');
 
         // Wait for user to close the browser or for a very long time
-        logger.info('Waiting for you to close the browser after logging in...');
+        logger.info('Waiting loop active. Press Ctrl+C to exit.');
 
-        // We'll just wait for the context to be closed
-        await new Promise((resolve) => {
-            context.on('close', resolve);
-        });
-
-        // Save auth.json for profile visibility
-        const state = await context.storageState();
-        const authFile = path.join(path.dirname(finalDir), 'auth.json');
-        fs.writeFileSync(authFile, JSON.stringify(state, null, 2));
-
-        logger.info(`Login state has been saved to ${finalDir} and ${authFile}`);
-        process.exit(0);
+        // Keep alive
+        await new Promise(() => { });
 
     } catch (error) {
         logger.error('Authentication process error:', error);

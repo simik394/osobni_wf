@@ -52,7 +52,6 @@ export class GraphStore {
 
     async connect(host = 'localhost', port = 6379, maxRetries = 3, retryDelay = 2000): Promise<void> {
         if (this.isConnected) return;
-
         for (let i = 0; i < maxRetries; i++) {
             try {
                 this.client = await FalkorDB.connect({ socket: { host, port } });
@@ -76,12 +75,17 @@ export class GraphStore {
         }
     }
 
-    /**
-     * Execute a raw Cypher query (public for CLI use)
-     */
-    async executeQuery(query: string): Promise<{ data?: Record<string, unknown>[] }> {
-        if (!this.graph) throw new Error('Not connected');
-        return this.graph.query(query);
+    public getIsConnected(): boolean {
+        return this.isConnected;
+    }
+
+    async disconnect(): Promise<void> {
+        if (this.client) {
+            await this.client.close();
+            this.client = null;
+            this.graph = null;
+            this.isConnected = false;
+        }
     }
 
     /**
@@ -154,7 +158,7 @@ export class GraphStore {
 
         if (result.data && result.data.length > 0) {
             const row = result.data[0] as any;
-            return this.nodeToJob(row.j);
+            return this.nodeToJob(row.j || row[0]);
         }
         return null;
     }
@@ -173,7 +177,7 @@ export class GraphStore {
 
         const result = await this.graph.query<any[]>(query);
 
-        return (result.data || []).map((row: any) => this.nodeToJob(row.j));
+        return (result.data || []).map((row: any) => this.nodeToJob(row.j || row[0]));
     }
 
     /**
@@ -220,7 +224,7 @@ export class GraphStore {
 
         if (result.data && result.data.length > 0) {
             const row = result.data[0] as any;
-            return this.nodeToJob(row.j);
+            return this.nodeToJob(row.j || row[0]);
         }
         return null;
     }
@@ -315,7 +319,7 @@ export class GraphStore {
         `);
 
         if (result.data && result.data.length > 0) {
-            const node = (result.data[0] as any).pa;
+            const node = (result.data[0] as any).pa || result.data[0];
             return {
                 id: node.id,
                 notebookTitle: node.notebookTitle,
@@ -328,6 +332,29 @@ export class GraphStore {
                 completedAt: node.completedAt,
                 error: node.error,
                 resultAudioId: node.resultAudioId
+            };
+        }
+        return null;
+    }
+
+    async getPendingAudioByWindmillJobId(windmillJobId: string): Promise<PendingAudio | null> {
+        if (!this.graph) throw new Error('Not connected');
+        const result = await this._executeQuery<any[]>(`MATCH(pa: PendingAudio { windmillJobId: '${escapeString(windmillJobId)}' }) RETURN pa`);
+        if (result.data && result.data.length > 0) {
+            const node = result.data[0][0] || result.data[0];
+            const props = node.properties || node;
+            return {
+                id: props.id,
+                notebookTitle: props.notebookTitle,
+                sources: JSON.parse(props.sources || '[]'),
+                status: props.status,
+                windmillJobId: props.windmillJobId,
+                customPrompt: props.customPrompt,
+                createdAt: props.createdAt,
+                startedAt: props.startedAt,
+                completedAt: props.completedAt,
+                error: props.error,
+                resultAudioId: props.resultAudioId
             };
         }
         return null;
@@ -351,7 +378,7 @@ export class GraphStore {
         if (!result.data) return [];
 
         return result.data.map((row: any) => {
-            const node = row.pa;
+            const node = row.pa || row[0];
             return {
                 id: node.id,
                 notebookTitle: node.notebookTitle,
@@ -455,7 +482,7 @@ export class GraphStore {
             LIMIT ${limit}
         `);
 
-        return (result.data || []).map((row: any) => this.nodeToEntity(row.e));
+        return (result.data || []).map((row: any) => this.nodeToEntity(row.e || row[0]));
     }
 
     /**
@@ -471,7 +498,7 @@ export class GraphStore {
         query += ' RETURN b';
 
         const result = await this.graph.query<any[]>(query);
-        return (result.data || []).map((row: any) => this.nodeToEntity(row.b));
+        return (result.data || []).map((row: any) => this.nodeToEntity(row.b || row[0]));
     }
 
     // ====================
@@ -512,7 +539,7 @@ export class GraphStore {
             LIMIT ${limit}
         `);
 
-        return (result.data || []).map((row: any) => row['f.content']);
+        return (result.data || []).map((row: any) => row['f.content'] || row[0]);
     }
 
     // ====================
@@ -585,7 +612,7 @@ export class GraphStore {
         `);
 
         return (result.data || []).map((row: any) => {
-            const props = row.t.properties || row.t;
+            const props = row.t?.properties || row.t || row[0];
             return {
                 role: props.role,
                 content: props.content,
@@ -608,7 +635,7 @@ export class GraphStore {
         `);
 
         return (result.data || []).map((row: any) => {
-            const props = row.c.properties || row.c;
+            const props = row.c?.properties || row.c || row[0];
             return {
                 id: props.id,
                 agentId: props.agentId,
@@ -707,6 +734,34 @@ export class GraphStore {
         }
     }
 
+    /**
+     * Get the current state (turn count) of a conversation to avoid redundant work.
+     */
+    async getConversationState(platformId: string, platform: 'gemini' | 'perplexity'): Promise<{ exists: boolean; turnCount: number; capturedAt: number }> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const result = await this.graph.query<any[]>(`
+            MATCH (c:Conversation {platformId: '${escapeString(platformId)}', platform: '${platform}'})
+            OPTIONAL MATCH (c)-[:HAS_TURN]->(t:Turn)
+            RETURN count(t) as turnCount, c.capturedAt as capturedAt
+        `);
+
+        if (!result.data || result.data.length === 0) {
+            return { exists: false, turnCount: 0, capturedAt: 0 };
+        }
+
+        const data = (result.data as any[])[0];
+        // If data exists, turnCount is returned even if 0
+        // If no match found, result.data is empty
+        // Wait, if MATCH fails, it returns empty? Yes.
+
+        return {
+            exists: true,
+            turnCount: Number(data?.turnCount || 0),
+            capturedAt: Number(data?.capturedAt || 0)
+        };
+    }
+
     private tripCircuit() {
         this.circuitState = CircuitBreakerState.OPEN;
         this.lastFailure = Date.now();
@@ -722,8 +777,6 @@ export class GraphStore {
     private halfOpenCircuit() {
         this.circuitState = CircuitBreakerState.HALF_OPEN;
     }
-
-
 
     /**
      * Helper to insert turns for a conversation, with inline URL citation linking
@@ -742,16 +795,16 @@ export class GraphStore {
             const turnId = `turn_${conversationId}_${i} `;
 
             await this.graph!.query(`
-MATCH(c: Conversation { id: '${conversationId}' })
-CREATE(t: Turn {
-    id: '${turnId}',
-    role: '${turn.role}',
-    content: '${escapeString(turn.content)}',
-    timestamp: ${ts},
-    idx: ${i}
+        MATCH(c: Conversation { id: '${conversationId}' })
+        CREATE(t: Turn {
+            id: '${turnId}',
+            role: '${turn.role}',
+            content: '${escapeString(turn.content)}',
+            timestamp: ${ts},
+            idx: ${i}
                 })
-CREATE(c) - [: HAS_TURN] -> (t)
-    `);
+    CREATE(c) -[: HAS_TURN] -> (t)
+        `);
 
             // Extract URLs from assistant responses and link to Citation nodes
             if (turn.role === 'assistant') {
@@ -831,18 +884,18 @@ CREATE(c) - [: HAS_RESEARCH_DOC] -> (d)
         }
 
         await this.graph.query(`
-            MERGE (c:Citation {url: '${escapeString(url)}'})
+MERGE(c: Citation { url: '${escapeString(url)}' })
             ON CREATE SET
-                c.id = '${citationId.trim()}',
-                c.text = '${escapeString(text)}',
-                c.domain = '${escapeString(domainValue)}',
-                c.firstSeenAt = ${now},
-                c.lastSeenAt = ${now},
-                c.count = 1
+c.id = '${citationId.trim()}',
+    c.text = '${escapeString(text)}',
+    c.domain = '${escapeString(domainValue)}',
+    c.firstSeenAt = ${now},
+c.lastSeenAt = ${now},
+c.count = 1
             ON MATCH SET
-                c.lastSeenAt = ${now},
-                c.count = c.count + 1
-        `);
+c.lastSeenAt = ${now},
+c.count = c.count + 1
+    `);
 
         return citationId.trim();
     }
@@ -875,38 +928,40 @@ CREATE(c) - [: HAS_RESEARCH_DOC] -> (d)
 
         await this.graph.query(`
             UNWIND $batch as row
-            MERGE (c:Citation {url: row.url})
+MERGE(c: Citation { url: row.url })
             ON CREATE SET
-                c.id = row.id,
-                c.text = row.text,
-                c.domain = row.domain,
-                c.firstSeenAt = row.now,
-                c.lastSeenAt = row.now,
-                c.count = 1
+c.id = row.id,
+    c.text = row.text,
+    c.domain = row.domain,
+    c.firstSeenAt = row.now,
+    c.lastSeenAt = row.now,
+    c.count = 1
             ON MATCH SET
-                c.lastSeenAt = row.now,
-                c.count = c.count + 1
+c.lastSeenAt = row.now,
+    c.count = c.count + 1
         `, { params: { batch } });
     }
 
     async linkCitationsToTurn(turnId: string, urls: string[]): Promise<void> {
         if (!this.graph || urls.length === 0) return;
         await this.graph.query(`
-            MATCH (t:Turn {id: '${escapeString(turnId)}'})
+MATCH(t: Turn { id: '${escapeString(turnId)}' })
             UNWIND $urls as url
-            MATCH (c:Citation {url: url})
-            MERGE (t)-[:REFERENCES]->(c)
-        `, { params: { urls } });
+MATCH(c: Citation { url: url })
+MERGE(t) - [: REFERENCES] -> (c)
+    `, { params: { urls } });
     }
+
+
 
     async linkCitationsToDoc(docId: string, urls: string[]): Promise<void> {
         if (!this.graph || urls.length === 0) return;
         await this.graph.query(`
-            MATCH (d:ResearchDoc {id: '${escapeString(docId)}'})
+MATCH(d: ResearchDoc { id: '${escapeString(docId)}' })
             UNWIND $urls as url
-            MATCH (c:Citation {url: url})
-            MERGE (d)-[:CITES]->(c)
-        `, { params: { urls } });
+MATCH(c: Citation { url: url })
+MERGE(d) - [: CITES] -> (c)
+    `, { params: { urls } });
     }
 
     private async _executeQuery<T = any>(query: string, options?: { params?: Record<string, any> }): Promise<{ data?: T[] }> {
@@ -932,31 +987,11 @@ CREATE(c) - [: HAS_RESEARCH_DOC] -> (d)
             if (this.circuitState === CircuitBreakerState.HALF_OPEN) {
                 this.tripCircuit();
             } else if (this.circuitState === CircuitBreakerState.CLOSED && this.failureCount >= this.failureThreshold) {
+                this.tripCircuit();
             }
             throw e;
         }
     }
-    /*
-    <<<<<<< HEAD
-    
-        // Batch process all sources for this doc (was O(N*3), now O(2))
-        const validSources = sources.filter(s => s.url);
-        if (validSources.length > 0) {
-            await this.mergeCitationsBatch(validSources.map(s => ({
-                url: s.url,
-                text: s.text || '',
-                domain: s.domain || ''
-            })));
-            await this.linkCitationsToDoc(docId, validSources.map(s => s.url));
-            citationsCreated += validSources.length;
-        }
-        processed++;
-    }
-    
-    logger.info(`[GraphStore] Migration complete: ${processed} docs, ${citationsCreated} new citations`);
-    return { processed, citations: citationsCreated };
-        }
-    */
 
     /**
      * Get all citations, optionally filtered by domain
@@ -1032,7 +1067,7 @@ MATCH(t: Turn) - [: MENTIONS] -> (c:Citation { url: '${escapeString(url)}' })
         const convResult = await this.graph.query<any[]>(`
 MATCH(c: Conversation { id: '${escapeString(conversationId)}' })
             RETURN c
-    `);
+        `);
 
         if (!convResult.data || convResult.data.length === 0) {
             return { conversation: null, turns: [] };
@@ -1048,24 +1083,15 @@ MATCH(c: Conversation { id: '${escapeString(conversationId)}' })
             capturedAt: convProps.capturedAt
         };
 
-        // Build role filter
-        let roleFilter = '';
-        if (filters.questionsOnly) {
-            roleFilter = " AND t.role = 'user'";
-        } else if (filters.answersOnly) {
-            roleFilter = " AND t.role = 'assistant'";
-        }
-
         // Get turns
-        const turnsResult = await this.graph.query<any[]>(`
-MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_TURN] -> (t:Turn)
-            WHERE true ${roleFilter}
-            RETURN t
-            ORDER BY t.idx ASC, t.timestamp ASC
-    `);
+        let turnQuery = `MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_TURN] -> (t:Turn)`;
+        if (filters.questionsOnly) turnQuery += ` WHERE t.role = 'user'`;
+        if (filters.answersOnly) turnQuery += ` WHERE t.role = 'assistant'`;
+        turnQuery += ` RETURN t ORDER BY t.idx ASC`;
 
+        const turnsResult = await this.graph.query<any[]>(turnQuery);
         const turns = (turnsResult.data || []).map((row: any) => {
-            const props = row.t.properties || row.t;
+            const props = row.t?.properties || row.t || row;
             return {
                 role: props.role,
                 content: props.content,
@@ -1073,16 +1099,15 @@ MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_TURN] 
             };
         });
 
-        // Get research docs if requested
-        let researchDocs: any[] | undefined;
-        if (filters.includeResearchDocs && conversation.type === 'deep-research') {
+        // Get research docs
+        let researchDocs: any[] = [];
+        if (filters.includeResearchDocs) {
             const docsResult = await this.graph.query<any[]>(`
 MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_RESEARCH_DOC] -> (d:ResearchDoc)
                 RETURN d
-            `);
-
+    `);
             researchDocs = (docsResult.data || []).map((row: any) => {
-                const props = row.d.properties || row.d;
+                const props = row.d?.properties || row.d || row;
                 return {
                     title: props.title,
                     content: props.content,
@@ -1096,155 +1121,6 @@ MATCH(c: Conversation { id: '${escapeString(conversationId)}' }) - [: HAS_RESEAR
     }
 
     // ====================
-    // NOTEBOOKLM SCRAPING
-    // ====================
-
-    /**
-     * Sync a scraped notebook from NotebookLM.
-     * Uses MERGE for idempotent upsert - repeated executions update existing nodes.
-     */
-    async syncNotebook(data: {
-        platformId: string;
-        title: string;
-        sources: Array<{ type: string; title: string; url?: string }>;
-        artifacts?: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'other'; title: string }>;
-        audioOverviews?: Array<{ title: string; hasTranscript: boolean }>; // Deprecated, kept for compatibility
-        messages?: Array<{ role: 'user' | 'ai'; contentPreview: string }>;
-    }): Promise<{ id: string; isNew: boolean; sourcesCount: number; artifactsCount: number; messagesCount: number }> {
-        if (!this.graph) throw new Error('Not connected');
-
-        const capturedAt = Date.now();
-        const id = `nb_${data.platformId} `;
-
-        // MERGE notebook (creates if not exists, updates if exists)
-        const existing = await this.graph.query<any[]>(`
-MATCH(n: Notebook { platformId: '${escapeString(data.platformId)}' })
-            RETURN n.id as id
-`);
-
-        const isNew = !existing.data || existing.data.length === 0;
-
-        // Create or update notebook
-        await this.graph.query(`
-MERGE(a: Agent { id: 'notebooklm' })
-MERGE(n: Notebook { platformId: '${escapeString(data.platformId)}' })
-            ON CREATE SET
-n.id = '${id}',
-    n.title = '${escapeString(data.title)}',
-    n.createdAt = ${capturedAt}
-            ON MATCH SET
-n.title = '${escapeString(data.title)}'
-            SET n.capturedAt = ${capturedAt},
-n.sourceCount = ${data.sources.length},
-n.artifactCount = ${data.artifacts?.length || 0}
-MERGE(a) - [: OWNS] -> (n)
-    `);
-
-        // MERGE sources (by title within notebook scope)
-        let sourcesCount = 0;
-        for (const source of data.sources) {
-            await this.graph.query(`
-MATCH(n: Notebook { id: '${id}' })
-MERGE(s: Source { notebookId: '${id}', title: '${escapeString(source.title)}' })
-                ON CREATE SET
-s.id = 'src_${id}_${Math.random().toString(36).substring(2, 8)}',
-    s.createdAt = ${capturedAt}
-                SET s.type = '${source.type}',
-    s.url = '${escapeString(source.url || '')}',
-        s.updatedAt = ${capturedAt}
-MERGE(n) - [: HAS_SOURCE] -> (s)
-    `);
-            sourcesCount++;
-        }
-
-        // MERGE artifacts (by title and type within notebook scope)
-        let artifactsCount = 0;
-        if (data.artifacts) {
-            for (const artifact of data.artifacts) {
-                await this.graph.query(`
-MATCH(n: Notebook { id: '${id}' })
-MERGE(art: Artifact { notebookId: '${id}', title: '${escapeString(artifact.title)}' })
-                    ON CREATE SET
-art.id = 'art_${id}_${Math.random().toString(36).substring(2, 8)}',
-    art.createdAt = ${capturedAt}
-                    SET art.type = '${artifact.type}',
-    art.updatedAt = ${capturedAt}
-MERGE(n) - [: HAS_ARTIFACT] -> (art)
-    `);
-
-                // Also create AudioOverview node for audio artifacts (for linking)
-                if (artifact.type === 'audio') {
-                    await this.graph.query(`
-MATCH(n: Notebook { id: '${id}' })
-MERGE(ao: AudioOverview { notebookId: '${id}', title: '${escapeString(artifact.title)}' })
-                        ON CREATE SET
-ao.id = 'audio_${id}_${Math.random().toString(36).substring(2, 8)}',
-    ao.createdAt = ${capturedAt}
-                        SET ao.updatedAt = ${capturedAt}
-MERGE(n) - [: HAS_AUDIO] -> (ao)
-    `);
-                }
-
-                artifactsCount++;
-            }
-        }
-
-        // MERGE messages (deduplicate by content and notebookId)
-        let messagesCount = 0;
-        if (data.messages) {
-            for (const msg of data.messages) {
-                // Create a simple hash/id for the message based on content
-                const contentHash = Buffer.from(msg.contentPreview).toString('base64').substring(0, 32);
-
-                await this.graph.query(`
-MATCH(n: Notebook { id: '${id}' })
-MERGE(m: Message { notebookId: '${id}', contentHash: '${contentHash}' })
-                    ON CREATE SET
-m.id = 'msg_${id}_${Math.random().toString(36).substring(2, 8)}',
-    m.createdAt = ${capturedAt},
-m.role = '${msg.role}',
-    m.content = '${escapeString(msg.contentPreview)}'
-                    SET m.updatedAt = ${capturedAt}
-MERGE(n) - [: HAS_MESSAGE] -> (m)
-    `);
-                messagesCount++;
-            }
-        }
-
-        logger.info(`[GraphStore] ${isNew ? 'Created' : 'Updated'} notebook: ${id} (${sourcesCount} sources, ${artifactsCount} artifacts, ${messagesCount} messages)`);
-        return { id, isNew, sourcesCount, artifactsCount, messagesCount };
-    }
-
-    /**
-     * Link an audio overview to the sources used to generate it
-     */
-    async linkAudioToSources(notebookPlatformId: string, audioTitle: string, sourceTitles: string[]): Promise<void> {
-        if (!this.graph) throw new Error('Not connected');
-
-        // This assumes the AudioOverview and Sources already exist (e.g. via syncNotebook or added previously)
-        // We match by title within the scope of the notebook
-
-        logger.info(`[GraphStore] Linking audio "${audioTitle}" to ${sourceTitles.length} sources in notebook "${notebookPlatformId}"`);
-
-        // Create relationship to each source
-        for (const sourceTitle of sourceTitles) {
-            await this.graph.query(`
-MATCH(n: Notebook { platformId: '${escapeString(notebookPlatformId)}' }) - [: HAS_AUDIO] -> (ao:AudioOverview { title: '${escapeString(audioTitle)}' })
-MATCH(n) - [: HAS_SOURCE] -> (s:Source { title: '${escapeString(sourceTitle)}' })
-MERGE(ao) - [r: GENERATED_FROM] -> (s)
-                SET r.createdAt = ${Date.now()}
-        `);
-        }
-    }
-
-
-
-    public getIsConnected(): boolean {
-        return this.isConnected;
-    }
-
-
-    // ====================
     // LINEAGE TRACKING
     // ====================
 
@@ -1255,15 +1131,17 @@ MERGE(ao) - [r: GENERATED_FROM] -> (s)
         if (!this.graph) throw new Error('Not connected');
 
         const createdAt = Date.now();
+        const title = session.title ? escapeString(session.title) : '';
         await this.graph.query(`
-            CREATE (s:Session {
-                id: '${escapeString(session.id)}',
-                platform: '${session.platform}',
-                externalId: '${escapeString(session.externalId)}',
-                query: '${escapeString(session.query)}',
-                createdAt: ${createdAt}
+CREATE(s: Session {
+    id: '${escapeString(session.id)}',
+    platform: '${session.platform}',
+    externalId: '${escapeString(session.externalId)}',
+    query: '${escapeString(session.query)}',
+    title: '${title}',
+    createdAt: ${createdAt}
             })
-        `);
+    `);
 
         logger.info(`[GraphStore] Session created: ${session.id} (${session.platform})`);
         return { ...session, createdAt };
@@ -1278,15 +1156,15 @@ MERGE(ao) - [r: GENERATED_FROM] -> (s)
         const createdAt = Date.now();
         const url = doc.url ? escapeString(doc.url) : '';
         await this.graph.query(`
-            CREATE (d:Document {
-                id: '${escapeString(doc.id)}',
-                title: '${escapeString(doc.title)}',
-                url: '${url}',
-                createdAt: ${createdAt}
+CREATE(d: Document {
+    id: '${escapeString(doc.id)}',
+    title: '${escapeString(doc.title)}',
+    url: '${url}',
+    createdAt: ${createdAt}
             })
-        `);
+    `);
 
-        logger.info(`[GraphStore] Document created: ${doc.id}`);
+        logger.info(`[GraphStore] Document created: ${doc.id} `);
         return { ...doc, createdAt };
     }
 
@@ -1298,40 +1176,26 @@ MERGE(ao) - [r: GENERATED_FROM] -> (s)
 
         const createdAt = Date.now();
         await this.graph.query(`
-            CREATE (a:Audio {
-                id: '${escapeString(audio.id)}',
-                path: '${escapeString(audio.path)}',
-                duration: ${audio.duration || 0},
-                createdAt: ${createdAt}
+CREATE(a: Audio {
+    id: '${escapeString(audio.id)}',
+    path: '${escapeString(audio.path)}',
+    duration: ${audio.duration || 0},
+    createdAt: ${createdAt}
             })
-        `);
+    `);
 
-        logger.info(`[GraphStore] Audio created: ${audio.id}`);
+        logger.info(`[GraphStore] Audio created: ${audio.id} `);
         return { ...audio, createdAt };
     }
 
     /**
-     * Get audio for a ResearchDoc (stub for server.ts compatibility)
-     */
-
-
-    async disconnect(): Promise<void> {
-        if (this.client) {
-            await this.client.close();
-            this.client = null;
-            this.graph = null;
-            this.isConnected = false;
-        }
-    }
-
-    /**
-     * Link job to session (Job - [: STARTED] -> Session)
+     * Link job to session (Job -[:STARTED]-> Session)
      */
     async linkJobToSession(jobId: string, sessionId: string): Promise<void> {
         if (!this.graph) throw new Error('Not connected');
 
         await this.graph.query(`
-            MATCH(j: Job { id: '${escapeString(jobId)}' }), (s: Session { id: '${escapeString(sessionId)}'})
+MATCH(j: Job { id: '${escapeString(jobId)}' }), (s: Session { id: '${escapeString(sessionId)}'})
             CREATE (j) - [: STARTED { createdAt: ${Date.now()}}] -> (s)
     `);
 
@@ -1366,7 +1230,6 @@ MATCH(d: Document { id: '${escapeString(documentId)}' }), (a: Audio { id: '${esc
         logger.info(`[GraphStore] Linked: Document ${documentId} -> Audio ${audioId} `);
     }
 
-
     private nodeToJob(node: any): GraphJob {
         const props = node.properties || node;
         return {
@@ -1393,40 +1256,8 @@ MATCH(d: Document { id: '${escapeString(documentId)}' }), (a: Audio { id: '${esc
         };
     }
 
-    async getNotebooks(limit = 50): Promise<any[]> {
-        const query = `MATCH(n: Notebook) RETURN n ORDER BY n.updatedAt DESC, n.createdAt DESC LIMIT $limit`;
-        try {
-            const result = await this._executeQuery<any[]>(query, { params: { limit } });
-            return (result.data || []).map(row => {
-                const node = row[0] || row;
-                return node.properties || node;
-            });
-        } catch (e) {
-            console.error('[GraphStore] getNotebooks error:', e);
-            return [];
-        }
-    }
-
-    async getSourcesWithoutAudio(platformId: string): Promise<any[]> {
-        const query = `
-MATCH(n: Notebook { platformId: $platformId }) - [: CONTAINS] -> (s:Source)
-            WHERE NOT(s) - [: HAS_AUDIO] -> ()
-            RETURN s
-        `;
-        try {
-            const result = await this._executeQuery<any[]>(query, { params: { platformId } });
-            return (result.data || []).map(row => {
-                const node = row[0] || row;
-                return node.properties || node;
-            });
-        } catch (e) {
-            console.error('[GraphStore] getSourcesWithoutAudio error:', e);
-            return [];
-        }
-    }
-
     /**
-     * Specialized update for Gemini sessions including deep research state.
+     * Creates or updates a GeminiSession node.
      */
     async createOrUpdateGeminiSession(data: {
         sessionId?: string;
@@ -1464,8 +1295,112 @@ s.title = $title,
     }
 
     /**
-     * Synchronize a Conversation node in the graph.
+     * Adds a GeminiQuery node and links it to a GeminiSession.
      */
+    async addGeminiQuery(data: { sessionId: string; query: string }): Promise<void> {
+        const queryId = `gq_${Date.now()}_${Math.random().toString(36).substring(2, 8)} `;
+        const query = `
+MATCH(gs: GeminiSession { sessionId: $sessionId })
+CREATE(gq: GeminiQuery {
+    queryId: $queryId,
+    sessionId: $sessionId,
+    query: $query,
+    createdAt: $now
+})
+CREATE(gs) - [: HAS_QUERY] -> (gq)
+    `;
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    sessionId: data.sessionId,
+                    query: data.query,
+                    queryId: queryId,
+                    now: Date.now(),
+                },
+            });
+        } catch (e) {
+            console.error('[GraphStore] addGeminiQuery error:', e);
+        }
+    }
+
+    /**
+     * Synchronize a Notebook node in the graph.
+     * Uses MERGE to ensure idempotency.
+     */
+    async syncNotebook(data: { platformId: string; title: string; url?: string }): Promise<{ isNew: boolean, id: string }> {
+        const id = `nb_${data.platformId} `;
+        const query = `
+MERGE(n: Notebook { platformId: $platformId })
+            ON CREATE SET
+n.id = $id,
+    n.title = $title,
+    n.url = $url,
+    n.createdAt = $now,
+    n._isNew = true
+            ON MATCH SET
+n.title = $title,
+    n.url = $url,
+    n.updatedAt = $now,
+    n._isNew = false
+            RETURN n.id as id, n._isNew as isNew
+`;
+
+        try {
+            const result = await this._executeQuery<{ id: string, isNew: boolean }[]>(query, {
+                params: {
+                    platformId: data.platformId,
+                    id,
+                    title: data.title,
+                    url: data.url || '',
+                    now: Date.now()
+                }
+            });
+
+            if (result.data && result.data.length > 0) {
+                const row = result.data[0] as any;
+                return {
+                    id: row.id || row[0],
+                    isNew: row.isNew !== undefined ? row.isNew : row[1]
+                };
+            }
+            return { isNew: false, id };
+        } catch (e) {
+            console.error('[GraphStore] syncNotebook error:', e);
+            return { isNew: false, id };
+        }
+    }
+
+    async getNotebooks(limit = 50): Promise<any[]> {
+        const query = `MATCH(n: Notebook) RETURN n ORDER BY n.updatedAt DESC, n.createdAt DESC LIMIT $limit`;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { limit } });
+            return (result.data || []).map(row => {
+                const node = row[0] || row;
+                return node.properties || node;
+            });
+        } catch (e) {
+            console.error('[GraphStore] getNotebooks error:', e);
+            return [];
+        }
+    }
+
+    async getSourcesWithoutAudio(platformId: string): Promise<any[]> {
+        const query = `
+MATCH(n: Notebook { platformId: $platformId }) - [: CONTAINS] -> (s:Source)
+            WHERE NOT(s) - [: HAS_AUDIO] -> ()
+            RETURN s
+    `;
+        try {
+            const result = await this._executeQuery<any[]>(query, { params: { platformId } });
+            return (result.data || []).map(row => {
+                const node = row[0] || row;
+                return node.properties || node;
+            });
+        } catch (e) {
+            console.error('[GraphStore] getSourcesWithoutAudio error:', e);
+            return [];
+        }
+    }
 
     async getConversationsByPlatform(platform: string, limit = 50): Promise<any[]> {
         const query = `
@@ -1483,7 +1418,6 @@ MATCH(c: Conversation { platform: $platform })
             return [];
         }
     }
-
 
     async getChangedConversations(since: number): Promise<any[]> {
         const query = `
@@ -1605,9 +1539,11 @@ MERGE(d) - [: HAS_AUDIO] -> (au)
     }
 
     async getPendingAudioByWindmillJobId(windmillJobId: string): Promise<PendingAudio | null> {
+        if (!this.graph) throw new Error('Not connected');
         const result = await this._executeQuery<any[]>(`MATCH(pa: PendingAudio { windmillJobId: '${escapeString(windmillJobId)}' }) RETURN pa`);
         if (result.data && result.data.length > 0) {
-            const props = result.data[0][0].properties;
+            const node = result.data[0][0] || result.data[0];
+            const props = node.properties || node;
             return {
                 id: props.id,
                 notebookTitle: props.notebookTitle,
