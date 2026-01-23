@@ -139,13 +139,13 @@ On a server (Docker/Kubernetes), we shift from **"Script Spawns Browser"** to **
 Instead of the Node.js script starting a child Chrome process, you run Chrome as a **separate, persistent daemon (container)**.
 
 ### Architecture
-*   **Container A (`browser`)**: Runs headless Chrome with a persistent volume mounted for `user-data`. Exposes port 9222.
-*   **Container B (`rsrch`)**: Runs the agent script. Connects to `browser:9222`.
+*   **Container A (`browser`)**: This is a **VNC-enabled Browser Container**. It runs Chrome *headed* inside Xvfb, exposing port 5900 (VNC) and 9222 (CDP).
+*   **Container B (`rsrch`)**: Runs the agent script. It connects efficiently via WebSocket to `browser:9222`.
 
 ### Why?
-1.  **Resilience**: If the agent script crashes (Node error), the browser stays open. You don't lose your tabs or session.
-2.  **Debugging**: You can attach a VNC viewer to the `browser` container to see exactly what the headless server is doing.
-3.  **State Management**: The "Login State" is stored in the `browser` container's volume, decoupled from the agent's code.
+1.  **Manual Auth via VNC**: You VNC into `Container A` to log in manually (Google/Gemini). The agent in `Container B` then inherits this session via CDP.
+2.  **Visual Debugging**: You can watch the agent work in real-time by keeping the VNC window open.
+3.  **Resilience**: Separating the heavy browser process from the lightweight Node script prevents crashes from propagating.
 
 ### "Can I still use `launchPersistentContext`?"
 Only if you set `FORCE_LOCAL_BROWSER=true`.
