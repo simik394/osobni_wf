@@ -129,3 +129,25 @@ If Windmill is running in the cloud (e.g., specific managed instance) but you wa
 *   If your local browser logs out, the agent fails. It cannot log you back in.
 
 This is a security feature: The credentials (cookies/tokens) never leave your local machine's memory/disk (except strictly as necessary for the CDP protocol traffic).
+
+## Server-Side / Fully Automated Workflow
+
+You noticed we removed/disabled `launchPersistentContext` (which spawns a browser). **"How does this run on a server without that?"**
+
+On a server (Docker/Kubernetes), we shift from **"Script Spawns Browser"** to **"Browser as a Service"**.
+
+Instead of the Node.js script starting a child Chrome process, you run Chrome as a **separate, persistent daemon (container)**.
+
+### Architecture
+*   **Container A (`browser`)**: Runs headless Chrome with a persistent volume mounted for `user-data`. Exposes port 9222.
+*   **Container B (`rsrch`)**: Runs the agent script. Connects to `browser:9222`.
+
+### Why?
+1.  **Resilience**: If the agent script crashes (Node error), the browser stays open. You don't lose your tabs or session.
+2.  **Debugging**: You can attach a VNC viewer to the `browser` container to see exactly what the headless server is doing.
+3.  **State Management**: The "Login State" is stored in the `browser` container's volume, decoupled from the agent's code.
+
+### "Can I still use `launchPersistentContext`?"
+Only if you set `FORCE_LOCAL_BROWSER=true`.
+But for production server automation, we strongly recommend the **Dual-Container** approach described above.
+
