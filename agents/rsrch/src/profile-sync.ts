@@ -24,7 +24,7 @@ export const SYNC_TARGETS: Record<string, SyncTarget> = {
         name: 'Local rsrch-chromium',
         type: 'local',
         browserDataPath: join(homedir(), '.rsrch/profiles/default/state'), // Playwright creates Default/ subdirectory
-        restartCommand: 'docker restart perplexity-server'
+        restartCommand: 'docker restart rsrch'
     },
     halvarm: {
         name: 'Production (halvarm)',

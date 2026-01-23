@@ -307,7 +307,10 @@ export class PerplexityClient extends BaseClient {
                 throw new Error(`Could not acquire context from remote browser: ${e.message}`);
             }
         } else {
-            // Local mode - use profile-based state directory
+            // Local mode
+            if (process.env.FORCE_LOCAL_BROWSER !== 'true') {
+                throw new Error('STRICT POLICY: Local browser launch PROHIBITED for agents. Set FORCE_LOCAL_BROWSER=true if you are a human debugging locally.');
+            }
             console.log(`Launching browser (Local Mode, profile: ${profileId})...`);
 
             // Get or create profile state directory

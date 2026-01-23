@@ -70,16 +70,11 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 
 ---
 
-<<<<<<< HEAD
-## Previous Lessons
-=======
 ## Previous Lessons Learned
 
 - **Tool Definitions Mapping**: Windmill script schemas in YAML are primarily for the Windmill UI. The MCP server (`main.go`) has its own `inputSchema` definition which MUST be kept in sync with the underlying Go scripts to ensure parameters are correctly passed.
 - **MCP Descriptions**: Avoid naming tools after transient model names (e.g., "Gemini Pro") if they actually represent a specific capability/mode (e.g., "Deep Research"). This prevents user confusion when models evolve.
 - **Session Continuity**: For agents to effectively use multi-turn tools, the `session_id` must be explicitly exposed in the tool schema, even if the underlying API supports it implicitly or via conversation history.
-
->>>>>>> origin/pr-20
 
 - **Local Mode & Auth Injection**: When using Playwright's `launchPersistentContext` in Local Mode (manual launch), cookies from `auth.json` are NOT automatically loaded. You MUST explicitly inject them using `context.addCookies` after context creation to restore authenticated sessions from synced profiles.
 
@@ -115,4 +110,9 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 - **Issue**: Naive printing in CLI caused overwrites of previous multi-line chunks.
 - **Fix**: Implemented delta-based printing or full-text replacement with caret management.
 - **Protocol**: `Accept: text/event-stream` header is CRITICAL for server to trigger streaming mode. Always verify headers when debugging 404/empty responses.
+
+## 2026-01-23: Codebase Refactoring & Type Safety
+1.  **Dynamic Import Aliasing**: When importing a class dynamically (e.g. `const { GeminiClient } = await import(...)`) that shares a name with a type import (`import type { GeminiClient }`), use aliasing (`const { GeminiClient: ClientClass }`) to avoid compiler errors where the type name shadows the value.
+2.  **Private Property Access**: When refactoring classes with `private` members (like `page` in `GeminiClient`), ensure public API methods (like `goto`, `wait`) are exposed for consumers (CLI/Scripts) to avoid breaking external code that previously relied on loose access.
+3.  **Template Literal Syntax**: Be extremely careful with template literals in TypeScript. A single astray backtick in a file can cause cascading syntax errors that are difficult to pinpoint, often manifesting as "Unexpected token" errors far from the source.
 

@@ -67,8 +67,8 @@ journalctl -u rsrch-server@$USER -f
 docker compose up -d falkordb
 
 # Build and run server container
-docker compose build perplexity-server
-docker compose up -d perplexity-server
+docker compose build rsrch
+docker compose up -d rsrch
 
 # Note: Requires angrav-browser or rsrch-chromium running on port 9223
 ```

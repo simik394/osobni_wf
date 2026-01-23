@@ -1,4 +1,4 @@
-# Perplexity Researcher - API Documentation
+# Rsrch - API Documentation
 
 ## Table of Contents
 1. [[#quick-start|Quick Start]]
@@ -23,7 +23,7 @@
 docker-compose build
 
 # 2. First-time setup: Authenticate with Perplexity
-docker-compose run --rm perplexity-server npm run auth
+docker-compose run --rm rsrch npm run auth
 # Follow the browser prompts to log in, then close the browser
 
 # 3. Start the server
@@ -94,7 +94,7 @@ docker-compose down
 #### One-Time Authentication
 ```bash
 # Run auth in a temporary container
-docker-compose run --rm perplexity-server npm run auth
+docker-compose run --rm rsrch npm run auth
 ```
 
 This opens a browser window. Log in to Perplexity, then close the browser. Your session is saved in the `browser-data` volume.
@@ -527,7 +527,7 @@ Capture current page state for debugging.
 
 ### Initial Login
 
-Authentication is unified across all environments using a shared file at `~/.config/perplexity-researcher/auth.json`.
+Authentication is unified across all environments using a shared file at `~/.config/rsrch/auth.json`.
 
 **Recommended Method (CLI):**
 ```bash
@@ -536,7 +536,7 @@ npm run auth
 1. A browser window will open.
 2. Log in to Perplexity.ai.
 3. Close the window or press Enter in the terminal.
-4. The session is saved to `~/.config/perplexity-researcher/auth.json`.
+4. The session is saved to `~/.config/rsrch/auth.json`.
 
 **Docker Method (if CLI not possible):**
 ```bash
@@ -667,7 +667,7 @@ environment:
 **Solution:**
 ```bash
 # Run auth command
-docker-compose run --rm perplexity-server npm run auth
+docker-compose run --rm rsrch npm run auth
 ```
 
 ---
@@ -695,7 +695,7 @@ ports:
 docker-compose ps
 
 # Check if x11vnc is running
-docker-compose exec perplexity-server ps aux | grep x11vnc
+docker-compose exec rsrch ps aux | grep x11vnc
 ```
 
 ---
@@ -729,13 +729,13 @@ If something goes wrong, reset everything:
 docker-compose down
 
 # Remove volumes (WARNING: Deletes saved authentication)
-docker volume rm perplexity-researcher_browser-data
+docker volume rm rsrch_browser-data
 
 # Rebuild
 docker-compose build
 
 # Re-authenticate
-docker-compose run --rm perplexity-server npm run auth
+docker-compose run --rm rsrch npm run auth
 
 # Start fresh
 docker-compose up -d
