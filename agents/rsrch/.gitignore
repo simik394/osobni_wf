@@ -39,3 +39,7 @@ Thumbs.db
 *_files/
 _site/
 docs/_site/
+
+# Local Reports
+TEST_REPORT.md
+TEST_SMALL.qmd
