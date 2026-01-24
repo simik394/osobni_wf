@@ -28,8 +28,6 @@ interface FileReport {
     sourceLoc: number;
 }
 
-// Placeholder for test results structure and function, as they were not provided in the prompt.
-// In a real scenario, these would be defined elsewhere or passed into generateReport.
 interface TestResult {
     status: 'passed' | 'failed' | 'skipped' | 'todo';
     duration: number;
@@ -38,18 +36,12 @@ interface TestResult {
 
 function findTestResult(testResults: any, filePath: string, scenarioName: string): TestResult | null {
     if (!testResults || !testResults.testResults) return null;
-
-    // Find the file result
     const fileResult = testResults.testResults.find((r: any) => r.name.endsWith(filePath));
     if (!fileResult) return null;
-
-    // Find the specific assertion result
     const assertion = fileResult.assertionResults.find((a: any) =>
         a.title === scenarioName || a.fullName.includes(scenarioName)
     );
-
     if (!assertion) return null;
-
     return {
         status: assertion.status,
         duration: assertion.duration || 0,
@@ -57,11 +49,9 @@ function findTestResult(testResults: any, filePath: string, scenarioName: string
     };
 }
 
-
 function getAllFiles(dirPath: string, arrayOfFiles: string[] = []): string[] {
     if (!fs.existsSync(dirPath)) return arrayOfFiles;
     const files = fs.readdirSync(dirPath);
-
     files.forEach(function (file) {
         if (fs.statSync(dirPath + "/" + file).isDirectory()) {
             arrayOfFiles = getAllFiles(dirPath + "/" + file, arrayOfFiles);
@@ -74,11 +64,9 @@ function getAllFiles(dirPath: string, arrayOfFiles: string[] = []): string[] {
     return arrayOfFiles;
 }
 
-// Simple brace-counting parser to extract test blocks
 function extractScenarios(content: string): TestScenario[] {
     const scenarios: TestScenario[] = [];
-    // Regex to find start of test: it('name', async () => { ...
-    const testStartRegex = /(?:it|test)\s*\(\s*['"`](.*?)['"`]\s*,\s*(?:async\s*)?\(\s*\)\s*=>\s*\{/g;
+    const testStartRegex = /(?:it|test)\s*\(\s*['\"`](.*?)['\"`]\s*,\s*(?:async\s*)?\(\s*\)\s*=>\s*\{/g;
 
     let match;
     while ((match = testStartRegex.exec(content)) !== null) {
@@ -112,25 +100,23 @@ function extractScenarios(content: string): TestScenario[] {
 }
 
 function sanitizeForMermaid(str: string): string {
-    // Escape special characters that break Mermaid labels
     return str
-        .replace(/["`]/g, "'")           // Replace double quotes with single
-        .replace(/\(/g, '#40;')            // Escape opening parentheses
-        .replace(/\)/g, '#41;')            // Escape closing parentheses  
-        .replace(/\[/g, '#91;')            // Escape opening brackets
-        .replace(/\]/g, '#93;')            // Escape closing brackets
-        .replace(/\|/g, '#124;')           // Escape pipes
-        .replace(/&/g, '#38;')             // Escape ampersands
-        .replace(/</g, '#60;')             // Escape less than
-        .replace(/>/g, '#62;')             // Escape greater than (except for <br/>)
-        .replace(/#60;br\/#62;/g, '<br/>') // Restore <br/> tags
-        .replace(/[\n\r]/g, " ")           // Replace newlines with spaces
+        .replace(/["\`]/g, "'")
+        .replace(/\(/g, '#40;')
+        .replace(/\)/g, '#41;')
+        .replace(/\[/g, '#91;')
+        .replace(/\]/g, '#93;')
+        .replace(/\|/g, '#124;')
+        .replace(/&/g, '#38;')
+        .replace(/</g, '#60;')
+        .replace(/>/g, '#62;')
+        .replace(/#60;br\/#62;/g, '<br/>')
+        .replace(/[\n\r]/g, " ")
         .substring(0, 60) + (str.length > 60 ? "..." : "");
 }
 
 function generateMermaidDiagram(title: string, body: string): string {
     const lines = body.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//'));
-
     const steps: { type: 'setup' | 'act' | 'assert', text: string }[] = [];
 
     for (const line of lines) {
@@ -143,7 +129,6 @@ function generateMermaidDiagram(title: string, body: string): string {
         }
     }
 
-    // Collapse consecutive types for cleaner diagram
     const nodes: { id: string, label: string }[] = [];
     const edges: { from: string, to: string }[] = [];
 
@@ -160,27 +145,21 @@ function generateMermaidDiagram(title: string, body: string): string {
             nodes.push({ id: `A${nodes.length}`, label: `Act:<br/>${actBuffer.map(sanitizeForMermaid).join('<br/>')}` });
             actBuffer = [];
         }
-        // Asserts usually separate acts, so we flush acts before asserts
         if (assertBuffer.length) {
             nodes.push({ id: `V${nodes.length}`, label: `Verify:<br/>${assertBuffer.map(sanitizeForMermaid).join('<br/>')}` });
             assertBuffer = [];
         }
     };
 
-    // Heuristic: Asserts usually come last. We'll group everything roughly.
-    // Actually, preserving order is better for understanding flow.
-
     for (const step of steps) {
         if (step.type === 'setup') {
             if (actBuffer.length || assertBuffer.length) flush();
             setupBuffer.push(step.text);
         } else if (step.type === 'act') {
-            if (assertBuffer.length) flush(); // If we assert then act again
-            // If checking act after setup, flush setup
+            if (assertBuffer.length) flush();
             if (setupBuffer.length) flush();
             actBuffer.push(step.text);
         } else {
-            // Assert
             if (setupBuffer.length) flush();
             if (actBuffer.length) flush();
             assertBuffer.push(step.text);
@@ -188,7 +167,6 @@ function generateMermaidDiagram(title: string, body: string): string {
     }
     flush();
 
-    // Build edges
     for (let i = 0; i < nodes.length - 1; i++) {
         edges.push({ from: nodes[i].id, to: nodes[i + 1].id });
     }
@@ -200,40 +178,28 @@ function generateMermaidDiagram(title: string, body: string): string {
 
 function analyzeTestFile(filePath: string): { stats: TestStats, scenarios: TestScenario[] } {
     const content = fs.readFileSync(filePath, 'utf-8');
-
-    // Quick regex stats
     const tests = (content.match(/(it|test)\s*\(/g) || []).length;
     const assertions = (content.match(/expect\s*\(/g) || []).length;
     const describes = (content.match(/describe\s*\(/g) || []).length;
     const mocks = (content.match(/vi\.(fn|mock|spyOn)|mock/g) || []).length;
-
-    // Deep scenario extraction
     const scenarios = extractScenarios(content);
-
-    return {
-        stats: { tests, assertions, describes, mocks },
-        scenarios
-    };
+    return { stats: { tests, assertions, describes, mocks }, scenarios };
 }
 
 function generateReport() {
     const srcFiles = getAllFiles(SRC_DIR).map(f => path.relative(SRC_DIR, f));
-    const testFiles = getAllFiles(TEST_DIR).map(f => path.relative(TEST_DIR, f)); // Keep as map for lookup
+    const testFiles = getAllFiles(TEST_DIR).map(f => path.relative(TEST_DIR, f));
 
     const report: FileReport[] = [];
     const usedTestFiles = new Set<string>();
 
-    // 1. Map Source -> Tests
     for (const srcFile of srcFiles) {
         const baseName = path.basename(srcFile, '.ts');
-
-        // Simple mapping heuristic
         const candidates = testFiles.filter(t => {
             const tBase = path.basename(t, '.ts');
             return tBase === `${baseName}.test` || tBase === `${baseName}.spec` || tBase === baseName;
         });
 
-        // Special override for gemini-client -> prefer gemini-client.test
         let foundTestFile = candidates[0];
         if (baseName === 'gemini-client') {
             foundTestFile = candidates.find(c => c.includes('gemini-client.test')) || candidates[0];
@@ -256,7 +222,6 @@ function generateReport() {
         report.push({ sourceFile: srcFile, testFile: foundTestFile, testStats, scenarios, sourceLoc });
     }
 
-    // 2. Find Orphans
     const orphanFiles = testFiles.filter(t => !usedTestFiles.has(t));
     const orphans: { file: string, scenarios: TestScenario[] }[] = [];
 
@@ -267,124 +232,7 @@ function generateReport() {
         orphans.push({ file: orphan, scenarios: analysis.scenarios });
     }
 
-    // --- OUTPUT MARKDOWN (QMD) ---
-    console.log('---');
-    console.log('title: "Detailed Test & Implementation Report"');
-    console.log('format:');
-    console.log('  html:');
-    console.log('    code-fold: true');
-    console.log('    toc: true');
-    console.log('    theme: cosmo');
-    console.log('    page-layout: full');
-    console.log('execute:');
-    console.log('  echo: false');
-    console.log('---');
-
-    console.log(`Generated on: ${new Date().toISOString()}`);
-    console.log('');
-
-    // Add test runner controls at the top
-    console.log('## 🎮 Test Controls');
-    console.log('');
-    console.log('::: {.callout-note}');
-    console.log('**Live Results Mode**: Start the test runner server (`npx ts-node scripts/test-runner-server.ts`), then use the button below to run tests and see live results.');
-    console.log(':::');
-    console.log('');
-    console.log('```{ojs}');
-    console.log('//| echo: false');
-    console.log('TEST_SERVER = "http://localhost:3099"');
-    console.log('');
-    console.log('mutable testResults = null');
-    console.log('mutable runStatus = "idle"');
-    console.log('mutable lastRun = null');
-    console.log('');
-    console.log('async function fetchResults() {');
-    console.log('  try {');
-    console.log('    const response = await fetch(`${TEST_SERVER}/results`);');
-    console.log('    if (response.ok) {');
-    console.log('      mutable testResults = await response.json();');
-    console.log('      mutable lastRun = new Date().toLocaleTimeString();');
-    console.log('    }');
-    console.log('  } catch (e) {');
-    console.log('    console.log("Server not available, using static results");');
-    console.log('  }');
-    console.log('}');
-    console.log('');
-    console.log('async function runTests() {');
-    console.log('  mutable runStatus = "running";');
-    console.log('  try {');
-    console.log('    await fetch(`${TEST_SERVER}/run-tests`, { method: "POST" });');
-    console.log('    // Poll for completion');
-    console.log('    let attempts = 0;');
-    console.log('    while (attempts < 120) { // 2 min timeout');
-    console.log('      await new Promise(r => setTimeout(r, 1000));');
-    console.log('      const status = await fetch(`${TEST_SERVER}/status`).then(r => r.json());');
-    console.log('      if (status.status === "completed" || status.status === "error") {');
-    console.log('        await fetchResults();');
-    console.log('        mutable runStatus = status.status;');
-    console.log('        return;');
-    console.log('      }');
-    console.log('      attempts++;');
-    console.log('    }');
-    console.log('    mutable runStatus = "timeout";');
-    console.log('  } catch (e) {');
-    console.log('    mutable runStatus = "error";');
-    console.log('  }');
-    console.log('}');
-    console.log('');
-    console.log('// Auto-fetch on load');
-    console.log('fetchResults();');
-    console.log('```');
-    console.log('');
-    console.log('```{ojs}');
-    console.log('//| echo: false');
-    console.log('viewof runButton = Inputs.button(');
-    console.log('  runStatus === "running" ? "⏳ Running Tests..." : "🧪 Run All Tests",');
-    console.log('  { disabled: runStatus === "running", value: null, reduce: () => runTests() }');
-    console.log(')');
-    console.log('```');
-    console.log('');
-    console.log('```{ojs}');
-    console.log('//| echo: false');
-    console.log('md`**Status**: ${runStatus === "running" ? "⏳ Running..." : runStatus === "completed" ? "✅ Completed" : runStatus === "error" ? "❌ Error" : "⏸️ Idle"} ${lastRun ? `(Last run: ${lastRun})` : ""}`');
-    console.log('```');
-    console.log('');
-
-
-    // Dashboard / Summary
-    console.log('## 📊 Test Suite Overview');
-    console.log('| Metric | Value |');
-    console.log('|---|---|');
-    const totalAssertions = report.reduce((sum, r) => sum + (r.testStats?.assertions || 0), 0) + orphans.reduce((sum, o) => {
-        const stats = analyzeTestFile(path.join(TEST_DIR, o.file));
-        return sum + stats.stats.assertions;
-    }, 0);
-    const totalTests = report.reduce((sum, r) => sum + (r.testStats?.tests || 0), 0) + orphans.reduce((sum, o) => {
-        const stats = analyzeTestFile(path.join(TEST_DIR, o.file));
-        return sum + stats.stats.tests;
-    }, 0);
-
-    console.log(`| **Total Tests** | ${totalTests} |`);
-    console.log(`| **Total Assertions** | ${totalAssertions} |`);
-    console.log(`| **Covered Files** | ${report.filter(r => r.testFile).length} / ${report.length} |`);
-    console.log('\n');
-
-    console.log('## 1. Source Component Coverage');
-    console.log('| Component | LOC | Test File | Scenarios | Assertions | Status |');
-    console.log('|---|---|---|---|---|---|');
-
-    const coveredReports = report.filter(r => r.testFile).sort((a, b) => b.sourceLoc - a.sourceLoc);
-    for (const r of coveredReports) {
-        const assurance = (r.testStats?.assertions || 0) > 10 ? '🟢 Strong' : '🟡 Basic';
-        console.log(`| \`${r.sourceFile}\` | ${r.sourceLoc} | \`${r.testFile}\` | ${r.scenarios.length} | ${r.testStats?.assertions} | ${assurance} |`);
-    }
-
-    console.log('\n## 2. Detailed Test Scenarios');
-    console.log('::: {.callout-note}');
-    console.log('Each scenario includes a Diagram, the Implementation Source (Embedded), and the Live Execution Result (calculated during render).');
-    console.log(':::\n');
-
-    // Load real test results if they exist
+    // Load test results
     let testResults: any = null;
     const resultsPath = path.join(__dirname, '../test-results.json');
     if (fs.existsSync(resultsPath)) {
@@ -395,53 +243,124 @@ function generateReport() {
         }
     }
 
-    // Combine all scenarios (Matched + Orphans)
+    // Calculate summary stats
+    const totalAssertions = report.reduce((sum, r) => sum + (r.testStats?.assertions || 0), 0) +
+        orphans.reduce((sum, o) => sum + analyzeTestFile(path.join(TEST_DIR, o.file)).stats.assertions, 0);
+    const totalTests = report.reduce((sum, r) => sum + (r.testStats?.tests || 0), 0) +
+        orphans.reduce((sum, o) => sum + analyzeTestFile(path.join(TEST_DIR, o.file)).stats.tests, 0);
+
+    let passed = 0, failed = 0, skipped = 0;
+    if (testResults?.testResults) {
+        for (const file of testResults.testResults) {
+            for (const a of file.assertionResults) {
+                if (a.status === 'passed') passed++;
+                else if (a.status === 'failed') failed++;
+                else skipped++;
+            }
+        }
+    }
+
+    // --- OUTPUT MARKDOWN (QMD) ---
+    console.log('---');
+    console.log('title: "Detailed Test & Implementation Report"');
+    console.log('format:');
+    console.log('  html:');
+    console.log('    code-fold: true');
+    console.log('    code-tools: true');
+    console.log('    toc: true');
+    console.log('    theme: cosmo');
+    console.log('    page-layout: full');
+    console.log('---');
+    console.log('');
+    console.log(`Generated on: ${new Date().toISOString()}`);
+    console.log('');
+
+    // Test Results Summary (from last run)
+    console.log('## 📊 Test Results Summary');
+    console.log('');
+    if (testResults) {
+        const runTime = testResults.startTime ? new Date(testResults.startTime).toLocaleString() : 'Unknown';
+        console.log(`> **Last Run:** ${runTime}`);
+        console.log('');
+        console.log('| Status | Count |');
+        console.log('|--------|-------|');
+        console.log(`| ✅ Passed | ${passed} |`);
+        console.log(`| ❌ Failed | ${failed} |`);
+        console.log(`| ⏭️ Skipped | ${skipped} |`);
+        console.log(`| **Total** | **${passed + failed + skipped}** |`);
+    } else {
+        console.log('::: {.callout-warning}');
+        console.log('No test results found. Run `npm test -- --reporter=json --outputFile=test-results.json` to generate results.');
+        console.log(':::');
+    }
+    console.log('');
+
+    // Coverage Summary
+    console.log('## 📈 Source Component Coverage');
+    console.log('| Component | LOC | Test File | Scenarios | Assertions | Status |');
+    console.log('|---|---|---|---|---|---|');
+
+    const coveredReports = report.filter(r => r.testFile).sort((a, b) => b.sourceLoc - a.sourceLoc);
+    for (const r of coveredReports) {
+        const assurance = (r.testStats?.assertions || 0) > 10 ? '🟢 Strong' : '🟡 Basic';
+        console.log(`| \`${r.sourceFile}\` | ${r.sourceLoc} | \`${r.testFile}\` | ${r.scenarios.length} | ${r.testStats?.assertions} | ${assurance} |`);
+    }
+    console.log('');
+
+    // Detailed Test Scenarios
+    console.log('## 🧪 Detailed Test Scenarios');
+    console.log('');
+
     const allFileScenarios = [
-        ...coveredReports.map(r => ({
-            file: r.testFile!,
-            scenarios: r.scenarios,
-            type: 'Unit/Mapped'
-        })),
-        ...orphans.map(o => ({
-            file: o.file,
-            scenarios: o.scenarios,
-            type: 'Integration/Orphan'
-        }))
+        ...coveredReports.map(r => ({ file: r.testFile!, scenarios: r.scenarios, type: 'Unit/Mapped' })),
+        ...orphans.map(o => ({ file: o.file, scenarios: o.scenarios, type: 'Integration/Orphan' }))
     ];
 
     for (const fileData of allFileScenarios) {
         if (fileData.scenarios.length === 0) continue;
 
-        console.log(`### 📁 \`${fileData.file}\` <small class="text-muted">(${fileData.type})</small>`);
+        console.log(`### 📁 \`${fileData.file}\` <small>(${fileData.type})</small>`);
+        console.log('');
 
         for (const scenario of fileData.scenarios) {
-            console.log(`\n#### 🧪 "${scenario.name}"`);
-
-            // Get Execution Result
             const result = findTestResult(testResults, fileData.file, scenario.name);
-            let statusCallout = '';
 
+            // Status badge
+            let statusBadge = '❓ Unknown';
+            let statusClass = 'callout-note';
             if (result) {
                 if (result.status === 'passed') {
-                    statusCallout = `::: {.callout-tip appearance="simple" icon=true}\n## ✅ Passed (${result.duration}ms)\n:::\n`;
+                    statusBadge = `✅ Passed (${result.duration.toFixed(2)}ms)`;
+                    statusClass = 'callout-tip';
                 } else if (result.status === 'failed') {
-                    statusCallout = `::: {.callout-important appearance="simple" icon=true}\n## ❌ Failed (${result.duration}ms)\n${result.failureMessages.join('\n')}\n:::\n`;
+                    statusBadge = `❌ Failed (${result.duration.toFixed(2)}ms)`;
+                    statusClass = 'callout-important';
                 } else {
-                    statusCallout = `::: {.callout-warning appearance="simple" icon=true}\n## ⚠️ ${result.status}\n:::\n`;
+                    statusBadge = `⏭️ ${result.status}`;
+                    statusClass = 'callout-warning';
                 }
-            } else {
-                statusCallout = `::: {.callout-note appearance="simple" icon=true}\n## 🤷 Status Unknown (Test not found in run)\n:::\n`;
             }
 
-            // Status callout BEFORE tabset to avoid nesting issues
-            console.log(statusCallout);
+            console.log(`#### 🧪 "${scenario.name}"`);
             console.log('');
-            console.log('::: panel-tabset');
+            console.log(`::: {.${statusClass} appearance="simple"}`);
+            console.log(`**${statusBadge}**`);
+            if (result?.status === 'failed' && result.failureMessages.length > 0) {
+                console.log('');
+                console.log('```');
+                console.log(result.failureMessages[0].substring(0, 300));
+                console.log('```');
+            }
+            console.log(':::');
+            console.log('');
 
+            console.log('::: {.panel-tabset}');
+            console.log('');
+
+            // Flowchart tab
             console.log('##### 🧬 Flowchart');
-            // Mermaid diagram with proper class definitions
+            console.log('');
             console.log('```{mermaid}');
-            console.log('%%| fig-width: 100%');
             console.log(scenario.diagram);
             console.log('');
             console.log('classDef setup fill:#e1f5fe,stroke:#01579b,stroke-width:2px');
@@ -453,73 +372,50 @@ function generateReport() {
             console.log('```');
             console.log('');
 
+            // Implementation tab - use Quarto file include with line range
             console.log('##### 💻 Implementation');
-            // Use Quarto file include with line numbers
+            console.log('');
             if (scenario.startLine && scenario.endLine) {
-                console.log(`\`\`\`{.typescript filename="tests/${fileData.file}" code-line-numbers="${scenario.startLine}-${scenario.endLine}"}`);
-                console.log(scenario.body);
-                console.log('```');
-            } else {
-                console.log('```typescript');
-                console.log(scenario.body);
-                console.log('```');
+                // Use the Quarto include shortcode for actual file embedding
+                console.log(`📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](tests/${fileData.file})`);
+                console.log('');
             }
+            console.log('```typescript');
+            console.log(scenario.body);
+            console.log('```');
             console.log('');
 
-            console.log('##### ⚡ Live Result');
-
-            // Generate a unique ID for this test's result container
-            const testId = `test_${fileData.file.replace(/[^a-zA-Z0-9]/g, '_')}_${scenario.name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}`;
-            const safeName = scenario.name.replace(/"/g, '\\"').replace(/'/g, "\\'");
-
-            console.log('**Command:**');
+            // Command tab
+            console.log('##### ▶️ Run Command');
+            console.log('');
+            const safeName = scenario.name.replace(/"/g, '\\"');
             console.log('```bash');
-            console.log(`npx vitest run tests/${fileData.file} -t "${safeName}" --reporter=basic`);
+            console.log(`npx vitest run tests/${fileData.file} -t "${safeName}" --reporter=verbose`);
             console.log('```');
             console.log('');
 
-            // OJS block for dynamic result display
-            console.log('```{ojs}');
-            console.log('//| echo: false');
-            console.log(`// Result for: ${scenario.name}`);
-            console.log('{');
-            console.log(`  const testFile = "${fileData.file}";`);
-            console.log(`  const testName = "${scenario.name.replace(/"/g, '\\"')}";`);
-            console.log('  ');
-            console.log('  function findResult(results) {');
-            console.log('    if (!results || !results.testResults) return null;');
-            console.log('    for (const file of results.testResults) {');
-            console.log('      if (file.name.includes(testFile)) {');
-            console.log('        for (const assertion of file.assertionResults) {');
-            console.log('          if (assertion.title === testName || assertion.fullName.includes(testName)) {');
-            console.log('            return assertion;');
-            console.log('          }');
-            console.log('        }');
-            console.log('      }');
-            console.log('    }');
-            console.log('    return null;');
-            console.log('  }');
-            console.log('  ');
-            console.log('  const result = findResult(testResults);');
-            console.log('  ');
-            console.log('  if (!result) {');
-            console.log('    return md`*No results available. Run tests to see live results.*`;');
-            console.log('  } else if (result.status === "passed") {');
-            console.log('    return md`✅ **Passed** in ${result.duration}ms`;');
-            console.log('  } else if (result.status === "failed") {');
-            console.log('    return md`❌ **Failed** in ${result.duration}ms`;');
-            console.log('  } else {');
-            console.log('    return md`⚠️ **${result.status}**`;');
-            console.log('  }');
-            console.log('}');
-            console.log('```');
+            console.log(':::');
             console.log('');
-
-
-            console.log(':::'); // End tabset
         }
-        console.log('---\n');
+        console.log('---');
+        console.log('');
     }
+
+    // How to refresh results
+    console.log('## 🔄 Refresh Test Results');
+    console.log('');
+    console.log('To update the results shown above:');
+    console.log('');
+    console.log('```bash');
+    console.log('# Run tests and generate JSON results');
+    console.log('npx vitest run --reporter=json --outputFile=test-results.json');
+    console.log('');
+    console.log('# Regenerate this report');
+    console.log('npx ts-node scripts/generate_test_report.ts > TEST_REPORT.qmd');
+    console.log('');
+    console.log('# Render to HTML');
+    console.log('quarto render TEST_REPORT.qmd');
+    console.log('```');
 }
 
 generateReport();
