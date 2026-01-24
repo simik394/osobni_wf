@@ -1,0 +1,34 @@
+---
+- name: Install Wander via Go
+  shell: go install github.com/robinovitch61/wander@latest
+  args:
+    executable: /bin/bash
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin:{{ ansible_env.HOME }}/.local/bin"
+  ignore_errors: true
+
+- name: Add Wander alias to Zsh
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: "alias ha.wan='NOMAD_ADDR=http://halvarm:4646 wander'"
+    regexp: "^alias ha.wan="
+    insertafter: EOF
+    state: present
+  ignore_errors: true
+
+- name: Check for Nushell config
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/nushell/config.nu"
+  register: nu_config_check
+
+- name: Add Wander command to Nushell
+  blockinfile:
+    path: "{{ ansible_env.HOME }}/.config/nushell/config.nu"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: WANDER"
+    block: |
+      def ha.wan [] {
+          with-env { NOMAD_ADDR: "http://halvarm:4646" } {
+              wander
+          }
+      }
+  when: nu_config_check.stat.exists

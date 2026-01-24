@@ -34,3 +34,29 @@
 - name: Display Lazydocker version
   debug:
     msg: "Installed Lazydocker version: {{ lazydocker_ver_check.stdout }}"
+
+- name: Add Lazydocker alias to Zsh
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: "alias ha.lzd='DOCKER_HOST=\"ssh://halvarm\" lazydocker'"
+    regexp: "^alias ha.lzd="
+    insertafter: EOF
+    state: present
+  ignore_errors: true
+
+- name: Check for Nushell config
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/nushell/config.nu"
+  register: nu_config_check
+
+- name: Add Lazydocker command to Nushell
+  blockinfile:
+    path: "{{ ansible_env.HOME }}/.config/nushell/config.nu"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: LAZYDOCKER"
+    block: |
+      def ha.lzd [] {
+          with-env { DOCKER_HOST: "ssh://halvarm" } {
+              lazydocker
+          }
+      }
+  when: nu_config_check.stat.exists

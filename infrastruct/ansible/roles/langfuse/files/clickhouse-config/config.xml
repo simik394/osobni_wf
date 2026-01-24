@@ -9,4 +9,10 @@
     <max_connections>1024</max_connections>
     <max_table_size_to_drop>0</max_table_size_to_drop>
     <max_partition_size_to_drop>0</max_partition_size_to_drop>
+    <trace_log>
+        <ttl>event_date + INTERVAL 2 DAY</ttl>
+    </trace_log>
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY</ttl>
+    </query_log>
 </clickhouse>

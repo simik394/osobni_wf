@@ -1,0 +1,33 @@
+---
+- name: Get latest Quarto release info
+  uri:
+    url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
+    return_content: true
+  register: quarto_release
+
+- name: Set Quarto download url
+  set_fact:
+    quarto_deb_url: "{{ quarto_release.json.assets | selectattr('name', 'search', 'linux-amd64.deb') | map(attribute='browser_download_url') | first }}"
+    quarto_version: "{{ quarto_release.json.tag_name }}"
+
+- name: Create temporary download directory
+  tempfile:
+    state: directory
+    suffix: quarto_install
+  register: quarto_temp_dir
+
+- name: Download Quarto .deb
+  get_url:
+    url: "{{ quarto_deb_url }}"
+    dest: "{{ quarto_temp_dir.path }}/quarto.deb"
+
+- name: Install Quarto
+  apt:
+    deb: "{{ quarto_temp_dir.path }}/quarto.deb"
+    state: present
+  become: true
+
+- name: Remove temporary directory
+  file:
+    path: "{{ quarto_temp_dir.path }}"
+    state: absent

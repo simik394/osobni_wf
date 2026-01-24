@@ -1,0 +1,28 @@
+---
+- name: Get latest Fly-Pie release info
+  uri:
+    url: https://api.github.com/repos/Schneegans/Fly-Pie/releases/latest
+    return_content: true
+  register: flypie_release
+
+- name: Set Fly-Pie variables
+  set_fact:
+    flypie_uuid: "flypie@schneegans.github.com"
+    flypie_zip_url: "{{ flypie_release.json.assets | selectattr('name', 'search', 'flypie@schneegans.github.com.zip') | map(attribute='browser_download_url') | first }}"
+
+- name: Ensure GNOME extensions directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/gnome-shell/extensions/{{ flypie_uuid }}"
+    state: directory
+    mode: '0755'
+
+- name: Download and install Fly-Pie
+  unarchive:
+    src: "{{ flypie_zip_url }}"
+    dest: "{{ ansible_env.HOME }}/.local/share/gnome-shell/extensions/{{ flypie_uuid }}"
+    remote_src: yes
+
+- name: Enable Fly-Pie extension
+  command: "gnome-extensions enable {{ flypie_uuid }}"
+  ignore_errors: true # Can fail if not in a graphical session or if already enabled/needs restart
+  changed_when: false
