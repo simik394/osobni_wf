@@ -42,6 +42,8 @@ describe.skipIf(!runE2E)('Gemini E2E Tests', () => {
         if (browser) await browser.close();
     });
 
+// #region test:should-navigate-to-gemini-and-verify-login-status
+
     it('should navigate to Gemini and verify login status', async () => {
         await page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForTimeout(2000);
@@ -58,6 +60,10 @@ describe.skipIf(!runE2E)('Gemini E2E Tests', () => {
 
         expect(isLoginPage, 'Should be logged in to Gemini').toBe(false);
     });
+
+// #endregion test:should-navigate-to-gemini-and-verify-login-status
+
+// #region test:should-parse-an-existing-research-session
 
     it('should parse an existing research session', async () => {
         // Skip if we failed the login check (assertions in beforeAll logic would be better but keeping simple flow)
@@ -117,5 +123,7 @@ describe.skipIf(!runE2E)('Gemini E2E Tests', () => {
                 // If it returns null, it means it couldn't find research structure
             }
         }
-    }, 120000); // Long timeout for E2E
+    }, 120000);
+
+// #endregion test:should-parse-an-existing-research-session // Long timeout for E2E
 });

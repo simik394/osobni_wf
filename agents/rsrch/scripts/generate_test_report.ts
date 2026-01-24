@@ -18,6 +18,43 @@ interface TestScenario {
     diagram: string;
     startLine?: number;
     endLine?: number;
+    regionName?: string;  // e.g., "test:should-be-defined"
+    regionStartLine?: number;  // Line number of #region marker
+    regionEndLine?: number;    // Line number of #endregion marker
+}
+
+// Helper to sanitize test name to region name format
+function sanitizeToRegionName(name: string): string {
+    return name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 50);
+}
+
+// Find region markers in file content and return line ranges
+function findRegionRange(content: string, regionName: string): { startLine: number; endLine: number } | null {
+    const lines = content.split('\n');
+    let startLine = -1;
+    let endLine = -1;
+
+    const startMarker = `// #region test:${regionName}`;
+    const endMarker = `// #endregion test:${regionName}`;
+
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(startMarker)) {
+            startLine = i + 1; // 1-indexed
+        }
+        if (lines[i].includes(endMarker) && startLine > 0) {
+            endLine = i + 1; // 1-indexed
+            break;
+        }
+    }
+
+    if (startLine > 0 && endLine > 0) {
+        return { startLine, endLine };
+    }
+    return null;
 }
 
 interface FileReport {
@@ -87,12 +124,20 @@ function extractScenarios(content: string): TestScenario[] {
         if (braceCount === 0) {
             const body = content.substring(startIndex, currentIndex - 1);
             const endLine = content.substring(0, currentIndex - 1).split('\n').length;
+
+            // Look for region markers
+            const regionName = sanitizeToRegionName(title);
+            const regionRange = findRegionRange(content, regionName);
+
             scenarios.push({
                 name: title,
                 body: body.trim(),
                 diagram: generateMermaidDiagram(title, body),
                 startLine: startLine,
-                endLine: endLine
+                endLine: endLine,
+                regionName: regionName,
+                regionStartLine: regionRange?.startLine,
+                regionEndLine: regionRange?.endLine
             });
         }
     }
@@ -372,17 +417,29 @@ function generateReport() {
             console.log('```');
             console.log('');
 
-            // Implementation tab - use Quarto file include with line range
+            // Implementation tab - use Quarto file include with region line range
             console.log('##### 💻 Implementation');
             console.log('');
-            if (scenario.startLine && scenario.endLine) {
-                // Use the Quarto include shortcode for actual file embedding
-                console.log(`📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](tests/${fileData.file})`);
+
+            // If we have region markers, use Quarto's include with line range for TRUE embedding
+            if (scenario.regionStartLine && scenario.regionEndLine) {
+                console.log(`> 📄 **Region:** \`// #region test:${scenario.regionName}\` in [\`tests/${fileData.file}\`](tests/${fileData.file})`);
                 console.log('');
+                // Use Quarto's include attribute - this reads from the actual file at render time!
+                console.log(`\`\`\`{.typescript include="tests/${fileData.file}" start-line=${scenario.regionStartLine} end-line=${scenario.regionEndLine}}`);
+                console.log('```');
+            } else if (scenario.startLine && scenario.endLine) {
+                // Fallback to line numbers if no region markers
+                console.log(`> 📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](tests/${fileData.file})`);
+                console.log('');
+                console.log(`\`\`\`{.typescript include="tests/${fileData.file}" start-line=${scenario.startLine} end-line=${scenario.endLine}}`);
+                console.log('```');
+            } else {
+                // Fallback to inline body if no line info
+                console.log('```typescript');
+                console.log(scenario.body);
+                console.log('```');
             }
-            console.log('```typescript');
-            console.log(scenario.body);
-            console.log('```');
             console.log('');
 
             // Command tab

@@ -7,6 +7,8 @@ const runIntegration = process.env.TEST_INTEGRATION === 'true';
 
 describe.skipIf(!runIntegration)('Gemini Streaming Integration', () => {
 
+// #region test:should-stream-thoughts-from-a-reasoning-query
+
     it('should stream thoughts from a reasoning query', async () => {
         const query = "Solve 25 * 44 with detailed thoughts";
         const serverUrl = 'http://halvarm:3030';
@@ -37,5 +39,7 @@ describe.skipIf(!runIntegration)('Gemini Streaming Integration', () => {
         // We strictly check if the loop logic found "Thought Process" or we just have a long response.
         // The thought block is what we specifically patched.
         expect(thoughtBlockDetected).toBe(true);
-    }, 60000); // Long timeout for LLM generation
+    }, 60000);
+
+// #endregion test:should-stream-thoughts-from-a-reasoning-query // Long timeout for LLM generation
 });

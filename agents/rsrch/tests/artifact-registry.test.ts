@@ -28,6 +28,8 @@ describe('ArtifactRegistry', () => {
         }
     });
 
+// #region test:should-generate-unique-3-character-base-ids
+
     it('should generate unique 3-character base IDs', () => {
         const ids = new Set<string>();
         for (let i = 0; i < 100; i++) {
@@ -36,6 +38,10 @@ describe('ArtifactRegistry', () => {
         expect(ids.size).toBe(100);
         expect([...ids][0].length).toBe(3);
     });
+
+// #endregion test:should-generate-unique-3-character-base-ids
+
+// #region test:should-register-and-retrieve-a-session
 
     it('should register and retrieve a session', () => {
         const sessionId = registry.registerSession('gemini-session-abc', 'History of Espresso');
@@ -46,6 +52,10 @@ describe('ArtifactRegistry', () => {
         expect(session?.type).toBe('session');
         expect(session?.query).toBe('History of Espresso');
     });
+
+// #endregion test:should-register-and-retrieve-a-session
+
+// #region test:should-register-and-retrieve-a-document
 
     it('should register and retrieve a document', () => {
         const sessionId = registry.registerSession('s1', 'Q1');
@@ -59,6 +69,10 @@ describe('ArtifactRegistry', () => {
         expect(doc?.type).toBe('document');
         expect(doc?.parentId).toBe(sessionId);
     });
+
+// #endregion test:should-register-and-retrieve-a-document
+
+// #region test:should-register-and-retrieve-audio-with-incrementi
 
     it('should register and retrieve audio with incrementing suffixes', () => {
         const sessionId = registry.registerSession('s1', 'Q1');
@@ -75,6 +89,10 @@ describe('ArtifactRegistry', () => {
         expect(audio?.type).toBe('audio');
     });
 
+// #endregion test:should-register-and-retrieve-audio-with-incrementi
+
+// #region test:should-track-lineage-correctly
+
     it('should track lineage correctly', () => {
         const sessionId = registry.registerSession('s1', 'Q1');
         const docId = registry.registerDocument(sessionId, 'd1', 'D1');
@@ -87,6 +105,10 @@ describe('ArtifactRegistry', () => {
         expect(lineage[2].type).toBe('session');
     });
 
+// #endregion test:should-track-lineage-correctly
+
+// #region test:should-persist-data-to-disk
+
     it('should persist data to disk', () => {
         const sessionId = registry.registerSession('s1', 'Persist Test');
 
@@ -98,6 +120,10 @@ describe('ArtifactRegistry', () => {
         expect(session?.query).toBe('Persist Test');
     });
 
+// #endregion test:should-persist-data-to-disk
+
+// #region test:should-list-artifacts-by-type
+
     it('should list artifacts by type', () => {
         const s1 = registry.registerSession('s1', 'Q1');
         registry.registerDocument(s1, 'd1', 'D1');
@@ -107,4 +133,6 @@ describe('ArtifactRegistry', () => {
         expect(registry.listByType('document').length).toBe(1);
         expect(registry.listByType('audio').length).toBe(1);
     });
+
+// #endregion test:should-list-artifacts-by-type
 });

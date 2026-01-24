@@ -9,7 +9,7 @@ format:
     page-layout: full
 ---
 
-Generated on: 2026-01-24T17:07:23.352Z
+Generated on: 2026-01-24T17:18:41.099Z
 
 ## 📊 Test Results Summary
 
@@ -63,10 +63,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:109-111`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-be-defined` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-expect(GeminiClient).toBeDefined();
+```{.typescript include="tests/gemini-client.test.ts" start-line=109 end-line=115}
 ```
 
 ##### ▶️ Run Command
@@ -103,11 +102,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:114-117`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-navigate-to-the-base-url-if-no-session-id-i` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-await client.init();
-            expect(mockPage.goto).toHaveBeenCalledWith('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+```{.typescript include="tests/gemini-client.test.ts" start-line=119 end-line=125}
 ```
 
 ##### ▶️ Run Command
@@ -144,11 +141,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:119-122`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-navigate-to-the-specific-session-url-if-an-` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-await client.init('test-session-id');
-            expect(mockPage.goto).toHaveBeenCalledWith('https://gemini.google.com/app/test-session-id', { waitUntil: 'domcontentloaded' });
+```{.typescript include="tests/gemini-client.test.ts" start-line=127 end-line=134}
 ```
 
 ##### ▶️ Run Command
@@ -191,19 +186,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:124-135`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-handle-and-click-cookie-consent-button` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockCookieButton = createMockLocator(true);
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('Accept all')) {
-                    return mockCookieButton;
-                }
-                return createMockLocator(false); // Hide other buttons
-            });
-
-            await client.init();
-            expect(mockCookieButton.click).toHaveBeenCalled();
+```{.typescript include="tests/gemini-client.test.ts" start-line=136 end-line=151}
 ```
 
 ##### ▶️ Run Command
@@ -246,19 +231,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:137-148`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-handle-and-click-dismiss-buttons-for-popups` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockDismissButton = createMockLocator(true);
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('No thanks')) {
-                    return mockDismissButton;
-                }
-                return createMockLocator(false);
-            });
-
-            await client.init();
-            expect(mockDismissButton.click).toHaveBeenCalled();
+```{.typescript include="tests/gemini-client.test.ts" start-line=153 end-line=168}
 ```
 
 ##### ▶️ Run Command
@@ -297,18 +272,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:150-161`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-throw-an-error-if-a-sign-in-button-is-detec` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('Sign in')) {
-                    return createMockLocator(true);
-                }
-                return createMockLocator(false);
-            });
-
-            await expect(client.init()).rejects.toThrow('Gemini requires authentication. Please run rsrch auth first.');
-            expect(client.dumpState).toHaveBeenCalledWith('gemini_auth_required');
+```{.typescript include="tests/gemini-client.test.ts" start-line=170 end-line=185}
 ```
 
 ##### ▶️ Run Command
@@ -347,14 +313,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:163-169`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-wait-for-the-chat-interface-to-be-ready` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-await client.init();
-            expect(mockPage.waitForSelector).toHaveBeenCalledWith(
-                'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]',
-                { timeout: 15000 }
-            );
+```{.typescript include="tests/gemini-client.test.ts" start-line=187 end-line=197}
 ```
 
 ##### ▶️ Run Command
@@ -393,15 +354,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:171-178`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-throw-an-error-if-chat-interface-is-not-fou` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-mockPage.waitForSelector.mockRejectedValue(new Error('Timeout'));
-            // also make sidebar invisible
-            mockPage.locator.mockImplementation(() => createMockLocator(false));
-
-            await expect(client.init()).rejects.toThrow('Timeout');
-            expect(client.dumpState).toHaveBeenCalledWith('gemini_init_fail');
+```{.typescript include="tests/gemini-client.test.ts" start-line=199 end-line=210}
 ```
 
 ##### ▶️ Run Command
@@ -450,29 +405,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:182-203`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-fill-the-input-press-enter-and-wait-for-a-r` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const message = 'Hello, Gemini!';
-            const mockInput = createMockLocator(true);
-            const mockResponse = createMockLocator(true, 'Response text');
-            mockResponse.last = vi.fn().mockReturnThis();
-
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div[contenteditable="true"]')) {
-                    return mockInput;
-                }
-                if (selector.includes('model-response')) {
-                    return mockResponse;
-                }
-                return createMockLocator(false);
-            });
-
-            const response = await client.sendMessage(message);
-
-            expect(mockInput.fill).toHaveBeenCalledWith(message);
-            expect(mockInput.press).toHaveBeenCalledWith('Enter');
-            expect(response).toBe('Response text');
+```{.typescript include="tests/gemini-client.test.ts" start-line=215 end-line=239}
 ```
 
 ##### ▶️ Run Command
@@ -516,14 +451,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:205-211`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-return-null-if-waitforresponse-is-false` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const message = 'Fire and forget';
-            const response = await client.sendMessage(message, false);
-            expect(response).toBeNull();
-            // Ensure we don't wait for response
-            expect(mockPage.waitForTimeout).toHaveBeenCalledTimes(1);
+```{.typescript include="tests/gemini-client.test.ts" start-line=241 end-line=251}
 ```
 
 ##### ▶️ Run Command
@@ -568,24 +498,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:213-229`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-return-null-and-log-an-error-if-sending-fai` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const message = 'This will fail';
-            const mockInput = createMockLocator(true);
-            mockInput.press.mockRejectedValue(new Error('Send failed')); // Simulate failure
-
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div[contenteditable="true"]')) {
-                    return mockInput;
-                }
-                return createMockLocator(false);
-            });
-
-            const response = await client.sendMessage(message);
-
-            expect(response).toBeNull();
-            expect(client.dumpState).toHaveBeenCalledWith('send_message_fail');
+```{.typescript include="tests/gemini-client.test.ts" start-line=253 end-line=273}
 ```
 
 ##### ▶️ Run Command
@@ -635,31 +550,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:231-254`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:should-handle-response-stabilization` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockInput = createMockLocator(true);
-            const mockResponse = createMockLocator(true, 'Initial response');
-            mockResponse.last = vi.fn().mockReturnThis();
-
-
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div[contenteditable="true"]')) return mockInput;
-                if (selector.includes('model-response')) return mockResponse;
-                return createMockLocator(true);
-            });
-
-            // Simulate response text changing and then stabilizing
-            mockResponse.innerText
-                .mockResolvedValueOnce('Initial response')
-                .mockResolvedValueOnce('Initial response, more text')
-                .mockResolvedValueOnce('Initial response, more text') // Stable
-                .mockResolvedValueOnce('Initial response, more text'); // Stable again
-
-            await client.sendMessage('test');
-
-            // waitForTimeout is called for stabilization checks
-            expect(mockPage.waitForTimeout).toHaveBeenCalled();
+```{.typescript include="tests/gemini-client.test.ts" start-line=275 end-line=302}
 ```
 
 ##### ▶️ Run Command
@@ -700,23 +593,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:258-273`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:getresponses-should-return-an-array-of-all-respons` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockResponses = {
-                count: vi.fn().mockResolvedValue(3),
-                nth: vi.fn((i) => {
-                    if (i === 0) return createMockLocator(true, 'Response 1');
-                    if (i === 1) return createMockLocator(true, 'Response 2');
-                    if (i === 2) return createMockLocator(true, 'Response 3');
-                    return createMockLocator(false);
-                }),
-            };
-            mockPage.locator.mockReturnValue(mockResponses);
-
-            const responses = await client.getResponses();
-            expect(responses).toEqual(['Response 1', 'Response 2', 'Response 3']);
-            expect(mockResponses.nth).toHaveBeenCalledTimes(3);
+```{.typescript include="tests/gemini-client.test.ts" start-line=307 end-line=325}
 ```
 
 ##### ▶️ Run Command
@@ -765,25 +644,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:275-292`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:getlatestresponse-should-return-the-text-of-the-la` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockResponses = {
-                count: vi.fn().mockResolvedValue(2),
-                nth: vi.fn().mockReturnThis(),
-                innerText: vi.fn().mockResolvedValue('This is the last one'),
-            };
-
-            mockPage.locator.mockImplementation(selector => {
-                if (selector.includes('model-response')) {
-                    return mockResponses;
-                }
-                return createMockLocator(false);
-            });
-
-            const latest = await client.getLatestResponse();
-            expect(latest).toBe('This is the last one');
-            expect(mockResponses.nth).toHaveBeenCalledWith(1);
+```{.typescript include="tests/gemini-client.test.ts" start-line=327 end-line=348}
 ```
 
 ##### ▶️ Run Command
@@ -820,12 +683,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:295-299`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:getlatestresponse-should-return-null-if-no-respons` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-mockPage.locator.mockReturnValue(createMockLocator(false));
-            const latest = await client.getLatestResponse();
-            expect(latest).toBeNull();
+```{.typescript include="tests/gemini-client.test.ts" start-line=350 end-line=359}
 ```
 
 ##### ▶️ Run Command
@@ -866,31 +726,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:301-324`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:getresponse-should-retrieve-responses-by-positive-` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockResponses = {
-                count: vi.fn().mockResolvedValue(3),
-                nth: vi.fn((i) => {
-                    if (i === 0) return createMockLocator(true, 'First');
-                    if (i === 1) return createMockLocator(true, 'Second');
-                    if (i === 2) return createMockLocator(true, 'Third');
-                    return createMockLocator(false);
-                }),
-            };
-            mockPage.locator.mockReturnValue(mockResponses);
-
-            // Test positive index (1-based)
-            expect(await client.getResponse(1)).toBe('First');
-            expect(await client.getResponse(3)).toBe('Third');
-
-            // Test negative index
-            expect(await client.getResponse(-1)).toBe('Third');
-            expect(await client.getResponse(-3)).toBe('First');
-
-            // Test out of bounds
-            expect(await client.getResponse(4)).toBeNull();
-            expect(await client.getResponse(-4)).toBeNull();
+```{.typescript include="tests/gemini-client.test.ts" start-line=361 end-line=388}
 ```
 
 ##### ▶️ Run Command
@@ -931,14 +769,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:328-334`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:listsessions-should-return-an-empty-array-on-failu` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-mockPage.locator.mockImplementation(() => {
-                throw new Error('Failed to find session list');
-            });
-            const sessions = await client.listSessions();
-            expect(sessions).toEqual([]);
+```{.typescript include="tests/gemini-client.test.ts" start-line=393 end-line=402}
 ```
 
 ##### ▶️ Run Command
@@ -979,16 +812,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:336-344`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:getlatestresponse-should-return-null-on-failure` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-mockPage.locator.mockImplementation(() => {
-                const locator = createMockLocator(true);
-                locator.innerText.mockRejectedValue(new Error('Cannot read text'));
-                return locator;
-            });
-            const response = await client.getLatestResponse();
-            expect(response).toBeNull();
+```{.typescript include="tests/gemini-client.test.ts" start-line=404 end-line=416}
 ```
 
 ##### ▶️ Run Command
@@ -1029,20 +855,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:346-358`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:exporttogoogledocs-should-return-null-values-on-fa` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-mockPage.locator.mockImplementation((selector) => {
-                // Make export button not visible/found
-                if (selector.includes('Export menu') || selector.includes('Nabídka pro export')) {
-                    return createMockLocator(false);
-                }
-                return createMockLocator(true);
-            });
-
-            const result = await client.exportCurrentToGoogleDocs();
-            expect(result).toEqual({ docId: null, docUrl: null, docTitle: null });
-            expect(client.dumpState).toHaveBeenCalledWith('export_button_not_found');
+```{.typescript include="tests/gemini-client.test.ts" start-line=418 end-line=434}
 ```
 
 ##### ▶️ Run Command
@@ -1093,34 +908,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:362-388`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:listsessions-should-scroll-to-load-more-sessions-i` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-let callCount = 0;
-            const mockSessionLocator = {
-                ...createMockLocator(true, 'Session'),
-                count: vi.fn(() => {
-                    callCount++;
-                    return Promise.resolve(callCount === 1 ? 10 : 20);
-                }),
-                last: vi.fn().mockReturnThis(),
-                scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
-            };
-
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div.conversation')) {
-                    return mockSessionLocator;
-                }
-                if (selector.includes('Show more')) {
-                    return createMockLocator(false);
-                }
-                return createMockLocator(true);
-            });
-
-            await client.listSessions(20, 0);
-
-            expect(mockSessionLocator.scrollIntoViewIfNeeded).toHaveBeenCalled();
-            expect(mockSessionLocator.count).toHaveBeenCalledTimes(2);
+```{.typescript include="tests/gemini-client.test.ts" start-line=439 end-line=468}
 ```
 
 ##### ▶️ Run Command
@@ -1167,26 +957,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.test.ts:390-408`](tests/gemini-client.test.ts)
+> 📄 **Region:** `// #region test:listsessions-should-click-show-more-button-if-visi` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```typescript
-const mockSessionLocator = createMockLocator(true, 'Session');
-            mockSessionLocator.count.mockResolvedValue(5);
-            const mockShowMoreButton = createMockLocator(true);
-
-            mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div.conversation')) {
-                    return mockSessionLocator;
-                }
-                if (selector.includes('Show more') || selector.includes('Zobrazit více')) {
-                    return mockShowMoreButton;
-                }
-                return createMockLocator(false);
-            });
-
-            await client.listSessions(10, 0);
-
-            expect(mockShowMoreButton.click).toHaveBeenCalled();
+```{.typescript include="tests/gemini-client.test.ts" start-line=470 end-line=492}
 ```
 
 ##### ▶️ Run Command
@@ -1231,23 +1004,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/e2e/gemini.test.ts:45-60`](tests/e2e/gemini.test.ts)
+> 📄 **Region:** `// #region test:should-navigate-to-gemini-and-verify-login-status` in [`tests/e2e/gemini.test.ts`](tests/e2e/gemini.test.ts)
 
-```typescript
-await page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.waitForTimeout(2000);
-
-        const url = page.url();
-        const isLoginPage = url.includes('accounts.google.com');
-
-        // Take a screenshot for debugging
-        await page.screenshot({ path: path.join(SNAPSHOT_DIR, 'login_status.png') });
-
-        if (isLoginPage) {
-            console.warn('Browser is not logged in. Skipping functionality tests.');
-        }
-
-        expect(isLoginPage, 'Should be logged in to Gemini').toBe(false);
+```{.typescript include="tests/e2e/gemini.test.ts" start-line=45 end-line=64}
 ```
 
 ##### ▶️ Run Command
@@ -1312,66 +1071,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/e2e/gemini.test.ts:62-120`](tests/e2e/gemini.test.ts)
+> 📄 **Region:** `// #region test:should-parse-an-existing-research-session` in [`tests/e2e/gemini.test.ts`](tests/e2e/gemini.test.ts)
 
-```typescript
-// Skip if we failed the login check (assertions in beforeAll logic would be better but keeping simple flow)
-        if (page.url().includes('accounts.google.com')) return;
-
-        // Try to navigate to a specific known session if provided, otherwise search for one
-        // Using the ID from the script as a fallback example, or we can make this dynamic
-        const targetSessionId = process.env.TEST_SESSION_ID;
-
-        if (targetSessionId) {
-            console.log(`Navigating to target session: ${targetSessionId}`);
-            const parsed = await gemini.parseResearch(targetSessionId);
-            expect(parsed).toBeDefined();
-            expect(parsed?.title).toBeTruthy();
-            expect(parsed?.content.length).toBeGreaterThan(0);
-        } else {
-            // Find a research session dynamically
-            console.log('Searching for a research session in sidebar...');
-
-            // Open menu if needed
-            const menuBtn = page.locator('button[aria-label*="Hlavní nabídka"], button[aria-label*="Main menu"]').first();
-            if (await menuBtn.count() > 0 && await menuBtn.isVisible()) {
-                await menuBtn.click();
-                await page.waitForTimeout(1000);
-            }
-
-            const chatItems = page.locator('a[href*="/app/"], .conversation');
-            const count = await chatItems.count();
-
-            let researchSessionFound = false;
-
-            for (let i = 0; i < Math.min(count, 10); i++) {
-                const item = chatItems.nth(i);
-                const text = await item.textContent();
-
-                if (text && (text.includes('Deep') || text.includes('Research') || text.includes('Dive') || text.includes('Analysis'))) {
-                    console.log(`Found candidate session: ${text}`);
-                    await item.click();
-                    await page.waitForTimeout(3000);
-
-                    // Try parsing
-                    const parsed = await gemini.parseResearch();
-                    if (parsed) {
-                        researchSessionFound = true;
-                        expect(parsed.title).toBeTruthy();
-                        expect(parsed.headings.length).toBeGreaterThanOrEqual(0);
-                        break;
-                    }
-                }
-            }
-
-            if (!researchSessionFound) {
-                console.warn('No specific research session found in top 10 items. Testing on current page.');
-                // Just try parsing whatever is open
-                const parsed = await gemini.parseResearch();
-                // We might fail gracefully or return null, so checking expectations carefully
-                // If it returns null, it means it couldn't find research structure
-            }
-        }
+```{.typescript include="tests/e2e/gemini.test.ts" start-line=66 end-line=128}
 ```
 
 ##### ▶️ Run Command
@@ -1412,20 +1114,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/selectors.test.ts:33-45`](tests/selectors.test.ts)
+> 📄 **Region:** `// #region test:should-return-default-selectors-when-selectors-yam` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```typescript
-vi.mocked(fs.existsSync).mockReturnValue(false);
-
-      // Force reload to verify loading logic
-      const result = reloadSelectors();
-
-      // Verify defaults are returned
-      expect(result.home.createNewButton).toBe('.create-new-button');
-      expect(result.notebook.titleInput).toBe('input.title-input');
-
-      // Verify fs.existsSync was called
-      expect(fs.existsSync).toHaveBeenCalled();
+```{.typescript include="tests/selectors.test.ts" start-line=34 end-line=49}
 ```
 
 ##### ▶️ Run Command
@@ -1466,33 +1157,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/selectors.test.ts:47-72`](tests/selectors.test.ts)
+> 📄 **Region:** `// #region test:should-load-and-merge-selectors-from-selectors-yam` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```typescript
-vi.mocked(fs.existsSync).mockReturnValue(true);
-
-      const mockYamlContent = `
-home:
-  createNewButton: '.custom-new-button'
-  projectButton: 'custom-project-button'
-  projectButtonTitle: '.custom-title'
-  projectCard: 'custom-card'
-  primaryActionButton: '.custom-action'
-notebook:
-  titleInput: '.custom-title-input'
-  urlPattern: '**/custom/**'
-`;
-      vi.mocked(fs.readFileSync).mockReturnValue(mockYamlContent);
-
-      // Force reload to pick up new mocks
-      const result = reloadSelectors();
-
-      // Verify custom values are loaded
-      expect(result.home.createNewButton).toBe('.custom-new-button');
-      expect(result.notebook.titleInput).toBe('.custom-title-input');
-
-      // Verify parts not in YAML still have defaults (shallow merge at top level)
-      expect(result.sources.tab).toBe('div[role="tab"]');
+```{.typescript include="tests/selectors.test.ts" start-line=51 end-line=80}
 ```
 
 ##### ▶️ Run Command
@@ -1535,25 +1202,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/selectors.test.ts:74-91`](tests/selectors.test.ts)
+> 📄 **Region:** `// #region test:should-fall-back-to-defaults-when-loading-fails-e-` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```typescript
-vi.mocked(fs.existsSync).mockReturnValue(true);
-
-      // Simulate an error during read
-      vi.mocked(fs.readFileSync).mockImplementation(() => {
-        throw new Error('Read failed');
-      });
-
-      // Spy on console.error to suppress output during test
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const result = reloadSelectors();
-
-      expect(result.home.createNewButton).toBe('.create-new-button');
-      expect(consoleSpy).toHaveBeenCalled();
-
-      consoleSpy.mockRestore();
+```{.typescript include="tests/selectors.test.ts" start-line=82 end-line=103}
 ```
 
 ##### ▶️ Run Command
@@ -1602,39 +1253,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/selectors.test.ts:95-126`](tests/selectors.test.ts)
+> 📄 **Region:** `// #region test:should-force-reload-of-selectors-and-invalidate-ca` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```typescript
-vi.mocked(fs.existsSync).mockReturnValue(true);
-
-      // Mock readFileSync to return different values on consecutive calls
-      let callCount = 0;
-      vi.mocked(fs.readFileSync).mockImplementation(() => {
-        callCount++;
-        return `
-home:
-  createNewButton: '.button-${callCount}'
-  projectButton: 'b'
-  projectButtonTitle: 'c'
-  projectCard: 'd'
-  primaryActionButton: 'e'
-`;
-      });
-
-      // First load (via reloadSelectors to ensure clean start)
-      const first = reloadSelectors();
-      expect(first.home.createNewButton).toBe('.button-1');
-      expect(callCount).toBe(1);
-
-      // Second load via loadSelectors should use cache
-      const second = loadSelectors();
-      expect(second.home.createNewButton).toBe('.button-1');
-      expect(callCount).toBe(1);
-
-      // reloadSelectors should force a new read
-      const third = reloadSelectors();
-      expect(third.home.createNewButton).toBe('.button-2');
-      expect(callCount).toBe(2);
+```{.typescript include="tests/selectors.test.ts" start-line=108 end-line=142}
 ```
 
 ##### ▶️ Run Command
@@ -1671,15 +1292,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/selectors.test.ts:130-137`](tests/selectors.test.ts)
+> 📄 **Region:** `// #region test:should-trigger-loadselectors-when-accessing-a-prop` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```typescript
-// Accessing selectors.home should trigger the loading mechanism.
-      // Since beforeEach set up defaults, this should work.
-      // We are verifying that the proxy correctly accesses the underlying loaded object.
-
-      const homeSelectors = selectors.home;
-      expect(homeSelectors.createNewButton).toBe('.create-new-button');
+```{.typescript include="tests/selectors.test.ts" start-line=147 end-line=157}
 ```
 
 ##### ▶️ Run Command
@@ -1719,12 +1334,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/graph.test.ts:37-41`](tests/graph.test.ts)
+> 📄 **Region:** `// #region test:should-be-tested-in-graph-store-test-ts` in [`tests/graph.test.ts`](tests/graph.test.ts)
 
-```typescript
-// Actual GraphStore tests are in graph-store.test.ts
-      // This file only contains CLI command tests which require full integration
-      expect(true).toBe(true);
+```{.typescript include="tests/graph.test.ts" start-line=38 end-line=45}
 ```
 
 ##### ▶️ Run Command
@@ -1767,15 +1379,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:31-38`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-generate-unique-3-character-base-ids` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const ids = new Set<string>();
-        for (let i = 0; i < 100; i++) {
-            ids.add(registry.generateBaseId());
-        }
-        expect(ids.size).toBe(100);
-        expect([...ids][0].length).toBe(3);
+```{.typescript include="tests/artifact-registry.test.ts" start-line=31 end-line=42}
 ```
 
 ##### ▶️ Run Command
@@ -1816,16 +1422,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:40-48`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-register-and-retrieve-a-session` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const sessionId = registry.registerSession('gemini-session-abc', 'History of Espresso');
-        expect(sessionId.length).toBe(3);
-
-        const session = registry.get(sessionId);
-        expect(session).toBeDefined();
-        expect(session?.type).toBe('session');
-        expect(session?.query).toBe('History of Espresso');
+```{.typescript include="tests/artifact-registry.test.ts" start-line=44 end-line=56}
 ```
 
 ##### ▶️ Run Command
@@ -1866,19 +1465,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:50-61`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-register-and-retrieve-a-document` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const sessionId = registry.registerSession('s1', 'Q1');
-        const docId = registry.registerDocument(sessionId, 'gdoc-123', 'Deep Research on Coffee');
-
-        expect(docId).toMatch(/^[A-Z0-9]{3}-\d{2}$/);
-        expect(docId.startsWith(sessionId)).toBe(true);
-
-        const doc = registry.get(docId);
-        expect(doc).toBeDefined();
-        expect(doc?.type).toBe('document');
-        expect(doc?.parentId).toBe(sessionId);
+```{.typescript include="tests/artifact-registry.test.ts" start-line=58 end-line=73}
 ```
 
 ##### ▶️ Run Command
@@ -1919,21 +1508,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:63-76`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-register-and-retrieve-audio-with-incrementi` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const sessionId = registry.registerSession('s1', 'Q1');
-        const docId = registry.registerDocument(sessionId, 'd1', 'title');
-
-        const audioId1 = registry.registerAudio(docId, 'Notebook', 'Overview 1');
-        const audioId2 = registry.registerAudio(docId, 'Notebook', 'Overview 2');
-
-        expect(audioId1).toMatch(/^[A-Z0-9]{3}-\d{2}-A$/);
-        expect(audioId2).toMatch(/^[A-Z0-9]{3}-\d{2}-B$/);
-
-        const audio = registry.get(audioId1);
-        expect(audio).toBeDefined();
-        expect(audio?.type).toBe('audio');
+```{.typescript include="tests/artifact-registry.test.ts" start-line=75 end-line=92}
 ```
 
 ##### ▶️ Run Command
@@ -1970,18 +1547,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:78-88`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-track-lineage-correctly` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const sessionId = registry.registerSession('s1', 'Q1');
-        const docId = registry.registerDocument(sessionId, 'd1', 'D1');
-        const audioId = registry.registerAudio(docId, 'N1', 'A1');
-
-        const lineage = registry.getLineage(audioId);
-        expect(lineage.length).toBe(3);
-        expect(lineage[0].type).toBe('audio');
-        expect(lineage[1].type).toBe('document');
-        expect(lineage[2].type).toBe('session');
+```{.typescript include="tests/artifact-registry.test.ts" start-line=94 end-line=108}
 ```
 
 ##### ▶️ Run Command
@@ -2022,17 +1590,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:90-99`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-persist-data-to-disk` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const sessionId = registry.registerSession('s1', 'Persist Test');
-
-        const registry2 = new ArtifactRegistry(TEST_DIR);
-        registry2.load();
-
-        const session = registry2.get(sessionId);
-        expect(session).toBeDefined();
-        expect(session?.query).toBe('Persist Test');
+```{.typescript include="tests/artifact-registry.test.ts" start-line=110 end-line=123}
 ```
 
 ##### ▶️ Run Command
@@ -2071,16 +1631,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/artifact-registry.test.ts:101-109`](tests/artifact-registry.test.ts)
+> 📄 **Region:** `// #region test:should-list-artifacts-by-type` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```typescript
-const s1 = registry.registerSession('s1', 'Q1');
-        registry.registerDocument(s1, 'd1', 'D1');
-        registry.registerAudio('s1-01', 'N1', 'A1');
-
-        expect(registry.listByType('session').length).toBe(1);
-        expect(registry.listByType('document').length).toBe(1);
-        expect(registry.listByType('audio').length).toBe(1);
+```{.typescript include="tests/artifact-registry.test.ts" start-line=125 end-line=137}
 ```
 
 ##### ▶️ Run Command
@@ -2129,35 +1682,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/windmill.test.ts:25-52`](tests/windmill.test.ts)
+> 📄 **Region:** `// #region test:should-trigger-audio-generation-and-update-graph-s` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```typescript
-// Mock graph execute calls
-      server.use(
-        http.post(`${RSRCH_URL}/graph/execute`, async ({ request }) => {
-          const body = await request.json();
-          if (body.query.includes('CREATE (pa:PendingAudio')) {
-            return HttpResponse.json({ notebookId: 'notebook-123' });
-          }
-          return HttpResponse.json({});
-        }),
-        http.post(`${RSRCH_URL}/notebooklm/generate-audio`, () => {
-          return HttpResponse.json({ success: true });
-        }),
-        http.post(`${NTFY_URL}/${NTFY_TOPIC}`, () => {
-          return new HttpResponse(null, { status: 200 });
-        })
-      );
-
-      const result = await clickGenerateAudio({
-        notebook_title: 'My Notebook',
-        source_title: 'My Source',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.notebook_id).toBe('notebook-123');
-      expect(result.source_title).toBe('My Source');
-      expect(result.pending_audio_id).toMatch(/^pending_audio_/);
+```{.typescript include="tests/windmill.test.ts" start-line=26 end-line=56}
 ```
 
 ##### ▶️ Run Command
@@ -2206,57 +1733,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/windmill.test.ts:56-105`](tests/windmill.test.ts)
+> 📄 **Region:** `// #region test:should-match-a-completed-audio-file-and-update-the` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```typescript
-const pendingAudio = {
-        id: 'pending-123',
-        notebookId: 'notebook-123',
-        sourceTitle: 'A very long source title that will be truncated',
-        startedAt: Date.now() - 10000,
-      };
-
-      const completedAudio = {
-        id: 'audio-456',
-        title: 'Audio for "A very long source title..."',
-        sourceCount: 1,
-        correlationId: pendingAudio.id,
-      };
-
-      // Mock fetching pending nodes
-      server.use(
-        http.post(`${RSRCH_URL}/graph/execute`, async ({ request }) => {
-          const body = await request.json();
-          if (body.query.includes('MATCH (pa:PendingAudio')) {
-            return HttpResponse.json([
-              [pendingAudio.id, pendingAudio.notebookId, pendingAudio.sourceTitle, pendingAudio.startedAt]
-            ]);
-          }
-           // Mock the update query
-          if (body.query.includes('DETACH DELETE pa')) {
-            return HttpResponse.json({ success: true });
-          }
-          return HttpResponse.json({});
-        }),
-        // Mock fetching notebook data
-        http.post(`${RSRCH_URL}/notebook/list`, () => {
-          return HttpResponse.json({
-            success: true,
-            data: [{
-              id: 'notebook-123',
-              audioOverviews: [completedAudio],
-            }],
-          });
-        }),
-        // Mock ntfy notification
-        http.post(`${NTFY_URL}/${NTFY_TOPIC}`, () => new HttpResponse(null, { status: 200 }))
-      );
-
-      const result = await watchAudioCompletion();
-
-      expect(result.processed).toBe(1);
-      expect(result.completed).toBe(1);
-      expect(result.failed).toBe(0);
+```{.typescript include="tests/windmill.test.ts" start-line=61 end-line=113}
 ```
 
 ##### ▶️ Run Command
@@ -2295,21 +1774,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/windmill.test.ts:110-123`](tests/windmill.test.ts)
+> 📄 **Region:** `// #region test:should-query-the-rsrch-server-and-return-sources` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```typescript
-server.use(
-            http.post(`${RSRCH_URL}/notebooklm/sources-without-audio`, () => {
-                return HttpResponse.json({
-                    sources: ['Source A', 'Source B'],
-                });
-            })
-        );
-
-        const result = await getSourcesWithoutAudio({ notebook_title: 'Test Book' });
-
-        expect(result.total_count).toBe(2);
-        expect(result.sources_without_audio).toEqual(['Source A', 'Source B']);
+```{.typescript include="tests/windmill.test.ts" start-line=119 end-line=135}
 ```
 
 ##### ▶️ Run Command
@@ -2352,27 +1819,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/windmill.test.ts:127-146`](tests/windmill.test.ts)
+> 📄 **Region:** `// #region test:should-send-a-success-notification-to-ntfy` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```typescript
-let requestBody = '';
-        server.use(
-            http.post(`${NTFY_URL}/${NTFY_TOPIC}`, async ({ request }) => {
-                requestBody = await request.text();
-                return new HttpResponse(null, { status: 200 });
-            })
-        );
-
-        const result = await notifyAudioComplete({
-            source_title: 'My Test Source',
-            notebook_title: 'My Test Notebook',
-            start_time: Date.now() - 5000,
-            success: true,
-            artifact_title: 'Audio for My Test Source',
-        });
-
-        expect(result.notification_sent).toBe(true);
-        expect(requestBody).toContain('Audio generated in 0m 5s');
+```{.typescript include="tests/windmill.test.ts" start-line=140 end-line=162}
 ```
 
 ##### ▶️ Run Command
@@ -2419,22 +1868,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:129-143`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-handle-empty-messages-array-gracefully` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-rsrch',
-                    messages: [] // Empty array - no messages!
-                })
-            });
-
-            // This should return 400, not crash or send empty prompt
-            expect(response.status).toBe(400);
-            const data = await response.json();
-            expect(data.error).toBeDefined();
+```{.typescript include="tests/adversarial.test.ts" start-line=130 end-line=147}
 ```
 
 ##### ▶️ Run Command
@@ -2473,24 +1909,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:150-166`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-reject-messages-with-empty-content` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-rsrch',
-                    messages: [
-                        { role: 'user', content: '' },
-                        { role: 'assistant', content: '' },
-                        { role: 'user', content: 'Hello' }
-                    ]
-                })
-            });
-
-            // Empty messages should be filtered or rejected
-            expect(response.status).toBe(400);
+```{.typescript include="tests/adversarial.test.ts" start-line=155 end-line=174}
 ```
 
 ##### ▶️ Run Command
@@ -2529,22 +1950,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:172-186`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-handle-only-system-message` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-rsrch',
-                    messages: [
-                        { role: 'system', content: 'You are a helpful assistant' }
-                    ]
-                })
-            });
-
-            // System-only should probably be rejected
-            expect(response.status).toBe(400);
+```{.typescript include="tests/adversarial.test.ts" start-line=181 end-line=198}
 ```
 
 ##### ▶️ Run Command
@@ -2580,16 +1988,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:223-231`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-handle-pollintervalms-0-edge-case` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-// This can't be tested directly from API, but documents the bug
-            // In gemini-client.ts line ~1052:
-            // const maxIterations = Math.ceil(timeoutMs / pollIntervalMs) + 10;
-            // If pollIntervalMs = 0 → maxIterations = Infinity
-
-            // The fix should validate pollIntervalMs > 0
-            expect(true).toBe(true); // Placeholder - need internal test
+```{.typescript include="tests/adversarial.test.ts" start-line=236 end-line=247}
 ```
 
 ##### ▶️ Run Command
@@ -2625,14 +2026,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:236-242`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-handle-timeoutms-0-edge-case` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-// timeoutMs = 0 means:
-            // - maxIterations = 10 (just the safety margin)
-            // - Date.now() - startTime > 0 is immediately true
-            // So it will timeout on first iteration
-            expect(true).toBe(true);
+```{.typescript include="tests/adversarial.test.ts" start-line=253 end-line=262}
 ```
 
 ##### ▶️ Run Command
@@ -2671,21 +2067,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:251-264`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-handle-options-preflight-correctly` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'OPTIONS',
-                headers: {
-                    'Origin': 'http://evil.com',
-                    'Access-Control-Request-Method': 'POST',
-                    'Access-Control-Request-Headers': 'Content-Type'
-                }
-            });
-
-            expect(response.status).toBe(204); // No Content
-            expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
-            expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+```{.typescript include="tests/adversarial.test.ts" start-line=272 end-line=288}
 ```
 
 ##### ▶️ Run Command
@@ -2726,20 +2110,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:269-281`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-allow-authorization-header-via-cors` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'OPTIONS',
-                headers: {
-                    'Origin': 'http://localhost:8080',
-                    'Access-Control-Request-Method': 'POST',
-                    'Access-Control-Request-Headers': 'Content-Type, Authorization'
-                }
-            });
-
-            const allowedHeaders = response.headers.get('Access-Control-Allow-Headers');
-            expect(allowedHeaders).toContain('Authorization');
+```{.typescript include="tests/adversarial.test.ts" start-line=294 end-line=309}
 ```
 
 ##### ▶️ Run Command
@@ -2778,21 +2151,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:289-302`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-reject-non-string-message-content` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-rsrch',
-                    messages: [
-                        { role: 'user', content: { text: 'Hello' } } // Object instead of string
-                    ]
-                })
-            });
-
-            expect(response.status).toBe(400);
+```{.typescript include="tests/adversarial.test.ts" start-line=318 end-line=334}
 ```
 
 ##### ▶️ Run Command
@@ -2831,21 +2192,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:307-320`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-reject-invalid-message-role` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-rsrch',
-                    messages: [
-                        { role: 'hacker', content: 'DROP TABLE users;' }
-                    ]
-                })
-            });
-
-            expect(response.status).toBe(400);
+```{.typescript include="tests/adversarial.test.ts" start-line=340 end-line=356}
 ```
 
 ##### ▶️ Run Command
@@ -2884,21 +2233,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/adversarial.test.ts:325-338`](tests/adversarial.test.ts)
+> 📄 **Region:** `// #region test:should-reject-messages-missing-required-fields` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gemini-rsrch',
-                    messages: [
-                        { content: 'Hello' } // Missing role
-                    ]
-                })
-            });
-
-            expect(response.status).toBe(400);
+```{.typescript include="tests/adversarial.test.ts" start-line=362 end-line=378}
 ```
 
 ##### ▶️ Run Command
@@ -2945,21 +2282,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/auth-sanity.test.ts:17-30`](tests/auth-sanity.test.ts)
+> 📄 **Region:** `// #region test:should-be-able-to-get-a-response-from-gemini-confi` in [`tests/auth-sanity.test.ts`](tests/auth-sanity.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'gemini-rsrch',
-                messages: [{ role: 'user', content: 'Reply only with "PONG"' }]
-            })
-        });
-
-        expect(response.status).toBe(200);
-        const data = await response.json();
-        expect(data.choices[0].message.content.toUpperCase()).toContain('PONG');
+```{.typescript include="tests/auth-sanity.test.ts" start-line=17 end-line=34}
 ```
 
 ##### ▶️ Run Command
@@ -3002,21 +2327,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/auth-sanity.test.ts:32-45`](tests/auth-sanity.test.ts)
+> 📄 **Region:** `// #region test:should-be-able-to-get-a-response-from-perplexity-c` in [`tests/auth-sanity.test.ts`](tests/auth-sanity.test.ts)
 
-```typescript
-const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'perplexity',
-                messages: [{ role: 'user', content: 'Reply only with "PONG"' }]
-            })
-        });
-
-        expect(response.status).toBe(200);
-        const data = await response.json();
-        expect(data.choices[0].message.content.toUpperCase()).toContain('PONG');
+```{.typescript include="tests/auth-sanity.test.ts" start-line=36 end-line=53}
 ```
 
 ##### ▶️ Run Command
@@ -3065,42 +2378,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/export.test.ts:40-74`](tests/export.test.ts)
+> 📄 **Region:** `// #region test:should-correctly-extract-research-data-from-dom-el` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```typescript
-// Trigger the parse
-            const result = await client.parseResearch();
-
-
-            expect(result).not.toBeNull();
-            if (!result) return;
-
-            // Verify basic metadata extraction
-            expect(result.query).toBe('Tell me about quantum computing');
-
-            // Note: The extraction logic for Title falls back to various strategies.
-            // Our mock provides 'Research Title' in the content headings.
-            expect(result.headings).toContain('Research Title');
-            expect(result.headings).toContain('Section 1');
-
-            // Verify Content HTML extraction
-            expect(result.contentHtml).toContain('<h1>Research Title</h1>');
-            expect(result.contentHtml).toContain('href="https://example.com/qc"');
-
-            // Verify Citation extraction
-            expect(result.citations).toHaveLength(1);
-            expect(result.citations[0]).toEqual({
-                id: 1,
-                text: 'quantum mechanics',
-                url: 'https://example.com/qc',
-                domain: 'example.com',
-                usedInSections: []
-            });
-
-            // Verify Reasoning Steps
-            // based on "Analyzing physics..." status message in mock
-            expect(result.reasoningSteps.length).toBeGreaterThan(0);
-            expect(result.reasoningSteps[0].action).toContain('Analyzing physics');
+```{.typescript include="tests/export.test.ts" start-line=41 end-line=78}
 ```
 
 ##### ▶️ Run Command
@@ -3145,35 +2425,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/export.test.ts:76-103`](tests/export.test.ts)
+> 📄 **Region:** `// #region test:should-generate-valid-markdown-from-parsed-structu` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```typescript
-const result = await client.parseResearch();
-            expect(result).not.toBeNull();
-
-            // Console output for user verification
-            console.log('\n--- PARSED RESULT (DEFAULT) ---');
-            console.log(JSON.stringify(result, null, 2));
-            console.log('-------------------------------\n');
-
-            const markdown = client.exportToMarkdown(result!);
-
-            // Console output for user verification
-            console.log('\n--- GENERATED MARKDOWN (DEFAULT) ---');
-            console.log(markdown);
-            console.log('------------------------------------\n');
-
-            // Check for key markdown elements
-            // The title extraction worked, so we expect the actual title found in the mock HTML
-            expect(markdown).toContain('# Research Title');
-            expect(markdown).toContain('> **Query:** Tell me about quantum computing');
-            expect(markdown).toContain('## Sources Used');
-            expect(markdown).toContain('| 1 | [quantum mechanics](https://example.com/qc) | example.com |');
-            expect(markdown).toContain('## Research Process');
-
-            // Check content markdown conversion
-            expect(markdown).toContain('# Research Title');
-            expect(markdown).toContain('Quantum computing uses [quantum mechanics](https://example.com/qc).');
+```{.typescript include="tests/export.test.ts" start-line=80 end-line=111}
 ```
 
 ##### ▶️ Run Command
@@ -3222,50 +2476,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/export.test.ts:105-147`](tests/export.test.ts)
+> 📄 **Region:** `// #region test:should-correctly-extract-different-research-data-t` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```typescript
-// Setup custom data
-            const customPage = createResearchMockPage({
-                title: 'AI History',
-                query: 'Who invented neural networks?',
-                contentHtml: `
-                    <h1>History of AI</h1>
-                    <p>The concept started with <a href="https://ai-history.com/mcculloch-pitts">McCulloch-Pitts neuron</a> in 1943.</p>
-                    <div class="research-status">Searching archives...</div>
-                    <h2>1943 Era</h2>
-                    <p>Foundations were laid.</p>
-                `,
-                contentText: 'History of AI\nThe concept started with McCulloch-Pitts neuron in 1943.\nSearching archives...\n1943 Era\nFoundations were laid.',
-                citations: [
-                    { text: 'McCulloch-Pitts neuron', href: 'https://ai-history.com/mcculloch-pitts' }
-                ],
-                headings: ['History of AI', '1943 Era'],
-                reasoning: ['Searching archives...']
-            });
-
-            const customClient = new GeminiClient(customPage, { verbose: false });
-            const result = await customClient.parseResearch();
-
-            expect(result).not.toBeNull();
-            if (!result) return;
-
-            // Console output for user verification
-            console.log('\n--- PARSED RESULT (CUSTOM) ---');
-            console.log(JSON.stringify(result, null, 2));
-            console.log('------------------------------\n');
-
-            const markdown = customClient.exportToMarkdown(result);
-
-            // Console output for user verification
-            console.log('\n--- GENERATED MARKDOWN (CUSTOM) ---');
-            console.log(markdown);
-            console.log('-----------------------------------\n');
-
-            expect(result.query).toBe('Who invented neural networks?');
-            expect(result.headings).toContain('History of AI');
-            expect(markdown).toContain('# History of AI');
-            expect(markdown).toContain('[McCulloch-Pitts neuron](https://ai-history.com/mcculloch-pitts)');
+```{.typescript include="tests/export.test.ts" start-line=113 end-line=159}
 ```
 
 ##### ▶️ Run Command
@@ -3306,32 +2519,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/export.test.ts:151-175`](tests/export.test.ts)
+> 📄 **Region:** `// #region test:should-format-full-research-document-correctly` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```typescript
-const mockParsedData = {
-                title: 'Test Research',
-                query: 'Test Query',
-                content: 'Some content',
-                contentHtml: '<p>Some content</p>',
-                contentMarkdown: 'Some content',
-                headings: ['Heading 1'],
-                citations: [
-                    { id: 1, text: 'Source 1', url: 'http://src1.com', domain: 'src1.com', usedInSections: [] }
-                ],
-                reasoningSteps: [
-                    { phase: 'Step 1', action: 'Thinking...' }
-                ],
-                researchFlow: [],
-                createdAt: '2025-01-01'
-            };
-
-            const compiledMd = client.exportToMarkdown(mockParsedData);
-
-            expect(compiledMd).toContain('# Test Research');
-            expect(compiledMd).toContain('> **Query:** Test Query');
-            expect(compiledMd).toContain('| 1 | [Source 1](http://src1.com) | src1.com |');
-            expect(compiledMd).toContain('**Step 1**: Thinking...');
+```{.typescript include="tests/export.test.ts" start-line=164 end-line=191}
 ```
 
 ##### ▶️ Run Command
@@ -3372,14 +2562,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:88-94`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-code-blocks-with-language` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<pre><code class="language-typescript">const x = 1;</code></pre>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('```typescript');
-            expect(result).toContain('const x = 1;');
-            expect(result).toContain('```');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=89 end-line=98}
 ```
 
 ##### ▶️ Run Command
@@ -3416,13 +2601,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:96-101`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-code-blocks-without-language` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<pre><code>plain code</code></pre>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('```\n');
-            expect(result).toContain('plain code');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=100 end-line=109}
 ```
 
 ##### ▶️ Run Command
@@ -3459,15 +2640,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:103-110`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-decode-html-entities-in-code-blocks` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-// Note: Inner HTML tags like <div> are stripped, only entities are decoded
-            const html = '<pre><code>&lt;div&gt;&amp;text&lt;/div&gt;</code></pre>';
-            const result = htmlToMarkdownSimple(html);
-            // The regex decodes &lt; &gt; &amp; but strips any actual HTML tags
-            expect(result).toContain('&text');
-            expect(result).toContain('```');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=111 end-line=122}
 ```
 
 ##### ▶️ Run Command
@@ -3504,12 +2679,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:112-116`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-inline-code` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'Use <code>npm install</code> to install';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('Use `npm install` to install');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=124 end-line=132}
 ```
 
 ##### ▶️ Run Command
@@ -3546,12 +2718,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:120-124`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-h1-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<h1>Main Title</h1>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('# Main Title');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=137 end-line=144}
 ```
 
 ##### ▶️ Run Command
@@ -3588,12 +2757,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:126-130`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-h2-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<h2>Section</h2>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('## Section');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=146 end-line=154}
 ```
 
 ##### ▶️ Run Command
@@ -3630,12 +2796,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:132-136`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-h3-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<h3>Subsection</h3>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('### Subsection');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=156 end-line=164}
 ```
 
 ##### ▶️ Run Command
@@ -3672,12 +2835,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:138-142`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-headings-with-attributes` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<h2 class="title" id="section-1">With Attrs</h2>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('## With Attrs');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=166 end-line=174}
 ```
 
 ##### ▶️ Run Command
@@ -3714,12 +2874,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:146-150`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-strong-to-bold` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'This is <strong>important</strong> text';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('This is **important** text');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=179 end-line=186}
 ```
 
 ##### ▶️ Run Command
@@ -3756,12 +2913,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:152-156`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-b-to-bold` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'This is <b>bold</b> text';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('This is **bold** text');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=188 end-line=196}
 ```
 
 ##### ▶️ Run Command
@@ -3798,12 +2952,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:158-162`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-em-to-italic` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'This is <em>emphasized</em> text';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('This is *emphasized* text');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=198 end-line=206}
 ```
 
 ##### ▶️ Run Command
@@ -3840,12 +2991,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:164-168`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-i-to-italic` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'This is <i>italic</i> text';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('This is *italic* text');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=208 end-line=216}
 ```
 
 ##### ▶️ Run Command
@@ -3882,13 +3030,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:172-177`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-unordered-list-items` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<ul><li>First</li><li>Second</li></ul>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('- First');
-            expect(result).toContain('- Second');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=221 end-line=229}
 ```
 
 ##### ▶️ Run Command
@@ -3925,13 +3069,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:179-184`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-ordered-list-items` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<ol><li>Step 1</li><li>Step 2</li></ol>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('- Step 1');
-            expect(result).toContain('- Step 2');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=231 end-line=240}
 ```
 
 ##### ▶️ Run Command
@@ -3968,13 +3108,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:188-193`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-paragraphs` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<p>First paragraph</p><p>Second paragraph</p>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('First paragraph');
-            expect(result).toContain('Second paragraph');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=245 end-line=253}
 ```
 
 ##### ▶️ Run Command
@@ -4011,12 +3147,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:195-199`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-br-to-newline` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'Line one<br>Line two<br/>Line three';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('Line one\nLine two\nLine three');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=255 end-line=263}
 ```
 
 ##### ▶️ Run Command
@@ -4053,12 +3186,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:203-207`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-links-to-markdown-format` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'Visit <a href="https://example.com">Example Site</a> for more';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('Visit [Example Site](https://example.com) for more');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=268 end-line=275}
 ```
 
 ##### ▶️ Run Command
@@ -4095,12 +3225,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:209-213`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-links-with-extra-attributes` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<a href="https://test.com" target="_blank" rel="noopener">Link</a>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('[Link](https://test.com)');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=277 end-line=285}
 ```
 
 ##### ▶️ Run Command
@@ -4137,12 +3264,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:217-221`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-decode-common-html-entities` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '&lt;tag&gt; &amp; &quot;quoted&quot; &#39;apostrophe&#39;';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('<tag> & "quoted" \'apostrophe\'');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=290 end-line=297}
 ```
 
 ##### ▶️ Run Command
@@ -4179,12 +3303,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:223-227`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-convert-nbsp-to-space` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = 'word&nbsp;word';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('word word');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=299 end-line=307}
 ```
 
 ##### ▶️ Run Command
@@ -4221,12 +3342,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:231-235`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-strip-unknown-html-tags` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<custom>content</custom><span>more</span>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toBe('contentmore');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=312 end-line=319}
 ```
 
 ##### ▶️ Run Command
@@ -4263,11 +3381,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:237-240`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-empty-input` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const result = htmlToMarkdownSimple('');
-            expect(result).toBe('');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=321 end-line=328}
 ```
 
 ##### ▶️ Run Command
@@ -4304,11 +3420,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:242-245`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-plain-text` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const result = htmlToMarkdownSimple('Just plain text');
-            expect(result).toBe('Just plain text');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=330 end-line=337}
 ```
 
 ##### ▶️ Run Command
@@ -4345,13 +3459,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:247-252`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-collapse-multiple-newlines` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<p>Para 1</p>\n\n\n\n<p>Para 2</p>';
-            const result = htmlToMarkdownSimple(html);
-            // Should not have more than 2 consecutive newlines
-            expect(result).not.toMatch(/\n{3,}/);
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=339 end-line=348}
 ```
 
 ##### ▶️ Run Command
@@ -4388,13 +3498,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:254-259`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-trim-whitespace` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '   <p>Content</p>   ';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).not.toMatch(/^\s/);
-            expect(result).not.toMatch(/\s$/);
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=350 end-line=359}
 ```
 
 ##### ▶️ Run Command
@@ -4431,12 +3537,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:263-267`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-nested-formatting` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = '<p><strong>Bold with <em>italic</em></strong></p>';
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('**Bold with *italic***');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=364 end-line=371}
 ```
 
 ##### ▶️ Run Command
@@ -4477,26 +3580,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-client.unit.test.ts:269-287`](tests/gemini-client.unit.test.ts)
+> 📄 **Region:** `// #region test:should-handle-full-document-structure` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```typescript
-const html = `
-                <h1>Title</h1>
-                <p>Introduction paragraph with <strong>bold</strong>.</p>
-                <h2>Section</h2>
-                <ul>
-                    <li>Item one</li>
-                    <li>Item two</li>
-                </ul>
-                <pre><code class="language-js">console.log("hello");</code></pre>
-            `;
-            const result = htmlToMarkdownSimple(html);
-            expect(result).toContain('# Title');
-            expect(result).toContain('**bold**');
-            expect(result).toContain('## Section');
-            expect(result).toContain('- Item one');
-            expect(result).toContain('```js');
-            expect(result).toContain('console.log("hello");');
+```{.typescript include="tests/gemini-client.unit.test.ts" start-line=373 end-line=395}
 ```
 
 ##### ▶️ Run Command
@@ -4545,36 +3631,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-windmill.test.ts:41-69`](tests/gemini-windmill.test.ts)
+> 📄 **Region:** `// #region test:queryviawindmill-should-delegate-to-windmillclient` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```typescript
-const query = 'Test Query';
-        const expectedResponse = 'Windmill Response';
-
-        mockIsConfigured.mockReturnValue(true);
-        // trigger returns job ID
-        mockTriggerGemini.mockResolvedValue({ jobId: 'job-123' });
-        // waitForJob returns the result
-        mockWaitForJob.mockResolvedValue({
-            success: true,
-            result: {
-                success: true,
-                response: expectedResponse,
-                session_id: 'new-session-id'
-            }
-        });
-
-        const result = await client.queryViaWindmill(query);
-
-        expect(mockIsConfigured).toHaveBeenCalled();
-        expect(mockTriggerGemini).toHaveBeenCalledWith({
-            message: query,
-            session_id: undefined,
-            model: 'pro',
-            waitForResponse: true
-        });
-        expect(mockWaitForJob).toHaveBeenCalledWith('job-123');
-        expect(result).toBe(expectedResponse);
+```{.typescript include="tests/gemini-windmill.test.ts" start-line=39 end-line=73}
 ```
 
 ##### ▶️ Run Command
@@ -4615,24 +3674,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-windmill.test.ts:71-87`](tests/gemini-windmill.test.ts)
+> 📄 **Region:** `// #region test:queryviawindmill-should-pass-session-id-and-model` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```typescript
-mockIsConfigured.mockReturnValue(true);
-        mockTriggerGemini.mockResolvedValue({ jobId: 'job-456' });
-        mockWaitForJob.mockResolvedValue({
-            success: true,
-            result: { success: true, response: 'ok' }
-        });
-
-        await client.queryViaWindmill('Hello', 'sess-123', 'thinking');
-
-        expect(mockTriggerGemini).toHaveBeenCalledWith({
-            message: 'Hello',
-            session_id: 'sess-123',
-            model: 'thinking',
-            waitForResponse: true
-        });
+```{.typescript include="tests/gemini-windmill.test.ts" start-line=73 end-line=95}
 ```
 
 ##### ▶️ Run Command
@@ -4669,11 +3713,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-windmill.test.ts:89-92`](tests/gemini-windmill.test.ts)
+> 📄 **Region:** `// #region test:queryviawindmill-should-throw-if-windmill-is-not-c` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```typescript
-mockIsConfigured.mockReturnValue(false);
-        await expect(client.queryViaWindmill('fail')).rejects.toThrow('Windmill is not configured');
+```{.typescript include="tests/gemini-windmill.test.ts" start-line=95 end-line=104}
 ```
 
 ##### ▶️ Run Command
@@ -4710,17 +3752,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/gemini-windmill.test.ts:94-103`](tests/gemini-windmill.test.ts)
+> 📄 **Region:** `// #region test:queryviawindmill-should-throw-if-job-fails-interna` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```typescript
-mockIsConfigured.mockReturnValue(true);
-        mockTriggerGemini.mockResolvedValue({ jobId: 'job-789' });
-        mockWaitForJob.mockResolvedValue({
-            success: true,
-            result: { success: false, error: 'Script Error' }
-        });
-
-        await expect(client.queryViaWindmill('fail')).rejects.toThrow('Script Error');
+```{.typescript include="tests/gemini-windmill.test.ts" start-line=104 end-line=119}
 ```
 
 ##### ▶️ Run Command
@@ -4765,19 +3799,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:16-27`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-succeed-on-the-first-attempt` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-const client = new WindmillClient();
-        (fetch as vi.Mock).mockResolvedValueOnce({
-            ok: true,
-            text: async () => 'job-123',
-        });
-
-        const result = await client.triggerAudioGeneration({ notebookTitle: 'test', sourceTitle: 'test' });
-        expect(result.success).toBe(true);
-        expect(result.jobId).toBe('job-123');
-        expect(fetch).toHaveBeenCalledTimes(1);
+```{.typescript include="tests/retry.test.ts" start-line=16 end-line=31}
 ```
 
 ##### ▶️ Run Command
@@ -4818,19 +3842,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:29-40`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-retry-on-transient-server-errors-and-eventu` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-const client = new WindmillClient();
-        (fetch as vi.Mock)
-            .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable', text: async () => 'error' })
-            .mockResolvedValueOnce({ ok: false, status: 429, statusText: 'Too Many Requests', text: async () => 'error' })
-            .mockResolvedValueOnce({ ok: true, text: async () => 'job-123' });
-
-        const result = await client.triggerAudioGeneration({ notebookTitle: 'test', sourceTitle: 'test' });
-        expect(result.success).toBe(true);
-        expect(result.jobId).toBe('job-123');
-        expect(fetch).toHaveBeenCalledTimes(3);
+```{.typescript include="tests/retry.test.ts" start-line=33 end-line=48}
 ```
 
 ##### ▶️ Run Command
@@ -4871,21 +3885,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:42-55`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-fail-after-max-retries-on-persistent-server` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-const client = new WindmillClient();
-        (fetch as vi.Mock).mockResolvedValue({
-            ok: false,
-            status: 500,
-            statusText: 'Internal Server Error',
-            text: async () => 'server-error',
-        });
-
-        const result = await client.triggerAudioGeneration({ notebookTitle: 'test', sourceTitle: 'test' });
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('API error (status 500): server-error');
-        expect(fetch).toHaveBeenCalledTimes(4);
+```{.typescript include="tests/retry.test.ts" start-line=50 end-line=67}
 ```
 
 ##### ▶️ Run Command
@@ -4926,21 +3928,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:57-70`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-fail-immediately-on-non-retriable-client-er` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-const client = new WindmillClient();
-        (fetch as vi.Mock).mockResolvedValueOnce({
-            ok: false,
-            status: 400,
-            statusText: 'Bad Request',
-            text: async () => 'bad-request',
-        });
-
-        const result = await client.triggerAudioGeneration({ notebookTitle: 'test', sourceTitle: 'test' });
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('API error (status 400): bad-request');
-        expect(fetch).toHaveBeenCalledTimes(1);
+```{.typescript include="tests/retry.test.ts" start-line=69 end-line=86}
 ```
 
 ##### ▶️ Run Command
@@ -4981,18 +3971,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:72-82`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-handle-request-timeouts-and-retry` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-const client = new WindmillClient();
-        (fetch as vi.Mock)
-            .mockRejectedValueOnce(new DOMException('The user aborted a request.', 'AbortError')) // Simulate timeout
-            .mockResolvedValueOnce({ ok: true, text: async () => 'job-123' });
-
-        const result = await client.triggerAudioGeneration({ notebookTitle: 'test', sourceTitle: 'test' });
-        expect(result.success).toBe(true);
-        expect(result.jobId).toBe('job-123');
-        expect(fetch).toHaveBeenCalledTimes(2);
+```{.typescript include="tests/retry.test.ts" start-line=88 end-line=102}
 ```
 
 ##### ▶️ Run Command
@@ -5029,12 +4010,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:119-123`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-connect-successfully-on-the-first-attempt` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-await graphStore.connect();
-        expect(mockConnect).toHaveBeenCalledTimes(1);
-        expect((graphStore as any).isConnected).toBe(true);
+```{.typescript include="tests/retry.test.ts" start-line=139 end-line=147}
 ```
 
 ##### ▶️ Run Command
@@ -5073,16 +4051,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:125-133`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-retry-connection-and-eventually-succeed` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-mockConnect
-            .mockRejectedValueOnce(new Error('Connection failed'))
-            .mockResolvedValueOnce({ selectGraph: () => ({ query: vi.fn() }), close: vi.fn() });
-
-        await graphStore.connect('localhost', 6379, 2);
-        expect(mockConnect).toHaveBeenCalledTimes(2);
-        expect((graphStore as any).isConnected).toBe(true);
+```{.typescript include="tests/retry.test.ts" start-line=149 end-line=161}
 ```
 
 ##### ▶️ Run Command
@@ -5121,13 +4092,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:135-140`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-fail-to-connect-after-max-retries` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-mockConnect.mockRejectedValue(new Error('Persistent connection failure'));
-        await expect(graphStore.connect('localhost', 6379, 2)).rejects.toThrow(NetworkError);
-        expect(mockConnect).toHaveBeenCalledTimes(2);
-        expect((graphStore as any).isConnected).toBe(false);
+```{.typescript include="tests/retry.test.ts" start-line=163 end-line=172}
 ```
 
 ##### ▶️ Run Command
@@ -5166,21 +4133,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:142-155`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-trip-circuit-breaker-after-enough-consecuti` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-await graphStore.connect();
-        // @ts-ignore - Access private method for mocking
-        mockQuery = graphStore.graph.query;
-        mockQuery.mockRejectedValue(new Error('Query failed'));
-
-        // Trigger failures to trip the circuit
-        for (let i = 0; i < 5; i++) {
-            await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow();
-        }
-
-        // Now the circuit should be open
-        await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow('circuit breaker is open');
+```{.typescript include="tests/retry.test.ts" start-line=174 end-line=191}
 ```
 
 ##### ▶️ Run Command
@@ -5225,34 +4180,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/retry.test.ts:157-183`](tests/retry.test.ts)
+> 📄 **Region:** `// #region test:should-transition-from-open-to-half-open-and-then-` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```typescript
-await graphStore.connect();
-        // @ts-ignore
-        mockQuery = graphStore.graph.query;
-        mockQuery.mockClear(); // Clear calls from initSchema
-
-        mockQuery.mockRejectedValue(new Error('Query failed'));
-
-        // Trip the circuit
-        for (let i = 0; i < 5; i++) {
-            await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow();
-        }
-
-        // It is now OPEN. Wait for reset timeout.
-        // @ts-ignore - access private property
-        graphStore.lastFailure = Date.now() - 31000;
-
-        // First call should be in HALF_OPEN. Let it succeed.
-        mockQuery.mockResolvedValue({ data: [] });
-        await (graphStore as any)._executeQuery('SUCCESS');
-
-        // Now it should be CLOSED. Let it succeed again.
-        await (graphStore as any)._executeQuery('SUCCESS');
-        // 5 failures + 1 HALF_OPEN success (which transitions to CLOSED) = 6 total calls
-        // Note: The second SUCCESS doesn't increment because circuit resets call tracking
-        expect(mockQuery).toHaveBeenCalledTimes(7);
+```{.typescript include="tests/retry.test.ts" start-line=193 end-line=223}
 ```
 
 ##### ▶️ Run Command
@@ -5299,38 +4229,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/stream-thoughts.integration.test.ts:10-40`](tests/stream-thoughts.integration.test.ts)
+> 📄 **Region:** `// #region test:should-stream-thoughts-from-a-reasoning-query` in [`tests/stream-thoughts.integration.test.ts`](tests/stream-thoughts.integration.test.ts)
 
-```typescript
-const query = "Solve 25 * 44 with detailed thoughts";
-        const serverUrl = 'http://halvarm:3030';
-
-        console.log(`Testing query: "${query}" against ${serverUrl}`);
-
-        let fullText = '';
-        let thoughtBlockDetected = false;
-
-        await executeGeminiStream('chat', { message: query }, { server: serverUrl }, (data) => {
-            if (data.type === 'progress' && data.text) {
-                fullText = data.text;
-                // Check for common thought indicators
-                if (data.text.includes('Thought Process') ||
-                    data.text.includes('Myšlenkový proces') ||
-                    data.text.includes('Reasoning')) {
-                    thoughtBlockDetected = true;
-                }
-            }
-        });
-
-        console.log('Final Text Length:', fullText.length);
-        console.log('Thought Block Detected:', thoughtBlockDetected);
-
-        expect(fullText.length).toBeGreaterThan(0);
-        // We expect some reasoning for a "with detailed thoughts" prompt
-        // Note: The model might vary in exact wording, but usually explicit prompts trigger it.
-        // We strictly check if the loop logic found "Thought Process" or we just have a long response.
-        // The thought block is what we specifically patched.
-        expect(thoughtBlockDetected).toBe(true);
+```{.typescript include="tests/stream-thoughts.integration.test.ts" start-line=10 end-line=44}
 ```
 
 ##### ▶️ Run Command
@@ -5371,11 +4272,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:45-48`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-empty-messages-array` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([]);
-            expect(result).toBe('Messages array cannot be empty');
+```{.typescript include="tests/validation.unit.test.ts" start-line=46 end-line=52}
 ```
 
 ##### ▶️ Run Command
@@ -5414,13 +4313,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:52-57`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-system-only-messages` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'system', content: 'You are helpful' }
-            ]);
-            expect(result).toBe('At least one user message is required');
+```{.typescript include="tests/validation.unit.test.ts" start-line=57 end-line=65}
 ```
 
 ##### ▶️ Run Command
@@ -5459,14 +4354,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:59-65`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-accept-messages-with-user` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'system', content: 'You are helpful' },
-                { role: 'user', content: 'Hello' }
-            ]);
-            expect(result).toBeNull();
+```{.typescript include="tests/validation.unit.test.ts" start-line=67 end-line=77}
 ```
 
 ##### ▶️ Run Command
@@ -5505,13 +4395,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:69-74`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-invalid-role` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'hacker', content: 'malicious' }
-            ]);
-            expect(result).toContain("Invalid role 'hacker'");
+```{.typescript include="tests/validation.unit.test.ts" start-line=82 end-line=90}
 ```
 
 ##### ▶️ Run Command
@@ -5550,13 +4436,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:76-81`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-missing-role` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: '', content: 'Hello' }
-            ]);
-            expect(result).toContain('Invalid role');
+```{.typescript include="tests/validation.unit.test.ts" start-line=92 end-line=101}
 ```
 
 ##### ▶️ Run Command
@@ -5595,16 +4477,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:83-91`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-accept-valid-roles` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'system', content: 'System prompt' },
-                { role: 'user', content: 'Hello' },
-                { role: 'assistant', content: 'Hi there' },
-                { role: 'user', content: 'Follow up' }
-            ]);
-            expect(result).toBeNull();
+```{.typescript include="tests/validation.unit.test.ts" start-line=103 end-line=115}
 ```
 
 ##### ▶️ Run Command
@@ -5643,13 +4518,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:95-100`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-object-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'user', content: { text: 'Hello' } }
-            ]);
-            expect(result).toContain('must be a string, got object');
+```{.typescript include="tests/validation.unit.test.ts" start-line=120 end-line=128}
 ```
 
 ##### ▶️ Run Command
@@ -5688,13 +4559,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:102-107`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-number-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'user', content: 42 }
-            ]);
-            expect(result).toContain('must be a string, got number');
+```{.typescript include="tests/validation.unit.test.ts" start-line=130 end-line=139}
 ```
 
 ##### ▶️ Run Command
@@ -5733,13 +4600,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:109-114`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-undefined-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'user', content: undefined }
-            ]);
-            expect(result).toContain('must be a string, got undefined');
+```{.typescript include="tests/validation.unit.test.ts" start-line=141 end-line=150}
 ```
 
 ##### ▶️ Run Command
@@ -5778,13 +4641,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:118-123`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-empty-user-message` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'user', content: '' }
-            ]);
-            expect(result).toContain('cannot have empty content');
+```{.typescript include="tests/validation.unit.test.ts" start-line=155 end-line=163}
 ```
 
 ##### ▶️ Run Command
@@ -5823,13 +4682,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:125-130`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-reject-whitespace-only-user-message` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'user', content: '   ' }
-            ]);
-            expect(result).toContain('cannot have empty content');
+```{.typescript include="tests/validation.unit.test.ts" start-line=165 end-line=174}
 ```
 
 ##### ▶️ Run Command
@@ -5868,14 +4723,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-📄 **File:** [`tests/validation.unit.test.ts:132-138`](tests/validation.unit.test.ts)
+> 📄 **Region:** `// #region test:should-allow-empty-assistant-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```typescript
-const result = validateMessages([
-                { role: 'user', content: 'Hello' },
-                { role: 'assistant', content: '' }
-            ]);
-            expect(result).toBeNull();
+```{.typescript include="tests/validation.unit.test.ts" start-line=176 end-line=186}
 ```
 
 ##### ▶️ Run Command

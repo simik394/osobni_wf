@@ -13,6 +13,8 @@ describe('WindmillClient Error Handling and Retry Logic', () => {
         vi.resetAllMocks();
     });
 
+// #region test:should-succeed-on-the-first-attempt
+
     it('should succeed on the first attempt', async () => {
         const client = new WindmillClient();
         (fetch as vi.Mock).mockResolvedValueOnce({
@@ -26,6 +28,10 @@ describe('WindmillClient Error Handling and Retry Logic', () => {
         expect(fetch).toHaveBeenCalledTimes(1);
     });
 
+// #endregion test:should-succeed-on-the-first-attempt
+
+// #region test:should-retry-on-transient-server-errors-and-eventu
+
     it('should retry on transient server errors and eventually succeed', async () => {
         const client = new WindmillClient();
         (fetch as vi.Mock)
@@ -38,6 +44,10 @@ describe('WindmillClient Error Handling and Retry Logic', () => {
         expect(result.jobId).toBe('job-123');
         expect(fetch).toHaveBeenCalledTimes(3);
     });
+
+// #endregion test:should-retry-on-transient-server-errors-and-eventu
+
+// #region test:should-fail-after-max-retries-on-persistent-server
 
     it('should fail after max retries on persistent server errors', async () => {
         const client = new WindmillClient();
@@ -54,6 +64,10 @@ describe('WindmillClient Error Handling and Retry Logic', () => {
         expect(fetch).toHaveBeenCalledTimes(4);
     }, 8000);
 
+// #endregion test:should-fail-after-max-retries-on-persistent-server
+
+// #region test:should-fail-immediately-on-non-retriable-client-er
+
     it('should fail immediately on non-retriable client errors (e.g., 400)', async () => {
         const client = new WindmillClient();
         (fetch as vi.Mock).mockResolvedValueOnce({
@@ -69,6 +83,10 @@ describe('WindmillClient Error Handling and Retry Logic', () => {
         expect(fetch).toHaveBeenCalledTimes(1);
     });
 
+// #endregion test:should-fail-immediately-on-non-retriable-client-er
+
+// #region test:should-handle-request-timeouts-and-retry
+
     it('should handle request timeouts and retry', async () => {
         const client = new WindmillClient();
         (fetch as vi.Mock)
@@ -80,6 +98,8 @@ describe('WindmillClient Error Handling and Retry Logic', () => {
         expect(result.jobId).toBe('job-123');
         expect(fetch).toHaveBeenCalledTimes(2);
     });
+
+// #endregion test:should-handle-request-timeouts-and-retry
 });
 
 
@@ -116,11 +136,17 @@ describe('GraphStore Resilience', () => {
         // We will mock the query function after connection.
     });
 
+// #region test:should-connect-successfully-on-the-first-attempt
+
     it('should connect successfully on the first attempt', async () => {
         await graphStore.connect();
         expect(mockConnect).toHaveBeenCalledTimes(1);
         expect((graphStore as any).isConnected).toBe(true);
     });
+
+// #endregion test:should-connect-successfully-on-the-first-attempt
+
+// #region test:should-retry-connection-and-eventually-succeed
 
     it('should retry connection and eventually succeed', async () => {
         mockConnect
@@ -132,12 +158,20 @@ describe('GraphStore Resilience', () => {
         expect((graphStore as any).isConnected).toBe(true);
     });
 
+// #endregion test:should-retry-connection-and-eventually-succeed
+
+// #region test:should-fail-to-connect-after-max-retries
+
     it('should fail to connect after max retries', async () => {
         mockConnect.mockRejectedValue(new Error('Persistent connection failure'));
         await expect(graphStore.connect('localhost', 6379, 2)).rejects.toThrow(NetworkError);
         expect(mockConnect).toHaveBeenCalledTimes(2);
         expect((graphStore as any).isConnected).toBe(false);
     });
+
+// #endregion test:should-fail-to-connect-after-max-retries
+
+// #region test:should-trip-circuit-breaker-after-enough-consecuti
 
     it('should trip circuit breaker after enough consecutive failures', async () => {
         await graphStore.connect();
@@ -153,6 +187,10 @@ describe('GraphStore Resilience', () => {
         // Now the circuit should be open
         await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow('circuit breaker is open');
     });
+
+// #endregion test:should-trip-circuit-breaker-after-enough-consecuti
+
+// #region test:should-transition-from-open-to-half-open-and-then-
 
     it('should transition from OPEN to HALF_OPEN and then to CLOSED', async () => {
         await graphStore.connect();
@@ -181,4 +219,6 @@ describe('GraphStore Resilience', () => {
         // Note: The second SUCCESS doesn't increment because circuit resets call tracking
         expect(mockQuery).toHaveBeenCalledTimes(7);
     });
+
+// #endregion test:should-transition-from-open-to-half-open-and-then-
 });

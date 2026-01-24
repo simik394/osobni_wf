@@ -37,6 +37,8 @@ describe('Export Automation', () => {
     });
 
     describe('parseResearch', () => {
+
+// #region test:should-correctly-extract-research-data-from-dom-el
         it('should correctly extract research data from DOM elements', async () => {
             // Trigger the parse
             const result = await client.parseResearch();
@@ -73,6 +75,10 @@ describe('Export Automation', () => {
             expect(result.reasoningSteps[0].action).toContain('Analyzing physics');
         });
 
+// #endregion test:should-correctly-extract-research-data-from-dom-el
+
+// #region test:should-generate-valid-markdown-from-parsed-structu
+
         it('should generate valid markdown from parsed structure', async () => {
             const result = await client.parseResearch();
             expect(result).not.toBeNull();
@@ -101,6 +107,10 @@ describe('Export Automation', () => {
             expect(markdown).toContain('# Research Title');
             expect(markdown).toContain('Quantum computing uses [quantum mechanics](https://example.com/qc).');
         });
+
+// #endregion test:should-generate-valid-markdown-from-parsed-structu
+
+// #region test:should-correctly-extract-different-research-data-t
 
         it('should correctly extract DIFFERENT research data to prove dynamic parsing', async () => {
             // Setup custom data
@@ -145,9 +155,13 @@ describe('Export Automation', () => {
             expect(markdown).toContain('# History of AI');
             expect(markdown).toContain('[McCulloch-Pitts neuron](https://ai-history.com/mcculloch-pitts)');
         });
+
+// #endregion test:should-correctly-extract-different-research-data-t
     });
 
     describe('exportToMarkdown', () => {
+
+// #region test:should-format-full-research-document-correctly
         it('should format full research document correctly', () => {
             const mockParsedData = {
                 title: 'Test Research',
@@ -173,5 +187,7 @@ describe('Export Automation', () => {
             expect(compiledMd).toContain('| 1 | [Source 1](http://src1.com) | src1.com |');
             expect(compiledMd).toContain('**Step 1**: Thinking...');
         });
+
+// #endregion test:should-format-full-research-document-correctly
     });
 });

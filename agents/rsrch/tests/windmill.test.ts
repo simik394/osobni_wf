@@ -22,6 +22,8 @@ afterAll(() => server.close());
 describe('Windmill Scripts', () => {
 
   describe('click_generate_audio', () => {
+
+// #region test:should-trigger-audio-generation-and-update-graph-s
     it('should trigger audio generation and update graph state', async () => {
       // Mock graph execute calls
       server.use(
@@ -50,9 +52,13 @@ describe('Windmill Scripts', () => {
       expect(result.source_title).toBe('My Source');
       expect(result.pending_audio_id).toMatch(/^pending_audio_/);
     });
+
+// #endregion test:should-trigger-audio-generation-and-update-graph-s
   });
 
   describe('watch_audio_completion', () => {
+
+// #region test:should-match-a-completed-audio-file-and-update-the
     it('should match a completed audio file and update the graph', async () => {
       const pendingAudio = {
         id: 'pending-123',
@@ -103,10 +109,14 @@ describe('Windmill Scripts', () => {
       expect(result.completed).toBe(1);
       expect(result.failed).toBe(0);
     });
+
+// #endregion test:should-match-a-completed-audio-file-and-update-the
   });
 
 
   describe('get_sources_without_audio', () => {
+
+// #region test:should-query-the-rsrch-server-and-return-sources
     it('should query the rsrch server and return sources', async () => {
         server.use(
             http.post(`${RSRCH_URL}/notebooklm/sources-without-audio`, () => {
@@ -121,9 +131,13 @@ describe('Windmill Scripts', () => {
         expect(result.total_count).toBe(2);
         expect(result.sources_without_audio).toEqual(['Source A', 'Source B']);
     });
+
+// #endregion test:should-query-the-rsrch-server-and-return-sources
   });
 
   describe('notify_audio_complete', () => {
+
+// #region test:should-send-a-success-notification-to-ntfy
     it('should send a success notification to ntfy', async () => {
         let requestBody = '';
         server.use(
@@ -144,5 +158,7 @@ describe('Windmill Scripts', () => {
         expect(result.notification_sent).toBe(true);
         expect(requestBody).toContain('Audio generated in 0m 5s');
     });
+
+// #endregion test:should-send-a-success-notification-to-ntfy
   });
 });

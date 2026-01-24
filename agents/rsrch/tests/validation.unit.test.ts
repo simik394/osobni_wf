@@ -42,19 +42,29 @@ function validateMessages(messages: Array<{ role: string; content: unknown }>): 
 describe('validateMessages - Unit Tests', () => {
 
     describe('Empty array', () => {
+
+// #region test:should-reject-empty-messages-array
         it('should reject empty messages array', () => {
             const result = validateMessages([]);
             expect(result).toBe('Messages array cannot be empty');
         });
+
+// #endregion test:should-reject-empty-messages-array
     });
 
     describe('User message requirement', () => {
+
+// #region test:should-reject-system-only-messages
         it('should reject system-only messages', () => {
             const result = validateMessages([
                 { role: 'system', content: 'You are helpful' }
             ]);
             expect(result).toBe('At least one user message is required');
         });
+
+// #endregion test:should-reject-system-only-messages
+
+// #region test:should-accept-messages-with-user
 
         it('should accept messages with user', () => {
             const result = validateMessages([
@@ -63,9 +73,13 @@ describe('validateMessages - Unit Tests', () => {
             ]);
             expect(result).toBeNull();
         });
+
+// #endregion test:should-accept-messages-with-user
     });
 
     describe('Role validation', () => {
+
+// #region test:should-reject-invalid-role
         it('should reject invalid role', () => {
             const result = validateMessages([
                 { role: 'hacker', content: 'malicious' }
@@ -73,12 +87,20 @@ describe('validateMessages - Unit Tests', () => {
             expect(result).toContain("Invalid role 'hacker'");
         });
 
+// #endregion test:should-reject-invalid-role
+
+// #region test:should-reject-missing-role
+
         it('should reject missing role', () => {
             const result = validateMessages([
                 { role: '', content: 'Hello' }
             ]);
             expect(result).toContain('Invalid role');
         });
+
+// #endregion test:should-reject-missing-role
+
+// #region test:should-accept-valid-roles
 
         it('should accept valid roles', () => {
             const result = validateMessages([
@@ -89,15 +111,23 @@ describe('validateMessages - Unit Tests', () => {
             ]);
             expect(result).toBeNull();
         });
+
+// #endregion test:should-accept-valid-roles
     });
 
     describe('Content type validation', () => {
+
+// #region test:should-reject-object-content
         it('should reject object content', () => {
             const result = validateMessages([
                 { role: 'user', content: { text: 'Hello' } }
             ]);
             expect(result).toContain('must be a string, got object');
         });
+
+// #endregion test:should-reject-object-content
+
+// #region test:should-reject-number-content
 
         it('should reject number content', () => {
             const result = validateMessages([
@@ -106,21 +136,33 @@ describe('validateMessages - Unit Tests', () => {
             expect(result).toContain('must be a string, got number');
         });
 
+// #endregion test:should-reject-number-content
+
+// #region test:should-reject-undefined-content
+
         it('should reject undefined content', () => {
             const result = validateMessages([
                 { role: 'user', content: undefined }
             ]);
             expect(result).toContain('must be a string, got undefined');
         });
+
+// #endregion test:should-reject-undefined-content
     });
 
     describe('Empty content validation', () => {
+
+// #region test:should-reject-empty-user-message
         it('should reject empty user message', () => {
             const result = validateMessages([
                 { role: 'user', content: '' }
             ]);
             expect(result).toContain('cannot have empty content');
         });
+
+// #endregion test:should-reject-empty-user-message
+
+// #region test:should-reject-whitespace-only-user-message
 
         it('should reject whitespace-only user message', () => {
             const result = validateMessages([
@@ -129,6 +171,10 @@ describe('validateMessages - Unit Tests', () => {
             expect(result).toContain('cannot have empty content');
         });
 
+// #endregion test:should-reject-whitespace-only-user-message
+
+// #region test:should-allow-empty-assistant-content
+
         it('should allow empty assistant content', () => {
             const result = validateMessages([
                 { role: 'user', content: 'Hello' },
@@ -136,5 +182,7 @@ describe('validateMessages - Unit Tests', () => {
             ]);
             expect(result).toBeNull();
         });
+
+// #endregion test:should-allow-empty-assistant-content
     });
 });
