@@ -1,0 +1,149 @@
+---
+title: "Architecture"
+---
+
+# Dependency Graph
+
+Internal module dependencies generated from `import` statements.
+
+```{mermaid}
+graph TD
+    subgraph commands [commands]
+        commands_gemini[gemini]
+        commands_graph[graph]
+        commands_misc[misc]
+        commands_notebooklm[notebooklm]
+        commands_perplexity[perplexity]
+        commands_profile[profile]
+        commands_registry[registry]
+        commands_server[server]
+    end
+    subgraph services [services]
+        services_notification[notification]
+    end
+    subgraph clients [clients]
+        clients_windmill[windmill]
+    end
+    subgraph types [types]
+        types_graph_store[graph-store]
+    end
+    auth[auth]
+    cli_utils[cli-utils]
+    cli[cli]
+    client[client]
+    discord[discord]
+    exporter[exporter]
+    gemini_client[gemini-client]
+    graph_store[graph-store]
+    index[index]
+    link_audios_to_sources[link-audios-to-sources]
+    notebooklm_client[notebooklm-client]
+    query[query]
+    server[server]
+    snapshot[snapshot]
+    test_notebooklm_capabilities[test-notebooklm-capabilities]
+    verify_audio_click[verify-audio-click]
+    verify_audio_features[verify-audio-features]
+    watcher[watcher]
+    windmill_client[windmill-client]
+    config[config]
+    logger[logger]
+    cli_context[cli-context]
+    profile[profile]
+    profile_sync[profile-sync]
+    artifact_registry[artifact-registry]
+    selectors[selectors]
+    errors[errors]
+    notify[notify]
+    observability[observability]
+    auth --> config
+    auth --> logger
+    cli_utils --> config
+    cli_utils --> client
+    cli_utils --> cli_context
+    cli --> cli_context
+    cli --> commands_server
+    cli --> commands_profile
+    cli --> commands_gemini
+    cli --> commands_notebooklm
+    cli --> commands_perplexity
+    cli --> commands_graph
+    cli --> commands_registry
+    cli --> commands_misc
+    client --> notebooklm_client
+    client --> gemini_client
+    client --> config
+    client --> profile
+    commands_gemini --> clients_windmill
+    commands_gemini --> cli_utils
+    commands_gemini --> gemini_client
+    commands_gemini --> cli_context
+    commands_gemini --> client
+    commands_gemini --> graph_store
+    commands_graph --> cli_utils
+    commands_graph --> graph_store
+    commands_graph --> config
+    commands_graph --> cli_context
+    commands_misc --> cli_utils
+    commands_notebooklm --> cli_utils
+    commands_notebooklm --> config
+    commands_notebooklm --> graph_store
+    commands_perplexity --> client
+    commands_perplexity --> cli_context
+    commands_perplexity --> auth
+    commands_perplexity --> config
+    commands_profile --> profile
+    commands_profile --> cli_context
+    commands_profile --> profile_sync
+    commands_registry --> artifact_registry
+    commands_server --> server
+    commands_server --> cli_utils
+    discord --> config
+    discord --> logger
+    exporter --> graph_store
+    gemini_client --> artifact_registry
+    gemini_client --> selectors
+    gemini_client --> graph_store
+    graph_store --> logger
+    graph_store --> errors
+    graph_store --> types_graph_store
+    index --> auth
+    index --> client
+    index --> server
+    index --> config
+    index --> gemini_client
+    index --> profile
+    index --> logger
+    index --> notebooklm_client
+    index --> graph_store
+    index --> cli_utils
+    index --> cli_context
+    link_audios_to_sources --> logger
+    notebooklm_client --> config
+    notebooklm_client --> selectors
+    query --> config
+    query --> logger
+    server --> client
+    server --> config
+    server --> notebooklm_client
+    server --> gemini_client
+    server --> graph_store
+    server --> discord
+    server --> notify
+    server --> artifact_registry
+    server --> services_notification
+    server --> observability
+    services_notification --> config
+    snapshot --> config
+    test_notebooklm_capabilities --> config
+    test_notebooklm_capabilities --> notebooklm_client
+    verify_audio_click --> client
+    verify_audio_features --> client
+    watcher --> client
+    watcher --> gemini_client
+    watcher --> notebooklm_client
+    watcher --> notify
+    windmill_client --> graph_store
+    windmill_client --> errors
+
+```

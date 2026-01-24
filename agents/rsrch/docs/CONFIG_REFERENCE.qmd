@@ -1,0 +1,51 @@
+---
+title: "Configuration Reference"
+---
+
+# Configuration
+
+Run-time configuration for `rsrch`, defined in `src/config.ts`.
+
+## Environment Variables
+
+Priority: `process.env` > `config.json` > Defaults
+
+| Variable | Path | Default | Type |
+|----------|------|---------|------|
+| `URL` | `url` | `https://www.perplexity.ai` | string |
+| `HEADLESS` | `headless` | false | boolean |
+| `PORT` | `port` | 3099 | number |
+| `BROWSERWSENDPOINT` | `browserWsEndpoint` | *Optional* | string |
+| `BROWSERCDPENDPOINT` | `browserCdpEndpoint` | *Optional* | string |
+| `REMOTEDEBUGGINGPORT` | `remoteDebuggingPort` | *Optional* | number |
+| `SELECTORS_LOGINBUTTON` | `selectors.loginButton` | `button:has-text(`Log in` | string |
+| `SELECTORS_GOOGLELOGINBUTTON` | `selectors.googleLoginButton` | `button:has-text(`Continue with Google` | string |
+| `SELECTORS_QUERYINPUT` | `selectors.queryInput` | [`textarea[placeholder*=`Ask`]`, `textarea`, `input[placeholder*=`Ask`]`, `div[contenteditable=`true`]`] | string |
+| `SELECTORS_SUBMITBUTTON` | `selectors.submitButton` | `button[aria-label=`Submit`]` | string |
+| `SELECTORS_ANSWERCONTAINER` | `selectors.answerContainer` | `.prose` | string |
+| `SELECTORS_FOLLOWUPINPUT` | `selectors.followUpInput` | `textarea[placeholder*=`Ask follow-up`]` | string |
+| `SELECTORS_AUTH_USERDATADIR` | `selectors.auth.userDataDir` | path.join(os.homedir( | string |
+| `SELECTORS_AUTH_AUTHFILE` | `selectors.auth.authFile` | path.join(os.homedir( | string |
+| `SELECTORS_NOTIFICATIONS_DISCORDWEBHOOKURL` | `selectors.notifications.discordWebhookUrl` | *Optional* | string |
+| `SELECTORS_NOTIFICATIONS_NTFY_TOPIC` | `selectors.notifications.ntfy.topic` | `rsrch-audio` | string |
+| `SELECTORS_NOTIFICATIONS_NTFY_SERVER` | `selectors.notifications.ntfy.server` | `https://ntfy.sh` | string |
+| `SELECTORS_PATHS_RESULTSDIR` | `selectors.paths.resultsDir` | path.join(os.homedir( | string |
+| `SELECTORS_PATHS_QUERIESFILE` | `selectors.paths.queriesFile` | path.join(process.cwd( | string |
+| `SELECTORS_FALKOR_HOST` | `selectors.falkor.host` | `localhost` | string |
+| `SELECTORS_FALKOR_PORT` | `selectors.falkor.port` | 6379 | number |
+| `SELECTORS_WINDMILL_APIURL` | `selectors.windmill.apiUrl` | *Optional* | string |
+| `SELECTORS_WINDMILL_TOKEN` | `selectors.windmill.token` | *Optional* | string |
+| `SELECTORS_WINDMILL_WORKSPACE` | `selectors.windmill.workspace` | *Optional* | string |
+| `SELECTORS_WINDMILL_AUDIOSCRIPTPATH` | `selectors.windmill.audioScriptPath` | *Optional* | string |
+
+## Usage
+
+To override defaults, create a `config.json` in the working directory or set environment variables.
+
+### Example `config.json`
+```json
+{
+  "port": 4000,
+  "headless": true
+}
+```

@@ -1,0 +1,790 @@
+---
+title: "CLI Reference"
+---
+
+# CLI Commands
+
+Reference for the `rsrch` command-line interface.
+
+## GEMINI Commands
+
+### `research <query>`
+
+Execute a Google Gemini research query (Deep Research)
+
+_Source: [gemini.ts:L22](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L22)_
+
+***
+### `set-model <model>`
+
+Set Gemini model
+
+_Source: [gemini.ts:L43](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L43)_
+
+***
+### `upload <files...>`
+
+Upload files to Gemini
+
+_Source: [gemini.ts:L62](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L62)_
+
+***
+### `chat <message>`
+
+Chat with Gemini
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-s, --session <id>` | Session ID |
+| `--model <name>` | Gemini Model (e.g.  |
+| `-f, --file <path...>` | File(s) to attach |
+
+
+_Source: [gemini.ts:L108](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L108)_
+
+***
+### `deep-research <query>`
+
+Run deep research
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--gem <name>` | Gem name |
+| `--local` | Use local execution |
+| `--remote` | Use Windmill remote execution (Default) |
+| `--headed` | Show browser |
+| `--async` | Start async (returns job ID immediately) |
+
+
+_Source: [gemini.ts:L164](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L164)_
+
+***
+### `job-status <jobId>`
+
+Get status of an async deep research job
+
+_Source: [gemini.ts:L224](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L224)_
+
+***
+### `job-result <jobId>`
+
+Get result of a completed async deep research job
+
+_Source: [gemini.ts:L239](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L239)_
+
+***
+### `open-session <identifier>`
+
+Open a session by ID or Name
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L254](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L254)_
+
+***
+### `export-to-docs [sessionId]`
+
+Export session to Google Docs
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L270](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L270)_
+
+***
+### `list-sessions`
+
+List sessions
+
+_Source: [gemini.ts:L288](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L288)_
+
+***
+### `send-message <sessionIdOrMessage> [message]`
+
+Send message to session
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+| `--no-wait` | Do not wait for response |
+
+
+_Source: [gemini.ts:L320](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L320)_
+
+***
+### `get-response [sessionIdOrIndex] [index]`
+
+Get response from session
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L418](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L418)_
+
+***
+### `get-responses [sessionId]`
+
+Get all responses from session
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L467](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L467)_
+
+***
+### `get-research-info [sessionId]`
+
+Get research info (title, heading)
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L508](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L508)_
+
+***
+### `list-research-docs [arg]`
+
+List research docs (by limit or sessionID)
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L543](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L543)_
+
+***
+### `list-updates`
+
+List sessions that need syncing
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+| `--force-new` | Force opening a new tab |
+| `--limit <number>` | Limit items to scan |
+
+
+_Source: [gemini.ts:L680](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L680)_
+
+***
+### `scrape-session <id>`
+
+Scrape and sync a specific session
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L759](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L759)_
+
+***
+### `sync-conversations`
+
+Sync conversations to graph
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--limit <number>` | Limit |
+| `--offset <number>` | Offset |
+| `--async` | Run in background and return immediately |
+| `--stream` | Show real-time progress streaming |
+| `--no-stream` | Disable real-time progress streaming |
+
+
+_Source: [gemini.ts:L817](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L817)_
+
+***
+### `upload-file <path> [sessionId]`
+
+Upload a file
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L921](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L921)_
+
+***
+### `upload-files <files...>`
+
+Upload multiple files
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L934](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L934)_
+
+***
+### `upload-repo <repoUrl> [sessionId]`
+
+Upload repository context
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--branch <branch>` | Git branch |
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L959](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L959)_
+
+***
+### `sources`
+
+List available context sources
+
+_Source: [gemini.ts:L983](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L983)_
+
+***
+### `list-gems`
+
+List available Gems
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L995](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L995)_
+
+***
+### `open-gem <gemNameOrId>`
+
+Open a Gem
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L1024](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L1024)_
+
+***
+### `create-gem <name>`
+
+Create a new Gem
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--file <paths...>` | Files to upload |
+| `--config <path>` | Config file |
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L1049](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L1049)_
+
+***
+### `chat-gem <gemNameOrId> <message>`
+
+Chat with a Gem
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [gemini.ts:L1085](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L1085)_
+
+***
+## GRAPH Commands
+
+### `notebooks`
+
+List synced notebooks
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--limit <number>` | Limit |
+
+
+_Source: [graph.ts:L9](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L9)_
+
+***
+### `status`
+
+Show graph status and jobs
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [graph.ts:L35](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L35)_
+
+***
+### `jobs [status]`
+
+List jobs by status
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [graph.ts:L63](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L63)_
+
+***
+### `lineage <artifactId>`
+
+Show lineage for an artifact
+
+_Source: [graph.ts:L86](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L86)_
+
+***
+### `conversations`
+
+List conversations
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--limit <number>` | Limit |
+| `--platform <platform>` | Platform (gemini|perplexity) |
+
+
+_Source: [graph.ts:L108](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L108)_
+
+***
+### `conversation <id>`
+
+View conversation details
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--questions-only` | Show questions only |
+| `--answers-only` | Show answers only |
+| `--research-docs` | Include research docs |
+
+
+_Source: [graph.ts:L137](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L137)_
+
+***
+### `export`
+
+Export graph data
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--platform <platform>` | gemini|perplexity |
+| `--format <format>` | md|json |
+| `--output <path>` | Output directory |
+| `--since <date>` | Since date (ISO or timestamp) |
+| `--limit <number>` | Limit |
+
+
+_Source: [graph.ts:L181](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L181)_
+
+***
+### `citations`
+
+List citations
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--domain <domain>` | Filter by domain |
+| `--limit <number>` | Limit |
+
+
+_Source: [graph.ts:L219](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L219)_
+
+***
+### `citation-usage <url>`
+
+Show where a URL is cited
+
+_Source: [graph.ts:L241](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L241)_
+
+***
+### `migrate-citations`
+
+Migrate existing ResearchDocs to Citations
+
+_Source: [graph.ts:L266](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/graph.ts#L266)_
+
+***
+## NOTEBOOKLM Commands
+
+### `create <title>`
+
+Create a notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L10](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L10)_
+
+***
+### `add-source <url>`
+
+Add a source URL to a notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--notebook <title>` | Notebook title |
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L23](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L23)_
+
+***
+### `add-drive-source <docNames>`
+
+Add Google Drive sources (comma-separated)
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--notebook <title>` | Notebook title |
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L36](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L36)_
+
+***
+### `generate-audio`
+
+Generate audio for sources
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--notebook <title>` | Notebook title |
+| `--source <source>` | Source name (can be used multiple times) |
+| `--sources <sources>` | Comma-separated sources (legacy) |
+| `--prompt <prompt>` | Custom prompt |
+| `--wet` | Wet run (consume quota) |
+| `--force` | Force regenerate |
+| `--local` | Use local execution (Deprecated) |
+
+
+_Source: [notebooklm.ts:L52](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L52)_
+
+***
+### `download-audio [outputPath]`
+
+Download audio overview
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+| `--latest` | Latest audio only |
+| `--pattern <regex>` | Audio title pattern |
+
+
+_Source: [notebooklm.ts:L106](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L106)_
+
+***
+### `download-all-audio [outputDir]`
+
+Download all audio overviews
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+| `--limit <number>` | Limit number of downloads |
+
+
+_Source: [notebooklm.ts:L128](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L128)_
+
+***
+### `sync`
+
+Sync notebook(s) to graph
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--title <title>` | Notebook title (sync single) |
+| `--pattern <regex>` | Regex pattern to filter notebooks |
+| `-a, --audio` | Download audio during sync |
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L144](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L144)_
+
+***
+### `list`
+
+List notebooks
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L205](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L205)_
+
+***
+### `stats <title>`
+
+Get notebook stats
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L219](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L219)_
+
+***
+### `sources <title>`
+
+List notebook sources
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L233](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L233)_
+
+***
+### `messages <title>`
+
+Get notebook chat messages
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L248](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L248)_
+
+***
+### `add-text <notebookTitle> <content>`
+
+Add text or file content to notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--source-title <title>` | Custom source title |
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L263](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L263)_
+
+***
+### `download-batch-audio`
+
+Batch download audio from multiple notebooks
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L307](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L307)_
+
+***
+### `artifacts <title>`
+
+Get notebook artifacts
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L347](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L347)_
+
+***
+### `audio-status`
+
+Check audio status
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L362](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L362)_
+
+***
+### `sources-without-audio`
+
+List sources without generated audio
+
+_Source: [notebooklm.ts:L377](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L377)_
+
+***
+## PROFILE Commands
+
+### `list`
+
+List all profiles
+
+_Source: [profile.ts:L13](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L13)_
+
+***
+### `info [profileId]`
+
+Show profile details
+
+_Source: [profile.ts:L30](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L30)_
+
+***
+### `delete <profileId>`
+
+Delete a profile
+
+_Source: [profile.ts:L43](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L43)_
+
+***
+### `sync-to-remote [profileId]`
+
+Export auth from local browser and sync to remote server
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--remote <host>` | Remote host (e.g., halvarm or user@host) |
+| `--cdp-port <port>` | Local CDP port |
+| `--remote-path <path>` | Remote profiles path |
+
+
+_Source: [profile.ts:L51](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L51)_
+
+***
+### `sync`
+
+Copy browser auth from local Cromite/Chromium to rsrch container
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--source <path>` | Source browser profile path (e.g., ~/.config/chromium/ |
+| `--target <name>` | Target: local | halvarm |
+| `--list-sources` | List available source profiles |
+| `--restart` | Restart target browser after sync |
+
+
+_Source: [profile.ts:L140](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L140)_
+
+***
+## REGISTRY Commands
+
+### `list`
+
+List artifacts
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--type <type>` | Filter by type (session|document|audio) |
+
+
+_Source: [registry.ts:L8](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/registry.ts#L8)_
+
+***
+### `show <id>`
+
+Show artifact details
+
+_Source: [registry.ts:L35](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/registry.ts#L35)_
+
+***
+### `lineage <id>`
+
+Show artifact lineage
+
+_Source: [registry.ts:L45](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/registry.ts#L45)_
+
+***

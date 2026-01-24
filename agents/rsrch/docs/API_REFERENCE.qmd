@@ -1,0 +1,592 @@
+---
+title: "API Reference"
+---
+
+# API Reference
+
+REST API endpoints provided by `src/server.ts`.
+
+## GET `/health`
+
+Health check endpoint
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/health
+```
+
+_Source: [server.ts:L87](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L87)_
+
+***
+## POST `/shutdown`
+
+Shutdown endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/shutdown
+```
+
+_Source: [server.ts:L120](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L120)_
+
+***
+## POST `/config/max-tabs`
+
+Config Endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/config/max-tabs
+```
+
+_Source: [server.ts:L138](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L138)_
+
+***
+## POST `/auth/save`
+
+Auth Save Endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/auth/save
+```
+
+_Source: [server.ts:L148](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L148)_
+
+***
+## POST `/query`
+
+Query endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/query
+```
+
+_Source: [server.ts:L160](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L160)_
+
+***
+## POST `/notebook/list`
+
+NotebookLM Endpoints
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/list
+```
+
+_Source: [server.ts:L236](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L236)_
+
+***
+## POST `/notebook/create`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/create
+```
+
+_Source: [server.ts:L249](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L249)_
+
+***
+## POST `/notebook/add-source`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/add-source
+```
+
+_Source: [server.ts:L278](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L278)_
+
+***
+## POST `/notebook/add-drive-source`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/add-drive-source
+```
+
+_Source: [server.ts:L308](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L308)_
+
+***
+## POST `/notebook/add-text`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/add-text
+```
+
+_Source: [server.ts:L330](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L330)_
+
+***
+## POST `/notebook/generate-audio`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/generate-audio
+```
+
+_Source: [server.ts:L352](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L352)_
+
+***
+## POST `/notebook/audio-status`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/audio-status
+```
+
+_Source: [server.ts:L411](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L411)_
+
+***
+## POST `/notebooklm/create-audio-from-doc`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebooklm/create-audio-from-doc
+```
+
+_Source: [server.ts:L429](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L429)_
+
+***
+## POST `/webhook/audio-complete`
+
+Webhook for Windmill/Watcher completion
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/webhook/audio-complete
+```
+
+_Source: [server.ts:L490](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L490)_
+
+***
+## GET `/jobs/:id`
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/jobs/:id
+```
+
+_Source: [server.ts:L524](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L524)_
+
+***
+## GET `/jobs`
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/jobs
+```
+
+_Source: [server.ts:L535](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L535)_
+
+***
+## POST `/deep-research/start`
+
+Start async deep research - returns job ID immediately
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/deep-research/start
+```
+
+_Source: [server.ts:L545](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L545)_
+
+***
+## GET `/deep-research/status/:id`
+
+Get deep research job status
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/deep-research/status/:id
+```
+
+_Source: [server.ts:L612](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L612)_
+
+***
+## GET `/deep-research/result/:id`
+
+Get deep research result (only when completed)
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/deep-research/result/:id
+```
+
+_Source: [server.ts:L632](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L632)_
+
+***
+## POST `/notebook/dump`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/notebook/dump
+```
+
+_Source: [server.ts:L654](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L654)_
+
+***
+## GET `/v1/models`
+
+List available models
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/v1/models
+```
+
+_Source: [server.ts:L798](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L798)_
+
+***
+## GET `/v1/models/:modelId`
+
+Get specific model info
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/v1/models/:modelId
+```
+
+_Source: [server.ts:L826](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L826)_
+
+***
+## POST `/v1/chat/completions`
+
+Chat completions endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/v1/chat/completions
+```
+
+_Source: [server.ts:L849](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L849)_
+
+***
+## POST `/gemini/research`
+
+Gemini Endpoints (Original)
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/research
+```
+
+_Source: [server.ts:L1229](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1229)_
+
+***
+## GET `/gemini/sessions`
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/gemini/sessions
+```
+
+_Source: [server.ts:L1311](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1311)_
+
+***
+## GET `/gemini/list-research-docs`
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/gemini/list-research-docs
+```
+
+_Source: [server.ts:L1349](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1349)_
+
+***
+## POST `/gemini/sync-graph`
+
+Sync Gemini research docs to FalkorDB
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/sync-graph
+```
+
+_Source: [server.ts:L1379](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1379)_
+
+***
+## GET `/graph/status`
+
+Graph Endpoints
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/graph/status
+```
+
+_Source: [server.ts:L1443](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1443)_
+
+***
+## GET `/graph/conversations`
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/graph/conversations
+```
+
+_Source: [server.ts:L1464](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1464)_
+
+***
+## POST `/gemini/export-to-docs`
+
+Existing export-to-docs endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/export-to-docs
+```
+
+_Source: [server.ts:L1475](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1475)_
+
+***
+## POST `/gemini/get-research-info`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/get-research-info
+```
+
+_Source: [server.ts:L1506](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1506)_
+
+***
+## GET `/gemini/sources`
+
+Additional Gemini Endpoints (Production CLI Support)
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/gemini/sources
+```
+
+_Source: [server.ts:L1532](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1532)_
+
+***
+## POST `/gemini/set-model`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/set-model
+```
+
+_Source: [server.ts:L1545](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1545)_
+
+***
+## POST `/gemini/upload`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/upload
+```
+
+_Source: [server.ts:L1569](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1569)_
+
+***
+## POST `/gemini/chat`
+
+Chat endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/chat
+```
+
+_Source: [server.ts:L1633](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1633)_
+
+***
+## POST `/gemini/send-message`
+
+Send message (alias for chat with explicit session)
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/send-message
+```
+
+_Source: [server.ts:L1740](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1740)_
+
+***
+## POST `/gemini/open-session`
+
+Open session
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/open-session
+```
+
+_Source: [server.ts:L1802](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1802)_
+
+***
+## POST `/gemini/sync-conversations`
+
+Sync conversations to FalkorDB
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/sync-conversations
+```
+
+_Source: [server.ts:L1821](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1821)_
+
+***
+## POST `/gemini/get-responses`
+
+Get responses from current session
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/get-responses
+```
+
+_Source: [server.ts:L1945](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1945)_
+
+***
+## GET `/gemini/gems`
+
+List Gems
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/gemini/gems
+```
+
+_Source: [server.ts:L1967](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1967)_
+
+***
+## POST `/gemini/open-gem`
+
+Open Gem
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/open-gem
+```
+
+_Source: [server.ts:L1983](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1983)_
+
+***
+## POST `/gemini/chat-gem`
+
+Chat with Gem
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/chat-gem
+```
+
+_Source: [server.ts:L2002](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2002)_
+
+***
+## POST `/gemini/list-research-docs`
+
+List Research Docs
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/gemini/list-research-docs
+```
+
+_Source: [server.ts:L2022](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2022)_
+
+***
+## POST `/research-to-podcast`
+
+Unified Unified Research to Podcast Endpoint
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/research-to-podcast
+```
+
+_Source: [server.ts:L2050](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2050)_
+
+***
+## POST `/jules/publish-session`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/jules/publish-session
+```
+
+_Source: [server.ts:L2275](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2275)_
+
+***
+## POST `/jules/publish-selected`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/jules/publish-selected
+```
+
+_Source: [server.ts:L2301](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2301)_
+
+***
+## POST `/jules/publish-all`
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:3055/jules/publish-all
+```
+
+_Source: [server.ts:L2348](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2348)_
+
+***
+## GET `/jules/sessions/:sessionId`
+
+**Example Request:**
+
+```bash
+curl -X GET http://localhost:3055/jules/sessions/:sessionId
+```
+
+_Source: [server.ts:L2368](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2368)_
+
+***
