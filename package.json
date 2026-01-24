@@ -1,5 +1,10 @@
 {
-  "dependencies": {
-    "zod": "^4.3.5"
+  "name": "pwf-monorepo",
+  "private": true,
+  "workspaces": [
+    "agents/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @agents/shared && npm run build -w rsrch"
   }
 }

@@ -4,8 +4,14 @@
         "description": "Shared utilities for agent infrastructure",
         "main": "dist/index.js",
         "exports": {
-                ".": "./dist/index.js",
-                "./*": "./dist/*.js"
+                ".": {
+                        "types": "./dist/index.d.ts",
+                        "default": "./dist/index.js"
+                },
+                "./*": {
+                        "types": "./dist/*.d.ts",
+                        "default": "./dist/*.js"
+                }
         },
         "types": "dist/index.d.ts",
         "scripts": {

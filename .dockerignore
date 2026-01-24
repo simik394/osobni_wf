@@ -1,0 +1,27 @@
+# root .dockerignore
+**/.git
+**/node_modules
+**/dist
+**/data
+**/test-results
+**/cached-sources
+**/.venv
+**/infrastruct
+**/.gemini
+**/_progress
+**/*.deb
+**/*.log
+
+# Specific exclusions for build context
+!package.json
+!package-lock.json
+!agents/shared/**
+!agents/rsrch/**
+
+# Even within included agents, ignore some things
+agents/shared/node_modules/
+agents/shared/dist/
+agents/rsrch/node_modules/
+agents/rsrch/dist/
+agents/rsrch/data/
+agents/rsrch/playwright/
