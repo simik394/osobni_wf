@@ -22,7 +22,7 @@ services:
     container_name: rsrch
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
-      - "5905:5900" # Expose VNC from rsrch container (5901 in use)
+      # - "5905:5900" # VNC disabled to avoid confusion. Use chromium container on 5902 for browser view.
     volumes:
       - ./data:/app/data
       - ./src:/app/src

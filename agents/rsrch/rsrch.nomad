@@ -11,7 +11,7 @@ job "rsrch" {
         static = 3055
       }
       port "vnc" {
-        static = 5900
+        static = 5955
       }
     }
 

@@ -1,9 +1,10 @@
 #!/bin/bash
 set -e
 
-# Defaults
-export DISPLAY=:20
-rm -f /tmp/.X20-lock
+# Cleanup old displays
+echo "Cleaning up display and profile locks..."
+rm -f /tmp/.X*-lock
+rm -rf /tmp/.X11-unix/X*
 
 # Start Xvfb
 echo "Starting Xvfb on $DISPLAY..."
@@ -15,9 +16,9 @@ sleep 2
 echo "Starting Fluxbox..."
 fluxbox &
 
-# Start x11vnc
+# Start x11vnc with explicit name and cleanup
 echo "Starting x11vnc..."
-x11vnc -display $DISPLAY -forever -nopw -create -rfbport 5900 &
+x11vnc -display $DISPLAY -forever -nopw -create -shared -rfbport 5900 -desktop "RSRCH-PROD" &
 VNC_PID=$!
 
 echo "System Check:"
