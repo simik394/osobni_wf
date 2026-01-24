@@ -4,13 +4,13 @@
   "description": "Automated researcher agent using Perplexity AI and Gemini",
   "main": "src/index.ts",
   "bin": {
-    "rsrch": "dist/rsrch/src/cli.js"
+    "rsrch": "dist/cli.js"
   },
   "scripts": {
     "rsrch": "ts-node src/cli.ts",
     "auth": "ts-node src/cli.ts auth",
     "login": "HEADLESS=false ts-node src/cli.ts login",
-    "start": "node dist/rsrch/src/cli.js",
+    "start": "node dist/cli.js",
     "serve": "ts-node src/server.ts",
     "debug:notebook": "ts-node src/debug-notebooklm.ts",
     "build": "tsc -p tsconfig.json",

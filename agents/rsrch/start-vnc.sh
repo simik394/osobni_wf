@@ -17,14 +17,23 @@ fluxbox &
 
 # Start x11vnc
 echo "Starting x11vnc..."
-x11vnc -display $DISPLAY -forever -usepw -create -rfbport 5900 &
+x11vnc -display $DISPLAY -forever -nopw -create -rfbport 5900 &
 VNC_PID=$!
+
+echo "System Check:"
+pwd
+ls -la
+ls -la dist || echo "No dist folder found"
+node -v
+
+echo "Locating Entrypoint..."
+REAL_CLI=$(find dist -name cli.js | head -n 1)
+echo "Found CLI at: $REAL_CLI"
 
 echo "Starting Main Application..."
 # Pass all arguments to the main app, or default to serving
-# Using exec so node takes over PID 1 if possible, or just waits
 if [ "$#" -eq 0 ]; then
-    exec node dist/cli.js serve
+    exec node "$REAL_CLI" serve
 else
     exec "$@"
 fi

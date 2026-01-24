@@ -336,10 +336,13 @@ export class PerplexityClient extends BaseClient {
                     '--disable-blink-features=AutomationControlled',
                     '--disable-infobars',
                     '--window-size=1280,1024',
+                    '--disable-web-security',
+                    '--remote-debugging-port=9223',
+                    '--remote-debugging-address=0.0.0.0',
+                    '--disable-gpu',
+                    '--disable-dev-shm-usage',
                     '--no-first-run',
-                    '--no-zygote',
-                    // '--disable-gpu', // GPU might be useful if available, but generally disable in docker unless passthrough
-                    '--disable-web-security'
+                    '--no-default-browser-check'
                 ],
                 ignoreDefaultArgs: ['--enable-automation'],
                 viewport: { width: 1280, height: 1024 }
@@ -801,6 +804,13 @@ export class PerplexityClient extends BaseClient {
     }
 
     async shutdown() {
+        try {
+            console.log('Saving auth state before shutdown...');
+            await this.saveAuth();
+        } catch (e: any) {
+            console.error('Failed to save auth on shutdown:', e.message);
+        }
+
         // Close all pages
         for (const session of this.sessions) {
             await session.page.close().catch(() => { });

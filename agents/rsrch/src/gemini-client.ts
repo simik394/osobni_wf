@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import { getRegistry } from './artifact-registry';
-import { getRsrchTelemetry } from '../../shared/src';
+import { getRsrchTelemetry } from '@agents/shared';
 import { selectors } from './selectors';
 import { getGraphStore } from './graph-store';
 

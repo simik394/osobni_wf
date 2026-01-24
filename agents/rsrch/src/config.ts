@@ -6,7 +6,7 @@ import { z } from 'zod';
 const configSchema = z.object({
   url: z.string().url().default('https://www.perplexity.ai'),
   headless: z.boolean().default(false),
-  port: z.coerce.number().int().positive().default(3001),
+  port: z.coerce.number().int().positive().default(3099),
   browserWsEndpoint: z.string().optional(),
   browserCdpEndpoint: z.string().optional(),
   remoteDebuggingPort: z.coerce.number().int().positive().optional(),
@@ -57,9 +57,18 @@ if (fs.existsSync(configPath)) {
 }
 
 // Merge configurations
+console.log(`[Config] DEBUG Environment:`);
+console.log(`  process.env.PORT: "${process.env.PORT}"`);
+console.log(`  process.env.NOMAD_PORT_http: "${process.env.NOMAD_PORT_http}"`);
+
+const envPort = process.env.PORT || process.env.NOMAD_PORT_http;
+const resolvedPort = envPort ? parseInt(envPort, 10) : (localConfig.port || 3055);
+
+console.log(`  Resolved Port: ${resolvedPort}`);
+
 const mergedConfig = {
   ...localConfig,
-  port: process.env.PORT || localConfig.port,
+  port: resolvedPort,
   browserWsEndpoint: process.env.BROWSER_WS_ENDPOINT || localConfig.browserWsEndpoint,
   browserCdpEndpoint: process.env.BROWSER_CDP_ENDPOINT || localConfig.browserCdpEndpoint,
   remoteDebuggingPort: process.env.REMOTE_DEBUGGING_PORT || localConfig.remoteDebuggingPort,

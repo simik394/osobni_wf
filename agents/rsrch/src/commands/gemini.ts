@@ -617,8 +617,11 @@ async function ensureGeminiContext(
     const { GeminiClient: GClient } = await import('../gemini-client');
     const { getTab } = await import('@agents/shared/tab-pool');
 
+    const { config } = await import('../config');
     const client = new PClient({ profileId: profileId || cliContext.get().profileId, cdpEndpoint });
-    await client.init({ local: !cdpEndpoint, profileId, cdpEndpoint });
+    // Smart detection: only local if NO cdpEndpoint is provided AND no endpoints in config
+    const isLocal = !cdpEndpoint && !config.browserCdpEndpoint && !config.browserWsEndpoint;
+    await client.init({ local: isLocal, profileId, cdpEndpoint });
 
     let gemini: GeminiClient;
 

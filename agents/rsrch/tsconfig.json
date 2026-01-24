@@ -11,12 +11,23 @@
         "strictNullChecks": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "moduleResolution": "node",
+        "baseUrl": ".",
+        "paths": {
+            "@agents/shared": [
+                "../shared/src/index"
+            ],
+            "@agents/shared/*": [
+                "../shared/src/*"
+            ]
+        }
     },
     "include": [
         "src/**/*"
     ],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "dist"
     ]
 }

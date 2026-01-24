@@ -18,6 +18,25 @@ import { discordService } from './services/notification';
 // Optional shared imports (may not be available in Docker)
 let getFalkorClient: any = null;
 // Define shouldBypass locally to ensure Windmill infinite loop protection works
+// (This is a simplified version of the logic in @agents/shared to avoid circular deps during startup)
+
+
+function findPackageVersion(): string | null {
+    let currentDir = __dirname;
+    while (currentDir !== path.parse(currentDir).root) {
+        const packagePath = path.join(currentDir, 'package.json');
+        if (fs.existsSync(packagePath)) {
+            try {
+                const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
+                return pkg.version;
+            } catch (e) {
+                console.error('Error reading package.json:', e);
+            }
+        }
+        currentDir = path.dirname(currentDir);
+    }
+    return null;
+}
 // even if @agents/shared is missing or fails to load.
 let shouldBypass: (headers: any) => boolean = (headers: any) => {
     return headers['x-bypass-windmill'] === 'true' || headers['x-windmill-bypass'] === 'true';
@@ -69,7 +88,7 @@ app.get('/health', (req, res) => {
     const health = {
         status: 'ok',
         uptime: process.uptime(),
-        version: require('../package.json').version,
+        version: '1.0.35', // Hardcoded to avoid fragile relative path lookups in Docker
         dependencies: {
             falkordb: 'unknown',
             browser: 'unknown',
@@ -123,6 +142,18 @@ app.post('/config/max-tabs', (req, res) => {
     }
     setMaxTabs(maxTabs);
     res.json({ success: true, maxTabs: getMaxTabs() });
+});
+
+// Auth Save Endpoint
+app.post('/auth/save', async (req, res) => {
+    try {
+        console.log('[Server] Manual auth save requested');
+        await client.saveAuth();
+        res.json({ success: true, message: 'Auth state saved' });
+    } catch (e: any) {
+        console.error('[Server] Failed to save auth state:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // Query endpoint
@@ -2319,6 +2350,14 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
     console.log('SIGINT received, closing browser...');
+    await flushObservability();
+    await shutdownObservability();
+    await client.close();
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, closing browser...');
     await flushObservability();
     await shutdownObservability();
     await client.close();

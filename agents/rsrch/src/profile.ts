@@ -23,6 +23,9 @@ export function getProfileDir(profileId: string = 'default'): string {
  * Get the auth file path for a profile
  */
 export function getAuthFile(profileId: string = 'default'): string {
+    if (process.env.AUTH_FILE) {
+        return process.env.AUTH_FILE;
+    }
     return path.join(getProfileDir(profileId), 'auth.json');
 }
 
