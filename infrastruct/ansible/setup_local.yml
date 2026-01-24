@@ -22,16 +22,14 @@
       tags: zellij
     - role: lazydocker
       tags: lazydocker
+    - role: wander
+      tags: wander
     - role: fonts
       tags: fonts
     - role: memgraph_lab_container
       tags: memgraph_lab
     - role: nushell
       tags: nushell
-    - role: ghostty
-      tags: ghostty
-      vars:
-        ghostty_command: "{{ ansible_env.HOME }}/.local/bin/nu"
     - role: wezterm
       tags: wezterm
     - role: jabref
@@ -48,3 +46,9 @@
       tags: chrome-bookmarks
     - role: antigravity-mcp
       tags: antigravity-mcp
+    - role: rsrch
+      tags: rsrch
+    - role: fly-pie
+      tags: fly-pie
+    - role: quarto
+      tags: quarto
