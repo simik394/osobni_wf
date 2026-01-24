@@ -1,0 +1,45 @@
+{
+    "workspaces": {
+        "agents/rsrch": {
+            "entry": [
+                "src/index.ts",
+                "src/cli.ts",
+                "src/server.ts",
+                "scripts/**/*.ts",
+                "tests/**/*.ts",
+                "vitest.config.ts"
+            ],
+            "project": [
+                "src/**/*.ts",
+                "scripts/**/*.ts",
+                "tests/**/*.ts"
+            ],
+            "ignore": [
+                "scripts/manual/**",
+                "windmill/**",
+                "deploy/**",
+                "test-results.json"
+            ]
+        },
+        "agents/shared": {
+            "entry": [
+                "src/index.ts",
+                "vitest.config.ts"
+            ],
+            "project": [
+                "src/**/*.ts"
+            ]
+        },
+        "agents/angrav": {
+            "entry": [
+                "src/index.ts",
+                "src/cli.ts",
+                "src/server.ts",
+                "vitest.config.ts"
+            ],
+            "project": [
+                "src/**/*.ts"
+            ]
+        }
+    }
+}

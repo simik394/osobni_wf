@@ -56,3 +56,7 @@ halvarm_storage_report*.md
 
 # Ansible / Roles junk if any
 .ansible/
+
+# Centralized Artifacts
+_artifacts/
+_leftovers/

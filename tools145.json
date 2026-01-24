@@ -1,6 +1,0 @@
-{
-  "name": "sessions/10874211690880704295",
-  "prompt": "Implement `jules-watchdog` CLI tool (Feature: Auto-Reconciliation Watchdog). Repo: simik394/osobni_wf. Base: main. It should check GitHub PR status vs Jules Session status. If Session == COMPLETED but PR == CONFLICTING or NO NEW COMMITS, flag it. See https://napoveda.youtrack.cloud/issue/TOOLS-145. Implement in `agents/jules-go/cmd/jules-watchdog` and add to Makefile.",
-  "url": "https://jules.google.com/session/10874211690880704295",
-  "id": "10874211690880704295"
-}

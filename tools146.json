@@ -1,6 +1,0 @@
-{
-  "name": "sessions/14441687869999814256",
-  "prompt": "Implement `jules-fleet` CLI tool (Feature: Jules Fleet Commander). Repo: simik394/osobni_wf. Base: main. It should allow bulk operations on sessions. Subcommands: `retry --reason X --ids 1,2,3`, `approve --all-completed`, `nuke --stale \u003e 24h`. See https://napoveda.youtrack.cloud/issue/TOOLS-146. Implement in `agents/jules-go/cmd/jules-fleet` and add to Makefile.",
-  "url": "https://jules.google.com/session/14441687869999814256",
-  "id": "14441687869999814256"
-}

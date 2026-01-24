@@ -343,7 +343,7 @@ export class WindmillClient {
         // Windmill usually maps scripts to user/workspace paths.
         // Assuming path 'f/rsrch/gemini_interaction' for now.
         return this.triggerJob('f/rsrch/gemini_interaction', {
-            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || 'ws://halvarm:9223',
+            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || `ws://${DEFAULTS.RSRCH.HOST}:${DEFAULTS.RSRCH.CDP_PORT}`,
             message: params.message,
             session_id: params.session_id,
             model: params.model || 'pro'

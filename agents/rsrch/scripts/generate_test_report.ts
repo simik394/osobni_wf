@@ -259,7 +259,7 @@ function generateReport() {
 
     // Load test results
     let testResults: any = null;
-    const resultsPath = path.join(__dirname, '../test-results.json');
+    const resultsPath = path.join(__dirname, '../../../_artifacts/reports/rsrch/test-results.json');
     if (fs.existsSync(resultsPath)) {
         try {
             testResults = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
@@ -446,10 +446,10 @@ function generateReport() {
     console.log('npx vitest run --reporter=json --outputFile=test-results.json');
     console.log('');
     console.log('# Regenerate this report');
-    console.log('npx ts-node scripts/generate_test_report.ts > TEST_REPORT.qmd');
+    console.log('npm run report:test');
     console.log('');
-    console.log('# Render to HTML');
-    console.log('quarto render TEST_REPORT.qmd');
+    console.log('# Render to HTML (handled by npm script above)');
+    console.log('quarto render ../../_artifacts/reports/rsrch/TEST_REPORT.qmd');
     console.log('```');
 }
 

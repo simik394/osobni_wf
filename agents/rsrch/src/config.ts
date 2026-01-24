@@ -2,11 +2,15 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { z } from 'zod';
+import { DEFAULTS } from '@agents/shared';
 
 const configSchema = z.object({
   url: z.string().url().default('https://www.perplexity.ai'),
   headless: z.boolean().default(false),
-  port: z.coerce.number().int().positive().default(3099),
+  host: z.string().default(DEFAULTS.RSRCH.HOST),
+  port: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.API_PORT),
+  vncPort: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.VNC_PORT),
+  chromiumPort: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.CHROMIUM_PORT),
   browserWsEndpoint: z.string().optional(),
   browserCdpEndpoint: z.string().optional(),
   remoteDebuggingPort: z.coerce.number().int().positive().optional(),
@@ -62,13 +66,16 @@ console.log(`  process.env.PORT: "${process.env.PORT}"`);
 console.log(`  process.env.NOMAD_PORT_http: "${process.env.NOMAD_PORT_http}"`);
 
 const envPort = process.env.PORT || process.env.NOMAD_PORT_http;
-const resolvedPort = envPort ? parseInt(envPort, 10) : (localConfig.port || 3055);
+const resolvedPort = envPort ? parseInt(envPort, 10) : (localConfig.port || DEFAULTS.RSRCH.API_PORT);
 
 console.log(`  Resolved Port: ${resolvedPort}`);
 
 const mergedConfig = {
   ...localConfig,
+  host: process.env.RSRCH_HOST || localConfig.host,
   port: resolvedPort,
+  vncPort: process.env.RSRCH_VNC_PORT ? parseInt(process.env.RSRCH_VNC_PORT) : localConfig.vncPort,
+  chromiumPort: process.env.RSRCH_CHROMIUM_PORT ? parseInt(process.env.RSRCH_CHROMIUM_PORT) : localConfig.chromiumPort,
   browserWsEndpoint: process.env.BROWSER_WS_ENDPOINT || localConfig.browserWsEndpoint,
   browserCdpEndpoint: process.env.BROWSER_CDP_ENDPOINT || localConfig.browserCdpEndpoint,
   remoteDebuggingPort: process.env.REMOTE_DEBUGGING_PORT || localConfig.remoteDebuggingPort,

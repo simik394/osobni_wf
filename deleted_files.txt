@@ -1,0 +1,60 @@
+agents/rsrch/AGENTS.md
+agents/rsrch/API.md
+agents/rsrch/CLI.md
+agents/rsrch/Dockerfile
+agents/rsrch/Dockerfile.unified
+agents/rsrch/LESSONS_LEARNED.md
+agents/rsrch/QUESTIONS.md
+agents/rsrch/TEST_REPORT.qmd
+agents/rsrch/TODO.md
+agents/rsrch/USER_GUIDE.md
+agents/rsrch/_extensions/quarto-ext/include-code-files/_extension.yml
+agents/rsrch/_extensions/quarto-ext/include-code-files/include-code-files.lua
+agents/rsrch/_progress/goals/Deep Research Orchestrator.md
+agents/rsrch/_progress/goals/Interactive Web Control.md
+agents/rsrch/_progress/goals/Multi-Profile Session Manager.md
+agents/rsrch/_progress/goals/REST API Service.md
+agents/rsrch/_progress/goals/Structured Data Extractor.md
+agents/rsrch/_quarto.yml
+agents/rsrch/bulk_publish_container.ts
+agents/rsrch/bulk_publish_full.ts
+agents/rsrch/bulk_publish_jules.ts
+agents/rsrch/bulk_publish_robust.ts
+agents/rsrch/bulk_publish_v2.ts
+agents/rsrch/bulk_publish_v3.ts
+agents/rsrch/docker-compose.yml
+agents/rsrch/dump-graph.ts
+agents/rsrch/entrypoint.sh
+agents/rsrch/extract_sessions.ts
+agents/rsrch/falkor_backup_20260118_085550.json
+agents/rsrch/fetch_url.js
+agents/rsrch/nav_google.ts
+agents/rsrch/nohup.out
+agents/rsrch/rsrch-bin
+agents/rsrch/rsrch-server@.service
+agents/rsrch/rsrch.nomad
+agents/rsrch/start-vnc.sh
+agents/rsrch/test-docker-deployment.sh
+agents/rsrch/test-results.json
+agents/rsrch/test-service.sh
+agents/rsrch/test_auth_check.ts
+agents/rsrch/test_button_detect.ts
+agents/rsrch/test_proof_click.ts
+agents/rsrch/test_single_session.ts
+agents/rsrch/test_upload.txt
+integrations/downloader/add_copyq_command.js
+integrations/downloader/reddit_downloader.ts
+integrations/gWrkspc/gdoc-combiner/Code.js
+integrations/yousidian/workflows/sync.js
+pending_sessions.json
+pr87_retry3.json
+pr_list.json
+pr_states_afk.json
+proj5.patch
+recent_sessions.json
+scan_results.json
+scan_results_afk.json
+scan_results_consolidated.json
+session_states.txt
+tools145.json
+tools146.json

@@ -5,6 +5,10 @@
     "agents/*"
   ],
   "scripts": {
-    "build": "npm run build -w @agents/shared && npm run build -w rsrch"
+    "build": "npm run build -w @agents/shared && npm run build -w rsrch",
+    "cleanup": "ts-node scripts/utils/cleanup_unused.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10"
   }
 }

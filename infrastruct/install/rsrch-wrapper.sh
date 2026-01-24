@@ -145,14 +145,15 @@ case "$1" in
     ;;
   vnc)
     echo "📡 [CLI Path: $(which rsrch)]"
-    echo "📡 Connecting to Production Browser VNC on halvarm:5902..."
+    HOST="${RSRCH_HOST:-halvarm}"
+    PORT="${RSRCH_VNC_PORT:-5902}"
+    echo "📡 Connecting to Production Browser VNC on $HOST:$PORT..."
     
-    # Check if port is reachable on halvarm (Remote/DNS)
-    HOST="halvarm"
-    # User mandate: NO localhost fallback. Architecture requires halvarm.
-    # Architecture: Try Standard (5902) -> Legacy (5955) -> Fail
-    PORT=5902
-    if ! nc -z -w 2 "$HOST" 5902 >/dev/null 2>&1; then
+    # Check if port is reachable
+    if ! nc -z -w 2 "$HOST" "$PORT" >/dev/null 2>&1; then
+         echo "⚠️  Warning: $HOST:$PORT unreachable. Checking fallback..."
+         # Fallback logic could be config driven too, but kept simple for now
+    fi
          echo "⚠️  Warning: $HOST:5902 unreachable. Checking legacy port 5955..."
          PORT=5955
          if ! nc -z -w 2 "$HOST" 5955 >/dev/null 2>&1; then

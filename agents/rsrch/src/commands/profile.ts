@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { listProfiles, getProfileInfo, deleteProfile, ensureProfileDir, getAuthFile } from '../profile';
+import { DEFAULTS } from '@agents/shared';
 import { cliContext } from '../cli-context';
 import { listSourceProfiles, syncProfile, restartTarget, SYNC_TARGETS } from '../profile-sync';
 import * as path from 'path';
@@ -50,9 +51,10 @@ profile.command('delete <profileId>')
 
 profile.command('sync-to-remote [profileId]')
     .description('Export auth from local browser and sync to remote server')
-    .option('--remote <host>', 'Remote host (e.g., halvarm or user@host)', 'halvarm')
+    .description('Export auth from local browser and sync to remote server')
+    .option('--remote <host>', `Remote host (e.g., ${DEFAULTS.RSRCH.HOST} or user@host)`, DEFAULTS.RSRCH.HOST)
     .option('--cdp-port <port>', 'Local CDP port', '9222')
-    .option('--remote-path <path>', 'Remote profiles path', '/opt/rsrch/profiles')
+    .option('--remote-path <path>', 'Remote profiles path', DEFAULTS.RSRCH.PROFILES_PATH)
     .action(async (profileId, opts) => {
         const { profileId: globalProfileId } = cliContext.get();
         const id = profileId || globalProfileId;
@@ -132,7 +134,7 @@ profile.command('sync-to-remote [profileId]')
         }
 
         console.log(`\n✅ Profile '${id}' synced to ${opts.remote} successfully!\n`);
-        console.log(`You can now use: rsrch --server http://${opts.remote}:3001 gemini list-sessions\n`);
+        console.log(`You can now use: rsrch --server http://${opts.remote}:${DEFAULTS.RSRCH.API_PORT} gemini list-sessions\n`);
 
         await browser.close();
     });
@@ -140,7 +142,7 @@ profile.command('sync-to-remote [profileId]')
 profile.command('sync')
     .description('Copy browser auth from local Cromite/Chromium to rsrch container')
     .option('--source <path>', 'Source browser profile path (e.g., ~/.config/chromium/"Profile 1")')
-    .option('--target <name>', 'Target: local | halvarm', 'local')
+    .option('--target <name>', `Target: local | ${DEFAULTS.RSRCH.HOST}`, 'local')
     .option('--list-sources', 'List available source profiles')
     .option('--restart', 'Restart target browser after sync', true)
     .action(async (opts) => {

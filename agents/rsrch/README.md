@@ -2,7 +2,7 @@
 
 The `rsrch` agent is a powerful CLI for automated research using Perplexity, Gemini, and NotebookLM.
 
-**🚀 [Full Command Reference (CLI.md)](./CLI.md)**
+**🚀 [Full Command Reference (docs/CLI.md)](./docs/CLI.md)**
 
 ## Setup
 
@@ -78,8 +78,8 @@ rsrch graph lineage <AudioID>
 
 | Document | Description |
 |----------|-------------|
-| [CLI.md](./CLI.md) | **Complete Command Reference** |
-| [API.md](./API.md) | HTTP API Endpoints |
-| [USER_GUIDE.md](./USER_GUIDE.md) | Detailed Workflows & Guides |
-| [AGENTS.md](./AGENTS.md) | Integration with other Agents |
+| [CLI.md](./docs/CLI.md) | **Complete Command Reference** |
+| [API.md](./docs/API.md) | HTTP API Endpoints |
+| [USER_GUIDE.md](./docs/USER_GUIDE.md) | Detailed Workflows & Guides |
+| [AGENTS.md](./docs/AGENTS.md) | Integration with other Agents |
 | [Local CDP Guide](./docs/local_cdp_workflow.md) | **How to use your local browser with Rsrch** |

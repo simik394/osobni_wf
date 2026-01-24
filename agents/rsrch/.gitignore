@@ -41,5 +41,11 @@ _site/
 docs/_site/
 
 # Local Reports
-TEST_REPORT.md
-TEST_SMALL.qmd
+TEST_REPORT*
+TEST_SMALL*
+report.html
+
+# Build & Runtime
+deb-pkg/
+*.deb
+nohup.out

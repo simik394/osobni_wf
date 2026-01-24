@@ -1,0 +1,9 @@
+---
+rsrch_host: "halvarm"
+rsrch_api_port: 3055
+rsrch_vnc_port: 5955
+rsrch_chromium_port: 5902
+rsrch_cdp_port: 9223
+rsrch_profiles_path: "/opt/rsrch/profiles"
+
+rsrch_env_file: "/opt/rsrch/.env"

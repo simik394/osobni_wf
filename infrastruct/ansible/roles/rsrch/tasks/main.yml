@@ -26,3 +26,10 @@
     dest: /opt/rsrch/
     mode: "0644"
   become: false
+
+- name: Generate .env configuration
+  ansible.builtin.template:
+    src: .env.j2
+    dest: "{{ rsrch_env_file }}"
+    mode: "0644"
+  become: true

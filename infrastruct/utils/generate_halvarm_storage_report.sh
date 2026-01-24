@@ -1,8 +1,14 @@
 #!/bin/bash
 
 # Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# utils -> infrastruct -> root
+ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+ARTIFACTS_DIR="$ROOT_DIR/_artifacts/reports/storage"
+mkdir -p "$ARTIFACTS_DIR"
+
 SERVER="halvarm"
-OUTPUT_FILE="halvarm_storage_report_$(date +%Y%m%d_%H%M%S).md"
+OUTPUT_FILE="$ARTIFACTS_DIR/halvarm_storage_report_$(date +%Y%m%d_%H%M%S).md"
 
 echo "Generating storage report for $SERVER..."
 echo "Output file: $OUTPUT_FILE"
