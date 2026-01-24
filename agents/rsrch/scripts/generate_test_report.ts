@@ -295,8 +295,7 @@ function generateReport() {
     console.log('    toc: true');
     console.log('    theme: cosmo');
     console.log('    page-layout: full');
-    console.log('filters:');
-    console.log('  - include-code-files');
+
     console.log('---');
     console.log('');
     console.log(`Generated on: ${new Date().toISOString()}`);
