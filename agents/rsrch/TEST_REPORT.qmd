@@ -7,9 +7,11 @@ format:
     toc: true
     theme: cosmo
     page-layout: full
+filters:
+  - include-code-files
 ---
 
-Generated on: 2026-01-24T17:18:41.099Z
+Generated on: 2026-01-24T17:25:05.710Z
 
 ## 📊 Test Results Summary
 
@@ -63,9 +65,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-be-defined` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-be-defined` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=109 end-line=115}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-be-defined"}
 ```
 
 ##### ▶️ Run Command
@@ -102,9 +104,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-navigate-to-the-base-url-if-no-session-id-i` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-navigate-to-the-base-url-if-no-session-id-i` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=119 end-line=125}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-navigate-to-the-base-url-if-no-session-id-i"}
 ```
 
 ##### ▶️ Run Command
@@ -141,9 +143,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-navigate-to-the-specific-session-url-if-an-` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-navigate-to-the-specific-session-url-if-an-` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=127 end-line=134}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-navigate-to-the-specific-session-url-if-an-"}
 ```
 
 ##### ▶️ Run Command
@@ -186,9 +188,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-and-click-cookie-consent-button` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-and-click-cookie-consent-button` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=136 end-line=151}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-handle-and-click-cookie-consent-button"}
 ```
 
 ##### ▶️ Run Command
@@ -231,9 +233,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-and-click-dismiss-buttons-for-popups` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-and-click-dismiss-buttons-for-popups` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=153 end-line=168}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-handle-and-click-dismiss-buttons-for-popups"}
 ```
 
 ##### ▶️ Run Command
@@ -272,9 +274,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-throw-an-error-if-a-sign-in-button-is-detec` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-throw-an-error-if-a-sign-in-button-is-detec` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=170 end-line=185}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-throw-an-error-if-a-sign-in-button-is-detec"}
 ```
 
 ##### ▶️ Run Command
@@ -313,9 +315,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-wait-for-the-chat-interface-to-be-ready` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-wait-for-the-chat-interface-to-be-ready` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=187 end-line=197}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-wait-for-the-chat-interface-to-be-ready"}
 ```
 
 ##### ▶️ Run Command
@@ -354,9 +356,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-throw-an-error-if-chat-interface-is-not-fou` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-throw-an-error-if-chat-interface-is-not-fou` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=199 end-line=210}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-throw-an-error-if-chat-interface-is-not-fou"}
 ```
 
 ##### ▶️ Run Command
@@ -405,9 +407,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-fill-the-input-press-enter-and-wait-for-a-r` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-fill-the-input-press-enter-and-wait-for-a-r` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=215 end-line=239}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-fill-the-input-press-enter-and-wait-for-a-r"}
 ```
 
 ##### ▶️ Run Command
@@ -451,9 +453,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-return-null-if-waitforresponse-is-false` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-return-null-if-waitforresponse-is-false` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=241 end-line=251}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-return-null-if-waitforresponse-is-false"}
 ```
 
 ##### ▶️ Run Command
@@ -498,9 +500,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-return-null-and-log-an-error-if-sending-fai` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-return-null-and-log-an-error-if-sending-fai` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=253 end-line=273}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-return-null-and-log-an-error-if-sending-fai"}
 ```
 
 ##### ▶️ Run Command
@@ -550,9 +552,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-response-stabilization` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-response-stabilization` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=275 end-line=302}
+```{.typescript include="tests/gemini-client.test.ts" snippet="should-handle-response-stabilization"}
 ```
 
 ##### ▶️ Run Command
@@ -593,9 +595,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:getresponses-should-return-an-array-of-all-respons` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet getresponses-should-return-an-array-of-all-respons` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=307 end-line=325}
+```{.typescript include="tests/gemini-client.test.ts" snippet="getresponses-should-return-an-array-of-all-respons"}
 ```
 
 ##### ▶️ Run Command
@@ -644,9 +646,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:getlatestresponse-should-return-the-text-of-the-la` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet getlatestresponse-should-return-the-text-of-the-la` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=327 end-line=348}
+```{.typescript include="tests/gemini-client.test.ts" snippet="getlatestresponse-should-return-the-text-of-the-la"}
 ```
 
 ##### ▶️ Run Command
@@ -683,9 +685,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:getlatestresponse-should-return-null-if-no-respons` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet getlatestresponse-should-return-null-if-no-respons` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=350 end-line=359}
+```{.typescript include="tests/gemini-client.test.ts" snippet="getlatestresponse-should-return-null-if-no-respons"}
 ```
 
 ##### ▶️ Run Command
@@ -726,9 +728,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:getresponse-should-retrieve-responses-by-positive-` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet getresponse-should-retrieve-responses-by-positive-` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=361 end-line=388}
+```{.typescript include="tests/gemini-client.test.ts" snippet="getresponse-should-retrieve-responses-by-positive-"}
 ```
 
 ##### ▶️ Run Command
@@ -769,9 +771,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:listsessions-should-return-an-empty-array-on-failu` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet listsessions-should-return-an-empty-array-on-failu` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=393 end-line=402}
+```{.typescript include="tests/gemini-client.test.ts" snippet="listsessions-should-return-an-empty-array-on-failu"}
 ```
 
 ##### ▶️ Run Command
@@ -812,9 +814,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:getlatestresponse-should-return-null-on-failure` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet getlatestresponse-should-return-null-on-failure` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=404 end-line=416}
+```{.typescript include="tests/gemini-client.test.ts" snippet="getlatestresponse-should-return-null-on-failure"}
 ```
 
 ##### ▶️ Run Command
@@ -855,9 +857,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:exporttogoogledocs-should-return-null-values-on-fa` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet exporttogoogledocs-should-return-null-values-on-fa` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=418 end-line=434}
+```{.typescript include="tests/gemini-client.test.ts" snippet="exporttogoogledocs-should-return-null-values-on-fa"}
 ```
 
 ##### ▶️ Run Command
@@ -908,9 +910,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:listsessions-should-scroll-to-load-more-sessions-i` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet listsessions-should-scroll-to-load-more-sessions-i` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=439 end-line=468}
+```{.typescript include="tests/gemini-client.test.ts" snippet="listsessions-should-scroll-to-load-more-sessions-i"}
 ```
 
 ##### ▶️ Run Command
@@ -957,9 +959,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:listsessions-should-click-show-more-button-if-visi` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
+> 📄 **Snippet:** `// start snippet listsessions-should-click-show-more-button-if-visi` in [`tests/gemini-client.test.ts`](tests/gemini-client.test.ts)
 
-```{.typescript include="tests/gemini-client.test.ts" start-line=470 end-line=492}
+```{.typescript include="tests/gemini-client.test.ts" snippet="listsessions-should-click-show-more-button-if-visi"}
 ```
 
 ##### ▶️ Run Command
@@ -1004,9 +1006,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-navigate-to-gemini-and-verify-login-status` in [`tests/e2e/gemini.test.ts`](tests/e2e/gemini.test.ts)
+> 📄 **Snippet:** `// start snippet should-navigate-to-gemini-and-verify-login-status` in [`tests/e2e/gemini.test.ts`](tests/e2e/gemini.test.ts)
 
-```{.typescript include="tests/e2e/gemini.test.ts" start-line=45 end-line=64}
+```{.typescript include="tests/e2e/gemini.test.ts" snippet="should-navigate-to-gemini-and-verify-login-status"}
 ```
 
 ##### ▶️ Run Command
@@ -1071,9 +1073,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-parse-an-existing-research-session` in [`tests/e2e/gemini.test.ts`](tests/e2e/gemini.test.ts)
+> 📄 **Snippet:** `// start snippet should-parse-an-existing-research-session` in [`tests/e2e/gemini.test.ts`](tests/e2e/gemini.test.ts)
 
-```{.typescript include="tests/e2e/gemini.test.ts" start-line=66 end-line=128}
+```{.typescript include="tests/e2e/gemini.test.ts" snippet="should-parse-an-existing-research-session"}
 ```
 
 ##### ▶️ Run Command
@@ -1114,9 +1116,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-return-default-selectors-when-selectors-yam` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
+> 📄 **Snippet:** `// start snippet should-return-default-selectors-when-selectors-yam` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```{.typescript include="tests/selectors.test.ts" start-line=34 end-line=49}
+```{.typescript include="tests/selectors.test.ts" snippet="should-return-default-selectors-when-selectors-yam"}
 ```
 
 ##### ▶️ Run Command
@@ -1157,9 +1159,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-load-and-merge-selectors-from-selectors-yam` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
+> 📄 **Snippet:** `// start snippet should-load-and-merge-selectors-from-selectors-yam` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```{.typescript include="tests/selectors.test.ts" start-line=51 end-line=80}
+```{.typescript include="tests/selectors.test.ts" snippet="should-load-and-merge-selectors-from-selectors-yam"}
 ```
 
 ##### ▶️ Run Command
@@ -1202,9 +1204,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-fall-back-to-defaults-when-loading-fails-e-` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
+> 📄 **Snippet:** `// start snippet should-fall-back-to-defaults-when-loading-fails-e-` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```{.typescript include="tests/selectors.test.ts" start-line=82 end-line=103}
+```{.typescript include="tests/selectors.test.ts" snippet="should-fall-back-to-defaults-when-loading-fails-e-"}
 ```
 
 ##### ▶️ Run Command
@@ -1253,9 +1255,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-force-reload-of-selectors-and-invalidate-ca` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
+> 📄 **Snippet:** `// start snippet should-force-reload-of-selectors-and-invalidate-ca` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```{.typescript include="tests/selectors.test.ts" start-line=108 end-line=142}
+```{.typescript include="tests/selectors.test.ts" snippet="should-force-reload-of-selectors-and-invalidate-ca"}
 ```
 
 ##### ▶️ Run Command
@@ -1292,9 +1294,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-trigger-loadselectors-when-accessing-a-prop` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
+> 📄 **Snippet:** `// start snippet should-trigger-loadselectors-when-accessing-a-prop` in [`tests/selectors.test.ts`](tests/selectors.test.ts)
 
-```{.typescript include="tests/selectors.test.ts" start-line=147 end-line=157}
+```{.typescript include="tests/selectors.test.ts" snippet="should-trigger-loadselectors-when-accessing-a-prop"}
 ```
 
 ##### ▶️ Run Command
@@ -1334,9 +1336,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-be-tested-in-graph-store-test-ts` in [`tests/graph.test.ts`](tests/graph.test.ts)
+> 📄 **Snippet:** `// start snippet should-be-tested-in-graph-store-test-ts` in [`tests/graph.test.ts`](tests/graph.test.ts)
 
-```{.typescript include="tests/graph.test.ts" start-line=38 end-line=45}
+```{.typescript include="tests/graph.test.ts" snippet="should-be-tested-in-graph-store-test-ts"}
 ```
 
 ##### ▶️ Run Command
@@ -1379,9 +1381,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-generate-unique-3-character-base-ids` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-generate-unique-3-character-base-ids` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=31 end-line=42}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-generate-unique-3-character-base-ids"}
 ```
 
 ##### ▶️ Run Command
@@ -1422,9 +1424,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-register-and-retrieve-a-session` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-register-and-retrieve-a-session` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=44 end-line=56}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-register-and-retrieve-a-session"}
 ```
 
 ##### ▶️ Run Command
@@ -1465,9 +1467,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-register-and-retrieve-a-document` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-register-and-retrieve-a-document` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=58 end-line=73}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-register-and-retrieve-a-document"}
 ```
 
 ##### ▶️ Run Command
@@ -1508,9 +1510,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-register-and-retrieve-audio-with-incrementi` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-register-and-retrieve-audio-with-incrementi` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=75 end-line=92}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-register-and-retrieve-audio-with-incrementi"}
 ```
 
 ##### ▶️ Run Command
@@ -1547,9 +1549,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-track-lineage-correctly` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-track-lineage-correctly` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=94 end-line=108}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-track-lineage-correctly"}
 ```
 
 ##### ▶️ Run Command
@@ -1590,9 +1592,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-persist-data-to-disk` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-persist-data-to-disk` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=110 end-line=123}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-persist-data-to-disk"}
 ```
 
 ##### ▶️ Run Command
@@ -1631,9 +1633,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-list-artifacts-by-type` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
+> 📄 **Snippet:** `// start snippet should-list-artifacts-by-type` in [`tests/artifact-registry.test.ts`](tests/artifact-registry.test.ts)
 
-```{.typescript include="tests/artifact-registry.test.ts" start-line=125 end-line=137}
+```{.typescript include="tests/artifact-registry.test.ts" snippet="should-list-artifacts-by-type"}
 ```
 
 ##### ▶️ Run Command
@@ -1682,9 +1684,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-trigger-audio-generation-and-update-graph-s` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
+> 📄 **Snippet:** `// start snippet should-trigger-audio-generation-and-update-graph-s` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```{.typescript include="tests/windmill.test.ts" start-line=26 end-line=56}
+```{.typescript include="tests/windmill.test.ts" snippet="should-trigger-audio-generation-and-update-graph-s"}
 ```
 
 ##### ▶️ Run Command
@@ -1733,9 +1735,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-match-a-completed-audio-file-and-update-the` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
+> 📄 **Snippet:** `// start snippet should-match-a-completed-audio-file-and-update-the` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```{.typescript include="tests/windmill.test.ts" start-line=61 end-line=113}
+```{.typescript include="tests/windmill.test.ts" snippet="should-match-a-completed-audio-file-and-update-the"}
 ```
 
 ##### ▶️ Run Command
@@ -1774,9 +1776,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-query-the-rsrch-server-and-return-sources` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
+> 📄 **Snippet:** `// start snippet should-query-the-rsrch-server-and-return-sources` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```{.typescript include="tests/windmill.test.ts" start-line=119 end-line=135}
+```{.typescript include="tests/windmill.test.ts" snippet="should-query-the-rsrch-server-and-return-sources"}
 ```
 
 ##### ▶️ Run Command
@@ -1819,9 +1821,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-send-a-success-notification-to-ntfy` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
+> 📄 **Snippet:** `// start snippet should-send-a-success-notification-to-ntfy` in [`tests/windmill.test.ts`](tests/windmill.test.ts)
 
-```{.typescript include="tests/windmill.test.ts" start-line=140 end-line=162}
+```{.typescript include="tests/windmill.test.ts" snippet="should-send-a-success-notification-to-ntfy"}
 ```
 
 ##### ▶️ Run Command
@@ -1868,9 +1870,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-empty-messages-array-gracefully` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-empty-messages-array-gracefully` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=130 end-line=147}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-handle-empty-messages-array-gracefully"}
 ```
 
 ##### ▶️ Run Command
@@ -1909,9 +1911,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-messages-with-empty-content` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-messages-with-empty-content` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=155 end-line=174}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-reject-messages-with-empty-content"}
 ```
 
 ##### ▶️ Run Command
@@ -1950,9 +1952,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-only-system-message` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-only-system-message` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=181 end-line=198}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-handle-only-system-message"}
 ```
 
 ##### ▶️ Run Command
@@ -1988,9 +1990,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-pollintervalms-0-edge-case` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-pollintervalms-0-edge-case` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=236 end-line=247}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-handle-pollintervalms-0-edge-case"}
 ```
 
 ##### ▶️ Run Command
@@ -2026,9 +2028,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-timeoutms-0-edge-case` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-timeoutms-0-edge-case` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=253 end-line=262}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-handle-timeoutms-0-edge-case"}
 ```
 
 ##### ▶️ Run Command
@@ -2067,9 +2069,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-options-preflight-correctly` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-options-preflight-correctly` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=272 end-line=288}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-handle-options-preflight-correctly"}
 ```
 
 ##### ▶️ Run Command
@@ -2110,9 +2112,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-allow-authorization-header-via-cors` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-allow-authorization-header-via-cors` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=294 end-line=309}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-allow-authorization-header-via-cors"}
 ```
 
 ##### ▶️ Run Command
@@ -2151,9 +2153,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-non-string-message-content` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-non-string-message-content` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=318 end-line=334}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-reject-non-string-message-content"}
 ```
 
 ##### ▶️ Run Command
@@ -2192,9 +2194,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-invalid-message-role` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-invalid-message-role` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=340 end-line=356}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-reject-invalid-message-role"}
 ```
 
 ##### ▶️ Run Command
@@ -2233,9 +2235,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-messages-missing-required-fields` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-messages-missing-required-fields` in [`tests/adversarial.test.ts`](tests/adversarial.test.ts)
 
-```{.typescript include="tests/adversarial.test.ts" start-line=362 end-line=378}
+```{.typescript include="tests/adversarial.test.ts" snippet="should-reject-messages-missing-required-fields"}
 ```
 
 ##### ▶️ Run Command
@@ -2282,9 +2284,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-be-able-to-get-a-response-from-gemini-confi` in [`tests/auth-sanity.test.ts`](tests/auth-sanity.test.ts)
+> 📄 **Snippet:** `// start snippet should-be-able-to-get-a-response-from-gemini-confi` in [`tests/auth-sanity.test.ts`](tests/auth-sanity.test.ts)
 
-```{.typescript include="tests/auth-sanity.test.ts" start-line=17 end-line=34}
+```{.typescript include="tests/auth-sanity.test.ts" snippet="should-be-able-to-get-a-response-from-gemini-confi"}
 ```
 
 ##### ▶️ Run Command
@@ -2327,9 +2329,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-be-able-to-get-a-response-from-perplexity-c` in [`tests/auth-sanity.test.ts`](tests/auth-sanity.test.ts)
+> 📄 **Snippet:** `// start snippet should-be-able-to-get-a-response-from-perplexity-c` in [`tests/auth-sanity.test.ts`](tests/auth-sanity.test.ts)
 
-```{.typescript include="tests/auth-sanity.test.ts" start-line=36 end-line=53}
+```{.typescript include="tests/auth-sanity.test.ts" snippet="should-be-able-to-get-a-response-from-perplexity-c"}
 ```
 
 ##### ▶️ Run Command
@@ -2378,9 +2380,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-correctly-extract-research-data-from-dom-el` in [`tests/export.test.ts`](tests/export.test.ts)
+> 📄 **Snippet:** `// start snippet should-correctly-extract-research-data-from-dom-el` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```{.typescript include="tests/export.test.ts" start-line=41 end-line=78}
+```{.typescript include="tests/export.test.ts" snippet="should-correctly-extract-research-data-from-dom-el"}
 ```
 
 ##### ▶️ Run Command
@@ -2425,9 +2427,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-generate-valid-markdown-from-parsed-structu` in [`tests/export.test.ts`](tests/export.test.ts)
+> 📄 **Snippet:** `// start snippet should-generate-valid-markdown-from-parsed-structu` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```{.typescript include="tests/export.test.ts" start-line=80 end-line=111}
+```{.typescript include="tests/export.test.ts" snippet="should-generate-valid-markdown-from-parsed-structu"}
 ```
 
 ##### ▶️ Run Command
@@ -2476,9 +2478,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-correctly-extract-different-research-data-t` in [`tests/export.test.ts`](tests/export.test.ts)
+> 📄 **Snippet:** `// start snippet should-correctly-extract-different-research-data-t` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```{.typescript include="tests/export.test.ts" start-line=113 end-line=159}
+```{.typescript include="tests/export.test.ts" snippet="should-correctly-extract-different-research-data-t"}
 ```
 
 ##### ▶️ Run Command
@@ -2519,9 +2521,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-format-full-research-document-correctly` in [`tests/export.test.ts`](tests/export.test.ts)
+> 📄 **Snippet:** `// start snippet should-format-full-research-document-correctly` in [`tests/export.test.ts`](tests/export.test.ts)
 
-```{.typescript include="tests/export.test.ts" start-line=164 end-line=191}
+```{.typescript include="tests/export.test.ts" snippet="should-format-full-research-document-correctly"}
 ```
 
 ##### ▶️ Run Command
@@ -2562,9 +2564,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-code-blocks-with-language` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-code-blocks-with-language` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=89 end-line=98}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-code-blocks-with-language"}
 ```
 
 ##### ▶️ Run Command
@@ -2601,9 +2603,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-code-blocks-without-language` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-code-blocks-without-language` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=100 end-line=109}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-code-blocks-without-language"}
 ```
 
 ##### ▶️ Run Command
@@ -2640,9 +2642,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-decode-html-entities-in-code-blocks` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-decode-html-entities-in-code-blocks` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=111 end-line=122}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-decode-html-entities-in-code-blocks"}
 ```
 
 ##### ▶️ Run Command
@@ -2679,9 +2681,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-inline-code` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-inline-code` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=124 end-line=132}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-inline-code"}
 ```
 
 ##### ▶️ Run Command
@@ -2718,9 +2720,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-h1-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-h1-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=137 end-line=144}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-h1-to-markdown"}
 ```
 
 ##### ▶️ Run Command
@@ -2757,9 +2759,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-h2-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-h2-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=146 end-line=154}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-h2-to-markdown"}
 ```
 
 ##### ▶️ Run Command
@@ -2796,9 +2798,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-h3-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-h3-to-markdown` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=156 end-line=164}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-h3-to-markdown"}
 ```
 
 ##### ▶️ Run Command
@@ -2835,9 +2837,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-headings-with-attributes` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-headings-with-attributes` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=166 end-line=174}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-headings-with-attributes"}
 ```
 
 ##### ▶️ Run Command
@@ -2874,9 +2876,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-strong-to-bold` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-strong-to-bold` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=179 end-line=186}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-strong-to-bold"}
 ```
 
 ##### ▶️ Run Command
@@ -2913,9 +2915,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-b-to-bold` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-b-to-bold` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=188 end-line=196}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-b-to-bold"}
 ```
 
 ##### ▶️ Run Command
@@ -2952,9 +2954,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-em-to-italic` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-em-to-italic` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=198 end-line=206}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-em-to-italic"}
 ```
 
 ##### ▶️ Run Command
@@ -2991,9 +2993,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-i-to-italic` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-i-to-italic` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=208 end-line=216}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-i-to-italic"}
 ```
 
 ##### ▶️ Run Command
@@ -3030,9 +3032,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-unordered-list-items` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-unordered-list-items` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=221 end-line=229}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-unordered-list-items"}
 ```
 
 ##### ▶️ Run Command
@@ -3069,9 +3071,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-ordered-list-items` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-ordered-list-items` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=231 end-line=240}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-ordered-list-items"}
 ```
 
 ##### ▶️ Run Command
@@ -3108,9 +3110,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-paragraphs` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-paragraphs` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=245 end-line=253}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-paragraphs"}
 ```
 
 ##### ▶️ Run Command
@@ -3147,9 +3149,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-br-to-newline` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-br-to-newline` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=255 end-line=263}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-br-to-newline"}
 ```
 
 ##### ▶️ Run Command
@@ -3186,9 +3188,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-links-to-markdown-format` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-links-to-markdown-format` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=268 end-line=275}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-links-to-markdown-format"}
 ```
 
 ##### ▶️ Run Command
@@ -3225,9 +3227,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-links-with-extra-attributes` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-links-with-extra-attributes` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=277 end-line=285}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-links-with-extra-attributes"}
 ```
 
 ##### ▶️ Run Command
@@ -3264,9 +3266,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-decode-common-html-entities` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-decode-common-html-entities` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=290 end-line=297}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-decode-common-html-entities"}
 ```
 
 ##### ▶️ Run Command
@@ -3303,9 +3305,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-convert-nbsp-to-space` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-convert-nbsp-to-space` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=299 end-line=307}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-convert-nbsp-to-space"}
 ```
 
 ##### ▶️ Run Command
@@ -3342,9 +3344,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-strip-unknown-html-tags` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-strip-unknown-html-tags` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=312 end-line=319}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-strip-unknown-html-tags"}
 ```
 
 ##### ▶️ Run Command
@@ -3381,9 +3383,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-empty-input` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-empty-input` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=321 end-line=328}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-empty-input"}
 ```
 
 ##### ▶️ Run Command
@@ -3420,9 +3422,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-plain-text` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-plain-text` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=330 end-line=337}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-plain-text"}
 ```
 
 ##### ▶️ Run Command
@@ -3459,9 +3461,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-collapse-multiple-newlines` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-collapse-multiple-newlines` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=339 end-line=348}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-collapse-multiple-newlines"}
 ```
 
 ##### ▶️ Run Command
@@ -3498,9 +3500,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-trim-whitespace` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-trim-whitespace` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=350 end-line=359}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-trim-whitespace"}
 ```
 
 ##### ▶️ Run Command
@@ -3537,9 +3539,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-nested-formatting` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-nested-formatting` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=364 end-line=371}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-nested-formatting"}
 ```
 
 ##### ▶️ Run Command
@@ -3580,9 +3582,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-full-document-structure` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-full-document-structure` in [`tests/gemini-client.unit.test.ts`](tests/gemini-client.unit.test.ts)
 
-```{.typescript include="tests/gemini-client.unit.test.ts" start-line=373 end-line=395}
+```{.typescript include="tests/gemini-client.unit.test.ts" snippet="should-handle-full-document-structure"}
 ```
 
 ##### ▶️ Run Command
@@ -3631,9 +3633,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:queryviawindmill-should-delegate-to-windmillclient` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
+> 📄 **Snippet:** `// start snippet queryviawindmill-should-delegate-to-windmillclient` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```{.typescript include="tests/gemini-windmill.test.ts" start-line=39 end-line=73}
+```{.typescript include="tests/gemini-windmill.test.ts" snippet="queryviawindmill-should-delegate-to-windmillclient"}
 ```
 
 ##### ▶️ Run Command
@@ -3674,9 +3676,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:queryviawindmill-should-pass-session-id-and-model` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
+> 📄 **Snippet:** `// start snippet queryviawindmill-should-pass-session-id-and-model` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```{.typescript include="tests/gemini-windmill.test.ts" start-line=73 end-line=95}
+```{.typescript include="tests/gemini-windmill.test.ts" snippet="queryviawindmill-should-pass-session-id-and-model"}
 ```
 
 ##### ▶️ Run Command
@@ -3713,9 +3715,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:queryviawindmill-should-throw-if-windmill-is-not-c` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
+> 📄 **Snippet:** `// start snippet queryviawindmill-should-throw-if-windmill-is-not-c` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```{.typescript include="tests/gemini-windmill.test.ts" start-line=95 end-line=104}
+```{.typescript include="tests/gemini-windmill.test.ts" snippet="queryviawindmill-should-throw-if-windmill-is-not-c"}
 ```
 
 ##### ▶️ Run Command
@@ -3752,9 +3754,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:queryviawindmill-should-throw-if-job-fails-interna` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
+> 📄 **Snippet:** `// start snippet queryviawindmill-should-throw-if-job-fails-interna` in [`tests/gemini-windmill.test.ts`](tests/gemini-windmill.test.ts)
 
-```{.typescript include="tests/gemini-windmill.test.ts" start-line=104 end-line=119}
+```{.typescript include="tests/gemini-windmill.test.ts" snippet="queryviawindmill-should-throw-if-job-fails-interna"}
 ```
 
 ##### ▶️ Run Command
@@ -3799,9 +3801,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-succeed-on-the-first-attempt` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-succeed-on-the-first-attempt` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=16 end-line=31}
+```{.typescript include="tests/retry.test.ts" snippet="should-succeed-on-the-first-attempt"}
 ```
 
 ##### ▶️ Run Command
@@ -3842,9 +3844,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-retry-on-transient-server-errors-and-eventu` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-retry-on-transient-server-errors-and-eventu` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=33 end-line=48}
+```{.typescript include="tests/retry.test.ts" snippet="should-retry-on-transient-server-errors-and-eventu"}
 ```
 
 ##### ▶️ Run Command
@@ -3885,9 +3887,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-fail-after-max-retries-on-persistent-server` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-fail-after-max-retries-on-persistent-server` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=50 end-line=67}
+```{.typescript include="tests/retry.test.ts" snippet="should-fail-after-max-retries-on-persistent-server"}
 ```
 
 ##### ▶️ Run Command
@@ -3928,9 +3930,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-fail-immediately-on-non-retriable-client-er` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-fail-immediately-on-non-retriable-client-er` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=69 end-line=86}
+```{.typescript include="tests/retry.test.ts" snippet="should-fail-immediately-on-non-retriable-client-er"}
 ```
 
 ##### ▶️ Run Command
@@ -3971,9 +3973,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-handle-request-timeouts-and-retry` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-handle-request-timeouts-and-retry` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=88 end-line=102}
+```{.typescript include="tests/retry.test.ts" snippet="should-handle-request-timeouts-and-retry"}
 ```
 
 ##### ▶️ Run Command
@@ -4010,9 +4012,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-connect-successfully-on-the-first-attempt` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-connect-successfully-on-the-first-attempt` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=139 end-line=147}
+```{.typescript include="tests/retry.test.ts" snippet="should-connect-successfully-on-the-first-attempt"}
 ```
 
 ##### ▶️ Run Command
@@ -4051,9 +4053,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-retry-connection-and-eventually-succeed` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-retry-connection-and-eventually-succeed` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=149 end-line=161}
+```{.typescript include="tests/retry.test.ts" snippet="should-retry-connection-and-eventually-succeed"}
 ```
 
 ##### ▶️ Run Command
@@ -4092,9 +4094,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-fail-to-connect-after-max-retries` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-fail-to-connect-after-max-retries` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=163 end-line=172}
+```{.typescript include="tests/retry.test.ts" snippet="should-fail-to-connect-after-max-retries"}
 ```
 
 ##### ▶️ Run Command
@@ -4133,9 +4135,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-trip-circuit-breaker-after-enough-consecuti` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-trip-circuit-breaker-after-enough-consecuti` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=174 end-line=191}
+```{.typescript include="tests/retry.test.ts" snippet="should-trip-circuit-breaker-after-enough-consecuti"}
 ```
 
 ##### ▶️ Run Command
@@ -4180,9 +4182,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-transition-from-open-to-half-open-and-then-` in [`tests/retry.test.ts`](tests/retry.test.ts)
+> 📄 **Snippet:** `// start snippet should-transition-from-open-to-half-open-and-then-` in [`tests/retry.test.ts`](tests/retry.test.ts)
 
-```{.typescript include="tests/retry.test.ts" start-line=193 end-line=223}
+```{.typescript include="tests/retry.test.ts" snippet="should-transition-from-open-to-half-open-and-then-"}
 ```
 
 ##### ▶️ Run Command
@@ -4229,9 +4231,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-stream-thoughts-from-a-reasoning-query` in [`tests/stream-thoughts.integration.test.ts`](tests/stream-thoughts.integration.test.ts)
+> 📄 **Snippet:** `// start snippet should-stream-thoughts-from-a-reasoning-query` in [`tests/stream-thoughts.integration.test.ts`](tests/stream-thoughts.integration.test.ts)
 
-```{.typescript include="tests/stream-thoughts.integration.test.ts" start-line=10 end-line=44}
+```{.typescript include="tests/stream-thoughts.integration.test.ts" snippet="should-stream-thoughts-from-a-reasoning-query"}
 ```
 
 ##### ▶️ Run Command
@@ -4272,9 +4274,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-empty-messages-array` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-empty-messages-array` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=46 end-line=52}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-empty-messages-array"}
 ```
 
 ##### ▶️ Run Command
@@ -4313,9 +4315,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-system-only-messages` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-system-only-messages` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=57 end-line=65}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-system-only-messages"}
 ```
 
 ##### ▶️ Run Command
@@ -4354,9 +4356,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-accept-messages-with-user` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-accept-messages-with-user` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=67 end-line=77}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-accept-messages-with-user"}
 ```
 
 ##### ▶️ Run Command
@@ -4395,9 +4397,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-invalid-role` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-invalid-role` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=82 end-line=90}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-invalid-role"}
 ```
 
 ##### ▶️ Run Command
@@ -4436,9 +4438,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-missing-role` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-missing-role` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=92 end-line=101}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-missing-role"}
 ```
 
 ##### ▶️ Run Command
@@ -4477,9 +4479,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-accept-valid-roles` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-accept-valid-roles` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=103 end-line=115}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-accept-valid-roles"}
 ```
 
 ##### ▶️ Run Command
@@ -4518,9 +4520,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-object-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-object-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=120 end-line=128}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-object-content"}
 ```
 
 ##### ▶️ Run Command
@@ -4559,9 +4561,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-number-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-number-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=130 end-line=139}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-number-content"}
 ```
 
 ##### ▶️ Run Command
@@ -4600,9 +4602,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-undefined-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-undefined-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=141 end-line=150}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-undefined-content"}
 ```
 
 ##### ▶️ Run Command
@@ -4641,9 +4643,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-empty-user-message` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-empty-user-message` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=155 end-line=163}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-empty-user-message"}
 ```
 
 ##### ▶️ Run Command
@@ -4682,9 +4684,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-reject-whitespace-only-user-message` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-reject-whitespace-only-user-message` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=165 end-line=174}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-reject-whitespace-only-user-message"}
 ```
 
 ##### ▶️ Run Command
@@ -4723,9 +4725,9 @@ class V0,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10 assert
 
 ##### 💻 Implementation
 
-> 📄 **Region:** `// #region test:should-allow-empty-assistant-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
+> 📄 **Snippet:** `// start snippet should-allow-empty-assistant-content` in [`tests/validation.unit.test.ts`](tests/validation.unit.test.ts)
 
-```{.typescript include="tests/validation.unit.test.ts" start-line=176 end-line=186}
+```{.typescript include="tests/validation.unit.test.ts" snippet="should-allow-empty-assistant-content"}
 ```
 
 ##### ▶️ Run Command

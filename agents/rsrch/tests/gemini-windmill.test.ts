@@ -36,7 +36,7 @@ describe('GeminiClient Windmill Integration', () => {
         client = new GeminiClient(mockPage as Page, { verbose: false });
         // @ts-ignore
         client.dumpState = vi.fn();
-    });// #region test:queryviawindmill-should-delegate-to-windmillclient
+    });// start snippet queryviawindmill-should-delegate-to-windmillclient
 
 
 
@@ -70,7 +70,7 @@ describe('GeminiClient Windmill Integration', () => {
         expect(result).toBe(expectedResponse);
     });
 
-// #endregion test:queryviawindmill-should-delegate-to-windmillclient// #region test:queryviawindmill-should-pass-session-id-and-model
+// end snippet queryviawindmill-should-delegate-to-windmillclient// start snippet queryviawindmill-should-pass-session-id-and-model
 
 
 
@@ -92,7 +92,7 @@ describe('GeminiClient Windmill Integration', () => {
         });
     });
 
-// #endregion test:queryviawindmill-should-pass-session-id-and-model// #region test:queryviawindmill-should-throw-if-windmill-is-not-c
+// end snippet queryviawindmill-should-pass-session-id-and-model// start snippet queryviawindmill-should-throw-if-windmill-is-not-c
 
 
 
@@ -101,7 +101,7 @@ describe('GeminiClient Windmill Integration', () => {
         await expect(client.queryViaWindmill('fail')).rejects.toThrow('Windmill is not configured');
     });
 
-// #endregion test:queryviawindmill-should-throw-if-windmill-is-not-c// #region test:queryviawindmill-should-throw-if-job-fails-interna
+// end snippet queryviawindmill-should-throw-if-windmill-is-not-c// start snippet queryviawindmill-should-throw-if-job-fails-interna
 
 
 
@@ -116,5 +116,5 @@ describe('GeminiClient Windmill Integration', () => {
         await expect(client.queryViaWindmill('fail')).rejects.toThrow('Script Error');
     });
 
-// #endregion test:queryviawindmill-should-throw-if-job-fails-interna
+// end snippet queryviawindmill-should-throw-if-job-fails-interna
 });

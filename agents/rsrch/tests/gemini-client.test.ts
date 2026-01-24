@@ -106,34 +106,34 @@ describe('GeminiClient', () => {
         client.dumpState = vi.fn();
     });
 
-// #region test:should-be-defined
+// start snippet should-be-defined
 
     it('should be defined', () => {
         expect(GeminiClient).toBeDefined();
     });
 
-// #endregion test:should-be-defined
+// end snippet should-be-defined
 
     describe('init', () => {
 
-// #region test:should-navigate-to-the-base-url-if-no-session-id-i
+// start snippet should-navigate-to-the-base-url-if-no-session-id-i
         it('should navigate to the base URL if no session ID is provided', async () => {
             await client.init();
             expect(mockPage.goto).toHaveBeenCalledWith('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
         });
 
-// #endregion test:should-navigate-to-the-base-url-if-no-session-id-i
+// end snippet should-navigate-to-the-base-url-if-no-session-id-i
 
-// #region test:should-navigate-to-the-specific-session-url-if-an-
+// start snippet should-navigate-to-the-specific-session-url-if-an-
 
         it('should navigate to the specific session URL if an ID is provided', async () => {
             await client.init('test-session-id');
             expect(mockPage.goto).toHaveBeenCalledWith('https://gemini.google.com/app/test-session-id', { waitUntil: 'domcontentloaded' });
         });
 
-// #endregion test:should-navigate-to-the-specific-session-url-if-an-
+// end snippet should-navigate-to-the-specific-session-url-if-an-
 
-// #region test:should-handle-and-click-cookie-consent-button
+// start snippet should-handle-and-click-cookie-consent-button
 
         it('should handle and click cookie consent button', async () => {
             const mockCookieButton = createMockLocator(true);
@@ -148,9 +148,9 @@ describe('GeminiClient', () => {
             expect(mockCookieButton.click).toHaveBeenCalled();
         });
 
-// #endregion test:should-handle-and-click-cookie-consent-button
+// end snippet should-handle-and-click-cookie-consent-button
 
-// #region test:should-handle-and-click-dismiss-buttons-for-popups
+// start snippet should-handle-and-click-dismiss-buttons-for-popups
 
         it('should handle and click dismiss buttons for popups', async () => {
             const mockDismissButton = createMockLocator(true);
@@ -165,9 +165,9 @@ describe('GeminiClient', () => {
             expect(mockDismissButton.click).toHaveBeenCalled();
         });
 
-// #endregion test:should-handle-and-click-dismiss-buttons-for-popups
+// end snippet should-handle-and-click-dismiss-buttons-for-popups
 
-// #region test:should-throw-an-error-if-a-sign-in-button-is-detec
+// start snippet should-throw-an-error-if-a-sign-in-button-is-detec
 
         it('should throw an error if a sign-in button is detected', async () => {
             mockPage.locator.mockImplementation((selector) => {
@@ -182,9 +182,9 @@ describe('GeminiClient', () => {
 
         });
 
-// #endregion test:should-throw-an-error-if-a-sign-in-button-is-detec
+// end snippet should-throw-an-error-if-a-sign-in-button-is-detec
 
-// #region test:should-wait-for-the-chat-interface-to-be-ready
+// start snippet should-wait-for-the-chat-interface-to-be-ready
 
         it('should wait for the chat interface to be ready', async () => {
             await client.init();
@@ -194,9 +194,9 @@ describe('GeminiClient', () => {
             );
         });
 
-// #endregion test:should-wait-for-the-chat-interface-to-be-ready
+// end snippet should-wait-for-the-chat-interface-to-be-ready
 
-// #region test:should-throw-an-error-if-chat-interface-is-not-fou
+// start snippet should-throw-an-error-if-chat-interface-is-not-fou
 
         it('should throw an error if chat interface is not found', async () => {
             mockPage.waitForSelector.mockRejectedValue(new Error('Timeout'));
@@ -207,12 +207,12 @@ describe('GeminiClient', () => {
             expect(client.dumpState).toHaveBeenCalledWith('gemini_init_fail');
         });
 
-// #endregion test:should-throw-an-error-if-chat-interface-is-not-fou
+// end snippet should-throw-an-error-if-chat-interface-is-not-fou
     });
 
     describe('sendMessage', () => {
 
-// #region test:should-fill-the-input-press-enter-and-wait-for-a-r
+// start snippet should-fill-the-input-press-enter-and-wait-for-a-r
         it('should fill the input, press Enter, and wait for a response', async () => {
             const message = 'Hello, Gemini!';
             const mockInput = createMockLocator(true);
@@ -236,9 +236,9 @@ describe('GeminiClient', () => {
             expect(response).toBe('Response text');
         });
 
-// #endregion test:should-fill-the-input-press-enter-and-wait-for-a-r
+// end snippet should-fill-the-input-press-enter-and-wait-for-a-r
 
-// #region test:should-return-null-if-waitforresponse-is-false
+// start snippet should-return-null-if-waitforresponse-is-false
 
         it('should return null if waitForResponse is false', async () => {
             const message = 'Fire and forget';
@@ -248,9 +248,9 @@ describe('GeminiClient', () => {
             expect(mockPage.waitForTimeout).toHaveBeenCalledTimes(1);
         });
 
-// #endregion test:should-return-null-if-waitforresponse-is-false
+// end snippet should-return-null-if-waitforresponse-is-false
 
-// #region test:should-return-null-and-log-an-error-if-sending-fai
+// start snippet should-return-null-and-log-an-error-if-sending-fai
 
         it('should return null and log an error if sending fails', async () => {
             const message = 'This will fail';
@@ -270,9 +270,9 @@ describe('GeminiClient', () => {
             expect(client.dumpState).toHaveBeenCalledWith('send_message_fail');
         });
 
-// #endregion test:should-return-null-and-log-an-error-if-sending-fai
+// end snippet should-return-null-and-log-an-error-if-sending-fai
 
-// #region test:should-handle-response-stabilization
+// start snippet should-handle-response-stabilization
 
         it('should handle response stabilization', async () => {
             const mockInput = createMockLocator(true);
@@ -299,12 +299,12 @@ describe('GeminiClient', () => {
             expect(mockPage.waitForTimeout).toHaveBeenCalled();
         });
 
-// #endregion test:should-handle-response-stabilization
+// end snippet should-handle-response-stabilization
     });
 
     describe('Response Parsing', () => {
 
-// #region test:getresponses-should-return-an-array-of-all-respons
+// start snippet getresponses-should-return-an-array-of-all-respons
         it('getResponses should return an array of all response texts', async () => {
             const mockResponses = {
                 count: vi.fn().mockResolvedValue(3),
@@ -322,9 +322,9 @@ describe('GeminiClient', () => {
             expect(mockResponses.nth).toHaveBeenCalledTimes(3);
         });
 
-// #endregion test:getresponses-should-return-an-array-of-all-respons
+// end snippet getresponses-should-return-an-array-of-all-respons
 
-// #region test:getlatestresponse-should-return-the-text-of-the-la
+// start snippet getlatestresponse-should-return-the-text-of-the-la
 
         it('getLatestResponse should return the text of the last response', async () => {
             const mockResponses = {
@@ -345,9 +345,9 @@ describe('GeminiClient', () => {
             expect(mockResponses.nth).toHaveBeenCalledWith(1);
         });
 
-// #endregion test:getlatestresponse-should-return-the-text-of-the-la
+// end snippet getlatestresponse-should-return-the-text-of-the-la
 
-// #region test:getlatestresponse-should-return-null-if-no-respons
+// start snippet getlatestresponse-should-return-null-if-no-respons
 
 
         it('getLatestResponse should return null if no responses are found', async () => {
@@ -356,9 +356,9 @@ describe('GeminiClient', () => {
             expect(latest).toBeNull();
         });
 
-// #endregion test:getlatestresponse-should-return-null-if-no-respons
+// end snippet getlatestresponse-should-return-null-if-no-respons
 
-// #region test:getresponse-should-retrieve-responses-by-positive-
+// start snippet getresponse-should-retrieve-responses-by-positive-
 
         it('getResponse should retrieve responses by positive and negative index', async () => {
             const mockResponses = {
@@ -385,12 +385,12 @@ describe('GeminiClient', () => {
             expect(await client.getResponse(-4)).toBeNull();
         });
 
-// #endregion test:getresponse-should-retrieve-responses-by-positive-
+// end snippet getresponse-should-retrieve-responses-by-positive-
     });
 
     describe('Error Handling', () => {
 
-// #region test:listsessions-should-return-an-empty-array-on-failu
+// start snippet listsessions-should-return-an-empty-array-on-failu
         it('listSessions should return an empty array on failure', async () => {
             mockPage.locator.mockImplementation(() => {
                 throw new Error('Failed to find session list');
@@ -399,9 +399,9 @@ describe('GeminiClient', () => {
             expect(sessions).toEqual([]);
         });
 
-// #endregion test:listsessions-should-return-an-empty-array-on-failu
+// end snippet listsessions-should-return-an-empty-array-on-failu
 
-// #region test:getlatestresponse-should-return-null-on-failure
+// start snippet getlatestresponse-should-return-null-on-failure
 
         it('getLatestResponse should return null on failure', async () => {
             mockPage.locator.mockImplementation(() => {
@@ -413,9 +413,9 @@ describe('GeminiClient', () => {
             expect(response).toBeNull();
         });
 
-// #endregion test:getlatestresponse-should-return-null-on-failure
+// end snippet getlatestresponse-should-return-null-on-failure
 
-// #region test:exporttogoogledocs-should-return-null-values-on-fa
+// start snippet exporttogoogledocs-should-return-null-values-on-fa
 
         it('exportToGoogleDocs should return null values on failure', async () => {
             mockPage.locator.mockImplementation((selector) => {
@@ -431,12 +431,12 @@ describe('GeminiClient', () => {
             expect(client.dumpState).toHaveBeenCalledWith('export_button_not_found');
         });
 
-// #endregion test:exporttogoogledocs-should-return-null-values-on-fa
+// end snippet exporttogoogledocs-should-return-null-values-on-fa
     });
 
     describe('Retry and Polling Logic', () => {
 
-// #region test:listsessions-should-scroll-to-load-more-sessions-i
+// start snippet listsessions-should-scroll-to-load-more-sessions-i
         it('listSessions should scroll to load more sessions if initial count is less than target', async () => {
             let callCount = 0;
             const mockSessionLocator = {
@@ -465,9 +465,9 @@ describe('GeminiClient', () => {
             expect(mockSessionLocator.count).toHaveBeenCalledTimes(2);
         });
 
-// #endregion test:listsessions-should-scroll-to-load-more-sessions-i
+// end snippet listsessions-should-scroll-to-load-more-sessions-i
 
-// #region test:listsessions-should-click-show-more-button-if-visi
+// start snippet listsessions-should-click-show-more-button-if-visi
 
         it('listSessions should click "Show more" button if visible', async () => {
             const mockSessionLocator = createMockLocator(true, 'Session');
@@ -489,6 +489,6 @@ describe('GeminiClient', () => {
             expect(mockShowMoreButton.click).toHaveBeenCalled();
         });
 
-// #endregion test:listsessions-should-click-show-more-button-if-visi
+// end snippet listsessions-should-click-show-more-button-if-visi
     });
 });

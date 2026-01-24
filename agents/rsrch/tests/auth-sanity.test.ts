@@ -14,7 +14,7 @@ const SKIP_INTEGRATION = !process.env.TEST_INTEGRATION;
 
 describe.skipIf(SKIP_INTEGRATION)('Auth Sanity: rsrch', () => {
 
-// #region test:should-be-able-to-get-a-response-from-gemini-confi
+// start snippet should-be-able-to-get-a-response-from-gemini-confi
 
     it('should be able to get a response from Gemini (confirms Google Auth)', async () => {
         const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
@@ -31,9 +31,9 @@ describe.skipIf(SKIP_INTEGRATION)('Auth Sanity: rsrch', () => {
         expect(data.choices[0].message.content.toUpperCase()).toContain('PONG');
     }, 120000);
 
-// #endregion test:should-be-able-to-get-a-response-from-gemini-confi // 2 min timeout as browser automation is involved
+// end snippet should-be-able-to-get-a-response-from-gemini-confi // 2 min timeout as browser automation is involved
 
-// #region test:should-be-able-to-get-a-response-from-perplexity-c
+// start snippet should-be-able-to-get-a-response-from-perplexity-c
 
     it('should be able to get a response from Perplexity (confirms Perplexity Auth)', async () => {
         const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
@@ -50,5 +50,5 @@ describe.skipIf(SKIP_INTEGRATION)('Auth Sanity: rsrch', () => {
         expect(data.choices[0].message.content.toUpperCase()).toContain('PONG');
     }, 120000);
 
-// #endregion test:should-be-able-to-get-a-response-from-perplexity-c
+// end snippet should-be-able-to-get-a-response-from-perplexity-c
 });

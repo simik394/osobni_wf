@@ -127,7 +127,7 @@ describe('Adversarial Tests', () => {
          * which may behave unexpectedly in the agent.
          */
 
-// #region test:should-handle-empty-messages-array-gracefully
+// start snippet should-handle-empty-messages-array-gracefully
         it('should handle empty messages array gracefully', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
@@ -144,7 +144,7 @@ describe('Adversarial Tests', () => {
             expect(data.error).toBeDefined();
         });
 
-// #endregion test:should-handle-empty-messages-array-gracefully
+// end snippet should-handle-empty-messages-array-gracefully
 
         /**
          * BUG FOUND: Messages with empty content will produce:
@@ -152,7 +152,7 @@ describe('Adversarial Tests', () => {
          * The agent receives malformed conversation.
          */
 
-// #region test:should-reject-messages-with-empty-content
+// start snippet should-reject-messages-with-empty-content
         it('should reject messages with empty content', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
@@ -171,14 +171,14 @@ describe('Adversarial Tests', () => {
             expect(response.status).toBe(400);
         });
 
-// #endregion test:should-reject-messages-with-empty-content
+// end snippet should-reject-messages-with-empty-content
 
         /**
          * Edge case: System message + no user message
          * Should this be allowed?
          */
 
-// #region test:should-handle-only-system-message
+// start snippet should-handle-only-system-message
         it('should handle only system message', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
@@ -195,7 +195,7 @@ describe('Adversarial Tests', () => {
             expect(response.status).toBe(400);
         });
 
-// #endregion test:should-handle-only-system-message
+// end snippet should-handle-only-system-message
 
         /**
          * BUG POTENTIAL: Very long conversation that exceeds token limits
@@ -233,7 +233,7 @@ describe('Adversarial Tests', () => {
          * Math.ceil(timeoutMs / 0) = Infinity
          */
 
-// #region test:should-handle-pollintervalms-0-edge-case
+// start snippet should-handle-pollintervalms-0-edge-case
         it('should handle pollIntervalMs = 0 edge case', async () => {
             // This can't be tested directly from API, but documents the bug
             // In gemini-client.ts line ~1052:
@@ -244,13 +244,13 @@ describe('Adversarial Tests', () => {
             expect(true).toBe(true); // Placeholder - need internal test
         });
 
-// #endregion test:should-handle-pollintervalms-0-edge-case
+// end snippet should-handle-pollintervalms-0-edge-case
 
         /**
          * POTENTIAL BUG: If timeoutMs is 0, loop exits immediately
          */
 
-// #region test:should-handle-timeoutms-0-edge-case
+// start snippet should-handle-timeoutms-0-edge-case
         it('should handle timeoutMs = 0 edge case', async () => {
             // timeoutMs = 0 means:
             // - maxIterations = 10 (just the safety margin)
@@ -259,7 +259,7 @@ describe('Adversarial Tests', () => {
             expect(true).toBe(true);
         });
 
-// #endregion test:should-handle-timeoutms-0-edge-case
+// end snippet should-handle-timeoutms-0-edge-case
     });
 
     describe('Adversarial: TOOLS-39 CORS Middleware', () => {
@@ -269,7 +269,7 @@ describe('Adversarial Tests', () => {
          * CORS requires proper handling of preflight requests
          */
 
-// #region test:should-handle-options-preflight-correctly
+// start snippet should-handle-options-preflight-correctly
         it('should handle OPTIONS preflight correctly', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'OPTIONS',
@@ -285,13 +285,13 @@ describe('Adversarial Tests', () => {
             expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST');
         });
 
-// #endregion test:should-handle-options-preflight-correctly
+// end snippet should-handle-options-preflight-correctly
 
         /**
          * Test: CORS with custom headers
          */
 
-// #region test:should-allow-authorization-header-via-cors
+// start snippet should-allow-authorization-header-via-cors
         it('should allow Authorization header via CORS', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'OPTIONS',
@@ -306,7 +306,7 @@ describe('Adversarial Tests', () => {
             expect(allowedHeaders).toContain('Authorization');
         });
 
-// #endregion test:should-allow-authorization-header-via-cors
+// end snippet should-allow-authorization-header-via-cors
     });
 
     describe('Adversarial: Input Validation', () => {
@@ -315,7 +315,7 @@ describe('Adversarial Tests', () => {
          * BUG POTENTIAL: Non-string content in messages
          */
 
-// #region test:should-reject-non-string-message-content
+// start snippet should-reject-non-string-message-content
         it('should reject non-string message content', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
@@ -331,13 +331,13 @@ describe('Adversarial Tests', () => {
             expect(response.status).toBe(400);
         });
 
-// #endregion test:should-reject-non-string-message-content
+// end snippet should-reject-non-string-message-content
 
         /**
          * BUG POTENTIAL: Invalid role
          */
 
-// #region test:should-reject-invalid-message-role
+// start snippet should-reject-invalid-message-role
         it('should reject invalid message role', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
@@ -353,13 +353,13 @@ describe('Adversarial Tests', () => {
             expect(response.status).toBe(400);
         });
 
-// #endregion test:should-reject-invalid-message-role
+// end snippet should-reject-invalid-message-role
 
         /**
          * BUG POTENTIAL: Missing role or content
          */
 
-// #region test:should-reject-messages-missing-required-fields
+// start snippet should-reject-messages-missing-required-fields
         it('should reject messages missing required fields', async () => {
             const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
@@ -375,6 +375,6 @@ describe('Adversarial Tests', () => {
             expect(response.status).toBe(400);
         });
 
-// #endregion test:should-reject-messages-missing-required-fields
+// end snippet should-reject-messages-missing-required-fields
     });
 });

@@ -31,7 +31,7 @@ describe('selectors', () => {
 
   describe('loadSelectors', () => {
 
-// #region test:should-return-default-selectors-when-selectors-yam
+// start snippet should-return-default-selectors-when-selectors-yam
     it('should return default selectors when selectors.yaml does not exist', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
 
@@ -46,9 +46,9 @@ describe('selectors', () => {
       expect(fs.existsSync).toHaveBeenCalled();
     });
 
-// #endregion test:should-return-default-selectors-when-selectors-yam
+// end snippet should-return-default-selectors-when-selectors-yam
 
-// #region test:should-load-and-merge-selectors-from-selectors-yam
+// start snippet should-load-and-merge-selectors-from-selectors-yam
 
     it('should load and merge selectors from selectors.yaml when it exists', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
@@ -77,9 +77,9 @@ notebook:
       expect(result.sources.tab).toBe('div[role="tab"]');
     });
 
-// #endregion test:should-load-and-merge-selectors-from-selectors-yam
+// end snippet should-load-and-merge-selectors-from-selectors-yam
 
-// #region test:should-fall-back-to-defaults-when-loading-fails-e-
+// start snippet should-fall-back-to-defaults-when-loading-fails-e-
 
     it('should fall back to defaults when loading fails (e.g. read error)', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
@@ -100,12 +100,12 @@ notebook:
       consoleSpy.mockRestore();
     });
 
-// #endregion test:should-fall-back-to-defaults-when-loading-fails-e-
+// end snippet should-fall-back-to-defaults-when-loading-fails-e-
   });
 
   describe('reloadSelectors', () => {
 
-// #region test:should-force-reload-of-selectors-and-invalidate-ca
+// start snippet should-force-reload-of-selectors-and-invalidate-ca
     it('should force reload of selectors and invalidate cache', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
 
@@ -139,12 +139,12 @@ home:
       expect(callCount).toBe(2);
     });
 
-// #endregion test:should-force-reload-of-selectors-and-invalidate-ca
+// end snippet should-force-reload-of-selectors-and-invalidate-ca
   });
 
   describe('selectors proxy', () => {
 
-// #region test:should-trigger-loadselectors-when-accessing-a-prop
+// start snippet should-trigger-loadselectors-when-accessing-a-prop
     it('should trigger loadSelectors when accessing a property', () => {
       // Accessing selectors.home should trigger the loading mechanism.
       // Since beforeEach set up defaults, this should work.
@@ -154,6 +154,6 @@ home:
       expect(homeSelectors.createNewButton).toBe('.create-new-button');
     });
 
-// #endregion test:should-trigger-loadselectors-when-accessing-a-prop
+// end snippet should-trigger-loadselectors-when-accessing-a-prop
   });
 });

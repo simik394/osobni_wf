@@ -28,7 +28,7 @@ describe('ArtifactRegistry', () => {
         }
     });
 
-// #region test:should-generate-unique-3-character-base-ids
+// start snippet should-generate-unique-3-character-base-ids
 
     it('should generate unique 3-character base IDs', () => {
         const ids = new Set<string>();
@@ -39,9 +39,9 @@ describe('ArtifactRegistry', () => {
         expect([...ids][0].length).toBe(3);
     });
 
-// #endregion test:should-generate-unique-3-character-base-ids
+// end snippet should-generate-unique-3-character-base-ids
 
-// #region test:should-register-and-retrieve-a-session
+// start snippet should-register-and-retrieve-a-session
 
     it('should register and retrieve a session', () => {
         const sessionId = registry.registerSession('gemini-session-abc', 'History of Espresso');
@@ -53,9 +53,9 @@ describe('ArtifactRegistry', () => {
         expect(session?.query).toBe('History of Espresso');
     });
 
-// #endregion test:should-register-and-retrieve-a-session
+// end snippet should-register-and-retrieve-a-session
 
-// #region test:should-register-and-retrieve-a-document
+// start snippet should-register-and-retrieve-a-document
 
     it('should register and retrieve a document', () => {
         const sessionId = registry.registerSession('s1', 'Q1');
@@ -70,9 +70,9 @@ describe('ArtifactRegistry', () => {
         expect(doc?.parentId).toBe(sessionId);
     });
 
-// #endregion test:should-register-and-retrieve-a-document
+// end snippet should-register-and-retrieve-a-document
 
-// #region test:should-register-and-retrieve-audio-with-incrementi
+// start snippet should-register-and-retrieve-audio-with-incrementi
 
     it('should register and retrieve audio with incrementing suffixes', () => {
         const sessionId = registry.registerSession('s1', 'Q1');
@@ -89,9 +89,9 @@ describe('ArtifactRegistry', () => {
         expect(audio?.type).toBe('audio');
     });
 
-// #endregion test:should-register-and-retrieve-audio-with-incrementi
+// end snippet should-register-and-retrieve-audio-with-incrementi
 
-// #region test:should-track-lineage-correctly
+// start snippet should-track-lineage-correctly
 
     it('should track lineage correctly', () => {
         const sessionId = registry.registerSession('s1', 'Q1');
@@ -105,9 +105,9 @@ describe('ArtifactRegistry', () => {
         expect(lineage[2].type).toBe('session');
     });
 
-// #endregion test:should-track-lineage-correctly
+// end snippet should-track-lineage-correctly
 
-// #region test:should-persist-data-to-disk
+// start snippet should-persist-data-to-disk
 
     it('should persist data to disk', () => {
         const sessionId = registry.registerSession('s1', 'Persist Test');
@@ -120,9 +120,9 @@ describe('ArtifactRegistry', () => {
         expect(session?.query).toBe('Persist Test');
     });
 
-// #endregion test:should-persist-data-to-disk
+// end snippet should-persist-data-to-disk
 
-// #region test:should-list-artifacts-by-type
+// start snippet should-list-artifacts-by-type
 
     it('should list artifacts by type', () => {
         const s1 = registry.registerSession('s1', 'Q1');
@@ -134,5 +134,5 @@ describe('ArtifactRegistry', () => {
         expect(registry.listByType('audio').length).toBe(1);
     });
 
-// #endregion test:should-list-artifacts-by-type
+// end snippet should-list-artifacts-by-type
 });

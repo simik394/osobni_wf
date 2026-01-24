@@ -7,7 +7,7 @@ const runIntegration = process.env.TEST_INTEGRATION === 'true';
 
 describe.skipIf(!runIntegration)('Gemini Streaming Integration', () => {
 
-// #region test:should-stream-thoughts-from-a-reasoning-query
+// start snippet should-stream-thoughts-from-a-reasoning-query
 
     it('should stream thoughts from a reasoning query', async () => {
         const query = "Solve 25 * 44 with detailed thoughts";
@@ -41,5 +41,5 @@ describe.skipIf(!runIntegration)('Gemini Streaming Integration', () => {
         expect(thoughtBlockDetected).toBe(true);
     }, 60000);
 
-// #endregion test:should-stream-thoughts-from-a-reasoning-query // Long timeout for LLM generation
+// end snippet should-stream-thoughts-from-a-reasoning-query // Long timeout for LLM generation
 });

@@ -32,29 +32,11 @@ function sanitizeToRegionName(name: string): string {
         .substring(0, 50);
 }
 
-// Find region markers in file content and return line ranges
-function findRegionRange(content: string, regionName: string): { startLine: number; endLine: number } | null {
-    const lines = content.split('\n');
-    let startLine = -1;
-    let endLine = -1;
-
-    const startMarker = `// #region test:${regionName}`;
-    const endMarker = `// #endregion test:${regionName}`;
-
-    for (let i = 0; i < lines.length; i++) {
-        if (lines[i].includes(startMarker)) {
-            startLine = i + 1; // 1-indexed
-        }
-        if (lines[i].includes(endMarker) && startLine > 0) {
-            endLine = i + 1; // 1-indexed
-            break;
-        }
-    }
-
-    if (startLine > 0 && endLine > 0) {
-        return { startLine, endLine };
-    }
-    return null;
+// Find snippet markers in file content and confirm they exist
+function findSnippetMarker(content: string, snippetName: string): boolean {
+    const startMarker = `// start snippet ${snippetName}`;
+    const endMarker = `// end snippet ${snippetName}`;
+    return content.includes(startMarker) && content.includes(endMarker);
 }
 
 interface FileReport {
@@ -125,9 +107,9 @@ function extractScenarios(content: string): TestScenario[] {
             const body = content.substring(startIndex, currentIndex - 1);
             const endLine = content.substring(0, currentIndex - 1).split('\n').length;
 
-            // Look for region markers
-            const regionName = sanitizeToRegionName(title);
-            const regionRange = findRegionRange(content, regionName);
+            // Look for snippet markers
+            const snippetName = sanitizeToRegionName(title);
+            const hasSnippet = findSnippetMarker(content, snippetName);
 
             scenarios.push({
                 name: title,
@@ -135,9 +117,7 @@ function extractScenarios(content: string): TestScenario[] {
                 diagram: generateMermaidDiagram(title, body),
                 startLine: startLine,
                 endLine: endLine,
-                regionName: regionName,
-                regionStartLine: regionRange?.startLine,
-                regionEndLine: regionRange?.endLine
+                regionName: hasSnippet ? snippetName : undefined
             });
         }
     }
@@ -315,6 +295,8 @@ function generateReport() {
     console.log('    toc: true');
     console.log('    theme: cosmo');
     console.log('    page-layout: full');
+    console.log('filters:');
+    console.log('  - include-code-files');
     console.log('---');
     console.log('');
     console.log(`Generated on: ${new Date().toISOString()}`);
@@ -417,25 +399,22 @@ function generateReport() {
             console.log('```');
             console.log('');
 
-            // Implementation tab - use Quarto file include with region line range
+            // Implementation tab - use Quarto include-code-files extension with snippet
             console.log('##### 💻 Implementation');
             console.log('');
 
-            // If we have region markers, use Quarto's include with line range for TRUE embedding
-            if (scenario.regionStartLine && scenario.regionEndLine) {
-                console.log(`> 📄 **Region:** \`// #region test:${scenario.regionName}\` in [\`tests/${fileData.file}\`](tests/${fileData.file})`);
+            // If we have snippet markers, use Quarto's include with snippet for TRUE embedding
+            if (scenario.regionName) {
+                console.log(`> 📄 **Snippet:** \`// start snippet ${scenario.regionName}\` in [\`tests/${fileData.file}\`](tests/${fileData.file})`);
                 console.log('');
-                // Use Quarto's include attribute - this reads from the actual file at render time!
-                console.log(`\`\`\`{.typescript include="tests/${fileData.file}" start-line=${scenario.regionStartLine} end-line=${scenario.regionEndLine}}`);
-                console.log('```');
-            } else if (scenario.startLine && scenario.endLine) {
-                // Fallback to line numbers if no region markers
-                console.log(`> 📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](tests/${fileData.file})`);
-                console.log('');
-                console.log(`\`\`\`{.typescript include="tests/${fileData.file}" start-line=${scenario.startLine} end-line=${scenario.endLine}}`);
+                // Use Quarto's include-code-files extension with snippet attribute
+                // This reads from the actual file at render time!
+                console.log(`\`\`\`{.typescript include="tests/${fileData.file}" snippet="${scenario.regionName}"}`);
                 console.log('```');
             } else {
-                // Fallback to inline body if no line info
+                // Fallback to inline body if no snippet markers
+                console.log(`> 📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](tests/${fileData.file})`);
+                console.log('');
                 console.log('```typescript');
                 console.log(scenario.body);
                 console.log('```');

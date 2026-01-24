@@ -35,13 +35,13 @@ describe('graph commands', () => {
 
   describe('GraphStore class tests - see graph-store.test.ts', () => {
 
-// #region test:should-be-tested-in-graph-store-test-ts
+// start snippet should-be-tested-in-graph-store-test-ts
     it('should be tested in graph-store.test.ts', () => {
       // Actual GraphStore tests are in graph-store.test.ts
       // This file only contains CLI command tests which require full integration
       expect(true).toBe(true);
     });
 
-// #endregion test:should-be-tested-in-graph-store-test-ts
+// end snippet should-be-tested-in-graph-store-test-ts
   });
 });

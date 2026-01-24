@@ -1,18 +1,19 @@
 /**
- * Script to add region markers to test files for stable code embedding.
+ * Script to add snippet markers to test files for stable code embedding.
+ * Uses the Quarto include-code-files extension snippet format.
  * 
- * This adds `// #region test:<sanitized-name>` and `// #endregion` markers
+ * This adds `// start snippet <name>` and `// end snippet <name>` markers
  * around each it() or test() block, enabling stable references in documentation.
  * 
  * Usage: npx ts-node scripts/add_test_regions.ts
  * 
  * The markers look like:
  * 
- * // #region test:should-be-defined
+ * // start snippet should-be-defined
  * it('should be defined', async () => {
  *     expect(GeminiClient).toBeDefined();
  * });
- * // #endregion test:should-be-defined
+ * // end snippet should-be-defined
  */
 
 import fs from 'fs';
@@ -100,9 +101,9 @@ function findTestBlocks(content: string): TestBlock[] {
 function addRegionMarkers(filePath: string): { modified: boolean; regionsAdded: number } {
     let content = fs.readFileSync(filePath, 'utf-8');
 
-    // Check if already has region markers
-    if (content.includes('// #region test:')) {
-        console.log(`  ⏭️  ${path.basename(filePath)} - already has regions`);
+    // Check if already has snippet markers
+    if (content.includes('// start snippet ')) {
+        console.log(`  ⏭️  ${path.basename(filePath)} - already has snippets`);
         return { modified: false, regionsAdded: 0 };
     }
 
@@ -132,16 +133,16 @@ function addRegionMarkers(filePath: string): { modified: boolean; regionsAdded: 
         const lineStart = content.lastIndexOf('\n', block.startIndex) + 1;
         const indent = content.substring(lineStart, block.startIndex).match(/^\s*/)?.[0] || '    ';
 
-        // Insert end region on a new line after the block
+        // Insert end snippet on a new line after the block
         content =
             content.substring(0, block.endIndex) +
-            `\n${indent}// #endregion test:${finalRegionName}` +
+            `\n${indent}// end snippet ${finalRegionName}` +
             content.substring(block.endIndex);
 
-        // Insert start region before the line containing the block
+        // Insert start snippet before the line containing the block
         content =
             content.substring(0, lineStart) +
-            `${indent}// #region test:${finalRegionName}\n` +
+            `${indent}// start snippet ${finalRegionName}\n` +
             content.substring(lineStart);
     }
 
