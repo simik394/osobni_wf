@@ -31,3 +31,11 @@ snapshot.ts
 .DS_Store
 Thumbs.db
 .env
+
+/.quarto/
+**/*.quarto_ipynb
+
+# Quarto Artifacts
+*_files/
+_site/
+docs/_site/

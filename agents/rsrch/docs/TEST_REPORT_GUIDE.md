@@ -1,6 +1,8 @@
 # Test Report Generation Guide
 
-> **Single Source of Truth** for creating interactive, self-updating test reports using Quarto.
+> Test-specific implementation of the [Living Documentation Standard](./LIVING_DOCUMENTATION.md).
+
+This guide covers generating **interactive test reports** using Quarto. For other report types (API, CLI, architecture), see the main standard.
 
 ## Quick Start
 
