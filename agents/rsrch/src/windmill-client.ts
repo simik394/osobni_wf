@@ -330,13 +330,34 @@ export class WindmillClient {
     }
 
     /**
-     * Trigger Gemini Chat via Windmill
+     * Trigger Gemini Chat via Windmill (New Architecture)
+     * Executes the interaction as a single robust script.
+     */
+    async triggerGeminiInteraction(params: {
+        message: string;
+        session_id?: string;
+        model?: 'pro' | 'thinking' | 'flash';
+        waitForResponse?: boolean;
+    }): Promise<WindmillJobResult> {
+        // Path matches the file created in agents/rsrch/scripts/windmill/gemini_interaction.ts
+        // Windmill usually maps scripts to user/workspace paths.
+        // Assuming path 'f/rsrch/gemini_interaction' for now.
+        return this.triggerJob('f/rsrch/gemini_interaction', {
+            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || 'ws://halvarm:9223',
+            message: params.message,
+            session_id: params.session_id,
+            model: params.model || 'pro'
+        });
+    }
+
+    /**
+     * Trigger Gemini Chat via Windmill (Legacy wrapper)
      */
     async triggerGeminiChat(message: string, sessionId?: string, waitForResponse: boolean = true): Promise<WindmillJobResult> {
-        return this.triggerJob('f/rsrch/gemini_chat', {
+        return this.triggerGeminiInteraction({
             message,
             session_id: sessionId,
-            wait_for_response: waitForResponse
+            waitForResponse
         });
     }
 

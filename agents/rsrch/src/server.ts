@@ -1003,7 +1003,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
         console.log(`[OpenAI API] Chat completion request: "${prompt.substring(0, 50)}..."`);
 
-        let responseText: string;
+        let responseText: string = '';
         const model = request.model || 'gemini-rsrch';
 
         try {
@@ -1128,12 +1128,31 @@ app.post('/v1/chat/completions', async (req, res) => {
                 } else {
                     // Non-streaming response
                     try {
-                        responseText = await activeGeminiClient.research(prompt, {
-                            deepResearch: useDeepResearch,
-                            sessionId: sessionId,
-                            // Force reset if not using specific session ID
-                            resetSession: !sessionId
-                        });
+                        const useWindmill = process.env.USE_WINDMILL !== 'false';
+                        let handled = false;
+
+                        if (useWindmill && !useDeepResearch) {
+                            try {
+                                const { getWindmillClient } = await import('./windmill-client');
+                                const windmill = getWindmillClient();
+                                if (windmill.isConfigured()) {
+                                    console.log('[OpenAI API] Delegating chat completion to Windmill...');
+                                    responseText = await activeGeminiClient.queryViaWindmill(prompt, sessionId, model as any);
+                                    handled = true;
+                                }
+                            } catch (e: any) {
+                                console.warn(`[OpenAI API] Windmill delegation failed (${e.message}), falling back to local...`);
+                            }
+                        }
+
+                        if (!handled) {
+                            responseText = await activeGeminiClient.research(prompt, {
+                                deepResearch: useDeepResearch,
+                                sessionId: sessionId,
+                                // Force reset if not using specific session ID
+                                resetSession: !sessionId
+                            });
+                        }
                     } catch (e: any) {
                         if (e.message.includes('Context not initialized') || e.message.includes('Target closed')) {
                             console.warn('[OpenAI API] Gemini client stale/closed, re-initializing and retrying...');
@@ -1256,8 +1275,31 @@ app.post('/gemini/research', async (req, res) => {
             }
         } else {
             // Traditional JSON response mode
+            // Traditional JSON response mode
             console.log(`[Server] Generating Gemini response for: "${query}"`);
-            const response = await activeGeminiClient.research(query);
+
+            let response;
+            const useWindmill = process.env.USE_WINDMILL !== 'false';
+
+            // Try Windmill first if enabled
+            if (useWindmill) {
+                try {
+                    const { getWindmillClient } = await import('./windmill-client');
+                    const windmill = getWindmillClient();
+                    if (windmill.isConfigured()) {
+                        console.log('[Server] Delegating research to Windmill...');
+                        response = await activeGeminiClient.queryViaWindmill(query, undefined, req.body.model);
+                    }
+                } catch (e: any) {
+                    console.warn(`[Server] Windmill research failed (${e.message}), falling back to local CDP...`);
+                }
+            }
+
+            // Fallback to local CDP if Windmill skipped or failed
+            if (!response) {
+                response = await activeGeminiClient.research(query, { deepResearch: false, ...options });
+            }
+
             res.json({ success: true, data: response });
         }
     } catch (e: any) {

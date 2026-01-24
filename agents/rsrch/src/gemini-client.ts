@@ -111,10 +111,50 @@ export class GeminiClient extends EventEmitter {
         this.verbose = options.verbose || false;
     }
 
+    /**
+     * @deprecated Legacy direct CDP method. Use queryViaWindmill instead.
+     */
     private log(message: string) {
         if (this.verbose) {
             console.log(`[Gemini] ${message}`);
         }
+    }
+
+    /**
+     * Execute query via Windmill (New Architecture)
+     *Delegates the entire interaction to a robust Windmill script.
+     */
+    async queryViaWindmill(query: string, sessionId?: string, model: 'pro' | 'thinking' | 'flash' = 'pro'): Promise<string> {
+        console.log(`[GeminiClient] Delegating query to Windmill...`);
+        const { getWindmillClient } = await import('./windmill-client');
+        const windmill = getWindmillClient();
+
+        if (!windmill.isConfigured()) {
+            throw new Error('Windmill is not configured. Cannot execute robust query.');
+        }
+
+        const job = await windmill.triggerGeminiInteraction({
+            message: query,
+            session_id: sessionId,
+            model,
+            waitForResponse: true
+        });
+
+        console.log(`[GeminiClient] Job triggered: ${job.jobId}. Waiting for result...`);
+        const result = await windmill.waitForJob(job.jobId);
+
+        if (!result.success && result.result?.success === false) {
+            throw new Error(result.result?.error || result.error || 'Windmill job failed');
+        }
+
+        // Parse result from script
+        // Script returns { success: true, response: "...", session_id: "..." }
+        const data = result.result;
+        if (!data || !data.success) {
+            throw new Error(data?.error || 'Unknown error from Windmill script');
+        }
+
+        return data.response;
     }
 
     // Emit progress events for SSE streaming (always emits, unlike log which respects verbose)
