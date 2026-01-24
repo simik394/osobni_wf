@@ -276,9 +276,80 @@ function generateReport() {
     console.log('    toc: true');
     console.log('    theme: cosmo');
     console.log('    page-layout: full');
+    console.log('execute:');
+    console.log('  echo: false');
     console.log('---');
 
-    console.log(`Generated on: ${new Date().toISOString()}\n`);
+    console.log(`Generated on: ${new Date().toISOString()}`);
+    console.log('');
+
+    // Add test runner controls at the top
+    console.log('## 🎮 Test Controls');
+    console.log('');
+    console.log('::: {.callout-note}');
+    console.log('**Live Results Mode**: Start the test runner server (`npx ts-node scripts/test-runner-server.ts`), then use the button below to run tests and see live results.');
+    console.log(':::');
+    console.log('');
+    console.log('```{ojs}');
+    console.log('//| echo: false');
+    console.log('TEST_SERVER = "http://localhost:3099"');
+    console.log('');
+    console.log('mutable testResults = null');
+    console.log('mutable runStatus = "idle"');
+    console.log('mutable lastRun = null');
+    console.log('');
+    console.log('async function fetchResults() {');
+    console.log('  try {');
+    console.log('    const response = await fetch(`${TEST_SERVER}/results`);');
+    console.log('    if (response.ok) {');
+    console.log('      mutable testResults = await response.json();');
+    console.log('      mutable lastRun = new Date().toLocaleTimeString();');
+    console.log('    }');
+    console.log('  } catch (e) {');
+    console.log('    console.log("Server not available, using static results");');
+    console.log('  }');
+    console.log('}');
+    console.log('');
+    console.log('async function runTests() {');
+    console.log('  mutable runStatus = "running";');
+    console.log('  try {');
+    console.log('    await fetch(`${TEST_SERVER}/run-tests`, { method: "POST" });');
+    console.log('    // Poll for completion');
+    console.log('    let attempts = 0;');
+    console.log('    while (attempts < 120) { // 2 min timeout');
+    console.log('      await new Promise(r => setTimeout(r, 1000));');
+    console.log('      const status = await fetch(`${TEST_SERVER}/status`).then(r => r.json());');
+    console.log('      if (status.status === "completed" || status.status === "error") {');
+    console.log('        await fetchResults();');
+    console.log('        mutable runStatus = status.status;');
+    console.log('        return;');
+    console.log('      }');
+    console.log('      attempts++;');
+    console.log('    }');
+    console.log('    mutable runStatus = "timeout";');
+    console.log('  } catch (e) {');
+    console.log('    mutable runStatus = "error";');
+    console.log('  }');
+    console.log('}');
+    console.log('');
+    console.log('// Auto-fetch on load');
+    console.log('fetchResults();');
+    console.log('```');
+    console.log('');
+    console.log('```{ojs}');
+    console.log('//| echo: false');
+    console.log('viewof runButton = Inputs.button(');
+    console.log('  runStatus === "running" ? "⏳ Running Tests..." : "🧪 Run All Tests",');
+    console.log('  { disabled: runStatus === "running", value: null, reduce: () => runTests() }');
+    console.log(')');
+    console.log('```');
+    console.log('');
+    console.log('```{ojs}');
+    console.log('//| echo: false');
+    console.log('md`**Status**: ${runStatus === "running" ? "⏳ Running..." : runStatus === "completed" ? "✅ Completed" : runStatus === "error" ? "❌ Error" : "⏸️ Idle"} ${lastRun ? `(Last run: ${lastRun})` : ""}`');
+    console.log('```');
+    console.log('');
+
 
     // Dashboard / Summary
     console.log('## 📊 Test Suite Overview');
@@ -383,50 +454,67 @@ function generateReport() {
             console.log('');
 
             console.log('##### 💻 Implementation');
-
-            // USE FILE EMBED SYNTAX if possible, or fallback to printing with meta
-            // Trying standard Quarto 'include' or 'code-file' attribute approach
-            // Assuming user might have 'include-code-files' or simply wants the source
-            // We'll use the 'file' attribute which is standard in some contexts,
-            // OR explicitly print "code-file: ..." for them to see.
-
-            // To ensure it works out of the box with standard Quarto, we might need to rely on `sed`
-            // inside a bash block if extensions aren't present.
-            // BUT user said "embeds of the actual code".
-            // Let's use the {{< include >}} syntax hack or just a raw code block with the 'filename' annotation.
-
-            // safest "embed" that reflects the file content on disk:
-            // Removed metadata comments that were confusing rendering
-            console.log('```typescript');
-            console.log(scenario.body);
-            console.log('```\n');
+            // Use Quarto file include with line numbers
+            if (scenario.startLine && scenario.endLine) {
+                console.log(`\`\`\`{.typescript filename="tests/${fileData.file}" code-line-numbers="${scenario.startLine}-${scenario.endLine}"}`);
+                console.log(scenario.body);
+                console.log('```');
+            } else {
+                console.log('```typescript');
+                console.log(scenario.body);
+                console.log('```');
+            }
+            console.log('');
 
             console.log('##### ⚡ Live Result');
-            // Static bash block showing the command (no execution)
+
+            // Generate a unique ID for this test's result container
+            const testId = `test_${fileData.file.replace(/[^a-zA-Z0-9]/g, '_')}_${scenario.name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}`;
             const safeName = scenario.name.replace(/"/g, '\\"').replace(/'/g, "\\'");
+
             console.log('**Command:**');
             console.log('```bash');
             console.log(`npx vitest run tests/${fileData.file} -t "${safeName}" --reporter=basic`);
             console.log('```');
             console.log('');
 
-            // Static output block showing the result we already found
-            console.log('**Execution Output:**');
-            console.log('```text');
-            if (result) {
-                if (result.status === 'passed') {
-                    console.log(` ✓ ${scenario.name} (${result.duration}ms)`);
-                } else if (result.status === 'failed') {
-                    console.log(` ✗ ${scenario.name} (${result.duration}ms)`);
-                    console.log('\nErrors:');
-                    result.failureMessages.forEach(msg => console.log(msg));
-                } else {
-                    console.log(` ⚠ ${scenario.name} (${result.status})`);
-                }
-            } else {
-                console.log('No result found in test-results.json');
-            }
-            console.log('```\n');
+            // OJS block for dynamic result display
+            console.log('```{ojs}');
+            console.log('//| echo: false');
+            console.log(`// Result for: ${scenario.name}`);
+            console.log('{');
+            console.log(`  const testFile = "${fileData.file}";`);
+            console.log(`  const testName = "${scenario.name.replace(/"/g, '\\"')}";`);
+            console.log('  ');
+            console.log('  function findResult(results) {');
+            console.log('    if (!results || !results.testResults) return null;');
+            console.log('    for (const file of results.testResults) {');
+            console.log('      if (file.name.includes(testFile)) {');
+            console.log('        for (const assertion of file.assertionResults) {');
+            console.log('          if (assertion.title === testName || assertion.fullName.includes(testName)) {');
+            console.log('            return assertion;');
+            console.log('          }');
+            console.log('        }');
+            console.log('      }');
+            console.log('    }');
+            console.log('    return null;');
+            console.log('  }');
+            console.log('  ');
+            console.log('  const result = findResult(testResults);');
+            console.log('  ');
+            console.log('  if (!result) {');
+            console.log('    return md`*No results available. Run tests to see live results.*`;');
+            console.log('  } else if (result.status === "passed") {');
+            console.log('    return md`✅ **Passed** in ${result.duration}ms`;');
+            console.log('  } else if (result.status === "failed") {');
+            console.log('    return md`❌ **Failed** in ${result.duration}ms`;');
+            console.log('  } else {');
+            console.log('    return md`⚠️ **${result.status}**`;');
+            console.log('  }');
+            console.log('}');
+            console.log('```');
+            console.log('');
+
 
             console.log(':::'); // End tabset
         }
