@@ -42,3 +42,17 @@ exp/
 # Temporary files
 *.patch
 sessions_list.txt
+
+# PWF Cleanups
+# Binaries
+agents/jules-go/jules-mcp-windmill
+
+# Dumps & Reports
+dump.html
+sessions_dump.json
+agents/jules-go/sessions_dump.json
+rsrch_payload*.json
+halvarm_storage_report*.md
+
+# Ansible / Roles junk if any
+.ansible/
