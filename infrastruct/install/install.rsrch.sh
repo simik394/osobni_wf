@@ -3,7 +3,7 @@ set -e
 
 # Configuration
 APP_NAME="rsrch"
-SRC_DIR="/home/sim/Obsi/Prods/01-pwf/agents/perplexity-researcher"
+SRC_DIR="/home/sim/Obsi/Prods/01-pwf/agents/rsrch"
 WORK_DIR="/tmp/${APP_NAME}_build"
 CACHE_DIR="/tmp/${APP_NAME}_cache"
 
@@ -121,14 +121,14 @@ fi
 # 4. Create Wrapper Script
 log_info "Installing wrapper script..."
 # Use the external wrapper script we created
-cp "/home/sim/Obsi/Prods/01-pwf/infrastruct/rsrch-wrapper.sh" "$BIN_DEST/$APP_NAME"
+    cp "/home/sim/Obsi/Prods/01-pwf/infrastruct/install/rsrch-wrapper.sh" "$BIN_DEST/$APP_NAME"
 # Ensure it is executable
 chmod +x "$BIN_DEST/$APP_NAME"
 
 
 # 5. Install Man Page (Optional - create if needed)
 if [ "$DEV_MODE" = "false" ]; then
-    if [ -f "/home/sim/Obsi/Prods/01-pwf/infrastruct/rsrch.1" ]; then
+    if [ -f "/home/sim/Obsi/Prods/01-pwf/infrastruct/install/rsrch.1" ]; then
         log_info "Installing man page..."
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         mkdir -p "$INSTALL_ROOT/usr/share/man/man1"

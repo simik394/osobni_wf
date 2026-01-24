@@ -1,14 +1,14 @@
-.TH PERPLEXITY-RESEARCHER 1 "November 2025" "1.0.0" "User Commands"
+.TH RSRCH 1 "November 2025" "1.0.0" "User Commands"
 .SH NAME
-perplexity-researcher \- Docker-based AI research automation tool
+rsrch \- Docker-based AI research automation tool
 .SH SYNOPSIS
-.B perplexity-researcher
+.B rsrch
 .I command
 [
 .I arguments
 ]
 .SH DESCRIPTION
-.B perplexity-researcher
+.B rsrch
 is a CLI wrapper for a Dockerized Perplexity.ai automation service. It manages the Docker containers and provides an interface for querying.
 
 .SH COMMANDS
@@ -42,7 +42,7 @@ If the server is not running, it will attempt to start it.
 .br
 .B Example:
 .br
-.B perplexity-researcher query "What is the history of the internet?"\fR
+.B rsrch query "What is the history of the internet?"\fR
 .TP
 .B notebook create "\fItitle\fR"
 Creates a new NotebookLM notebook with the specified title.
@@ -54,7 +54,7 @@ Adds a URL source to the active or specified notebook.
 Generates an audio overview for the active or specified notebook.
 .SH FILES
 .TP
-.B /opt/perplexity-researcher/
+.B /opt/rsrch/
 Installation directory containing Docker configuration.
 .TP
 .B ./data/auth.json

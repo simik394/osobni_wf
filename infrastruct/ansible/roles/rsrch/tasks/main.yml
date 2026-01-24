@@ -1,0 +1,28 @@
+---
+- name: Install VNC viewer dependency
+  ansible.builtin.apt:
+    name: xtightvncviewer
+    state: present
+  become: true
+
+- name: Create project directory in /opt
+  ansible.builtin.file:
+    path: /opt/rsrch
+    state: directory
+    mode: "0755"
+    owner: "{{ ansible_user_id }}"
+  become: true
+
+- name: Install rsrch wrapper script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../install/rsrch-wrapper.sh"
+    dest: /usr/bin/rsrch
+    mode: "0755"
+  become: true
+
+- name: Sync source to /opt/rsrch (for dev build)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../agents/rsrch/"
+    dest: /opt/rsrch/
+    mode: "0644"
+  become: false

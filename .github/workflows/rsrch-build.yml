@@ -1,0 +1,44 @@
+name: Build and Push Rsrch Server
+
+on:
+    push:
+        branches: ["main", "pr-20"]
+        paths:
+            - "agents/rsrch/**"
+            - "agents/shared/**"
+            - "package.json"
+            - ".github/workflows/rsrch-build.yml"
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm install
+
+            - name: Build shared library
+              run: npm run build -w @agents/shared
+
+            - name: Build rsrch
+              run: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm run build -w rsrch
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build Docker image
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  file: agents/rsrch/Dockerfile
+                  push: false # We need to push to a registry later, but for now just build
+                  tags: rsrch-server:latest
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max

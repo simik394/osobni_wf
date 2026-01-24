@@ -28,11 +28,20 @@ fi
 
 export PORT
 
-cd "$PROJECT_DIR"
+# Handle project directory
+if [ ! -d "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/docker-compose.yml" ]; then
+    # Fallback to local workspace if we are in the repo
+    WORKSPACE_DIR="/home/sim/Obsi/Prods/01-pwf/agents/rsrch"
+    if [ -d "$WORKSPACE_DIR" ]; then
+        PROJECT_DIR="$WORKSPACE_DIR"
+    fi
+fi
+
+cd "$PROJECT_DIR" || { echo "Error: Could not find project directory."; exit 1; }
 
 check_running() {
     # Check if container is running via docker
-    if docker ps --filter "name=perplexity-server" --filter "status=running" --format '{{.Names}}' | grep -q "perplexity-server"; then
+    if docker ps --filter "name=rsrch" --filter "status=running" --format '{{.Names}}' | grep -q "rsrch"; then
         return 0
     fi
     return 1
@@ -79,64 +88,26 @@ case "$1" in
     echo "Starting authentication..."
     docker compose up -d
     echo "Please use VNC to log in."
-    docker exec -it perplexity-server npm run login
+    docker exec -it rsrch npm run login
     ;;
   notebook)
-    shift
-    # Check for headed/native flag
-    USE_NATIVE=0
-    for arg in "$@"; do
-        if [ "$arg" == "--headed" ] || [ "$arg" == "--native" ]; then
-            USE_NATIVE=1
-            break
-        fi
-    done
-
-    if [ "$USE_NATIVE" -eq 1 ]; then
-        echo "Headed/Native mode detected. Switching to host execution..."
-        cd "$PROJECT_DIR"
-        # Ensure we are not root if possible? But wrapper might be run as user.
-        # If run with sudo, this runs as root. Users typically run 'rsrch ...' as user.
-        npx ts-node src/index.ts notebook "$@"
-    else
-        if ! check_running; then
-            echo "Error: Server is not running. Start it with '$APP_NAME start'"
-            exit 1
-        fi
-        docker exec -it perplexity-server npx ts-node src/index.ts notebook "$@"
+    if ! check_running; then
+        echo "Error: Server is not running. Start it with '$APP_NAME start'"
+        exit 1
     fi
-    ;;
-  gemini)
     shift
-    # Check for headed/native flag
-    USE_NATIVE=0
-    for arg in "$@"; do
-        if [ "$arg" == "--headed" ] || [ "$arg" == "--native" ]; then
-            USE_NATIVE=1
-            break
-        fi
-    done
-
-    if [ "$USE_NATIVE" -eq 1 ]; then
-        echo "Headed/Native mode detected. Switching to host execution..."
-        cd "$PROJECT_DIR"
-        npx ts-node src/index.ts gemini "$@"
-    else
-        if ! check_running; then
-            echo "Error: Server is not running. Start it with '$APP_NAME start'"
-            exit 1
-        fi
-        docker exec -it perplexity-server npx ts-node src/index.ts gemini "$@"
-    fi
+    # Use docker exec directly to avoid compose state issues
+    # Use docker exec directly to avoid compose state issues
+    docker exec -it rsrch npm run notebook -- "$@"
     ;;
   query)
     shift
     if ! check_running; then
          # Run one-off via compose if not running
-         docker compose run --rm -e PORT=$PORT perplexity-server npx ts-node src/index.ts query "$@"
+         docker compose run --rm -e PORT=$PORT rsrch npm run query "$@"
     else
          # Use exec
-         docker exec -it perplexity-server npx ts-node src/index.ts query "$@"
+         docker exec -it rsrch npm run query "$@"
     fi
     ;;
   batch)
@@ -150,10 +121,10 @@ case "$1" in
 
     if ! check_running; then
          echo "Starting temporary container for batch..."
-         docker compose run --rm -v "$BATCH_FILE:/tmp/batch.txt" perplexity-server npx ts-node src/index.ts batch /tmp/batch.txt
+         docker compose run --rm -v "$BATCH_FILE:/tmp/batch.txt" rsrch npm run batch /tmp/batch.txt
     else
-         docker cp "$BATCH_FILE" "perplexity-server:/tmp/batch.txt"
-         docker exec -it perplexity-server npx ts-node src/index.ts batch /tmp/batch.txt
+         docker cp "$BATCH_FILE" "rsrch:/tmp/batch.txt"
+         docker exec -it rsrch npm run batch /tmp/batch.txt
     fi
     ;;
   build)
@@ -162,32 +133,51 @@ case "$1" in
     ;;
   view)
     echo "Launching VNC Viewer..."
-    if command -v vncviewer > /dev/null 2>&1; then
+    if command -v vncviewer >/dev/null 2>&1; then
         vncviewer localhost:5900 &
-    elif command -v xtightvncviewer > /dev/null 2>&1; then
+    elif command -v xtightvncviewer >/dev/null 2>&1; then
         xtightvncviewer localhost:5900 &
-    elif command -v remmina > /dev/null 2>&1; then
+    elif command -v remmina >/dev/null 2>&1; then
         remmina -c vnc://localhost:5900 &
     else
         echo "Error: No VNC viewer found. Please install one (e.g., 'sudo apt install xtightvncviewer') or connect manually to localhost:5900."
     fi
     ;;
+  vnc)
+    echo "📡 [CLI Path: $(which rsrch)]"
+    echo "📡 Connecting to Production Browser VNC on halvarm:5902..."
+    
+    # Check if port is reachable on halvarm (Remote/DNS)
+    HOST="halvarm"
+    # User mandate: NO localhost fallback. Architecture requires halvarm.
+    # Architecture: Try Standard (5902) -> Legacy (5955) -> Fail
+    PORT=5902
+    if ! nc -z -w 2 "$HOST" 5902 >/dev/null 2>&1; then
+         echo "⚠️  Warning: $HOST:5902 unreachable. Checking legacy port 5955..."
+         PORT=5955
+         if ! nc -z -w 2 "$HOST" 5955 >/dev/null 2>&1; then
+             echo "❌ Error: Could not connect to VNC on $HOST:5902 or $HOST:5955."
+             echo "Diagnose: 'nc -v -z $HOST 5902' or 'nc -v -z $HOST 5955'"
+             exit 1
+         fi
+    fi
+
+    echo "✅ Connected to $HOST:$PORT"
+
+    if command -v vncviewer >/dev/null 2>&1; then
+        vncviewer "$HOST":$PORT &
+    elif command -v xtightvncviewer >/dev/null 2>&1; then
+        xtightvncviewer "$HOST":$PORT &
+    else
+        echo "Error: No VNC viewer found. Please connect manually to $HOST:$PORT."
+    fi
+    ;;
+
   *)
-    echo "Usage: $APP_NAME {start|stop|restart|status|logs|auth|notebook|gemini|query|batch|build|view}"
-    echo ""
-    echo "Commands:"
-    echo "  start/serve           - Start the server"
-    echo "  stop                  - Stop the server"
-    echo "  restart               - Restart the server"
-    echo "  status                - Show server status"
-    echo "  logs                  - Show server logs"
-    echo "  auth                  - Authenticate with services"
-    echo "  notebook <cmd> ...    - NotebookLM commands"
-    echo "  gemini <cmd> ...      - Gemini (research, deep-research, chat, sessions...)"
-    echo "  query <question>      - Query Perplexity"
-    echo "  batch <file>          - Batch queries"
-    echo "  build                 - Rebuild Docker images"
-    echo "  view                  - Launch VNC viewer"
+    echo "Usage: $APP_NAME {start|stop|restart|status|logs|auth|notebook|query|batch|build|view}"
+    echo "  notebook create <Title>"
+    echo "  notebook add-source <URL> [--notebook <Title>]"
+    echo "  notebook audio [--notebook <Title>]"
     exit 1
     ;;
 esac
