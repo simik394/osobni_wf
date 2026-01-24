@@ -8,7 +8,7 @@ import { notebookCommand } from './commands/notebooklm';
 import { queryCommand, batchCommand, authCommand, loginCommand } from './commands/perplexity';
 import { graphCommand } from './commands/graph';
 import { registryCommand } from './commands/registry';
-import { unifiedCommand, watchCommand, notifyCommand } from './commands/misc';
+import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from './commands/misc';
 
 const program = new Command();
 
@@ -41,6 +41,7 @@ program.addCommand(batchCommand);
 program.addCommand(unifiedCommand);
 program.addCommand(watchCommand);
 program.addCommand(notifyCommand);
+program.addCommand(vncCommand);
 
 // Command Groups
 program.addCommand(profileCommand);
