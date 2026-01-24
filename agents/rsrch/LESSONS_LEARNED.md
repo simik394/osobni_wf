@@ -111,6 +111,11 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 - **Fix**: Implemented delta-based printing or full-text replacement with caret management.
 - **Protocol**: `Accept: text/event-stream` header is CRITICAL for server to trigger streaming mode. Always verify headers when debugging 404/empty responses.
 
+## 2026-01-23: Codebase Refactoring & Type Safety
+1.  **Dynamic Import Aliasing**: When importing a class dynamically (e.g. `const { GeminiClient } = await import(...)`) that shares a name with a type import (`import type { GeminiClient }`), use aliasing (`const { GeminiClient: ClientClass }`) to avoid compiler errors where the type name shadows the value.
+2.  **Private Property Access**: When refactoring classes with `private` members (like `page` in `GeminiClient`), ensure public API methods (like `goto`, `wait`) are exposed for consumers (CLI/Scripts) to avoid breaking external code that previously relied on loose access.
+3.  **Template Literal Syntax**: Be extremely careful with template literals in TypeScript. A single astray backtick in a file can cause cascading syntax errors that are difficult to pinpoint, often manifesting as "Unexpected token" errors far from the source.
+
 ## 2026-01-24: Browser Singleton Recovery & Loop Optimization
 
 1.  **Playwright Version Parity**: Compiled code caches binary paths (e.g., `/ms-playwright/chromium-1208` for `v1.58.0`). If the Docker base image version doesn't EXACTLY match the library version in `package.json`, browser launch will silently hang or fail.
