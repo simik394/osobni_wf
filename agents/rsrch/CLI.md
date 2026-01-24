@@ -189,9 +189,16 @@ rsrch watch [--audio] [--queue] [--folder /path/to/audio] [--once]
 rsrch notify "Message" --title "Title" --priority default
 ```
 
-### Unified Pipeline
-```bash
 rsrch unified "Query" [--prompt "custom prompt"] [--dry-run]
+```
+
+### VNC Monitoring
+```bash
+# Connect to production browser VNC (Default: halvarm:5900)
+rsrch vnc
+
+# Connect to custom host/port
+rsrch vnc --host 192.168.1.10 --port 5901
 ```
 
 ---
