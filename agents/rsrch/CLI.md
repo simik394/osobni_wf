@@ -193,12 +193,17 @@ rsrch unified "Query" [--prompt "custom prompt"] [--dry-run]
 ```
 
 ### VNC Monitoring
-```bash
-# Connect to production browser VNC (Default: halvarm:5900)
-rsrch vnc
 
-# Connect to custom host/port
-rsrch vnc --host 192.168.1.10 --port 5901
+> [!CAUTION]
+> **STRICT ARCHITECTURE MANDATE:**
+> Connect ONLY to `halvarm`. Attempts to use `localhost` fallback are **FORBIDDEN** and have been purged from the codebase.
+> - **Standard**: `halvarm:5902` (Browser Container)
+> - **Legacy**: `halvarm:5955` (Fallback)
+
+```bash
+# Connect to production browser VNC (Default: halvarm:5902)
+# NOTE: Connect to the CHROMIUM container (5902).
+rsrch vnc --port 5902
 ```
 
 ---

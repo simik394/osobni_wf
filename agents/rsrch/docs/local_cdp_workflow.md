@@ -140,6 +140,11 @@ Instead of the Node.js script starting a child Chrome process, it relies on Chro
 *   **Container A (`browser`)**: This is a **VNC-enabled Browser Container**. It runs Chrome *headed* inside Xvfb, exposing port 5900 (VNC) and 9222 (CDP).
 *   **Container B (`rsrch`)**: Runs the agent script. It connects efficiently via WebSocket to `browser:9222`.
 
+> [!WARNING]
+> When connecting to the Production VNC (Container A), you MUST connect via the external hostname (`halvarm`).
+> **DO NOT** tunnel via localhost. The system architecture enforces strict remote connectivity.
+
+
 ### Why?
 1.  **Manual Auth via VNC**: You VNC into `Container A` to log in manually (Google/Gemini). The agent in `Container B` then inherits this session via CDP.
 2.  **Visual Debugging**: You can watch the agent work in real-time by keeping the VNC window open.
