@@ -1,0 +1,295 @@
+/**
+ * Tab Pool Management
+ *
+ * Manages a pool of browser tabs for efficient reuse:
+ * - Pre-loads tabs at startup (warm-up)
+ * - Marks tabs as busy/free to prevent stealing
+ * - Limits maximum tabs to prevent RAM exhaustion
+ * - Recycles tabs via UI navigation (no page.goto())
+ */
+
+import type { Browser, Page, BrowserContext } from 'playwright';
+
+// Configuration
+export const DEFAULT_MAX_TABS = 10;
+let currentMaxTabs = process.env.MAX_TABS ? parseInt(process.env.MAX_TABS, 10) : DEFAULT_MAX_TABS;
+
+if (isNaN(currentMaxTabs) || currentMaxTabs <= 0) {
+    currentMaxTabs = DEFAULT_MAX_TABS;
+}
+
+export function getMaxTabs(): number {
+    return currentMaxTabs;
+}
+
+export function setMaxTabs(max: number): void {
+    if (max > 0) {
+        currentMaxTabs = max;
+        console.log(`[TabPool] Max tabs set to ${currentMaxTabs}`);
+    }
+}
+
+export const BUSY_FLAG = '__WINDMILL_BUSY';
+export const TAB_ID_FLAG = '__WINDMILL_TAB_ID';
+
+// Service URLs for tab identification
+export const SERVICE_URLS = {
+    perplexity: 'https://www.perplexity.ai',
+    gemini: 'https://gemini.google.com',
+    angrav: 'chrome-extension://', // Angrav is an extension, URL pattern varies
+} as const;
+
+export type ServiceType = keyof typeof SERVICE_URLS;
+
+/**
+ * Generate a unique tab ID
+ */
+function generateTabId(): string {
+    return `tab_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+}
+
+/**
+ * Mark a tab as busy (in use by a job)
+ */
+export async function markTabBusy(page: Page, jobId?: string): Promise<string> {
+    const tabId = generateTabId();
+    // Ensure flags are set in the browser context
+    await page.evaluate(({ busy, tabId, jobId, tabIdFlag }: { busy: string, tabId: string, jobId: string | null, tabIdFlag: string }) => {
+        (globalThis as any)[busy] = true;
+        (globalThis as any)[tabIdFlag] = tabId;
+        (globalThis as any).__WINDMILL_JOB_ID = jobId;
+    }, { busy: BUSY_FLAG, tabId, jobId: jobId || tabId, tabIdFlag: TAB_ID_FLAG });
+
+    console.log(`🔒 Tab ${tabId} marked as busy`);
+    return tabId;
+}
+
+/**
+ * Mark a tab as free (available for new jobs)
+ */
+export async function markTabFree(page: Page): Promise<void> {
+    const tabId = await page.evaluate((flag: string) => (globalThis as any)[flag], TAB_ID_FLAG);
+
+    await page.evaluate((busy: string) => {
+        (globalThis as any)[busy] = false;
+        (globalThis as any).__WINDMILL_JOB_ID = null;
+    }, BUSY_FLAG);
+
+    console.log(`🔓 Tab ${tabId} marked as free`);
+}
+
+/**
+ * Check if a tab is busy
+ */
+export async function isTabBusy(page: Page): Promise<boolean> {
+    try {
+        return await page.evaluate((flag: string) => (globalThis as any)[flag] === true, BUSY_FLAG);
+    } catch {
+        // Page might be closed or navigating
+        return true;
+    }
+}
+
+/**
+ * Get the tab ID stored in the page
+ */
+export async function getTabId(page: Page): Promise<string | null> {
+    try {
+        return await page.evaluate((flag: string) => (globalThis as any)[flag] || null, TAB_ID_FLAG);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Find a tab by its ID
+ */
+export async function findTabById(browser: Browser, tabId: string): Promise<Page | null> {
+    const context = browser.contexts()[0];
+    if (!context) return null;
+
+    const pages = context.pages();
+
+    for (const page of pages) {
+        const pageTabId = await getTabId(page);
+        if (pageTabId === tabId) {
+            return page;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Find a free (not busy) tab for a specific service
+ */
+export async function findFreeTab(
+    browser: Browser | BrowserContext,
+    service: ServiceType
+): Promise<Page | null> {
+    let context: BrowserContext | undefined;
+    if ('contexts' in browser && typeof browser.contexts === 'function') {
+        context = browser.contexts()[0];
+    } else {
+        context = browser as BrowserContext;
+    }
+    if (!context) return null;
+
+    const pages = context.pages();
+    const serviceUrl = SERVICE_URLS[service];
+
+    for (const page of pages) {
+        try {
+            const url = page.url();
+            const isBusy = await isTabBusy(page);
+
+            // Check if this tab is for the right service and is free
+            if (url.includes(serviceUrl) && !isBusy) {
+                console.log(`♻️ Found free tab for ${service}: ${url}`);
+                return page;
+            }
+        } catch {
+            // Page might be closed, skip
+            continue;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Count current tabs for a service
+ */
+export async function countTabs(browser: Browser, service?: ServiceType): Promise<number> {
+    const context = browser.contexts()[0];
+    if (!context) return 0;
+
+    const pages = context.pages();
+
+    if (!service) return pages.length;
+
+    const serviceUrl = SERVICE_URLS[service];
+    return pages.filter((p: Page) => {
+        try {
+            return p.url().includes(serviceUrl);
+        } catch {
+            return false;
+        }
+    }).length;
+}
+
+/**
+ * Get or create a tab for a service.
+ * Respects MAX_TABS limit and prefers recycling.
+ */
+export async function getTab(
+    browser: Browser | BrowserContext,
+    service: ServiceType,
+    sessionId?: string
+): Promise<Page> {
+    // Handle both Browser and BrowserContext
+    let context: BrowserContext;
+    if ('contexts' in browser && typeof browser.contexts === 'function') {
+        // It's a Browser - get or create context
+        context = browser.contexts()[0] || await browser.newContext();
+    } else {
+        // It's already a BrowserContext
+        context = browser as BrowserContext;
+    }
+    const pages = context.pages();
+
+    // 1. If looking for specific session, try to find it
+    if (sessionId) {
+        for (const page of pages) {
+            if (page.url().includes(sessionId)) {
+                const isBusy = await isTabBusy(page);
+                if (!isBusy) {
+                    console.log(`🎯 Found existing tab for session ${sessionId}`);
+                    return page;
+                }
+                // Tab exists but is busy - we need to wait (Windmill queue handles this)
+                throw new Error(`Tab for session ${sessionId} is busy`);
+            }
+        }
+    }
+
+    // 2. Find a free tab for this service
+    const freeTab = await findFreeTab(browser, service);
+    if (freeTab) {
+        return freeTab;
+    }
+
+    // 3. Can we open a new tab?
+    const totalTabs = pages.length;
+    const maxTabs = getMaxTabs();
+    if (totalTabs < maxTabs) {
+        console.log(`✨ Opening new tab (${totalTabs + 1}/${maxTabs})`);
+        const newPage = await context.newPage();
+        await newPage.goto(SERVICE_URLS[service]);
+        return newPage;
+    }
+
+    // 4. Pool is full - throw error (Windmill will retry later)
+    throw new Error(`BROWSER_FULL_CAPACITY: All ${maxTabs} tabs are busy`);
+}
+
+/**
+ * Recycle a tab by navigating to "New Thread/Chat" via UI click
+ * (avoids page.goto() which causes full reload)
+ */
+export async function recycleTab(page: Page, service: ServiceType): Promise<void> {
+    await markTabFree(page);
+
+    const url = page.url();
+
+    if (service === 'perplexity') {
+        // Click "New Thread" button or navigate to home
+        const newThreadBtn = page.locator('button:has-text("New Thread"), a[href="/"]').first();
+        if (await newThreadBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await newThreadBtn.click();
+            await page.waitForURL('**/perplexity.ai/**', { timeout: 5000 }).catch(() => { });
+        } else {
+            // Fallback: clear the textarea if on homepage
+            const textarea = page.locator('textarea').first();
+            if (await textarea.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await textarea.fill('');
+            }
+        }
+    } else if (service === 'gemini') {
+        // Click "New chat" button
+        const newChatBtn = page.locator('button:has-text("New chat")').first();
+        if (await newChatBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await newChatBtn.click();
+        }
+    }
+
+    console.log(`♻️ Tab recycled for ${service}`);
+}
+
+/**
+ * Close excess tabs beyond MAX_TABS
+ * Keeps the most recently used ones
+ */
+export async function pruneExcessTabs(browser: Browser): Promise<void> {
+    const context = browser.contexts()[0];
+    if (!context) return;
+
+    const pages = context.pages();
+
+    const maxTabs = getMaxTabs();
+    if (pages.length <= maxTabs) return;
+
+    // Close oldest free tabs first
+    const freeTabs: Page[] = [];
+    for (const page of pages) {
+        if (!(await isTabBusy(page))) {
+            freeTabs.push(page);
+        }
+    }
+
+    const toClose = freeTabs.slice(0, pages.length - maxTabs);
+    for (const page of toClose) {
+        console.log(`🗑️ Closing excess tab: ${page.url()}`);
+        await page.close();
+    }
+}

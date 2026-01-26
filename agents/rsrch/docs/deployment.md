@@ -7,10 +7,10 @@
 cd agents/rsrch && npm run build
 
 # Run (foreground)
-PORT=3001 node dist/server.js
+PORT=3030 node dist/server.js
 
 # Run (background)
-PORT=3001 node dist/server.js &
+PORT=3030 node dist/server.js &
 ```
 
 ## Endpoints
@@ -26,7 +26,7 @@ PORT=3001 node dist/server.js &
 ## Example Query
 
 ```bash
-curl -X POST http://localhost:3001/query \
+curl -X POST http://localhost:3030/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is quantum computing?"}'
 ```
@@ -67,8 +67,8 @@ journalctl -u rsrch-server@$USER -f
 docker compose up -d falkordb
 
 # Build and run server container
-docker compose build perplexity-server
-docker compose up -d perplexity-server
+docker compose build rsrch
+docker compose up -d rsrch
 
 # Note: Requires angrav-browser or rsrch-chromium running on port 9223
 ```
@@ -84,14 +84,14 @@ Jobs are stored in FalkorDB for async processing.
 docker compose up -d falkordb
 
 # Submit async job
-curl -X POST http://localhost:3001/query \
+curl -X POST http://localhost:3030/query \
   -H "Content-Type: application/json" \
   -d '{"query": "AI trends 2025", "deepResearch": true}'
 
 # Response: {"jobId": "abc123", "statusUrl": "/jobs/abc123"}
 
 # Check status
-curl http://localhost:3001/jobs/abc123
+curl http://localhost:3030/jobs/abc123
 ```
 
 **Job Statuses:** `queued` → `running` → `completed` | `failed`

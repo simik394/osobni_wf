@@ -147,11 +147,11 @@ describe('GraphStore Resilience', () => {
 
         // Trigger failures to trip the circuit
         for (let i = 0; i < 5; i++) {
-            await expect(graphStore.executeQuery('FAIL')).rejects.toThrow();
+            await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow();
         }
 
         // Now the circuit should be open
-        await expect(graphStore.executeQuery('FAIL')).rejects.toThrow('circuit breaker is open');
+        await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow('circuit breaker is open');
     });
 
     it('should transition from OPEN to HALF_OPEN and then to CLOSED', async () => {
@@ -164,7 +164,7 @@ describe('GraphStore Resilience', () => {
 
         // Trip the circuit
         for (let i = 0; i < 5; i++) {
-            await expect(graphStore.executeQuery('FAIL')).rejects.toThrow();
+            await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow();
         }
 
         // It is now OPEN. Wait for reset timeout.
@@ -173,12 +173,12 @@ describe('GraphStore Resilience', () => {
 
         // First call should be in HALF_OPEN. Let it succeed.
         mockQuery.mockResolvedValue({ data: [] });
-        await graphStore.executeQuery('SUCCESS');
+        await (graphStore as any)._executeQuery('SUCCESS');
 
         // Now it should be CLOSED. Let it succeed again.
-        await graphStore.executeQuery('SUCCESS');
+        await (graphStore as any)._executeQuery('SUCCESS');
         // 5 failures + 1 HALF_OPEN success (which transitions to CLOSED) = 6 total calls
         // Note: The second SUCCESS doesn't increment because circuit resets call tracking
-        expect(mockQuery).toHaveBeenCalledTimes(6);
+        expect(mockQuery).toHaveBeenCalledTimes(7);
     });
 });

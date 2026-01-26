@@ -25,13 +25,7 @@ async function debug() {
         logger.info(`Navigating to ${config.url}...`);
         await page.goto(config.url);
 
-<<<<<<< HEAD:agents/rsrch/src/debug.ts
-        // logger.info('Taking screenshot...');
-        // await page.screenshot({ path: 'data/debug-screenshot.png', fullPage: true });
-        // logger.info('Screenshot saved to data/debug-screenshot.png');
 
-=======
->>>>>>> main:agents/rsrch/scripts/debug/debug.ts
         // Dump HTML
         const html = await page.content();
         logger.info('HTML Content:');

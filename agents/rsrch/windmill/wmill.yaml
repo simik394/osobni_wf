@@ -22,7 +22,7 @@ nonDottedPaths: true
 gitBranches:
   main:
     overrides: {}
-    baseUrl: 'http://100.73.45.27:8000/'
+    baseUrl: "http://100.73.45.27:8000/"
     workspaceId: knowlage
   enhance-agents-shared-library-12655918295314503708:
     overrides: {}

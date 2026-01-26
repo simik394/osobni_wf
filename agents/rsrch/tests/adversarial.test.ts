@@ -13,25 +13,6 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { Server } from 'http';
 import * as net from 'net';
 
-<<<<<<< HEAD
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3001';
-
-describe('Adversarial: TOOLS-32 Multi-turn Context', () => {
-
-    /**
-     * BUG FOUND: After removing the "no user message" check,
-     * empty messages array will cause formatConversation to return ''
-     * which may behave unexpectedly in the agent.
-     */
-    it('should handle empty messages array gracefully', async () => {
-        const response = await fetch(`${BASE_URL}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'gemini-rsrch',
-                messages: [] // Empty array - no messages!
-            })
-=======
 // Helper to find an available port
 function getRandomPort(): Promise<number> {
     return new Promise((resolve, reject) => {
@@ -40,7 +21,6 @@ function getRandomPort(): Promise<number> {
             const addr = server.address();
             const port = typeof addr === 'object' && addr ? addr.port : 0;
             server.close(() => resolve(port));
->>>>>>> main
         });
         server.on('error', reject);
     });

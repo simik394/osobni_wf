@@ -21,8 +21,9 @@ export async function runQuery(queryText: string) {
         logger.info(`Connecting to browser service at ${config.browserWsEndpoint}...`);
         browser = await chromium.connect(config.browserWsEndpoint);
     } else {
-        logger.info('Launching local browser (System Chrome)...');
-        browser = await chromium.launch({ headless: false, channel: 'chrome' });
+        // logger.info('Launching local browser (System Chrome)...');
+        // browser = await chromium.launch({ headless: false, channel: 'chrome' });
+        throw new Error('STRICT POLICY: Local browser launch PROHIBITED. Please check browser service connection.');
     }
 
     logger.info('Creating context with saved auth state...');
