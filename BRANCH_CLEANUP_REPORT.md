@@ -4,38 +4,35 @@
 **Status**: Completed
 
 ## Summary
-A comprehensive analysis of the repository's feature branches was conducted to identify missing logic, duplicate code, and stale state.
+A comprehensive analysis of 10+ feature branches was conducted. Significant useful code was identified in `TOOLS-63` (GraphStore extensions) and `feat-angrav` (Windmill scripts), which has been assimilated into `main`.
 
 ## Findings
 
 ### 1. The "Mega-Branch" Pattern
-The following branches were found to be massive "snapshots" (500+ files, 100k+ lines) with disjoint git history (no merge base with `main`):
-*   `origin/TOOLS-50-centralize-config-2122412381242290227`
-*   `origin/TOOLS-63-add-gemini-session-tracking-6384360672231470378`
-*   `origin/feat-TOOLS-69-windmill-flow-templates-6315938199643021303`
-*   `origin/feat-TOOLS-87-add-openapi-spec-2702938229025728362`
-*   `origin/feat-angrav-persistent-history-14196839462649387149`
-*   `origin/feat-infra-dashboard-5158685305511540484`
-*   `origin/feat-jules-go-browser-automation-4163621839892381246`
+Several branches were identified as "snapshots" with disjoint history.
+*   `origin/TOOLS-50-centralize-config...`: Redundant. `main` has superior config logic.
+*   `origin/feat-TOOLS-69-windmill-flow...`: Redundant. `main` has better templates.
+*   `origin/feat-TOOLS-87-add-openapi...`: Stale/Broken imports.
+*   `origin/feat-infra-dashboard...`: Redundant.
+*   `origin/feat-jules-go-browser-automation...`: Superseded by `jules-go` in `main`.
 
-**Analysis**:
-*   These branches appear to be earlier iterations or forks of the `pr-20` state which was recently assimilated.
-*   They contain large duplicates of `integrations/mapObsi`, `infrastruct/nomad_stack`, etc.
-*   **Comparison**: `pr-20` contained ~900 files, while these contain ~500-700. `pr-20` is the superset.
-*   **Logic Check**:
-    *   `TOOLS-63` (Session Tracking): Logic already exists in `main` (and was preserved during `pr-20` assimilation).
-    *   `feat-jules-go-browser-automation`: Contains older local automation code (`rod`) superseded by `main`'s Windmill integration.
-    *   `feat-TOOLS-87` (OpenAPI): Missing critical imports (`tab-pool`) present in `main`.
+### 2. Assimilated Features
+The following logic was **extracted and merged** into `assimilated-pr-20` (HEAD):
 
-### 2. Recommendation
-These branches are **stale and redundant**. They should be deleted to reduce repository noise.
+*   **From `origin/TOOLS-63-add-gemini-session-tracking...`**:
+    *   **Full GraphStore Implementation**: `agents/rsrch/src/graph-store.ts` was upgraded from a partial stub to a full implementation including:
+        *   Pending Audio management (Windmill integration).
+        *   Entity/Relationship mapping (Knowledge Graph).
+        *   Fact extraction and Reasoning steps.
+        *   Citation tracking with `apoc` fallback.
+    *   This bridges the gap between the `rsrch` agent and the knowledge graph.
 
-## Action Taken
-*   Analyzed code diffs for critical logic.
-*   Confirmed `main` (post-assimilation) is the most advanced state.
-*   No code from these branches needed to be merged as it was either already present or outdated.
+*   **From `origin/feat-angrav-persistent-history...`**:
+    *   **Angrav Windmill Scripts**: Recovered 4 missing scripts (`chat_completion.ts`, `dismiss_popups.ts`, etc.) from a misplaced directory (`infrastruct/configs/...`) and moved them to `agents/rsrch/windmill/f/agents/angrav/`.
 
-## List of Branches to Delete
+### 3. Recommendation
+With the critical logic extracted, the following branches are now **safe to delete**:
+
 ```text
 origin/TOOLS-50-centralize-config-2122412381242290227
 origin/TOOLS-63-add-gemini-session-tracking-6384360672231470378
