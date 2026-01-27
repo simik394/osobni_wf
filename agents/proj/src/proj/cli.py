@@ -11,9 +11,9 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
+from datetime import datetime
 from langchain_core.messages import HumanMessage
 
-from datetime import datetime
 from proj.agent import get_graph, create_proj_graph
 from proj.state import ProjState, Project, TaskStatus
 from proj.persistence import get_store
@@ -225,6 +225,26 @@ def complete(task_id: str):
     save_state()
 
     console.print(f"✅ Completed task: [bold]{task.title}[/bold]")
+
+
+@app.command()
+def sync():
+    """Sync task estimates based on historical data."""
+    state = get_state()
+    graph = get_graph()
+
+    state.messages.append(HumanMessage(content="sync estimates"))
+    result = graph.invoke(state)
+
+    global _state
+    _state = ProjState(**result)
+
+    if result.get("messages"):
+        last_msg = result["messages"][-1]
+        content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+        console.print(f"📊 {content}")
+
+    save_state()
 
 
 if __name__ == "__main__":
