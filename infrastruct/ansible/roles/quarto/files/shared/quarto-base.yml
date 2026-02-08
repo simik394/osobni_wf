@@ -29,6 +29,7 @@ format:
 
 filters:
   - /home/sim/.config/quarto/shared/filters/obsidian-embeds.lua
+  - /home/sim/.config/quarto/shared/filters/pagebreak.lua
   - quarto
 
 mermaid:
