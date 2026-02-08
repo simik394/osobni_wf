@@ -11,7 +11,7 @@ project:
 
 format:
   pdf:
-    keep-tex: true
+    keep-tex: false
     resource-path:
       - .
       - /home/sim/Obsi/attachments
