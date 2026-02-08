@@ -3,5 +3,8 @@ ansible_ssh_private_key_file: ~/.ssh/id_rsa
 # Set this to your OCI Public IP for correct Traefik routing
 public_ip: "130.61.225.114"
 
+# Storage Configuration
+data_root: "/mnt/data"
+
 # Windmill API token for rsrch server (from Vault: secret/agents/windmill)
 windmill_token: "Xz8URRuZ93NdWibjGs9tzpkSoypVAUNd"

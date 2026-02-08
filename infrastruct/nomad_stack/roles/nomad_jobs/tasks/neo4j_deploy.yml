@@ -1,0 +1,27 @@
+---
+- name: Create Neo4j data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 7474
+    group: 7474
+    mode: "0750"
+  loop:
+    - "{{ data_root }}/neo4j/data"
+    - "{{ data_root }}/neo4j/import"
+    - "{{ data_root }}/neo4j/plugins"
+  tags: neo4j
+
+- name: Copy Neo4j Nomad job template
+  ansible.builtin.template:
+    src: "neo4j.nomad.hcl.j2"
+    dest: "/opt/nomad/jobs/neo4j.nomad.hcl"
+    mode: "0644"
+  tags: neo4j
+
+- name: Run Neo4j
+  ansible.builtin.command: nomad job run /opt/nomad/jobs/neo4j.nomad.hcl
+  environment:
+    NOMAD_ADDR: http://127.0.0.1:4646
+  changed_when: false
+  tags: neo4j

@@ -70,8 +70,9 @@ cd "$WORK_DIR"
 cat > apply_czech_layout.py <<EOF
 import os
 
-# 1. Create czech_programmer.py
 KEYMAP_DIR = 'src/main/python/keymap'
+
+# 1. Create czech_programmer.py
 CZECH_KEYMAP_PATH = os.path.join(KEYMAP_DIR, 'czech_programmer.py')
 
 czech_keymap_content = """# coding: utf-8
@@ -93,7 +94,28 @@ with open(CZECH_KEYMAP_PATH, 'w', encoding='utf-8') as f:
     f.write(czech_keymap_content)
 print(f"Created {CZECH_KEYMAP_PATH}")
 
-# 2. Patch keymaps.py
+# 2. Create czech_qwerty.py
+CZECH_QWERTY_PATH = os.path.join(KEYMAP_DIR, 'czech_qwerty.py')
+czech_qwerty_content = """# coding: utf-8
+keymap = {
+    "KC_1": "+\\\\n1",
+    "KC_2": "ě\\\\n2",
+    "KC_3": "š\\\\n3",
+    "KC_4": "č\\\\n4",
+    "KC_5": "ř\\\\n5",
+    "KC_6": "ž\\\\n6",
+    "KC_7": "ý\\\\n7",
+    "KC_8": "á\\\\n8",
+    "KC_9": "í\\\\n9",
+    "KC_0": "é\\\\n0",
+}
+"""
+
+with open(CZECH_QWERTY_PATH, 'w', encoding='utf-8') as f:
+    f.write(czech_qwerty_content)
+print(f"Created {CZECH_QWERTY_PATH}")
+
+# 3. Patch keymaps.py
 KEYMAPS_PATH = 'src/main/python/keymaps.py'
 
 with open(KEYMAPS_PATH, 'r', encoding='utf-8') as f:
@@ -104,10 +126,11 @@ import_added = False
 keymap_added = False
 
 for line in lines:
-    # Add import
+    # Add imports
     if not import_added and line.strip().startswith('from keymap import ('):
         new_lines.append(line)
         new_lines.append('    czech_programmer,\\n')
+        new_lines.append('    czech_qwerty,\\n')
         import_added = True
         continue
 
@@ -115,6 +138,7 @@ for line in lines:
     if not keymap_added and line.strip() == 'KEYMAPS = [':
         new_lines.append(line)
         new_lines.append('    ("Czech Programmer", czech_programmer.keymap),\\n')
+        new_lines.append('    ("Czech QWERTY", czech_qwerty.keymap),\\n')
         keymap_added = True
         continue
 

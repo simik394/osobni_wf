@@ -4,6 +4,7 @@
 project:
   type: default
   output-dir: _build
+  # We use these scripts for atomic PDF movement and Excalidraw extraction
   pre-render:
     - python3 /home/sim/.config/quarto/shared/scripts/excalidraw_frame_extractor.py ${QUARTO_PROJECT_RENDER_ALL:-}
   post-render:

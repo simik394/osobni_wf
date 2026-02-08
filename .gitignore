@@ -8,10 +8,7 @@ build/
 .docker/
 
 # Agent specific
-agents/perplexity-researcher/data/results/
-agents/perplexity-researcher/data/queries.json
-agents/perplexity-researcher/config/user-data/
-agents/perplexity-researcher/browser/node_modules/
+
 *.deb
 
 # System
@@ -22,7 +19,8 @@ Thumbs.db
 .vscode/
 .idea/
 vault_keys.json
-cached-sources/
+#_cached-sources/
+gits/
 **/__pycache__/
 *.pyc
 agents/_report_archive/
@@ -30,7 +28,7 @@ lmstudio_dump.html
 history_dump/
 cdp_targets*.json
 infrastruct/utils/libs/
-exp/
+#exp/
 
 # Environment files
 .env
