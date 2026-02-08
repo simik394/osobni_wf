@@ -30,11 +30,11 @@
     msg: "Latest version detected: {{ lmstudio_latest_data.version }}"
 
 - name: Download LM Studio AppImage
-  get_url:
-    url: "{{ lmstudio_latest_data.url }}"
-    dest: "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}"
-    mode: "0755"
-  register: lmstudio_download
+  shell: |
+    curl -L -o "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}" "{{ lmstudio_latest_data.url }}"
+    chmod 0755 "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}"
+  args:
+    creates: "{{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}"
 
 - name: Download LM Studio Icon
   get_url:
@@ -63,15 +63,20 @@
     state: link
     force: yes
 
+- name: Remove old desktop entry if exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/applications/lmstudio.desktop"
+    state: absent
+
 - name: Create desktop entry for LM Studio
   copy:
-    dest: "{{ ansible_env.HOME }}/.local/share/applications/lmstudio.desktop"
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/lm-studio.desktop"
     mode: "0644"
     content: |
       [Desktop Entry]
       Name=LM Studio
       Comment=Discover, download, and run local LLMs
-      Exec={{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }}
+      Exec={{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }} --no-sandbox
       Icon={{ ansible_env.HOME }}/.local/share/icons/lmstudio.png
       Terminal=false
       Type=Application

@@ -1,36 +1,48 @@
 ---
+- name: Check current Quarto version
+  command: quarto --version
+  register: current_quarto_version
+  failed_when: false
+  changed_when: false
+
 - name: Get latest Quarto release info
   uri:
     url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
     return_content: true
   register: quarto_release
 
-- name: Set Quarto download url
+- name: Set Quarto version fact
   set_fact:
-    quarto_deb_url: "{{ quarto_release.json.assets | selectattr('name', 'search', 'linux-amd64.deb') | map(attribute='browser_download_url') | first }}"
-    quarto_version: "{{ quarto_release.json.tag_name }}"
+    latest_quarto_version: "{{ quarto_release.json.tag_name | regex_replace('^v', '') }}"
 
-- name: Create temporary download directory
-  tempfile:
-    state: directory
-    suffix: quarto_install
-  register: quarto_temp_dir
+- name: Quarto Installation block
+  block:
+    - name: Set Quarto download url
+      set_fact:
+        quarto_deb_url: "{{ quarto_release.json.assets | selectattr('name', 'search', 'linux-amd64.deb') | map(attribute='browser_download_url') | first }}"
 
-- name: Download Quarto .deb
-  get_url:
-    url: "{{ quarto_deb_url }}"
-    dest: "{{ quarto_temp_dir.path }}/quarto.deb"
+    - name: Create temporary download directory
+      tempfile:
+        state: directory
+        suffix: quarto_install
+      register: quarto_temp_dir
 
-- name: Install Quarto
-  apt:
-    deb: "{{ quarto_temp_dir.path }}/quarto.deb"
-    state: present
-  become: true
+    - name: Download Quarto .deb
+      get_url:
+        url: "{{ quarto_deb_url }}"
+        dest: "{{ quarto_temp_dir.path }}/quarto.deb"
 
-- name: Remove temporary directory
-  file:
-    path: "{{ quarto_temp_dir.path }}"
-    state: absent
+    - name: Install Quarto
+      apt:
+        deb: "{{ quarto_temp_dir.path }}/quarto.deb"
+        state: present
+      become: true
+
+    - name: Remove temporary directory
+      file:
+        path: "{{ quarto_temp_dir.path }}"
+        state: absent
+  when: current_quarto_version.stdout != latest_quarto_version
 
 - name: Check if TinyTeX is installed
   stat:
@@ -73,23 +85,24 @@
   command:
     cmd: "/home/sim/.TinyTeX/bin/x86_64-linux/tlmgr install koma-script geometry xcolor amsmath environ tcolorbox pdfcol wrapfig"
   register: tlmgr_output
-    changed_when: "'is already installed' not in tlmgr_output.stdout"
-    when: tinytex_stat.stat.exists or not tinytex_stat.stat.exists
-  
-  - name: Ensure Python dependencies for Quarto execution are installed
-    pip:
-      name:
-        - ipykernel
-        - nbformat
-        - nbconvert
-      state: present
-    - name: Check if IJulia is installed
-    command: julia -e 'using Pkg; if haskey(Pkg.dependencies(), Base.UUID("7073ff75-c69a-5deb-a3bc-73abb05c9518")) exit(0) else exit(1) end'
-    register: ijulia_check
-    failed_when: false
-    changed_when: false
-  
-  - name: Install IJulia kernel for Quarto
-    command: julia -e 'using Pkg; Pkg.add("IJulia")'
-    when: ijulia_check.rc != 0
-  
+  # Look for the specific string indicating nothing was installed
+  changed_when: "'already present' not in tlmgr_output.stdout"
+
+- name: Ensure Python dependencies for Quarto execution are installed
+  pip:
+    name:
+      - ipykernel
+      - nbformat
+      - nbconvert
+    state: present
+
+- name: Check if IJulia is installed
+  # More robust check that works regardless of environment
+  command: julia -e 'using Pkg; for (uuid, pkg) in Pkg.dependencies() if pkg.name == "IJulia" exit(0) end end; exit(1)'
+  register: ijulia_check
+  failed_when: false
+  changed_when: false
+
+- name: Install IJulia kernel for Quarto
+  command: julia -e 'using Pkg; Pkg.add("IJulia")'
+  when: ijulia_check.rc != 0

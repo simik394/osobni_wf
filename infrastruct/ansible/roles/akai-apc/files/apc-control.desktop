@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=APC Mini Control
+GenericName=Screen Recording Controller
+Exec=bash -c "pkill -f apc-control.py || true; nohup python3 /home/sim/bin/apc-control.py > /dev/null 2>&1 &"
+Icon=input-gaming
+Terminal=false
+Categories=Utility;AudioVideo;Recorder;
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Comment=Control Screenshot Record with Akai APC Mini

@@ -1,6 +1,6 @@
 ---
 - name: Setup Local Environment
-  hosts: all
+  hosts: local
   become: false
   roles:
     - role: julia
@@ -52,3 +52,11 @@
       tags: fly-pie
     - role: quarto
       tags: quarto
+    - role: obsidian
+      tags: obsidian
+    - role: akai-apc
+      tags: akai-apc
+    - role: nvim_m01
+      tags: nvim_m01
+    - role: vial
+      tags: vial
