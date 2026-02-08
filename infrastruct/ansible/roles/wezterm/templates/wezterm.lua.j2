@@ -1,18 +1,21 @@
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
+config.initial_cols = 100
+config.initial_rows = 44
+-- config.enable_osc52_paste = true
 -- Font configuration
 config.font = wezterm.font('JetBrainsMono Nerd Font', {
   weight = 'Regular',
   stretch = 'Normal',
   style = 'Normal',
-  harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0' }, -- Disable ligatures to match Ghostty
+--  harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0' }, -- Disable ligatures to match Ghostty
 })
-config.font_size = 12.0
+config.font_size = 13.5
 
 -- Ghostty has `adjust-cell-width = -25%`. WezTerm uses a multiplier (1.0 is default).
 -- 0.75 should roughly match the -25% reduction.
-config.cell_width = 0.75
+config.cell_width = 0.80
 config.line_height = 1.0
 
 -- Appearance to match Ghostty "Tomorrow Night Bright"
@@ -44,25 +47,37 @@ config.colors = {
   },
 }
 
-config.window_background_opacity = 0.95
+config.window_background_opacity = 0.90
 config.text_background_opacity = 1.0
+
+-- Change opacity based on focus
+wezterm.on('window-focus-changed', function(window, pane)
+  local overrides = window:get_config_overrides() or {}
+  if window:is_focused() then
+    overrides.window_background_opacity = 0.90
+  else
+    overrides.window_background_opacity = 0.75
+  end
+  window:set_config_overrides(overrides)
+end)
 
 config.window_padding = {
   left = 0,
-  right = 0,
+  right = "5cell",
   top = 0,
   bottom = 0,
 }
 
 -- Window decorations
 -- Ghostty config: window-decoration = true, gtk-titlebar = true (System Title Bar)
-config.window_decorations = "TITLE | RESIZE"
+-- config.window_decorations = "TITLE | RESIZE"
 
 -- Tab Bar
 config.enable_tab_bar = true
 config.hide_tab_bar_if_only_one_tab = false
 config.use_fancy_tab_bar = false
 config.tab_bar_at_bottom = true
+config.tab_max_width = 32 -- Increase the max width so it adapts better to longer titles
 
 -- Cursor
 config.default_cursor_style = 'BlinkingBlock'
