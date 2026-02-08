@@ -31,3 +31,65 @@
   file:
     path: "{{ quarto_temp_dir.path }}"
     state: absent
+
+- name: Check if TinyTeX is installed
+  stat:
+    path: "/home/sim/.TinyTeX"
+  register: tinytex_stat
+
+- name: Install TinyTeX via Quarto if missing
+  command: quarto install tinytex --no-prompt
+  when: not tinytex_stat.stat.exists
+  become: false
+
+- name: Ensure shared quarto directory exists
+  file:
+    path: "/home/sim/.config/quarto/shared/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - filters
+    - scripts
+
+- name: Deploy shared Quarto filters
+  copy:
+    src: shared/filters/
+    dest: /home/sim/.config/quarto/shared/filters/
+    mode: '0644'
+
+- name: Deploy shared Quarto scripts
+  copy:
+    src: shared/scripts/
+    dest: /home/sim/.config/quarto/shared/scripts/
+    mode: '0755'
+
+- name: Deploy shared Quarto base metadata
+  copy:
+    src: shared/quarto-base.yml
+    dest: /home/sim/.config/quarto/shared/quarto-base.yml
+    mode: '0644'
+
+- name: Install required LaTeX packages for PDF rendering
+  command:
+    cmd: "/home/sim/.TinyTeX/bin/x86_64-linux/tlmgr install koma-script geometry xcolor amsmath environ tcolorbox pdfcol wrapfig"
+  register: tlmgr_output
+    changed_when: "'is already installed' not in tlmgr_output.stdout"
+    when: tinytex_stat.stat.exists or not tinytex_stat.stat.exists
+  
+  - name: Ensure Python dependencies for Quarto execution are installed
+    pip:
+      name:
+        - ipykernel
+        - nbformat
+        - nbconvert
+      state: present
+    - name: Check if IJulia is installed
+    command: julia -e 'using Pkg; if haskey(Pkg.dependencies(), Base.UUID("7073ff75-c69a-5deb-a3bc-73abb05c9518")) exit(0) else exit(1) end'
+    register: ijulia_check
+    failed_when: false
+    changed_when: false
+  
+  - name: Install IJulia kernel for Quarto
+    command: julia -e 'using Pkg; Pkg.add("IJulia")'
+    when: ijulia_check.rc != 0
+  

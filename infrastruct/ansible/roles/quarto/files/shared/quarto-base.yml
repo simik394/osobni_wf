@@ -1,0 +1,36 @@
+# Shared Quarto Metadata for Obsidian Projects
+# Managed via Ansible: Obsi/Prods/01-pwf/infrastruct/ansible/roles/quarto
+
+project:
+  type: default
+  output-dir: _build
+  pre-render:
+    - python3 /home/sim/.config/quarto/shared/scripts/excalidraw_frame_extractor.py ${QUARTO_PROJECT_RENDER_ALL:-}
+  post-render:
+    - python3 /home/sim/.config/quarto/shared/scripts/restore_obsidian_syntax.py ${QUARTO_PROJECT_RENDER_ALL:-}
+
+format:
+  pdf:
+    keep-tex: true
+    resource-path:
+      - .
+      - /home/sim/Obsi/attachments
+    pdf-engine: lualatex
+    documentclass: article
+    toc: false
+    number-sections: true
+    colorlinks: true
+    papersize: A4
+    geometry:
+      - margin=2cm
+    include-in-header:
+      text: |
+        \usepackage{wrapfig}
+
+filters:
+  - /home/sim/.config/quarto/shared/filters/obsidian-embeds.lua
+  - quarto
+
+mermaid:
+  theme: default
+  fig-width: 3
