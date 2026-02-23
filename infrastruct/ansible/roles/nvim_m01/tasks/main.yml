@@ -14,23 +14,21 @@
   become: true
   when: deps_check.rc != 0
 
-- name: Deploy full Neovim configuration
-  synchronize:
-    src: config/
-    dest: "{{ ansible_env.HOME }}/.config/nvim_m01/"
-    recursive: yes
-    delete: yes
-    # Use checksum instead of modification time to detect changes
-    checksum: yes
-    archive: no
-    owner: no
-    group: no
-    rsync_opts:
-      - "--exclude=.git"
-      - "--exclude=.netrwhist"
-      - "--exclude=*.log"
-      - "--exclude=*.shada"
-      - "--exclude=lazy-lock.json"
-      - "--exclude=.undo"
-      - "--exclude=undodir"
-      - "--exclude=view"
+- name: Deploy Neovim configuration from Git
+  git:
+    repo: "https://github.com/simik394/myConfigs.git"
+    dest: "{{ ansible_env.HOME }}/.config/nvim_m01"
+    version: "nvim/m01-sync-2026-02-20"
+    force: yes
+    depth: 1
+  register: git_deploy
+
+- name: Ensure Neovim config directories exist
+  file:
+    path: "{{ ansible_env.HOME }}/.config/nvim_m01/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - undo
+    - undodir
+    - view

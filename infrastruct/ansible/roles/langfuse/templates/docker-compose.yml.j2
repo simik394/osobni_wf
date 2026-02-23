@@ -113,7 +113,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - langfuse_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -148,7 +148,7 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_data:/var/lib/clickhouse
       - ./clickhouse-config/config.xml:/etc/clickhouse-server/config.d/config.xml
       - ./clickhouse-config/users.xml:/etc/clickhouse-server/users.d/users.xml
       - ./clickhouse-config/metrika.xml:/etc/clickhouse-server/config.d/metrika.xml # To point to Zookeeper
@@ -185,7 +185,7 @@ services:
       MINIO_DEFAULT_BUCKETS: ${MINIO_BUCKET}
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
+      - langfuse_minio_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -194,9 +194,12 @@ services:
       start_period: 10s
 
 volumes:
-  postgres_data:
+  langfuse_postgres_data:
+    external: true
+  langfuse_clickhouse_data:
+    external: true
+  langfuse_minio_data:
+    external: true
   redis_data:
-  clickhouse_data:
   zookeeper_data:
   zookeeper_log:
-  minio_data:

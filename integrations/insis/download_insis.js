@@ -2,9 +2,20 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
+// Skript byl upraven, aby nepoužíval UI klikání, které padalo na timeout, 
+// ale aby přímo přes kontext prohlížeče (API) stahoval samotné soubory - čímž se
+// problém se stahováním spolehlivě řeší.
+
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const BASE_DIR = path.join(__dirname, 'insis_downloads');
+
+function sanitizeFilename(name) {
+    if (!name) return 'downloaded_file';
+    let decoded = decodeURIComponent(escape(name)); // zvládá diakritiku
+    // Odstranění nepovolených znaků pro filenames na různých OS
+    return decoded.replace(/[\\/:*?"<>|\r\n]+/g, '_').trim();
+}
 
 (async () => {
     try {
@@ -89,7 +100,9 @@ const BASE_DIR = path.join(__dirname, 'insis_downloads');
             }
 
             await downloadPage.goto(folder.url, { waitUntil: 'domcontentloaded' });
-            await sleep(1500 + Math.random() * 1000); // slowmo delay before interacting
+
+            // Zkrácená pauza před čtením složky (0.5s - 1.5s)
+            await sleep(500 + Math.random() * 1000);
 
             let hasNextPage = true;
             let pageNum = 1;
@@ -109,30 +122,36 @@ const BASE_DIR = path.join(__dirname, 'insis_downloads');
 
                 for (let j = 0; j < downloadLinks.length; j++) {
                     const linkUrl = downloadLinks[j];
-                    console.log(`  -> Downloading file ${j + 1}/${downloadLinks.length}`);
+                    console.log(`  -> Downloading file ${j + 1}/${downloadLinks.length} ...`);
 
                     try {
-                        const [download] = await Promise.all([
-                            downloadPage.waitForEvent('download', { timeout: 30000 }),
-                            downloadPage.evaluate((url) => {
-                                // use evaluate to click so we don't worry about element visibility/scrolling
-                                const el = document.querySelector(`a[href="${url.replace(location.origin, '')}"]`) || document.querySelector(`a[href="${url}"]`);
-                                if (el) el.click();
-                            }, linkUrl)
-                        ]);
+                        const res = await context.request.get(linkUrl);
+                        if (res.ok()) {
+                            const header = res.headers()['content-disposition'];
+                            let suggestedName = 'download_file_' + Date.now();
+                            if (header) {
+                                const match = header.match(/filename=\"?([^\"]+)\"?/);
+                                if (match && match[1]) {
+                                    suggestedName = match[1];
+                                }
+                            }
+                            suggestedName = sanitizeFilename(suggestedName);
 
-                        const suggestedName = download.suggestedFilename();
-                        const savePath = path.join(folderPath, suggestedName);
+                            const savePath = path.join(folderPath, suggestedName);
 
-                        if (!fs.existsSync(savePath)) {
-                            await download.saveAs(savePath);
-                            console.log(`     Saved: ${suggestedName}`);
+                            if (!fs.existsSync(savePath)) {
+                                const buffer = await res.body();
+                                fs.writeFileSync(savePath, buffer);
+                                console.log(`     Saved: ${suggestedName}`);
+                            } else {
+                                console.log(`     Skipped (already exists): ${suggestedName}`);
+                            }
                         } else {
-                            console.log(`     Skipped (already exists): ${suggestedName}`);
+                            console.error(`     Failed Response: ${res.status()} for ${linkUrl}`);
                         }
 
-                        // human-like delay between downloads
-                        await sleep(2000 + Math.random() * 2000);
+                        // Zkrácená lidská pauza před stahováním dalšího souboru (1s - 2.5s)
+                        await sleep(1000 + Math.random() * 1500);
                     } catch (e) {
                         console.error(`     Failed to download ${linkUrl}:`, e.message);
                     }
@@ -150,7 +169,8 @@ const BASE_DIR = path.join(__dirname, 'insis_downloads');
                         nextBtn.click()
                     ]);
                     pageNum++;
-                    await sleep(2000 + Math.random() * 1500);
+                    // Zkrácená pauza před zpracováním další stránky (1s - 2s)
+                    await sleep(1000 + Math.random() * 1000);
                 } else {
                     hasNextPage = false;
                 }

@@ -22,18 +22,8 @@
 
 - name: Ensure source files are executable
   file:
-    path: "{{ item }}"
+    path: "{{ playbook_dir }}/roles/akai-apc/files/apc-control.py"
     mode: '0755'
-  loop:
-    - "{{ playbook_dir }}/roles/akai-apc/files/screenshot-record"
-    - "{{ playbook_dir }}/roles/akai-apc/files/apc-control.py"
-
-- name: Symlink screenshot-record script (Dev Mode)
-  file:
-    src: "{{ playbook_dir }}/roles/akai-apc/files/screenshot-record"
-    dest: "{{ ansible_env.HOME }}/bin/screenshot-record"
-    state: link
-    force: yes
 
 - name: Symlink apc-control script (Dev Mode)
   file:

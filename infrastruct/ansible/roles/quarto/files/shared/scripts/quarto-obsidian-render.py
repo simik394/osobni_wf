@@ -179,7 +179,8 @@ def transform_wikilinks(content: str, base_dir: Path, staging_dir: Path = None) 
     
     # Pattern: ![[path#fragment|caption]]{attrs} or ![[path]]{attrs}
     # Now captures everything before | or ] as the path (including #fragment)
-    pattern = r'!\[\[([^\]|]+)([^\]]*)\]\](\{[^}]+\})?'
+    # AND allows optional space before attributes
+    pattern = r'!\[\[([^\]|]+)([^\]]*)\]\]\s*(\{[^}]+\})?'
     
     content = re.sub(pattern, replace_wikilink, content)
     
@@ -272,7 +273,7 @@ def transform_layout_to_subfigure(content: str, staging_dir: Path) -> str:
         # Parse images from body
         # Pattern: ![caption](path){#id ...}
         img_pattern = re.compile(
-            r'!\[([^\]]*)\]\(([^)]+)\)(?:\{#([a-zA-Z0-9_-]+)[^}]*\})?'
+            r'!\[([^\]]*)\]\(([^)]+)\)\s*(?:\{#([a-zA-Z0-9_-]+)[^}]*\})?'
         )
         
         images = list(img_pattern.finditer(body))
@@ -303,7 +304,7 @@ def transform_layout_to_subfigure(content: str, staging_dir: Path) -> str:
         # Build LaTeX subfigure
         latex_parts = [
             '```{=latex}',
-            '\\begin{figure}[H]',
+            '\\begin{figure}[htbp]',
             '\\centering'
         ]
         
@@ -577,26 +578,32 @@ def render_with_staging(source_file: Path, extra_args: list) -> int:
         return result.returncode
     
     # Full staging mode for wikilinks/canvas
-    print("  ℹ Full mode: wikilinks detected, using staging")
+    print("  ℹ Full mode: wikilinks detected, using local staging (for path headers)")
     
-    # Use _staging instead of .quarto/staging so project config applies
-    staging_dir = project_dir / "_staging"
-    staging_dir.mkdir(parents=True, exist_ok=True)
+    # Create staging directory (staging_temp instead of _staging so not hidden)
+    staging_dir = project_dir / "staging_temp"
+    staging_dir.mkdir(exist_ok=True)
     
-    # Copy _quarto.yml to staging so it inherits project config 
+    # Clean up any existing QMDs in staging to avoid confusion
+    for qmd in staging_dir.glob("*.qmd"):
+        qmd.unlink()
+    
+    # Copy _quarto.yml to staging so it inherits project config
     quarto_config = project_dir / "_quarto.yml"
     staging_config = staging_dir / "_quarto.yml"
     if quarto_config.exists():
+        import shutil
         shutil.copy2(str(quarto_config), str(staging_config))
         print(f"  ✓ Copied project config to staging")
     
-    staged_file = staging_dir / source_file.name
+    # Use staging file in staging_temp directory (avoid leading underscore so Quarto picks up project config)
+    staged_file = staging_dir / f"staged_{source_file.stem}.qmd"
     
     try:
         # Auto-convert any .canvas files referenced in the document
         convert_canvas_files(content, project_dir)
         
-        # Transform wikilinks (pass staging_dir for relative path calculation)
+        # Transform wikilinks (pass staging_dir so paths are valid from there)
         transformed = transform_wikilinks(content, project_dir, staging_dir)
         
         # Transform layout-ncol divs to LaTeX subfigure for proper caption handling
@@ -607,49 +614,45 @@ def render_with_staging(source_file: Path, extra_args: list) -> int:
         print(f"  ✓ Created staged file: {staged_file.relative_to(project_dir)}")
 
         
-        # Build Quarto command - render from project directory 
-        rel_staged = staged_file.relative_to(project_dir)
-        cmd = ["quarto", "render", str(rel_staged)] + extra_args
+        # Build Quarto command - render PROJECT (current dir)
+        # This ensures _quarto.yml is loaded
+        cmd = ["quarto", "render"] + extra_args
         
-        print(f"  → Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd=str(project_dir))
+        print(f"  → Running: {' '.join(cmd)} (in {staging_dir.relative_to(project_dir)})")
+        result = subprocess.run(cmd, cwd=str(staging_dir))
         
-        # Find and move output PDF - check both _build and staging
-        out_dir = project_dir / "out"
-        out_dir.mkdir(exist_ok=True)
+        # Find and move output PDF
+        # Output will be in staging_dir/out/pdfs or relative to staging
+        # User config: output-dir: out/pdfs
+        # So it's staging_dir/out/pdfs
+        
+        out_dir = project_dir / "out" / "pdfs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Expected output filename from Quarto (default based on input file)
+        expected_pdf_name = f"staged_{source_file.stem}.pdf"
+        
+        # Check wherever Quarto might put it relative to STAGING
+        # Also check for atomic candidate (from _quarto.yml output-file)
+        pdf_locs = [
+            staging_dir / "out" / "pdfs" / expected_pdf_name,
+            staging_dir / "pdfs" / expected_pdf_name,
+            staging_dir / "_build" / expected_pdf_name,
+            staging_dir / expected_pdf_name,
+            staging_dir / "__atomic_candidate.pdf",
+            staging_dir / "out" / "pdfs" / "__atomic_candidate.pdf",
+            staging_dir / "_build" / "__atomic_candidate.pdf"
+        ]
         
         pdf_found = False
-        
-        # Check _staging/_build first (output-dir in copied _quarto.yml)
-        staging_build_dir = staging_dir / "_build"
-        if staging_build_dir.exists():
-            for pdf_file in staging_build_dir.glob("*.pdf"):
-                pdf_found = True
-                final_name = source_file.with_suffix(".pdf").name if pdf_file.name == "__atomic_candidate.pdf" else pdf_file.name
-                dest = out_dir / final_name
-                shutil.move(str(pdf_file), str(dest))
-                print(f"  ✅ PDF output: {dest.relative_to(project_dir)}")
-        
-        # Check _build in project root (if output-dir is set in _quarto.yml)
-        if not pdf_found:
-            build_dir = project_dir / "_build"
-            if build_dir.exists():
-                for pdf_file in build_dir.glob("*.pdf"):
-                    pdf_found = True
-                    final_name = source_file.with_suffix(".pdf").name if pdf_file.name == "__atomic_candidate.pdf" else pdf_file.name
-                    dest = out_dir / final_name
-                    shutil.move(str(pdf_file), str(dest))
-                    print(f"  ✅ PDF output: {dest.relative_to(project_dir)}")
-        
-        # Check staging directory (Quarto may output there)
-        if not pdf_found:
-            for pdf_file in staging_dir.glob("*.pdf"):
-                pdf_found = True
-                # Use original source filename
+        for pdf_path in pdf_locs:
+            if pdf_path.exists():
                 final_name = source_file.with_suffix(".pdf").name
                 dest = out_dir / final_name
-                shutil.move(str(pdf_file), str(dest))
+                shutil.move(str(pdf_path), str(dest))
                 print(f"  ✅ PDF output: {dest.relative_to(project_dir)}")
+                pdf_found = True
+                break
 
         
         # Clean up staging
