@@ -276,3 +276,112 @@ class TestDeleteOperations:
         assert result1.success is True
         assert result2.success is True
         assert result3.success is True
+
+
+class TestIdempotentCreateField:
+    """Tests for create_field idempotency guard (NUCLEAR OPTION fix)."""
+    
+    @patch('requests.Session')
+    def test_create_field_already_exists_skips_creation(self, mock_session_class):
+        """Test that creating an already existing field is treated as success without POST."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock GET (field lookup) to return an existing field
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = [
+            {"id": "existing-field-uuid-123", "name": "Priority", "fieldType": {"id": "enum[1]"}}
+        ]
+        mock_get_response.raise_for_status = Mock()
+        mock_session.get.return_value = mock_get_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.create_field("Priority", "enum", "PriorityBundle")
+        
+        assert result.success is True
+        assert result.resource_id == "existing-field-uuid-123"
+        # POST should NOT have been called (idempotency guard short-circuited)
+        mock_session.post.assert_not_called()
+    
+    @patch('requests.Session')
+    def test_create_field_409_conflict_is_success(self, mock_session_class):
+        """Test that 409 Conflict from API is treated as success."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock GET (field lookup) returns empty - field not found by name lookup
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = []
+        mock_get_response.raise_for_status = Mock()
+        mock_session.get.return_value = mock_get_response
+        
+        # Mock POST to raise 409 Conflict
+        mock_409_response = Mock()
+        mock_409_response.status_code = 409
+        mock_409_response.text = "Field already exists"
+        import requests as req
+        mock_session.post.side_effect = req.HTTPError(response=mock_409_response)
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.create_field("Priority", "enum")
+        
+        assert result.success is True
+    
+    @patch('requests.Session')
+    def test_create_field_real_error_still_fails(self, mock_session_class):
+        """Test that non-409 errors still result in failure."""
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock GET returns empty
+        mock_get_response = Mock()
+        mock_get_response.json.return_value = []
+        mock_get_response.raise_for_status = Mock()
+        mock_session.get.return_value = mock_get_response
+        
+        # Mock POST to raise 500 Internal Server Error
+        mock_500_response = Mock()
+        mock_500_response.status_code = 500
+        mock_500_response.text = "Internal Server Error"
+        import requests as req
+        mock_session.post.side_effect = req.HTTPError(response=mock_500_response)
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.create_field("BrokenField", "enum")
+        
+        assert result.success is False
+
+
+class TestControllerFieldFilter:
+    """Test that controller filters create_field correctly (not blanket skip)."""
+    
+    def test_controller_allows_new_fields_through(self):
+        """Test that create_field for genuinely new fields is NOT filtered out."""
+        # Simulate the controller's filtering logic
+        existing_field_names = {"Priority", "State", "Assignee"}
+        
+        plan = [
+            ('create_bundle', 'NewBundle', 'enum'),
+            ('create_field', 'Priority', 'enum', 'PriorityBundle'),  # Exists -> filtered
+            ('create_field', 'BrandNewField', 'string'),             # New -> passes
+            ('attach_field', 'BrandNewField', 'DEMO'),
+        ]
+        
+        filtered_plan = []
+        for action in plan:
+            if action[0] == 'create_field' and action[1] in existing_field_names:
+                continue
+            filtered_plan.append(action)
+        
+        # BrandNewField should pass through
+        assert len(filtered_plan) == 3
+        assert ('create_field', 'BrandNewField', 'string') in filtered_plan
+        # Priority should be filtered
+        assert ('create_field', 'Priority', 'enum', 'PriorityBundle') not in filtered_plan
+

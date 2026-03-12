@@ -338,12 +338,27 @@ class YouTrackActuator:
     
     def create_field(self, name: str, field_type: str, 
                      bundle_name_or_id: Optional[str] = None) -> ActionResult:
-        """Create a new custom field."""
+        """Create a new custom field (idempotent).
+        
+        If the field already exists globally, this is a no-op and returns success.
+        This prevents failures when Prolog inference generates create_field for
+        fields that exist but weren't detected during sensing (e.g. name/type mismatch).
+        """
         action = f"create_field({name}, {field_type})"
         
         if self.dry_run:
             logger.info(f"[DRY RUN] {action}")
             return ActionResult(action=action, success=True)
+        
+        # Idempotency guard: check if field already exists globally
+        try:
+            existing_id = self._resolve_field_id(name)
+            # _resolve_field_id returns the name itself as fallback if not found via API
+            if existing_id and existing_id != name:
+                logger.info(f"Field '{name}' already exists globally (id={existing_id}), skipping creation")
+                return ActionResult(action=action, success=True, resource_id=existing_id)
+        except Exception:
+            pass  # Proceed with creation attempt
         
         api_type = self.FIELD_TYPES.get(field_type, field_type)
         
@@ -365,10 +380,13 @@ class YouTrackActuator:
             )
             resp.raise_for_status()
             data = resp.json()
-            # Cache field ID if needed? Not yet.
             logger.info(f"Created field: {name} (id={data.get('id')})")
             return ActionResult(action=action, success=True, resource_id=data.get('id'))
         except requests.HTTPError as e:
+            # Graceful handling: 409 Conflict means field already exists
+            if e.response.status_code == 409:
+                logger.info(f"Field '{name}' already exists (409 Conflict), treating as success")
+                return ActionResult(action=action, success=True)
             error = f"HTTP {e.response.status_code}: {e.response.text}"
             logger.error(f"Failed to create field {name}: {error}")
             return ActionResult(action=action, success=False, error=error)
