@@ -1,0 +1,23 @@
+[Unit]
+Description=Memgraph Graph Database (Docker)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+ExecStartPre=-/usr/bin/docker stop memgraph
+ExecStartPre=-/usr/bin/docker rm memgraph
+ExecStart=/usr/bin/docker run --rm --name memgraph \
+  -p 7687:7687 \
+  -p 3000:3000 \
+  -v memgraph-data:/var/lib/memgraph \
+  -v memgraph-log:/var/log/memgraph \
+  --cap-add SYS_NICE \
+  memgraph/memgraph-mage:latest
+ExecStop=/usr/bin/docker stop memgraph
+
+[Install]
+WantedBy=multi-user.target

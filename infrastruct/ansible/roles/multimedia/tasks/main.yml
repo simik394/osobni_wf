@@ -1,0 +1,117 @@
+---
+- name: Fix Spotify GPG key (prevents apt update failure)
+  become: true
+  apt_key:
+    url: https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.gpg
+    state: present
+  ignore_errors: true
+
+- name: Ensure Jellyfin GPG keyring directory exists
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Add Jellyfin GPG key
+  get_url:
+    url: https://repo.jellyfin.org/jellyfin_team.gpg.key
+    dest: /tmp/jellyfin.key
+  become: true
+
+- name: Dearmor Jellyfin GPG key
+  command: gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg /tmp/jellyfin.key
+  args:
+    creates: /etc/apt/keyrings/jellyfin.gpg
+  become: true
+
+- name: Add Jellyfin repository
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/jellyfin.gpg] https://repo.jellyfin.org/ubuntu jammy main"
+    state: present
+    filename: jellyfin
+  become: true
+
+- name: Install dependencies (imagemagick, xdotool, jellyfin-ffmpeg7, scrot, libx11-dev, gcc)
+  apt:
+    name:
+      - imagemagick
+      - xdotool
+      - jellyfin-ffmpeg7
+      - scrot
+      - libx11-dev
+      - gcc
+    state: latest
+    update_cache: yes
+  become: true
+
+- name: Ensure bin directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/bin"
+    state: directory
+    mode: '0755'
+
+- name: Copy xmeta source
+  copy:
+    src: xmeta.c
+    dest: "{{ ansible_env.HOME }}/bin/xmeta.c"
+    mode: '0644'
+
+- name: Compile xmeta tool
+  shell: gcc {{ ansible_env.HOME }}/bin/xmeta.c -lX11 -o {{ ansible_env.HOME }}/bin/xmeta
+  args:
+    creates: "{{ ansible_env.HOME }}/bin/xmeta"
+
+- name: CLEANUP - Remove failed static FFmpeg build
+  file:
+    path: "{{ ansible_env.HOME }}/bin/ffmpeg-latest"
+    state: absent
+
+- name: CLEANUP - Remove legacy symlink/file if exists
+  file:
+    path: "{{ ansible_env.HOME }}/bin/screenshot-record"
+    state: absent
+
+- name: Install screenshot-record script (AV1 NVENC version)
+  copy:
+    src: screenshot-record
+    dest: "{{ ansible_env.HOME }}/bin/screenshot-record"
+    mode: '0755'
+
+- name: Ensure user systemd directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: Create screenshot-record systemd service
+  copy:
+    dest: "{{ ansible_env.HOME }}/.config/systemd/user/screenshot-record.service"
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Screenshot Record Service
+      After=graphical-session.target
+      PartOf=graphical-session.target
+
+      [Service]
+      Type=forking
+      ExecStart={{ ansible_env.HOME }}/bin/screenshot-record start
+      ExecStop={{ ansible_env.HOME }}/bin/screenshot-record stop
+      PIDFile=/tmp/screenshot-record.pid
+      Restart=on-failure
+      RestartSec=5
+      TimeoutStopSec=300
+      Environment=PATH=/usr/lib/jellyfin-ffmpeg:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{{ ansible_env.HOME }}/bin
+      Environment=DISPLAY=:1
+      Environment=XAUTHORITY=/run/user/{{ ansible_user_uid }}/gdm/Xauthority
+
+      [Install]
+      WantedBy=graphical-session.target
+
+- name: Enable screenshot-record service
+  systemd:
+    name: screenshot-record.service
+    scope: user
+    enabled: yes
+    daemon_reload: yes

@@ -76,3 +76,40 @@
       tags: [memgraph]
     - role: postgres
       tags: [postgres]
+
+# --- SECTION 5: Infrastructure Optimization (Minimal Startup) ---
+- name: Local Infrastructure Optimization
+  hosts: local
+  become: true
+  tasks:
+    - name: Deactivate heavy services (Minimal Startup)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - vault
+        - nomad
+        - memgraph
+      when: minimal_startup | default(false) | bool
+      ignore_errors: true
+      tags: [minimal_cleanup]
+
+    - name: Stop Docker containers (Minimal Startup)
+      ansible.builtin.shell: "docker stop {{ item }}"
+      loop:
+        - postgres-local
+        - falkordb
+        - memgraph-lab
+      when: minimal_startup | default(false) | bool
+      ignore_errors: true
+      changed_when: false
+      tags: [minimal_cleanup]
+
+    - name: Ensure execsnoop is killed (Minimal Startup)
+      ansible.builtin.shell: pkill -f execsnoop
+      register: pkill_output
+      changed_when: pkill_output.rc == 0
+      failed_when: false
+      when: minimal_startup | default(false) | bool
+      tags: [minimal_cleanup]

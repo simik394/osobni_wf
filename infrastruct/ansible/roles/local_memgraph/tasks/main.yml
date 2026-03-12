@@ -1,0 +1,37 @@
+---
+# Ansible role for deploying Memgraph on local machine
+# This role installs Memgraph as a systemd service using Docker
+
+- name: Ensure Docker is running
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Pull Memgraph MAGE image
+  ansible.builtin.command: docker pull memgraph/memgraph-mage:latest
+  changed_when: false
+
+- name: Create Memgraph data volume
+  ansible.builtin.command: docker volume create memgraph-data
+  changed_when: false
+
+- name: Create Memgraph log volume
+  ansible.builtin.command: docker volume create memgraph-log
+  changed_when: false
+
+- name: Deploy Memgraph systemd service
+  ansible.builtin.template:
+    src: memgraph.service.j2
+    dest: /etc/systemd/system/memgraph.service
+    mode: "0644"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable and start Memgraph service
+  ansible.builtin.systemd:
+    name: memgraph
+    state: started
+    enabled: true

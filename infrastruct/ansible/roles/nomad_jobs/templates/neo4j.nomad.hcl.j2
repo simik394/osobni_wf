@@ -1,0 +1,105 @@
+job "neo4j" {
+  datacenters = ["{{ nomad_datacenter | default("oci-eu") }}"]
+  type        = "service"
+
+  group "neo4j" {
+    count = 1
+
+    network {
+      mode = "host"
+      port "http" {
+        static = 7474
+      }
+      port "bolt" {
+        static = 7687
+      }
+    }
+
+    ephemeral_disk {
+      size    = 1000
+      migrate = true
+      sticky  = true
+    }
+
+    constraint {
+      attribute = "${node.class}"
+      value     = "cloud"
+    }
+
+    task "neo4j" {
+      driver = "docker"
+
+      config {
+        image = "neo4j:5.25.1-enterprise"
+        network_mode = "host"
+        volumes = [
+          "{{ data_root }}/neo4j/data:/data",
+          "{{ data_root }}/neo4j/import:/import",
+          "{{ data_root }}/neo4j/plugins:/plugins",
+          "{{ data_root }}/neo4j/ssl:/ssl"
+        ]
+      }
+
+      env {
+        NEO4J_AUTH                                    = "neo4j/hesloheslo"
+        NEO4J_ACCEPT_LICENSE_AGREEMENT                = "yes"
+        NEO4J_apoc_import_file_enabled                = "true"
+        NEO4J_apoc_export_file_enabled                = "true"
+        NEO4J_apoc_import_file_use__neo4j__config     = "true"
+        NEO4JLABS_PLUGINS                             = "[\"apoc\"]"
+        
+        # Memory Configuration
+        NEO4J_server_memory_heap_initial__size        = "2G"
+        NEO4J_server_memory_heap_max__size            = "2G"
+        NEO4J_server_memory_pagecache_size            = "1G"
+        
+        # Bolt TLS Configuration
+        NEO4J_dbms_ssl_policy_bolt_enabled            = "true"
+        NEO4J_dbms_ssl_policy_bolt_base__directory    = "/ssl/bolt"
+        NEO4J_dbms_ssl_policy_bolt_private__key       = "private.key"
+        NEO4J_dbms_ssl_policy_bolt_public__certificate = "public.crt"
+        NEO4J_dbms_ssl_policy_bolt_client__auth       = "NONE"
+        NEO4J_dbms_connector_bolt_tls__level          = "REQUIRED"
+        NEO4J_server_bolt_connection__keep__alive     = "30s"
+        
+        # Network Advertising - Force ALL to public to prevent routing table returning internal names
+        NEO4J_server_default__advertised__address     = "neo4j.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+        NEO4J_server_routing_advertised__address      = "neo4j.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io"
+      }
+
+      resources {
+        cpu    = 1000
+        memory = 4096
+      }
+
+      service {
+        name = "neo4j-bolt"
+        port = "bolt"
+        check {
+          name     = "bolt-alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+
+      service {
+        name = "neo4j-http"
+        port = "http"
+        tags = [
+          "traefik.enable=true",
+          "traefik.http.routers.neo4j.rule=Host(`neo4j.{{ public_ip | default(ansible_default_ipv4.address) }}.nip.io`)",
+          "traefik.http.routers.neo4j.entrypoints=websecure",
+          "traefik.http.routers.neo4j.tls.certresolver=letsencrypt"
+        ]
+        check {
+          name     = "http-alive"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}

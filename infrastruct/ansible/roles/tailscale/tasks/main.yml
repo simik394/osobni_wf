@@ -1,0 +1,39 @@
+---
+- name: Add Tailscale GPG key
+  ansible.builtin.shell: |
+    mkdir -p --mode=0755 /usr/share/keyrings
+    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+  args:
+    creates: /usr/share/keyrings/tailscale-archive-keyring.gpg
+
+- name: Add Tailscale repository
+  ansible.builtin.shell: |
+    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+  args:
+    creates: /etc/apt/sources.list.d/tailscale.list
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: yes
+
+- name: Enable Tailscale service
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: yes
+    state: started
+
+- name: Check if Tailscale is authenticated
+  ansible.builtin.command: tailscale status
+  register: tailscale_status
+  failed_when: false
+  changed_when: false
+
+- name: Fail if Tailscale is not authenticated
+  ansible.builtin.fail:
+    msg: |
+      Tailscale is not authenticated on {{ inventory_hostname }}.
+      Please run 'sudo tailscale up' on this host to authenticate, then re-run the playbook.
+      You can verify authentication with: tailscale status
+  when: tailscale_status.rc != 0

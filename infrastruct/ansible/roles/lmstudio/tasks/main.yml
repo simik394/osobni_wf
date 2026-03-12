@@ -76,7 +76,7 @@
       [Desktop Entry]
       Name=LM Studio
       Comment=Discover, download, and run local LLMs
-      Exec={{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }} --no-sandbox
+      Exec={{ lmstudio_install_dir }}/{{ lmstudio_latest_data.filename }} --no-sandbox --disable-gpu-sandbox --ignore-gpu-blocklist
       Icon={{ ansible_env.HOME }}/.local/share/icons/lmstudio.png
       Terminal=false
       Type=Application

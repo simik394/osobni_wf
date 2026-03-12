@@ -1,0 +1,88 @@
+---
+# Pre-flight checks to validate environment before deployment
+
+- name: Display deployment target info
+  ansible.builtin.debug:
+    msg: |
+      ==========================================
+      Deploying to: {{ inventory_hostname }}
+      Region: {{ nomad_region | default('unknown') }}
+      Datacenter: {{ nomad_datacenter | default('unknown') }}
+      Node Class: {{ node_class | default('unknown') }}
+      ==========================================
+
+# Check 1: Tailscale connectivity
+- name: Check Tailscale is installed
+  ansible.builtin.command: which tailscale
+  register: tailscale_installed
+  failed_when: false
+  changed_when: false
+
+- name: Verify Tailscale authentication status
+  ansible.builtin.command: tailscale status
+  register: tailscale_preflight
+  failed_when: false
+  changed_when: false
+  when: tailscale_installed.rc == 0
+
+- name: Warn if Tailscale not authenticated (will fail later)
+  ansible.builtin.debug:
+    msg: "⚠️  WARNING: Tailscale is not authenticated on {{ inventory_hostname }}. Run 'sudo tailscale up' before proceeding."
+  when: tailscale_installed.rc == 0 and tailscale_preflight.rc != 0
+
+# Check 2: Vault keys file (only on localhost for unsealing)
+- name: Check vault_keys.json exists (for Vault auto-unseal)
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/vault_keys.json"
+  register: vault_keys_preflight
+  delegate_to: localhost
+  run_once: true
+
+- name: Info about vault_keys.json
+  ansible.builtin.debug:
+    msg: "{{ 'âś… vault_keys.json found - Vault auto-unseal available' if vault_keys_preflight.stat.exists else 'âš ď¸Ź  vault_keys.json not found - Vault will need manual initialization/unseal on first run' }}"
+  run_once: true
+
+# Check 3: SSH connectivity to remote hosts
+- name: Verify SSH connectivity
+  ansible.builtin.ping:
+  when: inventory_hostname != 'localhost'
+
+# Check 4: Disk space check
+- name: Check available disk space
+  ansible.builtin.shell: df -BG / | tail -1 | awk '{print $4}' | tr -d 'G'
+  register: disk_space
+  changed_when: false
+
+- name: Warn if low disk space (< 5GB)
+  ansible.builtin.debug:
+    msg: "⚠️  WARNING: Low disk space on {{ inventory_hostname }}: {{ disk_space.stdout }}GB available"
+  when: disk_space.stdout | int < 5
+
+# Check 5: Memory check
+- name: Check available memory
+  ansible.builtin.shell: free -m | grep Mem | awk '{print $7}'
+  register: available_memory
+  changed_when: false
+
+- name: Warn if low memory (< 512MB available)
+  ansible.builtin.debug:
+    msg: "⚠️  WARNING: Low available memory on {{ inventory_hostname }}: {{ available_memory.stdout }}MB"
+  when: available_memory.stdout | int < 512
+
+# Check 6: WAN peer connectivity (for federation)
+- name: Test WAN peer connectivity
+  ansible.builtin.command: "ping -c 1 -W 2 {{ wan_peer }}"
+  register: wan_peer_check
+  failed_when: false
+  changed_when: false
+  when: wan_peer is defined and wan_peer != ''
+
+- name: Warn if WAN peer unreachable
+  ansible.builtin.debug:
+    msg: "⚠️  WARNING: Cannot reach WAN peer {{ wan_peer }} from {{ inventory_hostname }}. Federation may not work."
+  when: wan_peer is defined and wan_peer != '' and wan_peer_check.rc != 0
+
+- name: Pre-flight checks complete
+  ansible.builtin.debug:
+    msg: "✅ Pre-flight checks complete for {{ inventory_hostname }}"

@@ -78,6 +78,12 @@ log() {
 mkdir -p "$OUTPUT_DIR"
 log "📁 Output: $OUTPUT_DIR"
 
+# Global metadata tracking
+GLOBAL_METADATA_FILE="$HOME/Downloads/download_metadata.txt"
+LOCAL_METADATA_FILE="$OUTPUT_DIR/download_metadata.txt"
+touch "$GLOBAL_METADATA_FILE"
+touch "$LOCAL_METADATA_FILE"
+
 # Get URLs from input file, stdin, or clipboard
 if [[ -n "$INPUT_FILE" ]]; then
     if [[ "$INPUT_FILE" == "-" ]]; then
@@ -162,10 +168,12 @@ REDDIT_MEDIA_URLS="/tmp/reddit_media_$$.txt"  # For direct curl download (best q
 REDDIT_URLS="/tmp/reddit_$$.txt"
 DIRECT_URLS="/tmp/direct_$$.txt"
 GALLERY_URLS="/tmp/gallery_$$.txt"
+RULE34_URLS="/tmp/rule34_$$.txt"
 > "$REDDIT_MEDIA_URLS"
 > "$REDDIT_URLS"
 > "$DIRECT_URLS"
 > "$GALLERY_URLS"
+> "$RULE34_URLS"
 
 while IFS= read -r line; do
     [[ -z "$line" ]] && continue
@@ -178,7 +186,11 @@ while IFS= read -r line; do
     elif [[ "$url" =~ reddit\.com/(user|u)/ ]]; then
         echo "$url" >> "$REDDIT_URLS"  # Store for later decision
     # Categorize by source (non-Reddit)
+    elif [[ "$url" =~ rule34\.xxx/index\.php\?page=post\&s=view\&id=([0-9]+) ]]; then
+        echo "$url" >> "$RULE34_URLS"
     elif [[ "$url" =~ (imgur\.com|twitter\.com|x\.com|pixiv|artstation|deviantart) ]]; then
+        echo "$url" >> "$GALLERY_URLS"
+    elif [[ "$url" =~ rule34\.xxx ]] && [[ ! "$url" =~ \.(jpg|jpeg|png|gif|webp|mp4|webm)(\?|$) ]]; then
         echo "$url" >> "$GALLERY_URLS"
     elif [[ "$url" =~ (youtube\.com|youtu\.be|vimeo\.com|twitch\.tv) ]]; then
         echo "$url" >> "$GALLERY_URLS"
@@ -207,13 +219,35 @@ fi
 # Count
 DIRECT_COUNT=$(wc -l < "$DIRECT_URLS" | tr -d ' ')
 GALLERY_COUNT=$(wc -l < "$GALLERY_URLS" | tr -d ' ')
-TOTAL=$((REDDIT_MEDIA_COUNT + DIRECT_COUNT + GALLERY_COUNT))
+RULE34_COUNT=$(wc -l < "$RULE34_URLS" | tr -d ' ')
+TOTAL=$((REDDIT_MEDIA_COUNT + DIRECT_COUNT + GALLERY_COUNT + RULE34_COUNT))
 
-log "🔗 Found $TOTAL URLs (reddit: $REDDIT_MEDIA_COUNT, direct: $DIRECT_COUNT, gallery-dl: $GALLERY_COUNT)"
+log "🔗 Found $TOTAL URLs (reddit: $REDDIT_MEDIA_COUNT, direct: $DIRECT_COUNT, gallery-dl: $GALLERY_COUNT, rule34: $RULE34_COUNT)"
 
-if [[ "$TOTAL" -eq 0 ]]; then
-    log "No URLs found in clipboard"
-    rm -f "$URLS_FILE" "$REDDIT_MEDIA_URLS" "$REDDIT_URLS" "$DIRECT_URLS" "$GALLERY_URLS"
+# Deduplication against historical metadata
+log "🔍 Checking for previously downloaded URLs..."
+DEDUP_TMP="/tmp/dedup_$$.txt"
+> "$DEDUP_TMP"
+for URL_FILE in "$REDDIT_MEDIA_URLS" "$DIRECT_URLS" "$GALLERY_URLS" "$RULE34_URLS"; do
+    if [[ -s "$URL_FILE" ]]; then
+        grep -vxf <(awk -F '\t' '{print $1}' "$GLOBAL_METADATA_FILE" "$LOCAL_METADATA_FILE" 2>/dev/null) "$URL_FILE" > "${URL_FILE}.new" || true
+        mv "${URL_FILE}.new" "$URL_FILE"
+    fi
+done
+
+REDDIT_MEDIA_COUNT=$(wc -l < "$REDDIT_MEDIA_URLS" | tr -d ' ')
+DIRECT_COUNT=$(wc -l < "$DIRECT_URLS" | tr -d ' ')
+GALLERY_COUNT=$(wc -l < "$GALLERY_URLS" | tr -d ' ')
+RULE34_COUNT=$(wc -l < "$RULE34_URLS" | tr -d ' ')
+NEW_TOTAL=$((REDDIT_MEDIA_COUNT + DIRECT_COUNT + GALLERY_COUNT + RULE34_COUNT))
+
+if [[ "$NEW_TOTAL" -lt "$TOTAL" ]]; then
+    log "🚫 Skipped $((TOTAL - NEW_TOTAL)) duplicate URLs"
+fi
+
+if [[ "$NEW_TOTAL" -eq 0 ]]; then
+    log "No new URLs found resulting in no downloads."
+    rm -f "$URLS_FILE" "$REDDIT_MEDIA_URLS" "$REDDIT_URLS" "$DIRECT_URLS" "$GALLERY_URLS" "$RULE34_URLS" "$DEDUP_TMP"
     exit 0
 fi
 
@@ -264,6 +298,8 @@ if [[ "$REDDIT_MEDIA_COUNT" -gt 0 ]]; then
             
             if file "$OUTPUT_PATH" 2>/dev/null | grep -qE "(image|WebP|JPEG|PNG)"; then
                 $VERBOSE && echo "✅"
+                echo -e "$IMAGE_URL\t$OUTPUT_PATH\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+                echo -e "$IMAGE_URL\t$OUTPUT_PATH\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
                 ((SUCCESS++))
             else
                 $VERBOSE && echo "❌ (got HTML)"
@@ -298,6 +334,8 @@ if [[ "$DIRECT_COUNT" -gt 0 ]]; then
                 ((FAILED++))
             else
                 echo "✓"
+                echo -e "$url\t$OUTPUT_DIR/$filename\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+                echo -e "$url\t$OUTPUT_DIR/$filename\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
                 ((SUCCESS++))
             fi
         else
@@ -317,9 +355,8 @@ if [[ "$GALLERY_COUNT" -gt 0 ]]; then
         log "📥 Downloading $GALLERY_COUNT URLs with gallery-dl (Docker) [DEEP MODE]..."
     else
         # Count and filter deep URLs
-        DEEP_COUNT=$(grep -cE "$DEEP_SITES" "$GALLERY_URLS" 2>/dev/null || echo "0")
-        if [[ "$DEEP_COUNT" -gt 0 ]]; then
-            log "⚠️  Skipping $DEEP_COUNT exhentai/e-hentai URLs (use -d for deep download)"
+        DEEP_COUNT=$(grep -cE "$DEEP_SITES" "$GALLERY_URLS" 2>/dev/null || true)
+        if [[ -n "$DEEP_COUNT" ]] && [[ "$DEEP_COUNT" =~ ^[0-9]+$ ]] && [[ "$DEEP_COUNT" -gt 0 ]]; then
             grep -vE "$DEEP_SITES" "$GALLERY_URLS" > "${GALLERY_URLS}.filtered"
             mv "${GALLERY_URLS}.filtered" "$GALLERY_URLS"
             GALLERY_COUNT=$((GALLERY_COUNT - DEEP_COUNT))
@@ -347,6 +384,9 @@ if [[ "$GALLERY_COUNT" -gt 0 ]]; then
         GALLERY_OPTS+=(-o "filename={num:>03}_{filename}.{extension}")
     fi
     
+    # Store currently completed files to track what gallery-dl downloads
+    BEFORE_FILES=$(find "$OUTPUT_DIR" -type f 2>/dev/null | wc -l || echo 0)
+    
     if $VERBOSE; then
         # Verbose: show all output
         docker run --rm \
@@ -372,10 +412,72 @@ if [[ "$GALLERY_COUNT" -gt 0 ]]; then
                 fi
             done || true
     fi
+    
+    # Simple logic for gallery-dl: assume all submitted URLs form part of the metadata
+    # (Extracting individual image-file level mapping from gallery-dl is hard inside docker output,
+    # so we log that the URL was processed)
+    while IFS= read -r url; do
+        [[ -z "$url" ]] && continue
+        echo -e "$url\t$OUTPUT_DIR (gallery-dl)\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+        echo -e "$url\t$OUTPUT_DIR (gallery-dl)\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
+    done < "$GALLERY_URLS"
+fi
+
+# Download rule34 explicit URLs natively scraping original image
+if [[ "$RULE34_COUNT" -gt 0 ]]; then
+    echo ""
+    echo "📥 Downloading $RULE34_COUNT rule34 URLs via direct extraction..."
+    RULE34_DIR="$OUTPUT_DIR/rule34"
+    mkdir -p "$RULE34_DIR"
+    NUM=1
+    
+    while IFS= read -r url; do
+        [[ -z "$url" ]] && continue
+        
+        # Extract Image ID for filename tracking
+        if [[ "$url" =~ id=([0-9]+) ]]; then
+            R34_ID="${BASH_REMATCH[1]}"
+        else
+            R34_ID="$RANDOM"
+        fi
+        
+        echo -n "  ⬇️  rule34 ID $R34_ID... "
+        ORIGINAL_IMAGE_URL=$(curl -sL -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/100.0" "$url" | grep -A 2 -B 2 "Original image" | grep -o 'href="[^"]*"' | head -n 1 | cut -d '"' -f 2 | sed 's/&amp;/\&/g')
+        
+        if [[ -z "$ORIGINAL_IMAGE_URL" ]]; then
+            echo "❌ (failed to extract original image link)"
+            ((FAILED++))
+            continue
+        fi
+        
+        filename=$(basename "${ORIGINAL_IMAGE_URL%%\?*}")
+        [[ -z "$filename" ]] && filename="rule34_${R34_ID}.jpg"
+        NUMBERED_FILE=$(printf "%03d_%s" "$NUM" "$filename")
+        
+        if wget -q --timeout=10 \
+            -U "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
+            -O "$RULE34_DIR/$NUMBERED_FILE" "$ORIGINAL_IMAGE_URL" 2>/dev/null; then
+            
+            if file "$RULE34_DIR/$NUMBERED_FILE" | grep -qE "(image|WebP|JPEG|PNG)"; then
+                echo "✓"
+                echo -e "$url\t$RULE34_DIR/$NUMBERED_FILE\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+                echo -e "$url\t$RULE34_DIR/$NUMBERED_FILE\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
+                ((SUCCESS++))
+            else
+                rm -f "$RULE34_DIR/$NUMBERED_FILE"
+                echo "❌ (got HTML instead of image)"
+                ((FAILED++))
+            fi
+        else
+            echo "❌ (download failed)"
+            ((FAILED++))
+        fi
+        ((NUM++))
+    done < "$RULE34_URLS"
 fi
 
 # Cleanup temp files
-rm -f "$URLS_FILE" "$REDDIT_MEDIA_URLS" "$REDDIT_URLS" "$DIRECT_URLS" "$GALLERY_URLS"
+rm -f "$URLS_FILE" "$REDDIT_MEDIA_URLS" "$REDDIT_URLS" "$DIRECT_URLS" "$GALLERY_URLS" "$RULE34_URLS"
 
 # Summary
 FILE_COUNT=$(find "$OUTPUT_DIR" -type f 2>/dev/null | wc -l)
