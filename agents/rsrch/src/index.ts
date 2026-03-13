@@ -8,6 +8,11 @@ import * as path from 'path';
 import { GeminiClient, ResearchInfo, Source } from './gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 import logger from './logger';
+import { sendNotification, loadConfigFromEnv } from './notify';
+import { execSync } from 'child_process';
+import { WindmillClient } from './clients/windmill';
+import { executeGeminiCommand, executeGeminiGet, ServerOptions } from './cli-utils';
+import { WorkflowEngine } from './workflows/engine';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -2252,6 +2257,101 @@ async function runLegacyMode() {
         } else {
             logger.error('Please provide a query: rsrch query "Your question" [--session=ID] [--name=NAME]');
         }
+    } else if (command === 'workflow') {
+        const subCommand = args[1];
+        if (!subCommand) {
+            console.log('Usage: rsrch workflow <list|run|create>');
+            return;
+        }
+
+        const client = new PerplexityClient({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+        
+        // Only init client if not list or create
+        if (subCommand === 'run') {
+            await client.init({ profileId: globalProfileId, cdpEndpoint: globalCdpEndpoint });
+        }
+        
+        const engine = new WorkflowEngine(client);
+
+        const possiblePaths = [
+            path.join(__dirname, 'workflows/templates'),
+            path.join(__dirname, '../src/workflows/templates')
+        ];
+
+        let loaded = false;
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                engine.loadWorkflows(p);
+                loaded = true;
+                break;
+            }
+        }
+
+        if (!loaded && subCommand !== 'create') {
+             console.log('No workflow templates found in:', possiblePaths.join(', '));
+             if (subCommand === 'run') await client.close();
+             return;
+        }
+
+        if (subCommand === 'list') {
+            const workflows = engine.listWorkflows();
+            if (workflows.length === 0) {
+                console.log('No workflows found.');
+            } else {
+                console.log('\nAvailable Workflows:');
+                workflows.forEach(w => {
+                    console.log(`- ${w.name}: ${w.description || ''}`);
+                });
+                console.log('');
+            }
+            
+        } else if (subCommand === 'run') {
+            const workflowName = args[2];
+            if (!workflowName) {
+                console.log('Usage: rsrch workflow run <name> [--input key=value ...]');
+                await client.close();
+                return;
+            }
+
+            const inputArgs: Record<string, string> = {};
+            let i = 3;
+            while (i < args.length) {
+                if (args[i] === '--input' && args[i+1]) {
+                    const params = [];
+                    // consume all arguments that do not start with -- as input
+                    let j = i + 1;
+                    while(j < args.length && !args[j].startsWith('--')) {
+                        params.push(args[j]);
+                        j++;
+                    }
+                    for (const param of params) {
+                        const [k, ...vParts] = param.split('=');
+                        inputArgs[k] = vParts.join('=');
+                    }
+                    i = j;
+                } else if (args[i].startsWith('--input=')) {
+                     const [k, ...vParts] = args[i].substring(8).split('=');
+                     inputArgs[k] = vParts.join('=');
+                     i++;
+                } else {
+                    i++;
+                }
+            }
+
+            try {
+                console.log(`[Workflow] Starting ${workflowName}...`);
+                console.log(`[Workflow] Inputs:`, inputArgs);
+                const execution = await engine.execute(workflowName, inputArgs);
+                console.log(`[Workflow] Completed with status: ${execution.status}`);
+                console.log('Results:', JSON.stringify(execution.results, null, 2));
+            } catch (e: any) {
+                console.error(`[Workflow] Failed: ${e.message}`);
+            } finally {
+                await client.close();
+            }
+        } else if (subCommand === 'create') {
+            console.log('Interactive creation not implemented yet. Please create YAML file in workflows/templates.');
+        }
     }
 }
 
@@ -2278,4 +2378,5 @@ export * from './config';
 export * from './profile';
 export * from './cli-utils';
 export * from './cli-context';
+
 
