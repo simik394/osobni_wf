@@ -14,17 +14,16 @@ import re
 class SolverCapability:
     """Solver with its capabilities and constraints"""
     name: str
-    
+
     # Matching criteria
     summary_regex: Optional[re.Pattern] = None
     capability_tags: List[str] = field(default_factory=list)
     supported_file_types: List[str] = field(default_factory=list)
     required_tools: List[str] = field(default_factory=list)
-    
     # Constraints
     max_complexity: int = 5  # 1-10, higher = can handle more complex tasks
     concurrency: int = 1     # Max parallel sessions
-    
+
     # Metadata
     strengths: List[str] = field(default_factory=list)
 
