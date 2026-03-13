@@ -5,7 +5,7 @@ import { startServer } from './server';
 import * as fs from 'fs';
 import { config } from './config';
 import * as path from 'path';
-import { GeminiClient, ResearchInfo } from './gemini-client';
+import { GeminiClient, ResearchInfo, Source } from './gemini-client';
 import { listProfiles, getProfileInfo, deleteProfile } from './profile';
 import logger from './logger';
 
@@ -1074,29 +1074,38 @@ async function main() {
 
         if (subArg1 === 'research') {
             // gemini research "Query string" [--local]
-            // Find query string (first non-flag arg after 'research')
             let query = '';
+            let sources: Source[] = [];
             for (let i = 2; i < args.length; i++) {
-                if (!args[i].startsWith('--')) {
+                if (args[i].startsWith('--url=')) {
+                    sources.push({ type: 'url', content: args[i].split('=')[1] });
+                } else if (args[i] === '--url' && args[i+1]) {
+                    sources.push({ type: 'url', content: args[i+1] });
+                    i++;
+                } else if (args[i].startsWith('--inject-text=')) {
+                    sources.push({ type: 'text', content: args[i].split('=')[1] });
+                } else if (args[i] === '--inject-text' && args[i+1]) {
+                    sources.push({ type: 'text', content: args[i+1] });
+                    i++;
+                } else if (!args[i].startsWith('--') && !query) {
                     query = args[i];
-                    break;
                 }
             }
 
             if (!query) {
-                logger.error('Usage: rsrch gemini research "Query" [--local]');
+                logger.error('Usage: rsrch gemini research "Query" [--local] [--url <url>]');
                 process.exit(1);
             }
 
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
-                    const response = await gemini.research(query);
+                    const response = await gemini.research(query, { sources: sources.length > 0 ? sources : undefined });
                     logger.info('\n--- Gemini Response ---\n');
                     logger.info(response);
                     logger.info('\n-----------------------\n');
                 });
             } else {
-                await sendServerRequest('/gemini/research', { query });
+                await sendServerRequest('/gemini/research', { query, sources: sources.length > 0 ? sources : undefined });
             }
         } else if (subArg1 === 'deep-research') {
             // gemini deep-research "Query string" [--gem "GemName"] [--local]
@@ -1224,10 +1233,21 @@ async function main() {
             // Parse session ID and message
             let sessionId = '';
             let message = '';
+            let sources: Source[] = [];
             const nonFlagArgs: string[] = [];
 
             for (let i = 2; i < args.length; i++) {
-                if (!args[i].startsWith('--')) {
+                if (args[i].startsWith('--url=')) {
+                    sources.push({ type: 'url', content: args[i].split('=')[1] });
+                } else if (args[i] === '--url' && args[i+1]) {
+                    sources.push({ type: 'url', content: args[i+1] });
+                    i++;
+                } else if (args[i].startsWith('--inject-text=')) {
+                    sources.push({ type: 'text', content: args[i].split('=')[1] });
+                } else if (args[i] === '--inject-text' && args[i+1]) {
+                    sources.push({ type: 'text', content: args[i+1] });
+                    i++;
+                } else if (!args[i].startsWith('--')) {
                     nonFlagArgs.push(args[i]);
                 }
             }
@@ -1246,7 +1266,7 @@ async function main() {
 
             if (isLocalExecution) {
                 await runLocalGeminiAction(async (client, gemini) => {
-                    const response = await gemini.sendMessage(message);
+                    const response = await gemini.sendMessage(message, { sources: sources.length > 0 ? sources : undefined });
 
                     logger.info('\n--- Response ---');
                     if (response) {
@@ -1263,7 +1283,7 @@ async function main() {
                     }
                 }, sessionId || undefined);
             } else {
-                logger.info('Server mode for send-message not yet implemented. Use --local.');
+                await sendServerRequest('/gemini/send-message', { sessionId, message, sources: sources.length > 0 ? sources : undefined });
             }
         } else if (subArg1 === 'get-response') {
             // gemini get-response [SessionID] [Index] [--local]
