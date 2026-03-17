@@ -27,3 +27,7 @@ Installing `janus-swi` via Ansible `pip` module can be brittle if it tries to in
 ## 5. Prolog plunit Module Context
 When using `plunit` test framework, tests run inside a generated module (e.g., `plunit_diff_logic`). If you `assertz` facts without module qualification, they go into the test module's namespace—not the `user` module where your production rules look for them.
 **Lesson**: Always use `assertz(user:fact(...))` and `retractall(user:fact(...))` in plunit setup/cleanup to ensure facts are visible to rules defined in `core.pl`.
+
+## 6. Actuator-Level Idempotency Guards
+When the inference engine (Prolog) generates `create_field` actions, there's always a risk that sensing missed an existing field (API pagination, name/type mismatch). The original "fix" was a blanket controller-side filter that skipped ALL `create_field` actions — a "NUCLEAR OPTION" that prevented any new fields from ever being created.
+**Lesson**: Idempotency must be implemented at the **lowest possible level** (actuator, not controller). The actuator should: (1) pre-check existence before calling POST, and (2) handle 409 Conflict gracefully. The controller filter should only act as "defense-in-depth" for confirmed-existing fields, never as a blanket skip.

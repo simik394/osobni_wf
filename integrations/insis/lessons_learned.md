@@ -1,0 +1,7 @@
+# Lessons Learned: Playwright CDP Automation for InSIS
+
+1. **Connecting to Existing Sessions**: When connecting to an existing browser via `chromium.connectOverCDP`, it's critical to search the `browser.contexts()[0].pages()` for the target context without manipulating the user's active page.
+2. **Robust Path Extraction**: Extracting a path from an HTML element requires navigating upwards in the DOM. By checking `.closest('.node-container')` and finding `parentElement.parentElement.parentElement` (the subtree), we can accurately reconstruct a path list dynamically without relying on static IDs.
+3. **Playwright Paginator Selecting**: When working with ambiguous "Next" pages in legacy systems like InSIS, it's beneficial to construct a composite locator that considers CSS selectors alongside `img` `alt` strings (`a[title*="Další"], a:has(img[alt*="Další"])`) for robustness instead of simpler role selections that might miss dynamically hidden components.
+4. **Node.js Playwright CDP Disconnectivity**: In Node.js Playwright (`playwright` package), the proper method to leave the CDP connection intact without closing the browser is simply `await browser.close()`. This differs intuitively from Python's method where `.close()` will shut the browser while `.disconnect()` just drops the CDP link.
+5. **Human behavior**: Implementing `await sleep(base_time + Math.random() * offset)` is necessary immediately before performing explicit action groups (like navigation and clicking to download) to mitigate bot detection.

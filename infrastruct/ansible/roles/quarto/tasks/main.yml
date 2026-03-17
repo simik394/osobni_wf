@@ -1,33 +1,114 @@
 ---
+- name: Check current Quarto version
+  command: quarto --version
+  register: current_quarto_version
+  failed_when: false
+  changed_when: false
+
 - name: Get latest Quarto release info
   uri:
     url: https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest
     return_content: true
   register: quarto_release
 
-- name: Set Quarto download url
+- name: Set Quarto version fact
   set_fact:
-    quarto_deb_url: "{{ quarto_release.json.assets | selectattr('name', 'search', 'linux-amd64.deb') | map(attribute='browser_download_url') | first }}"
-    quarto_version: "{{ quarto_release.json.tag_name }}"
+    latest_quarto_version: "{{ quarto_release.json.tag_name | regex_replace('^v', '') }}"
 
-- name: Create temporary download directory
-  tempfile:
-    state: directory
-    suffix: quarto_install
-  register: quarto_temp_dir
+- name: Quarto Installation block
+  block:
+    - name: Set Quarto download url
+      set_fact:
+        quarto_deb_url: "{{ quarto_release.json.assets | selectattr('name', 'search', 'linux-amd64.deb') | map(attribute='browser_download_url') | first }}"
 
-- name: Download Quarto .deb
-  get_url:
-    url: "{{ quarto_deb_url }}"
-    dest: "{{ quarto_temp_dir.path }}/quarto.deb"
+    - name: Create temporary download directory
+      tempfile:
+        state: directory
+        suffix: quarto_install
+      register: quarto_temp_dir
 
-- name: Install Quarto
+    - name: Download Quarto .deb
+      get_url:
+        url: "{{ quarto_deb_url }}"
+        dest: "{{ quarto_temp_dir.path }}/quarto.deb"
+
+    - name: Install Quarto
+      apt:
+        deb: "{{ quarto_temp_dir.path }}/quarto.deb"
+        state: present
+      become: true
+
+    - name: Remove temporary directory
+      file:
+        path: "{{ quarto_temp_dir.path }}"
+        state: absent
+  when: current_quarto_version.stdout != latest_quarto_version
+
+- name: Install Linux Libertine fonts for PDF rendering
   apt:
-    deb: "{{ quarto_temp_dir.path }}/quarto.deb"
+    name: fonts-linuxlibertine
     state: present
   become: true
 
-- name: Remove temporary directory
+- name: Check if TinyTeX is installed
+  stat:
+    path: "/home/sim/.TinyTeX"
+  register: tinytex_stat
+
+- name: Install TinyTeX via Quarto if missing
+  command: quarto install tinytex --no-prompt
+  when: not tinytex_stat.stat.exists
+  become: false
+
+- name: Ensure shared quarto directory exists
   file:
-    path: "{{ quarto_temp_dir.path }}"
-    state: absent
+    path: "/home/sim/.config/quarto/shared/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - filters
+    - scripts
+
+- name: Deploy shared Quarto filters
+  copy:
+    src: shared/filters/
+    dest: /home/sim/.config/quarto/shared/filters/
+    mode: "0644"
+
+- name: Deploy shared Quarto scripts
+  copy:
+    src: shared/scripts/
+    dest: /home/sim/.config/quarto/shared/scripts/
+    mode: "0755"
+
+- name: Deploy shared Quarto base metadata
+  copy:
+    src: shared/quarto-base.yml
+    dest: /home/sim/.config/quarto/shared/quarto-base.yml
+    mode: "0644"
+
+- name: Install required LaTeX packages for PDF rendering
+  command:
+    cmd: "/home/sim/.TinyTeX/bin/x86_64-linux/tlmgr install koma-script geometry xcolor amsmath environ tcolorbox pdfcol wrapfig"
+  register: tlmgr_output
+  # Look for the specific string indicating nothing was installed
+  changed_when: "'already present' not in tlmgr_output.stdout"
+
+- name: Ensure Python dependencies for Quarto execution are installed
+  pip:
+    name:
+      - ipykernel
+      - nbformat
+      - nbconvert
+    state: present
+
+- name: Check if IJulia is installed
+  # More robust check that works regardless of environment
+  command: julia -e 'using Pkg; for (uuid, pkg) in Pkg.dependencies() if pkg.name == "IJulia" exit(0) end end; exit(1)'
+  register: ijulia_check
+  failed_when: false
+  changed_when: false
+
+- name: Install IJulia kernel for Quarto
+  command: julia -e 'using Pkg; Pkg.add("IJulia")'
+  when: ijulia_check.rc != 0

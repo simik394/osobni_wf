@@ -1,0 +1,176 @@
+#!/bin/bash
+# Adaptive screenshot recording with activity detection and auto-splitting
+# Usage: screenshot-record start|stop|status
+#
+# Active (mouse/window change): 2s interval
+# Idle (no activity): 10s interval
+# Auto-split: Every 15 minutes (creates separate MKV files)
+
+SCREENSHOT_DIR="/home/sim/Videos/Screenshots"
+RECORDING_DIR="/home/sim/Videos/OBS"
+INTERVAL_ACTIVE=2   # seconds when active
+INTERVAL_IDLE=10    # seconds when idle
+IDLE_THRESHOLD=10   # seconds of no activity before going idle
+CHUNK_DURATION=900 # 15 minutes in seconds
+PIDFILE="/tmp/screenshot-record.pid"
+
+# Configuration
+ENABLE_SOUND="false"  # Set to "true" to enable shutter sound
+
+convert_session() {
+    local S_DIR="$1"
+    local OUTPUT_NAME="screenshots_$(basename $S_DIR).mkv"
+    local OUTPUT_PATH="$RECORDING_DIR/$OUTPUT_NAME"
+
+    if [ -d "$S_DIR" ]; then
+        # Create SRT subtitles from filenames and metadata
+        cd "$S_DIR"
+        local i=0
+        echo "[" > combined_metadata.json
+        for f in $(ls -tr frame_*.jpg 2>/dev/null); do
+            local BASE="${f%.jpg}"
+            local JSON_FILE="${BASE}.json"
+
+            # Robust Timestamp Extraction
+            local TS=$(echo "$f" | grep -oP '\d{10}')
+            if [ -z "$TS" ]; then
+                TS=$(stat -c %Y "$f")
+            fi
+            local DATE_STR=$(date -d "@$TS" "+%Y-%m-%d %H:%M:%S")
+
+            local H=$((i / 3600)); local M=$(((i % 3600) / 60)); local S=$((i % 60))
+            local H2=$(((i+1) / 3600)); local M2=$((((i+1) % 3600) / 60)); local S2=$(((i+1) % 60))
+
+            # Track 1: Time
+            printf "%d\n%02d:%02d:%02d,000 --> %02d:%02d:%02d,000\n%s\n\n" \
+                $((i+1)) $H $M $S $H2 $M2 $S2 "$DATE_STR" >> timestamps.srt
+
+            # Track 2: Active Window
+            local WIN_TITLE="Unknown"
+            if [ -f "$JSON_FILE" ]; then
+                WIN_TITLE=$(grep -oP '"active":true,"title":"\K[^"]+' "$JSON_FILE" | head -n 1)
+                [ $i -gt 0 ] && echo "," >> combined_metadata.json
+                cat "$JSON_FILE" >> combined_metadata.json
+                rm "$JSON_FILE"
+            fi
+            printf "%d\n%02d:%02d:%02d,000 --> %02d:%02d:%02d,000\n%s\n\n" \
+                $((i+1)) $H $M $S $H2 $M2 $S2 "$WIN_TITLE" >> windows.srt
+
+            mv "$f" "seq_$(printf '%05d' $i).jpg" 2>/dev/null
+            i=$((i + 1))
+        done
+        echo "]" >> combined_metadata.json
+        cd - > /dev/null
+
+        local COUNT=$(ls "$S_DIR"/seq_* 2>/dev/null | wc -l)
+
+        if [ "$COUNT" -gt 0 ]; then
+            # CRF 40 hits ~20-25MB/hour with SVT-AV1 at 1fps
+            /usr/lib/jellyfin-ffmpeg/ffmpeg -y -framerate 1 -i "$S_DIR/seq_%05d.jpg" \
+              -i "$S_DIR/timestamps.srt" -i "$S_DIR/windows.srt" \
+              -map 0:v -map 1:s -map 2:s \
+              -attach "$S_DIR/combined_metadata.json" -metadata:s:t mimetype=application/json \
+              -c:v libsvtav1 -preset 10 -crf 40 \
+              -c:s srt -metadata:s:s:0 title="Time" -metadata:s:s:1 title="Active Window" \
+              -vf "scale=1920:-1,drawtext=text='%{sub_text}':source_index=1:fontcolor=yellow:fontsize=30:box=1:boxcolor=black@0.6:x=w-350:y=h-50,drawtext=text='%{sub_text}':source_index=2:fontcolor=white:fontsize=25:box=1:boxcolor=black@0.4:x=(w-text_w)/2:y=20" \
+              -pix_fmt yuv420p "$OUTPUT_PATH" > /tmp/ffmpeg-convert.log 2>&1
+
+            if [ -f "$OUTPUT_PATH" ]; then
+                rm -rf "$S_DIR"
+            fi
+        fi
+    fi
+}
+export RECORDING_DIR
+
+run_internal() {
+    # Initialize session
+    START_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+    SESSION_DIR="$SCREENSHOT_DIR/$START_TIMESTAMP"
+    mkdir -p "$SESSION_DIR"
+
+    echo "$SESSION_DIR" > /tmp/screenshot-session.txt
+
+    COUNT=0
+    CHUNK_START=$(date +%s)
+    CURRENT_SESSION_DIR="$SESSION_DIR"
+    CURRENT_IDLE_INTERVAL=$INTERVAL_IDLE
+
+    while true; do
+        NOW=$(date +%s)
+        ELAPSED=$((NOW - CHUNK_START))
+
+        if [ $ELAPSED -ge $CHUNK_DURATION ]; then
+            OLD_SESSION_DIR="$CURRENT_SESSION_DIR"
+            NEW_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+            CURRENT_SESSION_DIR="$SCREENSHOT_DIR/$NEW_TIMESTAMP"
+            mkdir -p "$CURRENT_SESSION_DIR"
+
+            COUNT=0
+            CHUNK_START=$NOW
+            ( convert_session "$OLD_SESSION_DIR" ) &
+            echo "$CURRENT_SESSION_DIR" > /tmp/screenshot-session.txt
+        fi
+
+        IDLE_MS=$(gdbus call --session --dest org.gnome.Mutter.IdleMonitor --object-path /org/gnome/Mutter/IdleMonitor/Core --method org.gnome.Mutter.IdleMonitor.GetIdletime 2>/dev/null | awk '{print $2}' | tr -d ',)')
+        if [ -z "$IDLE_MS" ]; then IDLE_MS=0; fi
+
+        if [ "$IDLE_MS" -lt "$((IDLE_THRESHOLD * 1000))" ]; then
+          INTERVAL=$INTERVAL_ACTIVE
+          CURRENT_IDLE_INTERVAL=$INTERVAL_IDLE
+        else
+          INTERVAL=$CURRENT_IDLE_INTERVAL
+          CURRENT_IDLE_INTERVAL=$((CURRENT_IDLE_INTERVAL * 2))
+          if [ $CURRENT_IDLE_INTERVAL -gt 3600 ]; then CURRENT_IDLE_INTERVAL=3600; fi
+        fi
+
+        if xdotool search --onlyvisible --name "\bIncognito\b|\bPrivate Browsing\b|\bInPrivate\b|\bTor\b|digiKam|digicam" >/dev/null 2>&1; then
+             sleep $INTERVAL
+             continue
+        fi
+
+        TIMESTAMP=$(date +%s)
+        OUTPUT_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT)_${TIMESTAMP}.jpg"
+        # Quality 80 for sharper text
+        scrot --quality 80 "$OUTPUT_FILE" 2>>/tmp/screenshot-error.log
+
+        WINDOW_DATA=$(/home/sim/bin/xmeta 2>/dev/null)
+        CURRENT_WIN_ID=$(echo "$WINDOW_DATA" | grep -oP '"id":"\K[^"]+(?=","x".*?"active":true)' | head -n 1)
+
+        if [ "$CURRENT_WIN_ID" != "$LAST_WIN_ID" ]; then
+            METADATA_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT)_${TIMESTAMP}.json"
+            TOP_PROC=$(ps -eo comm,pcpu,pmem --sort=-pcpu --no-headers | head -n 5 | awk '{printf "{\"name\":\"%s\",\"cpu\":\"%s\",\"mem\":\"%s\"},", $1, $2, $3}' | sed 's/,$//')
+            echo "{\"timestamp\":$TIMESTAMP,\"active_window\":$WINDOW_DATA,\"top_processes\":[$TOP_PROC]}" > "$METADATA_FILE"
+            LAST_WIN_ID="$CURRENT_WIN_ID"
+        fi
+
+        COUNT=$((COUNT + 1))
+        sleep $INTERVAL
+    done
+}
+
+case "$1" in
+  run-internal) run_internal ;;
+  start)
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then exit 1; fi
+    setsid "$0" run-internal >/tmp/screenshot-record.log 2>&1 &
+    PID=$!
+    echo $PID > "$PIDFILE"
+    sleep 1
+    SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+    echo "Recording started (PID: $PID)"
+    ;;
+  stop)
+    PID=$(cat "$PIDFILE" 2>/dev/null)
+    [ -z "$PID" ] && exit 1
+    SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+    kill -- -"$PID" 2>/dev/null || kill "$PID" 2>/dev/null
+    rm -f "$PIDFILE"
+    if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then convert_session "$SESSION_DIR"; fi
+    rm -f /tmp/screenshot-session.txt
+    ;;
+  status)
+     if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then echo "Running"; else echo "Stopped"; fi
+     ;;
+  *) echo "Usage: $0 {start|stop|status}"; exit 1 ;;
+esac

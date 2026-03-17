@@ -14,8 +14,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	jules "jules-go"
 	"jules-go/internal/browser"
+	jules "jules-go/internal/core"
 	"jules-go/internal/github"
 	"jules-go/internal/logging"
 	"jules-go/internal/youtrack"

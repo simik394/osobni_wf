@@ -295,6 +295,8 @@ function generateReport() {
     console.log('    toc: true');
     console.log('    theme: cosmo');
     console.log('    page-layout: full');
+    console.log('filters:');
+    console.log('  - include-code-files');
 
     console.log('---');
     console.log('');
@@ -404,15 +406,15 @@ function generateReport() {
 
             // If we have snippet markers, use Quarto's include with snippet for TRUE embedding
             if (scenario.regionName) {
-                console.log(`> 📄 **Snippet:** \`// start snippet ${scenario.regionName}\` in [\`tests/${fileData.file}\`](tests/${fileData.file})`);
+                console.log(`> 📄 **Snippet:** \`// start snippet ${scenario.regionName}\` in [\`tests/${fileData.file}\`](../../../agents/rsrch/tests/${fileData.file})`);
                 console.log('');
                 // Use Quarto's include-code-files extension with snippet attribute
                 // This reads from the actual file at render time!
-                console.log(`\`\`\`{.typescript include="tests/${fileData.file}" snippet="${scenario.regionName}"}`);
+                console.log(`\`\`\`{.typescript include="../../../agents/rsrch/tests/${fileData.file}" snippet="${scenario.regionName}"}`);
                 console.log('```');
             } else {
                 // Fallback to inline body if no snippet markers
-                console.log(`> 📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](tests/${fileData.file})`);
+                console.log(`> 📄 **File:** [\`tests/${fileData.file}:${scenario.startLine}-${scenario.endLine}\`](../../../agents/rsrch/tests/${fileData.file})`);
                 console.log('');
                 console.log('```typescript');
                 console.log(scenario.body);

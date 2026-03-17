@@ -1,0 +1,112 @@
+---
+- name: Get Zotero redirect URL to determine latest version
+  uri:
+    url: "https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64"
+    method: GET
+    follow_redirects: safe
+    status_code: 200
+  register: zotero_redirect
+
+- name: Extract Zotero version from URL
+  set_fact:
+    zotero_version: "{{ zotero_redirect.url | regex_findall('client/release/([0-9.]+)/Zotero') | first }}"
+
+- name: Check currently installed Zotero version
+  command: dpkg-query -W -f='${Version}' zotero
+  register: zotero_installed_check
+  failed_when: false
+  changed_when: false
+
+- name: Set installed version fact
+  set_fact:
+    zotero_installed_version: "{{ zotero_installed_check.stdout if zotero_installed_check.rc == 0 else '' }}"
+
+- name: Install/Update Zotero if version differs
+  block:
+    - name: Create temporary build directory
+      tempfile:
+        state: directory
+        suffix: zotero_build
+      register: zotero_temp_dir
+
+    - name: Create package structure
+      file:
+        path: "{{ zotero_temp_dir.path }}/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - opt/zotero
+        - usr/share/applications
+        - usr/local/bin
+        - usr/share/icons/hicolor/128x128/apps
+        - DEBIAN
+
+    - name: Download and unarchive Zotero
+      unarchive:
+        src: "https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64"
+        dest: "{{ zotero_temp_dir.path }}/opt/zotero"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+
+    - name: Create DEBIAN/control
+      copy:
+        dest: "{{ zotero_temp_dir.path }}/DEBIAN/control"
+        content: |
+          Package: zotero
+          Version: {{ zotero_version }}
+          Section: science
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Sim <sim@localhost>
+          Description: Zotero is a free, easy-to-use tool to help you collect, organize, cite, and share research.
+
+    - name: Configure desktop entry
+      shell: |
+        cp {{ zotero_temp_dir.path }}/opt/zotero/zotero.desktop {{ zotero_temp_dir.path }}/usr/share/applications/zotero.desktop
+        # Use our symlink for Exec and preserve other fields
+        sed -i 's|^Exec=.*|Exec=/usr/local/bin/zotero %U|' {{ zotero_temp_dir.path }}/usr/share/applications/zotero.desktop
+        # Fix Icon reference to a system-wide one
+        sed -i 's|^Icon=.*|Icon=zotero|' {{ zotero_temp_dir.path }}/usr/share/applications/zotero.desktop
+        if ! grep -q "Categories=" {{ zotero_temp_dir.path }}/usr/share/applications/zotero.desktop; then
+            echo "Categories=Office;Education;Science;" >> {{ zotero_temp_dir.path }}/usr/share/applications/zotero.desktop
+        fi
+
+    - name: Setup icon
+      shell: |
+        ICON_PATH=$(find {{ zotero_temp_dir.path }}/opt/zotero -name "icon128.png" | head -n 1)
+        if [ -n "$ICON_PATH" ]; then
+          cp "$ICON_PATH" {{ zotero_temp_dir.path }}/usr/share/icons/hicolor/128x128/apps/zotero.png
+        fi
+
+    - name: Create symlink in package
+      file:
+        src: /opt/zotero/zotero
+        dest: "{{ zotero_temp_dir.path }}/usr/local/bin/zotero"
+        state: link
+
+    - name: Build .deb package with root ownership
+      command: dpkg-deb --root-owner-group --build "{{ zotero_temp_dir.path }}" "{{ ansible_env.HOME }}/zotero_{{ zotero_version }}_amd64.deb"
+
+    - name: Install .deb package
+      apt:
+        deb: "{{ ansible_env.HOME }}/zotero_{{ zotero_version }}_amd64.deb"
+      become: true
+
+    - name: Cleanup temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ zotero_temp_dir.path }}"
+        - "{{ ansible_env.HOME }}/zotero_{{ zotero_version }}_amd64.deb"
+
+    - name: Update desktop and icon databases
+      shell: |
+        if command -v update-desktop-database >/dev/null; then
+            update-desktop-database
+        fi
+        if command -v gtk-update-icon-cache >/dev/null; then
+            gtk-update-icon-cache -f -t /usr/share/icons/hicolor
+        fi
+      become: true
+  when: zotero_version != zotero_installed_version or force_zotero_update | default(false)

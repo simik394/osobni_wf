@@ -1,0 +1,57 @@
+---
+- name: Check if MIDI dependencies are already installed
+  command: dpkg-query -l python3-mido python3-rtmidi
+  register: midi_deps_check
+  failed_when: false
+  changed_when: false
+
+- name: Install python dependencies for MIDI
+  apt:
+    name:
+      - python3-mido
+      - python3-rtmidi
+    state: present
+  become: true
+  when: midi_deps_check.rc != 0
+
+- name: Ensure bin directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/bin"
+    state: directory
+    mode: '0755'
+
+- name: Ensure source files are executable
+  file:
+    path: "{{ playbook_dir }}/roles/akai-apc/files/apc-control.py"
+    mode: '0755'
+
+- name: Symlink apc-control script (Dev Mode)
+  file:
+    src: "{{ playbook_dir }}/roles/akai-apc/files/apc-control.py"
+    dest: "{{ ansible_env.HOME }}/bin/apc-control.py"
+    state: link
+    force: yes
+
+- name: Ensure autostart directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/autostart"
+    state: directory
+    mode: '0755'
+
+- name: Configure autostart for APC control
+  copy:
+    src: apc-control.desktop
+    dest: "{{ ansible_env.HOME }}/.config/autostart/apc-control.desktop"
+    mode: '0644'
+
+- name: Ensure applications directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/applications"
+    state: directory
+    mode: '0755'
+
+- name: Install Desktop Entry for App Menu
+  copy:
+    src: apc-control.desktop
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/apc-control.desktop"
+    mode: '0644'

@@ -206,15 +206,15 @@ def main():
     plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries)
     
     if plan:
-        # Patch: Filter out create_field actions for fields that already exist
-        # This acts as a safety net against Prolog logic flaws regarding idempotency
+        # Defense-in-depth: skip create_field for fields confirmed to exist globally.
+        # The actuator also has its own idempotency guard (pre-check + 409 handling),
+        # so this is a belt-and-suspenders approach to prevent unnecessary API calls.
         existing_field_names = {f.get('name') for f in fields}
         filtered_plan = []
         for action in plan:
-            if action[0] == 'create_field':
-                 # NUCLEAR OPTION: Skip ALL create_field to bypass "Already Exists" + "Invisible" blocker
-                 logger.warning(f"Skipping create_field({action[1]}) - forcing bypass to unblock Project creation")
-                 continue
+            if action[0] == 'create_field' and action[1] in existing_field_names:
+                logger.info(f"Skipping create_field({action[1]}) - field already exists globally (defense-in-depth)")
+                continue
             filtered_plan.append(action)
         plan = filtered_plan
 

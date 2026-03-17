@@ -1,18 +1,37 @@
-# For running ansible from a local machine (e.g., ntb) to provision 'halvarm'
+# Unified Infrastructure Inventory
+
+# Cloud Servers (halvarm)
 servers:
   hosts:
     halvarm:
       ansible_user: ubuntu
+      # ansible_host inherited from ~/.ssh/config alias 'halvarm'
       public_ip: 100.73.45.27
-      # ansible_host is inherited from ~/.ssh/config alias 'halvarm'
 
-# For running ansible from 'halvarm' itself
+      # Federation Config
+      nomad_region: cloud
+      nomad_datacenter: oci-eu
+      node_class: cloud
+      nomad_role: server
+
+      # Peer to join via WAN (Tailscale) - Only if peer exists
+      # wan_peer: 100.92.153.10
+
+# Local Machine (ntb)
 local:
   hosts:
     localhost:
       ansible_connection: local
+      ansible_python_interpreter: /usr/bin/python3
+      minimal_startup: false
 
-# Local workstations (ntb + desktop)
+      # Federation Config
+      nomad_region: local
+      nomad_datacenter: laptop
+      node_class: local
+      nomad_role: server
+
+# Remote Workstations
 workstations:
   hosts:
     ntb:
@@ -33,5 +52,3 @@ remarkable:
       ansible_connection: ssh
       ansible_shell_type: sh
       remarkable_ssh_port: 22
-      # Override ansible_host if using WiFi:
-      # ansible_host: 192.168.1.xxx

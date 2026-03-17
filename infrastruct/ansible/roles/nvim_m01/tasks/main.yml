@@ -1,0 +1,34 @@
+---
+- name: Check if system dependencies are already installed
+  command: dpkg-query -l libmagickwand-dev xclip
+  register: deps_check
+  failed_when: false
+  changed_when: false
+
+- name: Install system dependencies for image.nvim and obsidian.nvim
+  apt:
+    name:
+      - libmagickwand-dev
+      - xclip
+    state: present
+  become: true
+  when: deps_check.rc != 0
+
+- name: Deploy Neovim configuration from Git
+  git:
+    repo: "https://github.com/simik394/myConfigs.git"
+    dest: "{{ ansible_env.HOME }}/.config/nvim_m01"
+    version: "nvim/m01-sync-2026-02-20"
+    force: yes
+    depth: 1
+  register: git_deploy
+
+- name: Ensure Neovim config directories exist
+  file:
+    path: "{{ ansible_env.HOME }}/.config/nvim_m01/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - undo
+    - undodir
+    - view

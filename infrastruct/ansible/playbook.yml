@@ -1,7 +1,115 @@
 ---
-- name: Deploy Langfuse to server
+# ==============================================================================
+# Unified Infrastructure Playbook
+# Targets: Cloud Server (halvarm) and Local Workstation (ntb)
+# ==============================================================================
+
+# --- SECTION 1: Pre-flight & Server Core ---
+- name: Server Infrastructure Deployment
+  hosts: servers:local
+  become: true
+  roles:
+    - role: preflight
+    - role: common
+    - role: tailscale
+    - role: docker
+    - role: hashicorp # Installs Consul, Nomad, Vault
+
+# --- SECTION 2: Server-Side Jobs (Nomad) ---
+- name: Deploy Server Jobs
   hosts: servers
   become: true
   roles:
-    - role: docker
-    - role: langfuse
+    - role: nomad_jobs # Deploys Windmill, Falkor, etc.
+      tags: [nomad_jobs, jobs]
+    - role: langfuse   # Existing standalone Langfuse role
+      tags: [langfuse]
+
+# --- SECTION 3: Local Desktop Configuration ---
+- name: Local Desktop Setup
+  hosts: local
+  become: false # Most user tools don't need sudo
+  roles:
+    - role: nvim_m01
+      tags: [nvim]
+    - role: wezterm
+      tags: [wezterm]
+    - role: ghostty
+      tags: [ghostty]
+    - role: quarto
+      tags: [quarto]
+    - role: obsidian
+      tags: [obsidian]
+    - role: akai-apc
+      tags: [apc, akai]
+    - role: multimedia
+      tags: [multimedia, ffmpeg, screenshot]
+    - role: zellij
+      tags: [zellij]
+    - role: lazydocker
+      tags: [lazydocker]
+    - role: input-leap
+      tags: [input-leap]
+    - role: jabref
+      tags: [jabref]
+    - role: logseq
+      tags: [logseq]
+    - role: zotero
+      tags: [zotero]
+    - role: julia
+      tags: [julia, extra]
+    - role: swiprolog
+      tags: [swiprolog, extra]
+    - role: obs-studio
+      tags: [obs, extra]
+    - role: lmstudio
+      tags: [lmstudio, extra]
+    - role: x11vnc
+      tags: [vnc, extra]
+
+# --- SECTION 4: Local Services (Containers) ---
+- name: Local Services (Docker)
+  hosts: local
+  become: true
+  roles:
+    - role: local_memgraph
+      tags: [memgraph]
+    - role: postgres
+      tags: [postgres]
+
+# --- SECTION 5: Infrastructure Optimization (Minimal Startup) ---
+- name: Local Infrastructure Optimization
+  hosts: local
+  become: true
+  tasks:
+    - name: Deactivate heavy services (Minimal Startup)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - vault
+        - nomad
+        - memgraph
+      when: minimal_startup | default(false) | bool
+      ignore_errors: true
+      tags: [minimal_cleanup]
+
+    - name: Stop Docker containers (Minimal Startup)
+      ansible.builtin.shell: "docker stop {{ item }}"
+      loop:
+        - postgres-local
+        - falkordb
+        - memgraph-lab
+      when: minimal_startup | default(false) | bool
+      ignore_errors: true
+      changed_when: false
+      tags: [minimal_cleanup]
+
+    - name: Ensure execsnoop is killed (Minimal Startup)
+      ansible.builtin.shell: pkill -f execsnoop
+      register: pkill_output
+      changed_when: pkill_output.rc == 0
+      failed_when: false
+      when: minimal_startup | default(false) | bool
+      tags: [minimal_cleanup]
