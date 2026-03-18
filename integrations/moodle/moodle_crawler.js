@@ -47,8 +47,14 @@ async function extractZip(zipPath, targetDir) {
 
         console.log("Found Moodle page:", targetPage.url());
         
+        const workPage = await context.newPage();
+
+        console.log("Navigating to dashboard to find all courses...");
+        await workPage.goto('https://moodle.vse.cz/my/', { waitUntil: 'domcontentloaded' });
+        await sleep(2000);
+
         // Find course links on the dashboard/overview
-        const courseLinks = await targetPage.evaluate((targets) => {
+        const courseLinks = await workPage.evaluate((targets) => {
             const links = [];
             document.querySelectorAll('a[href*="/course/view.php?id="]').forEach(a => {
                 const title = a.innerText || a.getAttribute('title') || '';
@@ -61,8 +67,6 @@ async function extractZip(zipPath, targetDir) {
         }, TARGET_COURSES);
 
         console.log(`Found ${courseLinks.length} target courses:`, courseLinks.map(c => c.title));
-
-        const workPage = await context.newPage();
 
         for (const course of courseLinks) {
             console.log(`\n=== Processing Course: ${course.title} ===`);
@@ -363,6 +367,54 @@ async function extractZip(zipPath, targetDir) {
                         }
                     }
                 }
+            }
+
+            // Generate HTML Index for easy browsing of the downloaded course material
+            if (!isMapOnly) {
+                console.log(`\nGenerating HTML index for ${course.title}...`);
+                let indexHtml = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>${course.title}</title>\n`;
+                indexHtml += `<style>\nbody{font-family:sans-serif;margin:2rem;max-width:900px;margin:auto;} \nul{list-style:none;padding-left:1.5rem;} \nli{margin:0.5rem 0;} \na{text-decoration:none;color:#0366d6;} \na:hover{text-decoration:underline;}\n</style>\n`;
+                indexHtml += `</head>\n<body>\n<h1>Kurz: ${course.title}</h1>\n`;
+                
+                let currentSec = '';
+                for (let i = 0; i < Math.min(modules.length, limit); i++) {
+                    const mod = modules[i];
+                    const supportedTypes = ['resource', 'folder', 'assign', 'page', 'book', 'turnitintooltwo', 'choicegroup', 'feedback', 'quiz', 'other', 'unknown'];
+                    if (!supportedTypes.includes(mod.type)) continue;
+
+                    if (mod.section !== currentSec) {
+                        if (currentSec !== '') indexHtml += `</ul>\n`;
+                        currentSec = mod.section;
+                        indexHtml += `<h2>${currentSec}</h2>\n<ul>\n`;
+                    }
+                    
+                    const cleanSecName = sanitizeFilename(mod.section);
+                    const cleanModName = sanitizeFilename(mod.name);
+                    
+                    let localPath = '';
+                    if (['page', 'assign', 'book', 'turnitintooltwo', 'choicegroup', 'feedback', 'quiz', 'other', 'unknown'].includes(mod.type)) {
+                        localPath = path.join(cleanSecName, cleanModName + '.html');
+                    } else if (mod.type === 'folder') {
+                        localPath = path.join(cleanSecName, cleanModName);
+                    } else if (mod.type === 'resource') {
+                        // Vague resource links usually result in downloaded PDFs or other files. We link to the section explicitly or guess pdf.
+                        localPath = path.join(cleanSecName, cleanModName + '.pdf'); // Educated guess, often true for Moodle
+                    }
+
+                    if (mod.type === 'resource') {
+                        indexHtml += `<li>📄 <a href="${localPath}" target="_blank">${mod.name}</a> <i>(Soubor)</i></li>\n`;
+                    } else if (mod.type === 'folder') {
+                        indexHtml += `<li>📁 <a href="${localPath}/" target="_blank">${mod.name}</a> <i>(Složka)</i></li>\n`;
+                    } else if (mod.type === 'book') {
+                        indexHtml += `<li>📚 <a href="${localPath}" target="_blank">${mod.name}</a> <i>(Kniha - Celý obsah)</i></li>\n`;
+                    } else {
+                        indexHtml += `<li>🌐 <a href="${localPath}" target="_blank">${mod.name}</a></li>\n`;
+                    }
+                }
+                if (currentSec !== '') indexHtml += `</ul>\n`;
+                indexHtml += `</body>\n</html>`;
+                fs.writeFileSync(path.join(courseDir, 'index.html'), indexHtml, 'utf8');
+                console.log(`     Saved index.html successfully.`);
             }
         }
 
