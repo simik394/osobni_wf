@@ -79,39 +79,66 @@ async function extractZip(zipPath, targetDir) {
                 const results = [];
                 const sections = document.querySelectorAll('div.courseindex-section');
                 
-                sections.forEach(sec => {
-                    const titleNode = sec.querySelector('a[data-for="section_title"]');
-                    let sectionName = titleNode ? titleNode.textContent.trim() : 'Unknown Section';
+                sections.forEach((sec, index) => {
+                    const titleEl = sec.querySelector('.courseindex-section-title a[data-for="section_title"]');
+                    let sectionTitle = titleEl ? titleEl.textContent.trim() : `Section ${index + 1}`;
+                    sectionTitle = sectionTitle.replace(/^\d+\.\s*/, '').trim(); 
                     
-                    const links = sec.querySelectorAll('a[data-for="cm_name"]');
-                    links.forEach(link => {
-                        const url = link.href;
-                        const name = link.textContent.trim();
-                        let type = 'unknown';
-                        if (url.includes('mod/resource')) type = 'resource'; // File
-                        else if (url.includes('mod/folder')) type = 'folder'; // Folder
-                        else if (url.includes('mod/assign')) type = 'assignment';
-                        else if (url.includes('mod/page')) type = 'page';
-                        else if (url.includes('mod/forum')) type = 'forum';
-                        else if (url.includes('mod/url')) type = 'url';
+                    const moduleNodes = sec.querySelectorAll('li.courseindex-item');
+                    for (const modElement of moduleNodes) {
+                        const linkLabel = modElement.querySelector('a.courseindex-link');
+                        if (!linkLabel) continue;
+                        
+                        const href = linkLabel.href;
+                        // Skip anchor links on the main page like Labels
+                        if (!href || href.includes('#')) continue;
+                        
+                        const title = linkLabel.textContent.trim();
 
+                        let type = 'unknown';
+                        if (href.includes('mod/resource')) type = 'resource';
+                        else if (href.includes('mod/folder')) type = 'folder';
+                        else if (href.includes('mod/page')) type = 'page';
+                        else if (href.includes('mod/assign')) type = 'assign';
+                        else if (href.includes('mod/turnitintooltwo')) type = 'turnitintooltwo';
+                        else if (href.includes('mod/choicegroup')) type = 'choicegroup';
+                        else if (href.includes('mod/feedback')) type = 'feedback';
+                        else if (href.includes('mod/quiz')) type = 'quiz';
+                        else type = 'other';
+                        
                         results.push({
-                            section: sectionName,
-                            name: name,
+                            section: sectionTitle,
+                            name: title,
                             type: type,
-                            url: url
+                            url: href
                         });
-                    });
+                    }
                 });
                 return results;
             });
 
             console.log(`Found ${modules.length} modules to process in this course.`);
 
-            for (const mod of modules) {
-                // We mainly care about resources (files) and folders for downloading documents.
-                // Pages and assignments might have attachments, but let's cover the main ones first.
-                if (mod.type === 'resource' || mod.type === 'folder' || mod.type === 'assign' || mod.type === 'page') {
+            const testLimitIndex = process.argv.indexOf('--limit');
+            let limit = modules.length;
+            if (testLimitIndex > -1 && process.argv.length > testLimitIndex + 1) {
+                limit = parseInt(process.argv[testLimitIndex + 1], 10);
+                console.log(`[TEST RUN] Limiting to first ${limit} modules.`);
+            }
+
+            const isMapOnly = process.argv.includes('--map-only');
+            if (isMapOnly) {
+                console.log(`[MAP ONLY] Exporting module map for ${course.title}...`);
+                fs.writeFileSync(path.join(courseDir, 'course_map.json'), JSON.stringify(modules, null, 2));
+                console.log(`     Saved map to course_map.json. Skipping downloads for this course.`);
+                continue;
+            }
+
+            for (let i = 0; i < Math.min(modules.length, limit); i++) {
+                const mod = modules[i];
+                // we process everything now. unknown types fallback to HTML save.
+                const supportedTypes = ['resource', 'folder', 'assign', 'page', 'turnitintooltwo', 'choicegroup', 'feedback', 'quiz', 'other', 'unknown'];
+                if (supportedTypes.includes(mod.type)) {
                     const cleanSecName = sanitizeFilename(mod.section);
                     const cleanModName = sanitizeFilename(mod.name);
                     const modDir = path.join(courseDir, cleanSecName);
@@ -247,7 +274,25 @@ async function extractZip(zipPath, targetDir) {
                                 await sleep(500);
                             }
                         }
-                    } else if (mod.type === 'page' || mod.type === 'assign') {
+                    } else {
+                        // Fallback for all other types (page, assign, turnitintooltwo, quiz, etc.):
+                        // Save the page content itself as readable offline HTML
+                        try {
+                            const pageHtml = await workPage.evaluate((title) => {
+                                const mainRegion = document.querySelector('[role="main"]') || document.querySelector('#region-main') || document.body;
+                                // Basic cleanup of empty or UI-heavy spans if needed, but innerHTML is fine for now
+                                return `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>${title}</title>\n<style>body{font-family:sans-serif;line-height:1.6;padding:2rem;max-width:900px;margin:auto;} img{max-width:100%;height:auto;}</style>\n</head>\n<body>\n<h1>${title}</h1>\n<hr>\n${mainRegion.innerHTML}\n</body>\n</html>`;
+                            }, mod.name);
+                            
+                            const htmlPath = path.join(modDir, cleanModName + '.html');
+                            if (!fs.existsSync(htmlPath)) {
+                                fs.writeFileSync(htmlPath, pageHtml, 'utf8');
+                                console.log(`     Saved page HTML: ${cleanModName}.html`);
+                            }
+                        } catch (e) {
+                            console.error(`     Error saving page HTML for ${mod.name}:`, e.message);
+                        }
+
                         // Look for attachments (pluginfile.php links)
                         const attachments = await workPage.evaluate(() => {
                             const atts = [];
