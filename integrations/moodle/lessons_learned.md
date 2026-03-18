@@ -1,0 +1,7 @@
+
+### Moodle Document Crawling
+- **CDP Automation in Moodle**: By connecting to an existing browser via CDP (`127.0.0.1:9222`), we bypassed complex authentication methods.
+- **Handling Moodle Tree Structure**: Instead of clicking through paginated layouts manually, the Moodle Boost theme conveniently lists all sections and activities (`mod/resource`, `mod/folder`, etc.) implicitly in the left navigation sidebar under `courseindex-section`. Parsing this DOM `ul` element reveals 100% of all learning materials globally.
+- **Zip Folder Handling**: Moodle folders (`mod/folder`) often contain multiple files. Rather than iterating DOM nodes within the folder, submitting the "Stáhnout složku" (download folder) form using its query params dynamically fetches a ZIP archive, which the script extracts natively in Node using `unzip`. This proves much more reliable and preserves absolute structure.
+- **Diacritics the hard way**: Do not use `decodeURIComponent(escape())` on UTF-8 strings (especially Czech diacritics like 'Ř'). It will raise `URIError: URI malformed`. A reliable fix is simply stripping illegal directory characters natively via standard Regex replacement operations.
+- **Browser State Context**: When running scripts depending on an active browser DOM, whatever tab the user is visually focused on will dictate the starting conditions of the script, so if limiting scope, searching for target courses only limits it if they are available to click on from that particular open Moodle page.
