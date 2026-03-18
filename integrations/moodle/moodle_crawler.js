@@ -104,6 +104,7 @@ async function extractZip(zipPath, targetDir) {
                         else if (href.includes('mod/choicegroup')) type = 'choicegroup';
                         else if (href.includes('mod/feedback')) type = 'feedback';
                         else if (href.includes('mod/quiz')) type = 'quiz';
+                        else if (href.includes('mod/book')) type = 'book';
                         else type = 'other';
                         
                         results.push({
@@ -137,7 +138,7 @@ async function extractZip(zipPath, targetDir) {
             for (let i = 0; i < Math.min(modules.length, limit); i++) {
                 const mod = modules[i];
                 // we process everything now. unknown types fallback to HTML save.
-                const supportedTypes = ['resource', 'folder', 'assign', 'page', 'turnitintooltwo', 'choicegroup', 'feedback', 'quiz', 'other', 'unknown'];
+                const supportedTypes = ['resource', 'folder', 'assign', 'page', 'book', 'turnitintooltwo', 'choicegroup', 'feedback', 'quiz', 'other', 'unknown'];
                 if (supportedTypes.includes(mod.type)) {
                     const cleanSecName = sanitizeFilename(mod.section);
                     const cleanModName = sanitizeFilename(mod.name);
@@ -273,6 +274,42 @@ async function extractZip(zipPath, targetDir) {
                                 } catch (e) {}
                                 await sleep(500);
                             }
+                        }
+                    } else if (mod.type === 'book') {
+                        // For books, try to fetch the "Print complete book" version which has all chapters in one HTML
+                        const printUrl = await workPage.evaluate(() => {
+                            const links = Array.from(document.querySelectorAll('a'));
+                            const target = links.find(a => a.textContent.includes('Vytisknout celou knihu'));
+                            if (target) return target.href;
+                            
+                            const printLinks = links.filter(a => a.href && a.href.includes('tool/print/index.php'));
+                            if (printLinks.length > 0) {
+                                const wholeBook = printLinks.find(a => !a.href.includes('chapterid'));
+                                return wholeBook ? wholeBook.href : printLinks[0].href;
+                            }
+                            return null;
+                        });
+
+                        try {
+                            if (printUrl) {
+                                await workPage.goto(printUrl, { waitUntil: 'domcontentloaded' });
+                                await sleep(1000);
+                            }
+                            
+                            const pageHtml = await workPage.evaluate((title) => {
+                                const mainRegion = document.querySelector('[role="main"]') || document.querySelector('#region-main') || document.body;
+                                return `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>${title}</title>\n<style>body{font-family:sans-serif;line-height:1.6;padding:2rem;max-width:900px;margin:auto;} img{max-width:100%;height:auto;}</style>\n</head>\n<body>\n<h1>${title}</h1>\n<hr>\n${mainRegion.innerHTML}\n</body>\n</html>`;
+                            }, mod.name);
+                            
+                            const htmlPath = path.join(modDir, cleanModName + '.html');
+                            if (!fs.existsSync(htmlPath)) {
+                                fs.writeFileSync(htmlPath, pageHtml, 'utf8');
+                                console.log(`     Saved complete book HTML: ${cleanModName}.html`);
+                            } else {
+                                console.log(`     Skipped book HTML: ${cleanModName}.html (exists)`);
+                            }
+                        } catch (e) {
+                            console.error(`     Error saving book HTML for ${mod.name}:`, e.message);
                         }
                     } else {
                         // Fallback for all other types (page, assign, turnitintooltwo, quiz, etc.):
