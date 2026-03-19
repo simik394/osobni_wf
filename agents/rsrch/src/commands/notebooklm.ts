@@ -33,22 +33,48 @@ notebook.command('add-web-source <url>')
         });
     });
 
-notebook.command('add-local-source <path>')
+notebook.command('add-local-source <paths...>')
     .alias('add-file')
-    .description('Upload a local file (e.g. PDF, TXT) to a notebook')
+    .description('Upload local files or directories (e.g. PDF, TXT) to a notebook')
     .option('--notebook <title>', 'Notebook title')
     .option('--local', 'Use local execution', true)
-    .action(async (filePath, opts) => {
-        const resolvedPath = path.resolve(process.cwd(), filePath);
-        if (!fs.existsSync(resolvedPath)) {
-            console.error(`Error: File not found at ${resolvedPath}`);
+    .action(async (filePaths, opts) => {
+        let filesToUpload: string[] = [];
+        
+        for (const filePath of filePaths) {
+            const resolvedPath = path.resolve(process.cwd(), filePath);
+            if (!fs.existsSync(resolvedPath)) {
+                console.warn(`Warning: File or directory not found at ${resolvedPath}`);
+                continue;
+            }
+            
+            const stat = fs.statSync(resolvedPath);
+            if (stat.isDirectory()) {
+                const files = fs.readdirSync(resolvedPath)
+                    .filter(f => f.toLowerCase().endsWith('.pdf') || f.toLowerCase().endsWith('.txt') || f.toLowerCase().endsWith('.md'))
+                    .map(f => path.join(resolvedPath, f));
+                filesToUpload.push(...files);
+            } else {
+                filesToUpload.push(resolvedPath);
+            }
+        }
+        
+        if (filesToUpload.length === 0) {
+            console.error('Error: No valid files found to upload.');
             process.exit(1);
         }
+
+        console.log(`Found ${filesToUpload.length} files to upload.`);
+
         await runLocalNotebookAction(async (client, notebook) => {
             if (opts.notebook) {
                 await notebook.openNotebook(opts.notebook);
             }
-            await notebook.uploadLocalFile(resolvedPath);
+            for (let i = 0; i < filesToUpload.length; i++) {
+                console.log(`[${i+1}/${filesToUpload.length}] Uploading ${filesToUpload[i]}...`);
+                await notebook.uploadLocalFile(filesToUpload[i]);
+            }
+            console.log(`✅ Successfully uploaded ${filesToUpload.length} files to NotebookLM.`);
         });
     });
 
