@@ -489,8 +489,9 @@ export class NotebookLMClient {
         }
     }
 
-    async uploadLocalFile(filePath: string) {
-        console.log(`[NotebookLM] Uploading local file: ${filePath}`);
+    async uploadLocalFile(filePath: string | string[]) {
+        const pathsArr = Array.isArray(filePath) ? filePath : [filePath];
+        console.log(`[NotebookLM] Uploading local file(s): ${pathsArr.join(', ')}`);
 
         // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
         const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
@@ -504,7 +505,7 @@ export class NotebookLMClient {
         }
 
         // Check if "Add sources" dialog is already open (NotebookLM auto-opens after new notebook)
-        const dialogVisible = await this.page.locator('mat-dialog-container').filter({ hasText: /Přidat zdroje|Add sources/i }).count() > 0;
+        const dialogVisible = await this.page.locator('add-sources-dialog, mat-dialog-container:has(add-sources-dialog), [role="dialog"]:has(add-sources-dialog)').count() > 0;
 
         if (!dialogVisible) {
             // Click "Add sources" button only if dialog not already open
@@ -528,25 +529,26 @@ export class NotebookLMClient {
         // 2. The drop zone button
         // 3. Any clickable element with upload_file icon
 
-        const selectLink = this.page.locator('span.select-files-link, a:has-text("vyberte"), a:has-text("select"), span:has-text("vyberte"), span:has-text("select")').first();
-        const uploadBtn = this.page.locator('button.drop-zone-icon-button, .drop-zone').first();
-        const iconBtn = this.page.locator('mat-icon:has-text("upload_file")').locator('..').first();
+        const dialogLocator = this.page.locator('add-sources-dialog').first();
+        const selectLink = dialogLocator.locator('span.select-files-link, a:has-text("vyberte"), a:has-text("select")').first();
+        const uploadBtn = dialogLocator.locator('button').filter({ hasText: /Nahrát soubor|Upload file|Upload/i }).first();
+        const iconBtn = dialogLocator.locator('mat-icon:has-text("upload_file")').locator('..').first();
 
         if (await selectLink.count() > 0 && await selectLink.isVisible()) {
             console.log('[NotebookLM] Clicking select link...');
-            await selectLink.click({ force: true });  // Force click to bypass overlay
+            await selectLink.click();
         } else if (await uploadBtn.count() > 0 && await uploadBtn.isVisible()) {
             console.log('[NotebookLM] Clicking upload button...');
-            await uploadBtn.click({ force: true });
+            await uploadBtn.click();
         } else if (await iconBtn.count() > 0 && await iconBtn.isVisible()) {
             console.log('[NotebookLM] Clicking icon button...');
-            await iconBtn.click({ force: true });
+            await iconBtn.click();
         } else {
             // Last resort: click anywhere in the drop zone area
-            const dropZone = this.page.locator('.drop-zone, [class*="drop-zone"], .file-upload-area').first();
+            const dropZone = dialogLocator.locator('.drop-zone, [class*="drop-zone"], .file-upload-area').first();
             if (await dropZone.count() > 0) {
                 console.log('[NotebookLM] Clicking drop zone...');
-                await dropZone.click({ force: true });
+                await dropZone.click();
             } else {
                 throw new Error('Upload source button/link not found');
             }
@@ -554,12 +556,12 @@ export class NotebookLMClient {
 
         const fileChooser = await fileChooserPromise;
         await fileChooser.setFiles(filePath);
-        console.log('[NotebookLM] File selected.');
+        console.log('[NotebookLM] File(s) selected.');
 
         // Wait for upload to complete
         // usually the dialog closes automatically or we verify the file appears in source list.
         // Let's wait for dialog to close.
-        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 30000 });
+        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 60000 });
 
         // Verify in source list?
         // Simple delay for now.

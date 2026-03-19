@@ -70,9 +70,9 @@ notebook.command('add-local-source <paths...>')
             if (opts.notebook) {
                 await notebook.openNotebook(opts.notebook);
             }
-            for (let i = 0; i < filesToUpload.length; i++) {
-                console.log(`[${i+1}/${filesToUpload.length}] Uploading ${filesToUpload[i]}...`);
-                await notebook.uploadLocalFile(filesToUpload[i]);
+            if (filesToUpload.length > 0) {
+                console.log(`Uploading ${filesToUpload.length} files in a single batch...`);
+                await notebook.uploadLocalFile(filesToUpload);
             }
             console.log(`✅ Successfully uploaded ${filesToUpload.length} files to NotebookLM.`);
         });
