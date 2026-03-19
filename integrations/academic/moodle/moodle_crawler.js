@@ -79,7 +79,8 @@ async function extractZip(zipPath, targetDir) {
                 ensureDirSync(modDir);
 
                 console.log(`  -> Processing [${mod.type}] ${mod.name}...`);
-                await smartGoto(workPage, mod.url, 1500);
+                const randomDelay = Math.floor(500 + Math.random() * 500);
+                await smartGoto(workPage, mod.url, randomDelay);
 
                 const modHtml = await workPage.content();
 

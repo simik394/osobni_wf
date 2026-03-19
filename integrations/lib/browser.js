@@ -1,9 +1,10 @@
 const { chromium } = require('playwright');
 
 /**
- * Connects to an existing Chrome instance via CDP (default 127.0.0.1:9222)
+ * Connects to an existing Chrome instance via CDP.
+ * You can set the CDP_URL environment variable in Windmill to point to the rsrch container.
  */
-async function connectToBrowser(cdpUrl = 'http://127.0.0.1:9222') {
+async function connectToBrowser(cdpUrl = process.env.CDP_URL || 'http://127.0.0.1:9222') {
     try {
         const browser = await chromium.connectOverCDP(cdpUrl);
         const context = browser.contexts()[0];

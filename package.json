@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.10"
+  },
+  "dependencies": {
+    "jsdom": "^29.0.0"
   }
 }

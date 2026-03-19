@@ -19,8 +19,7 @@ const Extractor = require('./insis_data_extractors');
 
         // We fetch the main portal HTML using script evaluation and node fetching
         console.log("\n-> Fetching Dropboxes (Odevzdávárny)...");
-        await page.goto('https://insis.vse.cz/auth/student/odevzdavarny.pl?studium=250444;obdobi=1187', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
+        await smartGoto(page, 'https://insis.vse.cz/auth/student/odevzdavarny.pl?studium=250444;obdobi=1187', 1000 + Math.random() * 1000);
         const dropboxesHtml = await page.content();
         const dropboxes = Extractor.extractDropboxes(dropboxesHtml);
 
@@ -32,8 +31,7 @@ const Extractor = require('./insis_data_extractors');
                     properLink = 'https://insis.vse.cz' + properLink;
                 }
                 
-                await page.goto(properLink, { waitUntil: 'domcontentloaded' });
-                await page.waitForTimeout(1000);
+                await smartGoto(page, properLink, 500 + Math.random() * 500);
                 const detailsHtml = await page.content();
                 dropbox.details = Extractor.extractDropboxDetails(detailsHtml);
             }
@@ -43,24 +41,21 @@ const Extractor = require('./insis_data_extractors');
         console.log(`Saved ${dropboxes.length} Dropboxes to insis_dropboxes.json`);
 
         console.log("\n-> Fetching Exams (Termíny zkoušek)...");
-        await page.goto('https://insis.vse.cz/auth/student/terminy_seznam.pl?studium=250444;obdobi=1187', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
+        await smartGoto(page, 'https://insis.vse.cz/auth/student/terminy_seznam.pl?studium=250444;obdobi=1187', 1000 + Math.random() * 1000);
         const examsHtml = await page.content();
         const exams = Extractor.extractExams(examsHtml);
         fs.writeFileSync('insis_exams.json', JSON.stringify(exams, null, 2));
         console.log(`Saved ${exams.length} Exams to insis_exams.json`);
 
         console.log("\n-> Fetching Grades (Průběžná hodnocení)...");
-        await page.goto('https://insis.vse.cz/auth/student/list.pl?studium=250444;obdobi=1187', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
+        await smartGoto(page, 'https://insis.vse.cz/auth/student/list.pl?studium=250444;obdobi=1187', 1000 + Math.random() * 1000);
         const gradesHtml = await page.content();
         const grades = Extractor.extractGrades(gradesHtml);
         fs.writeFileSync('insis_grades.json', JSON.stringify(grades, null, 2));
         console.log(`Saved ${grades.length} Grade entries to insis_grades.json`);
 
         console.log("\n-> Fetching Schedule (Rozvrh)...");
-        await page.goto('https://insis.vse.cz/auth/katalog/rozvrhy_view.pl?rozvrh_student_obec=1?zobraz=1;format=html;rozvrh_student=149348', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
+        await smartGoto(page, 'https://insis.vse.cz/auth/katalog/rozvrhy_view.pl?rozvrh_student_obec=1?zobraz=1;format=html;rozvrh_student=149348', 1000 + Math.random() * 1000);
         const rozvrhHtml = await page.content();
         
         const anomalies = Extractor.extractAnomalies(rozvrhHtml);
@@ -83,8 +78,7 @@ const Extractor = require('./insis_data_extractors');
             }
 
             console.log(`Loading syllabus for ${sub.name}...`);
-            await page.goto(properLink, { waitUntil: 'domcontentloaded' });
-            await page.waitForTimeout(1500);
+            await smartGoto(page, properLink, 500 + Math.random() * 1000);
             
             const syllabusHtml = await page.content();
             const details = Extractor.extractSyllabusDetails(syllabusHtml);
