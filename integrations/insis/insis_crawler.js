@@ -13,8 +13,8 @@ const Extractor = require('./insis_data_extractors');
         page = await context.newPage();
 
         console.log("Navigating to InSIS student portal...");
-        await page.goto('https://insis.vse.cz/auth/', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(2000);
+        await page.goto('https://insis.vse.cz/auth/', { waitUntil: 'networkidle' });
+        await page.waitForTimeout(3000);
 
         await ensureAuthenticated(page);
         console.log("✅ Authentication verified successfully.");
@@ -25,6 +25,22 @@ const Extractor = require('./insis_data_extractors');
         await page.waitForTimeout(2000);
         const dropboxesHtml = await page.content();
         const dropboxes = Extractor.extractDropboxes(dropboxesHtml);
+
+        console.log(`\n-> Fetching ${dropboxes.length} Detailed Dropbox Profiles...`);
+        for (const dropbox of dropboxes) {
+            if (dropbox.detailsLink) {
+                let properLink = dropbox.detailsLink;
+                if (!properLink.startsWith('http')) {
+                    properLink = 'https://insis.vse.cz' + properLink;
+                }
+                
+                await page.goto(properLink, { waitUntil: 'domcontentloaded' });
+                await page.waitForTimeout(1000);
+                const detailsHtml = await page.content();
+                dropbox.details = Extractor.extractDropboxDetails(detailsHtml);
+            }
+        }
+
         fs.writeFileSync('insis_dropboxes.json', JSON.stringify(dropboxes, null, 2));
         console.log(`Saved ${dropboxes.length} Dropboxes to insis_dropboxes.json`);
 
@@ -36,14 +52,53 @@ const Extractor = require('./insis_data_extractors');
         fs.writeFileSync('insis_exams.json', JSON.stringify(exams, null, 2));
         console.log(`Saved ${exams.length} Exams to insis_exams.json`);
 
+        console.log("\n-> Fetching Grades (Průběžná hodnocení)...");
+        await page.goto('https://insis.vse.cz/auth/student/list.pl?studium=250444;obdobi=1187', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000);
+        const gradesHtml = await page.content();
+        const grades = Extractor.extractGrades(gradesHtml);
+        fs.writeFileSync('insis_grades.json', JSON.stringify(grades, null, 2));
+        console.log(`Saved ${grades.length} Grade entries to insis_grades.json`);
+
         console.log("\n-> Fetching Schedule (Rozvrh)...");
         await page.goto('https://insis.vse.cz/auth/katalog/rozvrhy_view.pl?rozvrh_student_obec=1?zobraz=1;format=html;rozvrh_student=149348', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(2000);
         const rozvrhHtml = await page.content();
         
+        const anomalies = Extractor.extractAnomalies(rozvrhHtml);
+        fs.writeFileSync('insis_schedule_anomalies.json', JSON.stringify(anomalies, null, 2));
+        console.log(`Saved ${anomalies.length} Schedule Anomalies to insis_schedule_anomalies.json`);
+
         const subjects = Extractor.extractSyllabuses(rozvrhHtml, examsHtml);
-        fs.writeFileSync('insis_subjects.json', JSON.stringify(subjects, null, 2));
-        console.log(`Saved ${subjects.length} Subjects to insis_subjects.json`);
+
+        console.log(`\n-> Fetching ${subjects.length} Detailed Subject Profiles (Syllabuses)...`);
+        const fullProfiles = [];
+        for (const sub of subjects) {
+            let properLink = sub.link;
+            // Handle relative paths
+            if (properLink.startsWith('.')) {
+                // E.g "../katalog/syllabus.pl?predmet=215586"
+                // E.g "./syllabus.pl?predmet=215931"
+                properLink = new URL(properLink, 'https://insis.vse.cz/auth/katalog/rozvrhy_view.pl').href;
+            } else if (!properLink.startsWith('http')) {
+                properLink = 'https://insis.vse.cz' + properLink;
+            }
+
+            console.log(`Loading syllabus for ${sub.name}...`);
+            await page.goto(properLink, { waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(1500);
+            
+            const syllabusHtml = await page.content();
+            const details = Extractor.extractSyllabusDetails(syllabusHtml);
+            fullProfiles.push({
+                id: sub.id,
+                name: sub.name,
+                url: properLink,
+                profile: details
+            });
+        }
+        fs.writeFileSync('insis_subject_profiles.json', JSON.stringify(fullProfiles, null, 2));
+        console.log(`Saved ${fullProfiles.length} Detailed Profiles to insis_subject_profiles.json`);
 
         console.log("\nFinished gracefully.");
     } catch (e) {
