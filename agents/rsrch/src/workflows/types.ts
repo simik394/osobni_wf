@@ -7,7 +7,7 @@ export interface Trigger {
 export interface WorkflowStep {
     id: string;
     agent: 'gemini' | 'perplexity' | 'notebooklm';
-    action: 'query' | 'deep-research' | 'audio' | 'export';
+    action: 'query' | 'deep-research' | 'audio' | 'export' | 'chat' | 'upload';
     params: Record<string, any>;
     dependsOn?: string[];
     condition?: string;

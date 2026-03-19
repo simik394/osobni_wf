@@ -20,8 +20,8 @@ notebook.command('create <title>')
         }
     });
 
-notebook.command('add-source <url>')
-    .description('Add a source URL to a notebook')
+notebook.command('add-web-source <url>')
+    .description('Add a website source URL to a notebook')
     .option('--notebook <title>', 'Notebook title')
     .option('--local', 'Use local execution', true)
     .action(async (url, opts) => {
@@ -30,6 +30,25 @@ notebook.command('add-source <url>')
                 await notebook.openNotebook(opts.notebook);
             }
             await notebook.addSourceUrl(url);
+        });
+    });
+
+notebook.command('add-local-source <path>')
+    .alias('add-file')
+    .description('Upload a local file (e.g. PDF, TXT) to a notebook')
+    .option('--notebook <title>', 'Notebook title')
+    .option('--local', 'Use local execution', true)
+    .action(async (filePath, opts) => {
+        const resolvedPath = path.resolve(process.cwd(), filePath);
+        if (!fs.existsSync(resolvedPath)) {
+            console.error(`Error: File not found at ${resolvedPath}`);
+            process.exit(1);
+        }
+        await runLocalNotebookAction(async (client, notebook) => {
+            if (opts.notebook) {
+                await notebook.openNotebook(opts.notebook);
+            }
+            await notebook.uploadLocalFile(resolvedPath);
         });
     });
 
