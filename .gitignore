@@ -62,3 +62,10 @@ _leftovers/
 
 insis_downloads/
 *.bundle
+
+# Integration Dynamic Payloads & Scraper Dumps
+integrations/insis/*.json
+integrations/insis/*.html
+integrations/moodle/*.html
+integrations/moodle/moodle_downloads/
+integrations/moodle/moodle_downloads_backup/
