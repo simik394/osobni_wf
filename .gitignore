@@ -69,3 +69,7 @@ integrations/insis/*.html
 integrations/moodle/*.html
 integrations/moodle/moodle_downloads/
 integrations/moodle/moodle_downloads_backup/
+
+# Track the consolidated archived dumps
+!integrations/insis/_dumps/**
+!integrations/moodle/_dumps/**
