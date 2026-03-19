@@ -9,6 +9,8 @@
 - **Problem**: When passing 9 PDFs through `waitForEvent('filechooser')` inside a large `for` loop, the script frequently hung. NotebookLM's uploader state occasionally stalls out or changes intermediate selectors.
 - **Solution**: A sequential Bash script `for f in ...; do rsrch notebook add-local-source "$f"; done` provides a much higher rate of success. Each file upload utilizes a fresh connection to the remote CDP browser, which clears any lingering dialog overlays and UI bugs between runs. It completely mitigates memory leaks and SPA component desync.
 
-## NotebookLM Specifics
-- Text matches for buttons should accommodate localization differences (e.g. `/(Vyberte|Upload|Přidat)/i`).
-- Forcing a click on the upload zone strictly breaks the native file-picker trigger constraint over CDP. Never use `force: true` when expecting a filechooser event.
+## HTML Scraping & Text Conversion
+- **Problem**: Many LMS platforms (like Moodle) store their primary instructional content in `mod/page` or `mod/book` modules rather than just PDF files. Simply downloading attachments missed 70% of the course content.
+- **Solution**: A tailored scraper using `jsdom` or Playwright can extract the `innerHTML` of the `#region-main` or `[role="main"]` area.
+- **Optimization**: Converting extracted HTML to plain `.txt` (stripping tags) before uploading to NotebookLM is crucial. This reduces token waste, eliminates noise from navigation/sidebar elements, and improves the quality of the AI's grounding by providing clean, content-focused data.
+- **Deduplication**: Use `rsrch notebook sources <title>` to audit the current state before batching, as re-running scripts can easily lead to source duplication in the UI.

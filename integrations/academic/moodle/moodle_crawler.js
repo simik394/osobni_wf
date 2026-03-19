@@ -33,7 +33,7 @@ async function extractZip(zipPath, targetDir) {
         await assertAuthenticated(workPage, 'vse_moodle');
 
         // Find course links
-        const courseLinks = await workPage.evaluate((targets) => {
+        let courseLinks = await workPage.evaluate((targets) => {
             const links = [];
             document.querySelectorAll('a[href*="/course/view.php?id="]').forEach(a => {
                 const title = a.innerText || a.getAttribute('title') || '';
@@ -43,6 +43,12 @@ async function extractZip(zipPath, targetDir) {
             });
             return links;
         }, TARGET_COURSES);
+
+        // Fallback if no courses found (might be on a different page now)
+        if (courseLinks.length === 0) {
+            console.log("No courses found via dashboard links, trying direct navigation to 4IT415...");
+            courseLinks = [{ url: 'https://moodle.vse.cz/course/view.php?id=21750', title: '4IT415 Informační modelování organizací (2025/2026 LS)' }];
+        }
 
         console.log(`Found ${courseLinks.length} target courses.`);
 
