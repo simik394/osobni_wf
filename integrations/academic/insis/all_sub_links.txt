@@ -1,0 +1,54 @@
+ ||| http://www.vse.cz/english/
+ČESKY ||| https://insis.vse.cz/auth/student/moje_studium.pl?_m=3110;studium=250444;obdobi=1187;lang=cz
+SLOVENSKY ||| https://insis.vse.cz/auth/student/moje_studium.pl?_m=3110;studium=250444;obdobi=1187;lang=sk
+Log out ||| /auth/system/logout.pl
+Office365 ||| https://outlook.com/vse.cz
+0 ||| /auth/dok_server/nove_dok.pl
+documents ||| /auth/dok_server/nove_dok.pl
+0 ||| /auth/todo/
+tasks ||| /auth/todo/
+ ||| ../
+View application help ||| /auth/help.pl?page=8948;back=aHR0cHM6Ly9pbnNpcy52c2UuY3ovYXV0aC9zdHVkZW50L21vamVfc3R1ZGl1bS5wbD9fbT0zMTEwO3N0dWRpdW09MjUwNDQ0O29iZG9iaT0xMTg3
+My College ||| /auth/student/moje_studium.pl
+E-study record ||| /auth/student/pruchod_studiem.pl?studium=250444;obdobi=1187
+My schoolmates ||| /auth/student/spoluzaci.pl?studium=250444;obdobi=1187
+Study details ||| /auth/student/studium.pl?studium=250444;obdobi=1187
+Map of my study ||| /auth/student/mapa_studii.pl?studium=250444;obdobi=1187
+Course e-plans ||| /auth/elis/student/seznam_osnov.pl?studium=250444;obdobi=1187
+List of topics ||| /auth/student/temata_prihlasovani.pl?studium=250444;obdobi=1187
+Coursework submissions ||| /auth/student/odevzdavarny.pl?studium=250444;obdobi=1187
+Plan progress check ||| /auth/studijni/studijni_povinnosti.pl?studium=250444;obdobi=1187
+My lectures sheet ||| /auth/student/list.pl?studium=250444;obdobi=1187
+My favourite courses ||| /auth/student/oblibene_predmety.pl?studium=250444;obdobi=1187
+ ||| 
+ ||| 
+ ||| 
+ ||| 
+ ||| /auth/tm_help.pl?lang=en
+ ||| ../student/terminy_seznam.pl?studium=250444;obdobi=1187
+ ||| ../student/registrace.pl?studium=250444;obdobi=1187
+ ||| ../student/mimosemestr_zapis.pl?studium=250444;obdobi=1187
+ ||| ../zp/zp_portal.pl?studium=250444;obdobi=1187
+ ||| ../student/vs_registrace.pl?studium=250444;obdobi=1187
+ ||| ./moje_studium.pl?studium=251310
+ ||| ../student/zp_temata.pl?studium=251310;obdobi=1140
+ ||| ./moje_studium.pl?studium=204717
+ ||| ../zp/zp_portal.pl?studium=204717;obdobi=1035
+Personal timetable ||| /auth/katalog/rozvrhy_view.pl?rozvrh_student_obec=1?zobraz=1;format=html;rozvrh_student=149348;zpet=../student/moje_studium.pl?_m=3110,studium=250444,obdobi=1187
+Academic calendar (weeks overview) ||| /auth/ca/prehled_tydnu.pl?studium=250444;obdobi=1187;
+Academic year schedule ||| /auth/student/harmonogram.pl?obdobi=1187;fakulta=40;zpet_student=moje_studium.pl?_m=3110,studium=250444,obdobi=1187
+Contact departments ||| /auth/pracoviste/stud_odd.pl?fakulta=40;zpet_student=moje_studium.pl?_m=3110,studium=250444,obdobi=1187
+Contact centre ||| /auth/kc/kc.pl?studium=250444;obdobi=1187;
+My excuse notes ||| /auth/student/moje_omluvenky.pl?studium=250444;obdobi=1187;
+Print documents ||| /auth/student/tisk_dokumentu.pl?studium=250444;obdobi=1187;
+Document storage ||| ../uloziste/index.pl?rezim=7;studium=250444;obdobi=1187;
+Course evaluation by students ||| /auth/anketky/dotazniky.pl?studium=250444;obdobi=1187;
+Jobs portal ||| /auth/praxe/index.pl?studium=250444;obdobi=1187;je_student=1
+Overview of financing (all studies) ||| /auth/student/financovani.pl?prehled_portal=1;obdobi=1187;studium=250444
+Study financing ||| /auth/student/financovani.pl?obdobi=1187;studium=250444
+Accommodation benefit application form ||| /auth/student/zadost_ubyt_stip.pl?obdobi=1187;studium=250444
+Paid-out scholarships ||| /auth/student/vypl_stip_student.pl?obdobi=1187;studium=250444
+Bank accounts ||| ./bank_spojeni_clovek.pl
+Orders ||| /auth/financovani/objednavky.pl?obdobi=1187;studium=250444
+Submit exchange programme application ||| /auth/int/podani_prihlasky.pl?obdobi=1187;studium=250444
+Change photo ||| /auth/personalizace/vkladani_fotky.pl?zpet=/auth/student/moje_studium.pl?studium=250444,obdobi=1187

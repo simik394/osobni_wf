@@ -1,0 +1,62 @@
+[
+  {
+    "category": "available",
+    "code": "4IT414",
+    "courseName": "IS/ICT Project Management",
+    "date": "04/06/2026 14:30 (Thu)",
+    "room": "SB 107 (ZI)",
+    "type": "examination(written and oral)",
+    "teacher": "D. Chlapek",
+    "capacity": "15/25"
+  },
+  {
+    "category": "available",
+    "code": "4IT414",
+    "courseName": "IS/ICT Project Management",
+    "date": "05/06/2026 09:15 (Fri)",
+    "room": "SB 107 (ZI)",
+    "type": "examination(written and oral)",
+    "teacher": "D. Chlapek",
+    "capacity": "16/25"
+  },
+  {
+    "category": "available",
+    "code": "4IT414",
+    "courseName": "IS/ICT Project Management",
+    "date": "05/06/2026 12:30 (Fri)",
+    "room": "SB 107 (ZI)",
+    "type": "examination(written and oral)",
+    "teacher": "D. Chlapek",
+    "capacity": "20/20"
+  },
+  {
+    "category": "available",
+    "code": "4IT414",
+    "courseName": "IS/ICT Project Management",
+    "date": "18/06/2026 12:30 (Thu)",
+    "room": "NB 468 FIS (ZI)",
+    "type": "examination(written and oral)",
+    "teacher": "D. Chlapek",
+    "capacity": "6/25"
+  },
+  {
+    "category": "available",
+    "code": "4IT414",
+    "courseName": "IS/ICT Project Management",
+    "date": "22/06/2026 11:00 (Mon)",
+    "room": "SB 107 (ZI)",
+    "type": "examination(written and oral)",
+    "teacher": "D. Chlapek",
+    "capacity": "2/25"
+  },
+  {
+    "category": "available",
+    "code": "4IT414",
+    "courseName": "IS/ICT Project Management",
+    "date": "25/06/2026 09:15 (Thu)",
+    "room": "SB 107 (ZI)",
+    "type": "examination(written and oral)",
+    "teacher": "D. Chlapek",
+    "capacity": "0/25"
+  }
+]
