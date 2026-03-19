@@ -48,10 +48,12 @@ export const notifyCommand = new Command('notify')
         console.log('Results:', results);
     });
 
+import { DEFAULTS } from '@agents/shared';
+
 export const vncCommand = new Command('vnc')
     .description('Open VNC connection to the production browser')
-    .option('--host <host>', 'VNC host', 'halvarm')
-    .option('--port <port>', 'VNC port', '5900')
+    .option('--host <host>', 'VNC host', DEFAULTS.RSRCH.HOST)
+    .option('--port <port>', 'VNC port', DEFAULTS.RSRCH.VNC_PORT.toString())
     .option('--viewer <path>', 'Custom VNC viewer command')
     .action(async (opts) => {
         const { execSync } = await import('child_process');

@@ -7,21 +7,13 @@
             "dom"
         ],
         "outDir": "./dist",
+        "rootDir": "./src",
         "strict": true,
         "strictNullChecks": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "moduleResolution": "node",
-        "baseUrl": ".",
-        "paths": {
-            "@agents/shared": [
-                "../shared/src/index"
-            ],
-            "@agents/shared/*": [
-                "../shared/src/*"
-            ]
-        }
+        "moduleResolution": "node"
     },
     "include": [
         "src/**/*"
