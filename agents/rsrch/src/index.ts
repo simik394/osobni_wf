@@ -530,6 +530,25 @@ async function main() {
                 await sendServerRequest('/notebook/sources', { title });
             }
 
+        } else if (subArg1 === 'delete-source') {
+            // rsrch notebook delete-source "Notebook Title" "Source Title" [--local]
+            const nbTitle = subArg2;
+            const srcTitle = args[3];
+            if (!nbTitle || !srcTitle) {
+                logger.error('Usage: rsrch notebook delete-source "Notebook Title" "Source Title" [--local]');
+                process.exit(1);
+            }
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    await notebook.openNotebook(nbTitle);
+                    await notebook.deleteSource(srcTitle);
+                    logger.info(`✅ Successfully deleted source "${srcTitle}" from notebook "${nbTitle}".`);
+                });
+            } else {
+                logger.error('Error: Server-side source deletion not implemented. Use --local.');
+                process.exit(1);
+            }
+
         } else if (subArg1 === 'messages') {
             // rsrch notebook messages "Title" [--local]
             const title = subArg2;
@@ -772,6 +791,7 @@ async function main() {
             console.log('  rsrch notebook list [--local]');
             console.log('  rsrch notebook stats "Title" [--local]');
             console.log('  rsrch notebook sources "Title" [--local]');
+            console.log('  rsrch notebook delete-source "Title" "Source Title" [--local]');
             console.log('  rsrch notebook messages "Title" [--local]');
             console.log('  rsrch notebook artifacts "Title" [--local]');
             console.log('  rsrch notebook audio-status --notebook "Title" [--local]');

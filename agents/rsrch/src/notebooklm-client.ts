@@ -1878,5 +1878,80 @@ export class NotebookLMClient {
     async getSources(): Promise<Array<{ type: string; title: string; url?: string }>> {
         return this.extractSources();
     }
+
+    /**
+     * Delete a source from the current notebook by title.
+     * @param title The title of the source to delete.
+     */
+    async deleteSource(title: string) {
+        console.log(`[NotebookLM] Attempting to delete source: "${title}"`);
+
+        // Ensure we are on "Sources" tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                await sourcesTab.click();
+                await this.humanDelay(1000);
+            }
+        }
+
+        // Find the source item by title
+        // We use the same selectors as in extractSources
+        const item = this.page.locator('.single-source-container, source-list-item').filter({
+            has: this.page.locator('.source-title, .title, span', { hasText: title })
+        }).first();
+
+        if (await item.count() === 0) {
+            console.error(`[NotebookLM] Error: Source "${title}" not found.`);
+            // Dump state for debugging if title match fails
+            await this.dumpState('delete_source_not_found');
+            throw new Error(`Source "${title}" not found`);
+        }
+
+        // Find and click the 'more' options button (three vertical dots)
+        const moreBtn = item.locator('button').filter({ 
+            has: this.page.locator('mat-icon', { hasText: 'more_vert' }) 
+        }).first();
+        
+        if (await moreBtn.count() === 0) {
+             throw new Error(`More options button for source "${title}" not found`);
+        }
+        
+        await moreBtn.click();
+        await this.humanDelay(800);
+
+        // Click Delete/Odstranit from the menu
+        const deleteOption = this.page.locator('button[role="menuitem"]').filter({ 
+            hasText: /Odstranit|Smazat|Remove|Delete/i 
+        }).first();
+        
+        if (await deleteOption.count() === 0) {
+            // fallback: check if menu opened but selector failed, try hitting escape to clean up
+            await this.page.keyboard.press('Escape');
+            throw new Error(`Delete menu option for source "${title}" not found`);
+        }
+        
+        await deleteOption.click();
+        await this.humanDelay(1000);
+
+        // Handle confirmation dialog
+        const confirmBtn = this.page.locator('mat-dialog-container button').filter({ 
+            hasText: /Odstranit|Smazat|Remove|Delete|vymazat/i 
+        }).first();
+        
+        if (await confirmBtn.count() > 0) {
+            await confirmBtn.click();
+        } else {
+            console.log('[NotebookLM] Warning: Confirmation button not found by text, trying last button in dialog');
+            const lastBtn = this.page.locator('mat-dialog-container button').last();
+            await lastBtn.click();
+        }
+
+        // Wait for dialog to disappear to confirm operation completion
+        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 10000 });
+        console.log(`[NotebookLM] Successfully deleted source: "${title}"`);
+        await this.humanDelay(1000);
+    }
 }
 

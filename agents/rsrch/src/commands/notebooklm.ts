@@ -7,16 +7,20 @@ import { getGraphStore } from '../graph-store';
 
 const notebook = new Command('notebook').description('NotebookLM commands');
 
-notebook.command('create <title>')
-    .description('Create a notebook')
+notebook.command('list')
+    .description('List all notebooks')
     .option('--local', 'Use local execution', true)
-    .action(async (title, opts) => {
-        if (true) { // Forced local
+    .action(async (opts) => {
+        if (opts.local) {
             await runLocalNotebookAction(async (client, notebook) => {
-                await notebook.createNotebook(title);
+                await notebook.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+                await notebook.page.waitForSelector('.project-button, .project-card, .project-button-title', { timeout: 20000 });
+                const titles = await notebook.page.locator('.project-button-title, .title').allInnerTexts();
+                console.log('Available Notebooks:');
+                titles.map((t: string) => t.trim()).filter((t: string) => t.length > 0).forEach((t: string) => console.log(` - ${t}`));
             });
         } else {
-            await sendServerRequest('/notebook/create', { title });
+            await sendServerRequest('/notebook/list', {});
         }
     });
 
@@ -287,6 +291,23 @@ notebook.command('sources <title>')
             });
         } else {
             await sendServerRequest('/notebook/sources', { title });
+        }
+    });
+
+notebook.command('delete-source <notebookTitle> <sourceTitle>')
+    .description('Delete a source from a notebook by title')
+    .option('--local', 'Use local execution', true)
+    .action(async (notebookTitle, sourceTitle, opts) => {
+        if (opts.local) {
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(notebookTitle);
+                await notebook.deleteSource(sourceTitle);
+                console.log(`✅ Successfully deleted source "${sourceTitle}" from notebook "${notebookTitle}".`);
+            });
+        } else {
+            // Server side not implemented yet
+            console.error('Error: Server-side source deletion not implemented. Use --local.');
+            process.exit(1);
         }
     });
 
