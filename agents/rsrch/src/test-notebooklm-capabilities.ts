@@ -77,18 +77,24 @@ async function runTests() {
         console.log('[Test] Initializing NotebookLM Client...');
         await client.init();
 
+        const testNotebookTitle = 'rsrch-test-notebook';
+        console.log(`[Test] Using common test notebook: "${testNotebookTitle}"...`);
+        try {
+            await client.openNotebook(testNotebookTitle);
+        } catch (e) {
+            console.log(`[Test] Test notebook not found. Creating it...`);
+            await client.createNotebook(testNotebookTitle);
+        }
+
+        let allTestsPassed = true;
+
         // --- Test 1: Web Content Update ---
         console.log('\n[Test 1] Starting Web Update Test...');
-        // Note: Requires a public URL that changes. 
-        // For this manual/automated hybrid, we will ask the user (or use a placeholder)
-        // Testing limit: We can't easily spin up a public server here without ngrok.
-        // We will assume a Gist URL is provided via ENV or use a constant one if available.
         const gistUrl = process.env.TEST_GIST_URL;
 
         if (gistUrl) {
-            const notebookTitle = `Test Web Update ${Date.now()}`;
-            await client.createNotebook(notebookTitle);
-            await client.addSourceUrl(gistUrl);
+            try {
+                await client.addSourceUrl(gistUrl);
 
             console.log('[Test 1] Source added. Querying baseline...');
             const baseline = await client.query("What is the content of the website source?");
@@ -109,6 +115,10 @@ async function runTests() {
 
             const updated = await client.query("What is the content of the website source now?");
             console.log(`[Test 1] Updated: ${updated}`);
+            } catch (e) {
+                console.error('[Test 1] Failed with exception:', e);
+                allTestsPassed = false;
+            }
         } else {
             console.log('[Test 1] SKIPPED (TEST_GIST_URL not set)');
         }
@@ -146,10 +156,8 @@ async function runTests() {
             await page.goto('https://notebooklm.google.com/');
         }
 
-        const notebookTitlePdf = `Test PDF Images ${Date.now()}`;
-        await client.createNotebook(notebookTitlePdf);
-
-        // Upload PDF
+        console.log('\n[Test 2] Starting PDF Image Test...');
+        try {
         console.log(`[Test 2] Uploading ${pdfPath}...`);
         // We need to implement addSourceFile or similar in client, currently referenced as addSourceFromDrive
         // If file upload is not implemented in client, we might need to add it or skip.
@@ -238,6 +246,34 @@ async function runTests() {
         const pdfQuery = "What is the sales figure shown in the red box?";
         const pdfAnswer = await client.query(pdfQuery);
         console.log(`[Test 2] Answer: ${pdfAnswer}`);
+        if (!pdfAnswer || pdfAnswer.length < 5) {
+             console.log('[Test 2] Failed: Answer was too short or empty.');
+             allTestsPassed = false;
+        }
+
+        } catch (e) {
+            console.error('[Test 2] Failed with exception:', e);
+            allTestsPassed = false;
+        }
+
+        // --- Test 3: Audio Generation ---
+        console.log('\n[Test 3] Conditional Audio Generation Test...');
+        if (!allTestsPassed) {
+            console.log('[Test 3] SKIPPED: Previous tests failed. Not wasting audio generation quota.');
+        } else {
+            console.log('[Test 3] Previous tests passed. Triggering ONE audio generation (wait for completion)...');
+            try {
+                // Wait for completion = true, dryRun = false
+                const result = await client.generateAudioOverview(testNotebookTitle, [], undefined, true, false);
+                if (result.success && result.artifactTitle) {
+                    console.log(`[Test 3] SUCCESS: Audio generated with title "${result.artifactTitle}"`);
+                } else {
+                    console.log(`[Test 3] FAILED: Audio generation did not return a valid result.`);
+                }
+            } catch (e) {
+                console.error('[Test 3] FAILED with exception:', e);
+            }
+        }
 
     } catch (e) {
         console.error('[Test] Execution failed:', e);
