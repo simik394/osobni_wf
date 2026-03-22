@@ -2,20 +2,20 @@
 
 This document provides a comprehensive overview of the features within the `01-pwf` project, categorized by component/agent, including their current implementation status.
 
-## 🚀 RSRCH Agent (Research Automation)
-*The core engine for automated research using Perplexity, Gemini, and NotebookLM.*
+## 🛠️ YouTrack IaC (Infrastructure as Code)
+*Specific project for declarative YouTrack configuration management.*
 
-| Feature ID | Feature Name | Description | Status |
-|:---|:---|:---|:---|
-| R-001 | **Deep Research (Gemini)** | Multi-step automated research using Gemini 1.5 Pro. | ✅ Implemented |
-| R-002 | **Deep Research (Perplexity)** | Deep search mode for comprehensive web indexing. | ✅ Implemented |
-| R-003 | **NotebookLM Integration** | Automated creation of notebooks, source management, and audio overview generation. | ✅ Implemented |
-| R-004 | **Unified Pipeline** | End-to-end flow: Research → Document → Podcast. | ✅ Implemented |
-| R-005 | **Stealth Browser (ID #7)** | Undetectable Chrome automation in Docker using Socat proxy & mounted User Data. | ✅ Implemented |
-| R-006 | **Artifact Registry** | Lineage tracking for sessions, docs, and audio (FalkorDB/JSON). | ✅ Implemented |
-| R-007 | **Gems Support** | Creation and interaction with custom Gemini Assistants (Gems). | ✅ Implemented |
-| R-008 | **VNC Monitoring** | Real-time visual monitoring of browser containers on `halvarm:5902`. | ✅ Implemented |
-| R-009 | **Windmill Routing** | Routing CLI/Chat requests to Windmill for orchestration. | 🚧 In Progress |
+**Detailed Catalog**: [youtrack_iac_feature_catalog.md](file:///home/sim/Obsi/Prods/01-pwf/infrastruct/configs/youtrack.conf/youtrack_iac_feature_catalog.md)
+
+| Feature | Description | Status |
+|:---|:---|:---|
+| **Prolog Engine** | Logic-based configuration diffing and planning. | ✅ Implemented |
+| **YAML Management** | Projects, Fields, Boards, and Workflows as Code. | ✅ Implemented |
+| **Windmill Sync** | Automated scheduled synchronization of configuration. | ✅ Implemented |
+
+---
+
+## 🚀 RSRCH Agent (Research Automation)
 
 ---
 
