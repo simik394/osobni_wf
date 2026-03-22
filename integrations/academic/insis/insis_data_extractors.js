@@ -209,6 +209,7 @@ class InsisDataExtractor {
         
         // Clean up common useless keys or limit the payload to important ones
         const importantKeys = [
+            "Ident", "Identifikátor", "Identifikátor předmětu", "Kód", "Kód předmětu", "Subject",
             "Course title in English", "Course title in Czech", 
             "Aims of the course", "Learning outcomes and competences", 
             "Course contents", "Assessment methods and criteria",

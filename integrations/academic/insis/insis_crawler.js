@@ -82,9 +82,19 @@ const Extractor = require('./insis_data_extractors');
             
             const syllabusHtml = await page.content();
             const details = Extractor.extractSyllabusDetails(syllabusHtml);
+            
+            let finalName = sub.name;
+            // Pokud jméno nezačíná klasickým VŠE kódem (např. 4IT415), zkusíme kód vytáhnout ze sylabu
+            if (!/^[0-9A-Z]{4,8}/.test(finalName)) {
+                const code = details['Ident'] || details['Identifikátor'] || details['Identifikátor předmětu'] || details['Kód'] || details['Kód předmětu'] || details['Subject'];
+                if (code) {
+                    finalName = `${code} ${finalName}`;
+                }
+            }
+
             fullProfiles.push({
                 id: sub.id,
-                name: sub.name,
+                name: finalName,
                 url: properLink,
                 profile: details
             });
