@@ -156,9 +156,19 @@ class InsisDataExtractor {
             for (const a of links) {
                 if (a.href && a.href.includes('syllabus.pl?predmet=')) {
                     // Extract subject name
-                    const name = a.textContent.trim();
+                    let name = a.textContent.trim();
                     const urlIdMatch = a.href.match(/predmet=(\d+)/);
                     if (name && urlIdMatch) {
+                        // Pokud název v odkazu (např. z anomálií) neobsahuje kód předmětu, 
+                        // zkusíme propátrat rodičovský element, kde kód typicky je
+                        if (!/^[0-9A-Z]{4,8}/.test(name)) {
+                            const parentText = a.parentElement ? a.parentElement.textContent : '';
+                            const codeMatch = parentText.match(/\b([1-9][A-Z0-9]{4,6})\b/);
+                            if (codeMatch) {
+                                name = `${codeMatch[1]} ${name}`;
+                            }
+                        }
+
                         subjects.set(urlIdMatch[1], {
                             id: urlIdMatch[1],
                             name: name,
