@@ -64,6 +64,45 @@ def _generate_facts(config: YouTrackConfig) -> Iterator[str]:
             else:
                 yield f"target_tag('{name}', '{color}', {untag}, '{visible}')."
     
+
+    # Users
+    if config.users:
+        for user in config.users:
+            login = escape_prolog_string(user.login)
+            full_name = escape_prolog_string(user.full_name)
+            email = escape_prolog_string(user.email)
+            if user.state == 'absent':
+                yield f"target_delete_user('{login}')."
+            else:
+                yield f"target_user('{login}', '{full_name}', '{email}')."
+
+    # Roles
+    if config.roles:
+        for role in config.roles:
+            name = escape_prolog_string(role.name)
+            if role.state == 'absent':
+                yield f"target_delete_role('{name}')."
+            else:
+                yield f"target_role('{name}')."
+                for perm in role.permissions:
+                    perm_name = escape_prolog_string(perm)
+                    yield f"target_role_permission('{name}', '{perm_name}')."
+
+    # Groups
+    if config.groups:
+        for group in config.groups:
+            name = escape_prolog_string(group.name)
+            if group.state == 'absent':
+                yield f"target_delete_group('{name}')."
+            else:
+                yield f"target_group('{name}')."
+                for u in group.users:
+                    u_login = escape_prolog_string(u)
+                    yield f"target_group_user('{name}', '{u_login}')."
+                for r in group.roles:
+                    r_name = escape_prolog_string(r)
+                    yield f"target_group_role('{name}', '{r_name}')."
+
     # Saved queries
     if config.saved_queries:
         for sq in config.saved_queries:
@@ -163,6 +202,17 @@ def _generate_project_facts(project: ProjectConfig) -> Iterator[str]:
     if project.workflows:
         for wf in project.workflows:
             yield from _generate_workflow_facts(wf, project_short_name=short_name)
+
+
+    # Role Assignments
+    for assignment in getattr(project, 'role_assignments', []):
+        subject = escape_prolog_string(assignment.subject)
+        a_type = escape_prolog_string(assignment.type)
+        role = escape_prolog_string(assignment.role)
+        if assignment.state == 'absent':
+            yield f"target_delete_project_role('{short_name}', '{subject}', '{a_type}', '{role}')."
+        else:
+            yield f"target_project_role('{short_name}', '{subject}', '{a_type}', '{role}')."
 
     # Agile Boards
     if project.boards:

@@ -90,6 +90,72 @@ class YouTrackClient:
         resp.raise_for_status()
         return resp.json()
 
+
+    def get_users(self) -> list[dict]:
+        """Fetch all active users."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/users',
+            params={'fields': 'id,login,fullName,email'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_groups(self) -> list[dict]:
+        """Fetch all user groups with their users and roles."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/groups',
+            params={'fields': 'id,name,users(login),roles(id,role(name))'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_roles(self) -> list[dict]:
+        """Fetch all roles with their permissions."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/roles',
+            params={'fields': 'id,name,permissions(id,permission(name))'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_project_role_assignments(self, project_id: str) -> list[dict]:
+        """Fetch role assignments (team/users) for a project."""
+        # Depending on YouTrack version, project roles are usually in team or directly on project
+        # In modern YouTrack, project.team.users or we query access
+        # Wait, the easiest way to get who has what role in a project is project profiles / team
+        resp = self.session.get(
+            f'{self.url}/api/admin/projects/{project_id}',
+            params={'fields': 'id,shortName,team(users(login),groups(name)),teamRoles(role(name),team(id))'}
+            # Wait, YouTrack REST API for project access is a bit convoluted.
+            # A common way is project.team(users(login)) for simple cases, but for explicit roles:
+            # Let's use /api/admin/projects/{project_id}?fields=id,shortName,team(id),teamRoles(...)
+        )
+        if resp.status_code == 404:
+             return []
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_all_project_role_assignments(self, projects: list[dict]) -> dict:
+        """Fetch roles for all given projects."""
+        # Not perfectly efficient but works for a reasonable number of projects
+        assignments = {}
+        for proj in projects:
+            try:
+                # To get role assignments: we need to look at /api/admin/projects/{id}/projectRoles
+                # (if YouTrack has projectRoles natively, wait let's use the standard `team`)
+                # Actually YouTrack uses /api/admin/projects/{id}?fields=...
+                # Let's use the hub API or simply assume we get it from project profiles?
+                # A safer bet that works across versions:
+                resp = self.session.get(
+                    f'{self.url}/api/admin/projects/{proj["id"]}/projectRoles',
+                    params={'fields': 'id,role(name),team(id),user(login),group(name)'}
+                )
+                if resp.status_code == 200:
+                    assignments[proj['shortName']] = resp.json()
+            except Exception as e:
+                pass
+        return assignments
+
     def get_workflows(self) -> list[dict]:
         """Fetch all workflows with their rules and usage."""
         # We reuse the WorkflowClient logic which already knows the internal API
@@ -146,6 +212,12 @@ def main():
         agiles = client.get_agiles()
         tags = client.get_tags()
         saved_queries = client.get_saved_queries()
+
+        users = client.get_users()
+        groups = client.get_groups()
+        roles = client.get_roles()
+        project_roles = client.get_all_project_role_assignments(projects)
+
         
         # Merge enum and state bundles
         all_bundles = bundles + state_bundles
@@ -160,7 +232,7 @@ def main():
     # If export requested, do it and exit
     if args.export:
         logger.info(f"Exporting current YouTrack state to {args.export}...")
-        export_config(args.export, fields, all_bundles, projects, workflows, agiles)
+        export_config(args.export, fields, all_bundles, projects, workflows, agiles, users, groups, roles, project_roles)
         return
 
     config_dir = Path(args.config_dir)
@@ -203,7 +275,7 @@ def main():
     
     
     # Pass workflows and project fields to inference
-    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries)
+    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries, users, groups, roles, project_roles)
     
     if plan:
         # Defense-in-depth: skip create_field for fields confirmed to exist globally.
@@ -245,7 +317,7 @@ def main():
 
 
 
-def export_config(output_file: str, fields: list, bundles: list, projects: list, workflows: list, agiles: list):
+def export_config(output_file: str, fields: list, bundles: list, projects: list, workflows: list, agiles: list, users: list = None, groups: list = None, roles: list = None, project_roles: dict = None):
     """Export current state to YAML configuration."""
     import yaml
     

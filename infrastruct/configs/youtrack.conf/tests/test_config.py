@@ -321,3 +321,25 @@ class TestSavedQueryConfig:
         facts = config_to_prolog_facts(config)
         
         assert "target_delete_saved_query('Old Query')" in facts
+
+
+def test_user_config():
+    from src.config.schema import UserConfig
+    user = UserConfig(login="test", fullName="Test User", email="test@example.com")
+    assert user.login == "test"
+    assert user.full_name == "Test User"
+    assert user.email == "test@example.com"
+    assert user.state == "present"
+
+def test_group_config():
+    from src.config.schema import GroupConfig
+    group = GroupConfig(name="admins", users=["test"], roles=["Admin"])
+    assert group.name == "admins"
+    assert group.users == ["test"]
+    assert group.roles == ["Admin"]
+
+def test_role_config():
+    from src.config.schema import RoleConfig
+    role = RoleConfig(name="Admin", permissions=["Read Issue", "Update Issue"])
+    assert role.name == "Admin"
+    assert role.permissions == ["Read Issue", "Update Issue"]
