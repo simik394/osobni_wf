@@ -73,6 +73,34 @@ class PrologInferenceEngine:
         janus.query_once("retractall(curr_workflow(_, _, _))")
         janus.query_once("retractall(curr_rule(_, _, _, _, _))")
         janus.query_once("retractall(curr_workflow_usage(_, _, _))")
+        janus.query_once("retractall(target_workflow(_, _, _))")
+        
+        # Board facts
+        janus.query_once("retractall(curr_board(_, _, _))")
+        janus.query_once("retractall(target_board(_, _, _))")
+        janus.query_once("retractall(target_board_project(_, _))")
+        janus.query_once("retractall(target_board_sprints(_, _))")
+        janus.query_once("retractall(target_board_visibility(_, _))")
+        janus.query_once("retractall(target_board_column(_, _))")
+        
+        # Tags and queries
+        janus.query_once("retractall(curr_tag(_, _, _, _))")
+        janus.query_once("retractall(target_tag(_, _, _, _))")
+        janus.query_once("retractall(curr_saved_query(_, _, _))")
+        janus.query_once("retractall(target_saved_query(_, _, _))")
+        
+        # UAM facts
+        for fact in [
+            'curr_user(_, _, _)', 'target_user(_, _, _)', 'target_delete_user(_)',
+            'curr_group(_)', 'target_group(_)', 'target_delete_group(_)',
+            'curr_group_user(_, _)', 'target_group_user(_, _)',
+            'curr_group_role(_, _)', 'target_group_role(_, _)',
+            'curr_role(_)', 'target_role(_)', 'target_delete_role(_)',
+            'curr_role_permission(_, _)', 'target_role_permission(_, _)',
+            'curr_project_role(_, _, _, _)', 'target_project_role(_, _, _, _)', 'target_delete_project_role(_, _, _, _)'
+        ]:
+            janus.query_once(f"retractall({fact})")
+        janus.query_once("retractall(curr_workflow_usage(_, _, _))")
         janus.query_once("retractall(curr_field_default(_, _, _))")
         janus.query_once("retractall(target_workflow(_, _, _))")
         janus.query_once("retractall(target_rule(_, _, _, _))")
@@ -325,48 +353,48 @@ class PrologInferenceEngine:
         # Users
         if users:
             for u in users:
-                login = escape_prolog_string(u.get('login', ''))
-                full_name = escape_prolog_string(u.get('fullName', ''))
-                email = escape_prolog_string(u.get('email', ''))
+                login = self._escape(u.get('login', ''))
+                full_name = self._escape(u.get('fullName', ''))
+                email = self._escape(u.get('email', ''))
                 janus.query_once(f"assertz(curr_user('{login}', '{full_name}', '{email}')).")
 
         # Groups
         if groups:
             for g in groups:
-                name = escape_prolog_string(g.get('name', ''))
+                name = self._escape(g.get('name', ''))
                 janus.query_once(f"assertz(curr_group('{name}')).")
                 for gu in g.get('users', []):
-                    u_login = escape_prolog_string(gu.get('login', ''))
+                    u_login = self._escape(gu.get('login', ''))
                     janus.query_once(f"assertz(curr_group_user('{name}', '{u_login}')).")
                 for gr in g.get('roles', []):
-                    r_name = escape_prolog_string(gr.get('role', {}).get('name', ''))
+                    r_name = self._escape(gr.get('role', {}).get('name', ''))
                     janus.query_once(f"assertz(curr_group_role('{name}', '{r_name}')).")
 
         # Roles
         if roles:
             for r in roles:
-                name = escape_prolog_string(r.get('name', ''))
+                name = self._escape(r.get('name', ''))
                 janus.query_once(f"assertz(curr_role('{name}')).")
                 for p in r.get('permissions', []):
-                    p_name = escape_prolog_string(p.get('permission', {}).get('name', ''))
+                    p_name = self._escape(p.get('permission', {}).get('name', ''))
                     janus.query_once(f"assertz(curr_role_permission('{name}', '{p_name}')).")
-
+        
         # Project Roles
         if project_roles:
             for project_short_name, pr_list in project_roles.items():
-                p_short = escape_prolog_string(project_short_name)
+                p_short = self._escape(project_short_name)
                 for pr in pr_list:
-                    role_name = escape_prolog_string(pr.get('role', {}).get('name', ''))
+                    role_name = self._escape(pr.get('role', {}).get('name', ''))
                     # Team member could be user or group
                     team = pr.get('team', {})
                     user = pr.get('user', {})
                     group = pr.get('group', {})
-
+                    
                     if user and user.get('login'):
-                        subj = escape_prolog_string(user.get('login'))
+                        subj = self._escape(user.get('login'))
                         janus.query_once(f"assertz(curr_project_role('{p_short}', '{subj}', 'user', '{role_name}')).")
                     elif group and group.get('name'):
-                        subj = escape_prolog_string(group.get('name'))
+                        subj = self._escape(group.get('name'))
                         janus.query_once(f"assertz(curr_project_role('{p_short}', '{subj}', 'group', '{role_name}')).")
 
         # Tags

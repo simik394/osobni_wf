@@ -86,6 +86,32 @@
 :- dynamic field_uses_bundle/2.
 :- dynamic field_required/2.
 
+%% User Access Management
+:- dynamic curr_user/3.
+:- dynamic target_user/3.
+:- dynamic target_delete_user/1.
+
+:- dynamic curr_group/1.
+:- dynamic target_group/1.
+:- dynamic target_delete_group/1.
+
+:- dynamic curr_group_user/2.
+:- dynamic target_group_user/2.
+
+:- dynamic curr_group_role/2.
+:- dynamic target_group_role/2.
+
+:- dynamic curr_role/1.
+:- dynamic target_role/1.
+:- dynamic target_delete_role/1.
+
+:- dynamic curr_role_permission/2.
+:- dynamic target_role_permission/2.
+
+:- dynamic curr_project_role/4.
+:- dynamic target_project_role/4.
+:- dynamic target_delete_project_role/4.
+
 %% Delete targets (from YAML state: absent)
 :- dynamic target_delete_field/2.       %% target_delete_field(Name, Project)
 :- dynamic target_delete_rule/2.        %% target_delete_rule(WorkflowName, RuleName)
@@ -337,14 +363,14 @@ deletable_project_role(Project, Subject, Type, Role) :-
 extraneous_project_role(Project, Subject, Type, Role) :-
     curr_project_role(Project, Subject, Type, Role),
     target_project_role(_, _, _, _),
-    %% If we manage ANY role in this project we revoke unmanaged ones?
+    %% If we manage ANY role in this project we revoke unmanaged ones? 
     %% Or do we strictly do declarative exact match per explicit definition?
     %% Usually list implies exact match. If target_project_role isn't there, remove it.
-    %% But wait, what if another system manages other roles?
-    %% For now let's stick to declarative `state: absent` logic for unmanaged,
+    %% But wait, what if another system manages other roles? 
+    %% For now let's stick to declarative `state: absent` logic for unmanaged, 
     %% plus maybe strict drift if the config is meant to be exhaustive.
     %% But our schema only has `target_delete_project_role`, so we just use that.
-    fail.
+    fail. 
 
 %% We use explicit delete for now
 action(revoke_project_role(Project, Subject, Type, Role)) :-
