@@ -196,6 +196,49 @@ class ColorCodingConfig(BaseModel):
 
 
 
+
+class RoleConfig(BaseModel):
+    """Configuration for a custom role."""
+    name: str = Field(description="Role name")
+    description: Optional[str] = Field(default=None, description="Role description")
+    permissions: list[str] = Field(default_factory=list, description="List of permission names")
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this role"
+    )
+
+class UserConfig(BaseModel):
+    """Configuration for a YouTrack user."""
+    login: str = Field(description="User login (username)")
+    full_name: str = Field(alias="fullName", description="User's full name")
+    email: str = Field(description="User's email address")
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete/ban this user"
+    )
+
+    model_config = {"populate_by_name": True}
+
+class GroupConfig(BaseModel):
+    """Configuration for a user group."""
+    name: str = Field(description="Group name")
+    roles: list[str] = Field(default_factory=list, description="Global roles assigned to this group")
+    users: list[str] = Field(default_factory=list, description="List of user logins in this group")
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this group"
+    )
+
+class RoleAssignmentConfig(BaseModel):
+    """Configuration for a role assignment in a project."""
+    subject: str = Field(description="Login of the user or name of the group")
+    type: Literal['user', 'group'] = Field(description="Type of subject: 'user' or 'group'")
+    role: str = Field(description="Name of the role to assign")
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to revoke this role assignment"
+    )
+
 class ProjectConfig(BaseModel):
     """Configuration for a YouTrack project."""
     name: str = Field(description="Full project name")
@@ -208,6 +251,7 @@ class ProjectConfig(BaseModel):
     fields: list[FieldConfig] = Field(default_factory=list)
     workflows: list[WorkflowConfig] = Field(default_factory=list)
     boards: list[AgileBoardConfig] = Field(default_factory=list, description="Agile boards for this project")
+    role_assignments: list[RoleAssignmentConfig] = Field(default_factory=list, description="Role assignments for this project")
     
     model_config = {"populate_by_name": True}  # Allow both short_name and shortName
 
@@ -216,6 +260,11 @@ class YouTrackConfig(BaseModel):
     """Root configuration containing multiple projects."""
     projects: list[ProjectConfig] = Field(default_factory=list)
     
+    # Global access management
+    users: Optional[list[UserConfig]] = Field(default=None, description="Global user definitions")
+    groups: Optional[list[GroupConfig]] = Field(default=None, description="Global group definitions")
+    roles: Optional[list[RoleConfig]] = Field(default=None, description="Global role definitions")
+
     # Global bundles that can be shared across projects
     bundles: Optional[dict[str, list[str | BundleValueConfig]]] = Field(
         default=None,

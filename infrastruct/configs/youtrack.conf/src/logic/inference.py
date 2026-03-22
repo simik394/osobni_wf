@@ -73,6 +73,34 @@ class PrologInferenceEngine:
         janus.query_once("retractall(curr_workflow(_, _, _))")
         janus.query_once("retractall(curr_rule(_, _, _, _, _))")
         janus.query_once("retractall(curr_workflow_usage(_, _, _))")
+        janus.query_once("retractall(target_workflow(_, _, _))")
+        
+        # Board facts
+        janus.query_once("retractall(curr_board(_, _, _))")
+        janus.query_once("retractall(target_board(_, _, _))")
+        janus.query_once("retractall(target_board_project(_, _))")
+        janus.query_once("retractall(target_board_sprints(_, _))")
+        janus.query_once("retractall(target_board_visibility(_, _))")
+        janus.query_once("retractall(target_board_column(_, _))")
+        
+        # Tags and queries
+        janus.query_once("retractall(curr_tag(_, _, _, _))")
+        janus.query_once("retractall(target_tag(_, _, _, _))")
+        janus.query_once("retractall(curr_saved_query(_, _, _))")
+        janus.query_once("retractall(target_saved_query(_, _, _))")
+        
+        # UAM facts
+        for fact in [
+            'curr_user(_, _, _)', 'target_user(_, _, _)', 'target_delete_user(_)',
+            'curr_group(_)', 'target_group(_)', 'target_delete_group(_)',
+            'curr_group_user(_, _)', 'target_group_user(_, _)',
+            'curr_group_role(_, _)', 'target_group_role(_, _)',
+            'curr_role(_)', 'target_role(_)', 'target_delete_role(_)',
+            'curr_role_permission(_, _)', 'target_role_permission(_, _)',
+            'curr_project_role(_, _, _, _)', 'target_project_role(_, _, _, _)', 'target_delete_project_role(_, _, _, _)'
+        ]:
+            janus.query_once(f"retractall({fact})")
+        janus.query_once("retractall(curr_workflow_usage(_, _, _))")
         janus.query_once("retractall(curr_field_default(_, _, _))")
         janus.query_once("retractall(target_workflow(_, _, _))")
         janus.query_once("retractall(target_rule(_, _, _, _))")
@@ -93,12 +121,16 @@ class PrologInferenceEngine:
         
         logger.debug("Cleared all dynamic facts")
     
-    def assert_current_state(self, fields: list[dict], bundles: list[dict], 
-                            projects: list[dict] = None, workflows: list[dict] = None,
-                            project_fields: dict[str, list[dict]] = None,
-                            agiles: list[dict] = None,
-                            tags: list[dict] = None,
-                            saved_queries: list[dict] = None) -> None:
+    def assert_current_state(self, fields: list[dict], bundles: list[dict],
+                             projects: list[dict] = None, workflows: list[dict] = None,
+                             project_fields: dict[str, list[dict]] = None,
+                             agiles: list[dict] = None,
+                             tags: list[dict] = None,
+                             saved_queries: list[dict] = None,
+                             users: list[dict] = None,
+                             groups: list[dict] = None,
+                             roles: list[dict] = None,
+                             project_roles: dict[str, list[dict]] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -317,6 +349,54 @@ class PrologInferenceEngine:
             
             logger.debug(f"Asserted {len(agiles)} current agile boards")
         
+
+        # Users
+        if users:
+            for u in users:
+                login = self._escape(u.get('login', ''))
+                full_name = self._escape(u.get('fullName', ''))
+                email = self._escape(u.get('email', ''))
+                janus.query_once(f"assertz(curr_user('{login}', '{full_name}', '{email}')).")
+
+        # Groups
+        if groups:
+            for g in groups:
+                name = self._escape(g.get('name', ''))
+                janus.query_once(f"assertz(curr_group('{name}')).")
+                for gu in g.get('users', []):
+                    u_login = self._escape(gu.get('login', ''))
+                    janus.query_once(f"assertz(curr_group_user('{name}', '{u_login}')).")
+                for gr in g.get('roles', []):
+                    r_name = self._escape(gr.get('role', {}).get('name', ''))
+                    janus.query_once(f"assertz(curr_group_role('{name}', '{r_name}')).")
+
+        # Roles
+        if roles:
+            for r in roles:
+                name = self._escape(r.get('name', ''))
+                janus.query_once(f"assertz(curr_role('{name}')).")
+                for p in r.get('permissions', []):
+                    p_name = self._escape(p.get('permission', {}).get('name', ''))
+                    janus.query_once(f"assertz(curr_role_permission('{name}', '{p_name}')).")
+        
+        # Project Roles
+        if project_roles:
+            for project_short_name, pr_list in project_roles.items():
+                p_short = self._escape(project_short_name)
+                for pr in pr_list:
+                    role_name = self._escape(pr.get('role', {}).get('name', ''))
+                    # Team member could be user or group
+                    team = pr.get('team', {})
+                    user = pr.get('user', {})
+                    group = pr.get('group', {})
+                    
+                    if user and user.get('login'):
+                        subj = self._escape(user.get('login'))
+                        janus.query_once(f"assertz(curr_project_role('{p_short}', '{subj}', 'user', '{role_name}')).")
+                    elif group and group.get('name'):
+                        subj = self._escape(group.get('name'))
+                        janus.query_once(f"assertz(curr_project_role('{p_short}', '{subj}', 'group', '{role_name}')).")
+
         # Tags
         if tags:
             for tag in tags:
@@ -409,7 +489,11 @@ def run_inference(fields: list[dict], bundles: list[dict],
                   project_fields: dict[str, list[dict]] = None,
                   agiles: list[dict] = None,
                   tags: list[dict] = None,
-                  saved_queries: list[dict] = None) -> list[tuple]:
+                  saved_queries: list[dict] = None,
+                  users: list[dict] = None,
+                  groups: list[dict] = None,
+                  roles: list[dict] = None,
+                  project_roles: dict[str, list[dict]] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -429,7 +513,7 @@ def run_inference(fields: list[dict], bundles: list[dict],
     """
     engine = PrologInferenceEngine()
     engine.clear_facts()
-    engine.assert_current_state(fields, bundles, projects, workflows, project_fields, agiles, tags, saved_queries)
+    engine.assert_current_state(fields, bundles, projects, workflows, project_fields, agiles, tags, saved_queries, users, groups, roles, project_roles)
     engine.assert_target_state(target_facts)
     
     return engine.compute_plan()

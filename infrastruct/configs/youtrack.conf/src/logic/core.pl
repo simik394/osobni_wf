@@ -86,6 +86,32 @@
 :- dynamic field_uses_bundle/2.
 :- dynamic field_required/2.
 
+%% User Access Management
+:- dynamic curr_user/3.
+:- dynamic target_user/3.
+:- dynamic target_delete_user/1.
+
+:- dynamic curr_group/1.
+:- dynamic target_group/1.
+:- dynamic target_delete_group/1.
+
+:- dynamic curr_group_user/2.
+:- dynamic target_group_user/2.
+
+:- dynamic curr_group_role/2.
+:- dynamic target_group_role/2.
+
+:- dynamic curr_role/1.
+:- dynamic target_role/1.
+:- dynamic target_delete_role/1.
+
+:- dynamic curr_role_permission/2.
+:- dynamic target_role_permission/2.
+
+:- dynamic curr_project_role/4.
+:- dynamic target_project_role/4.
+:- dynamic target_delete_project_role/4.
+
 %% Delete targets (from YAML state: absent)
 :- dynamic target_delete_field/2.       %% target_delete_field(Name, Project)
 :- dynamic target_delete_rule/2.        %% target_delete_rule(WorkflowName, RuleName)
@@ -180,6 +206,176 @@ deletable_workflow(WorkflowId, Name) :-
 %% =============================================================================
 %% ACTION GENERATION
 %% =============================================================================
+
+
+%% =============================================================================
+%% USER ACCESS MANAGEMENT LOGIC
+%% =============================================================================
+
+%% ------------------- Users -------------------
+%% Create User
+%% We need a safety check: max 10 users overall.
+total_curr_users(Count) :-
+    findall(U, curr_user(U, _, _), L),
+    length(L, Count).
+
+total_target_users(Count) :-
+    findall(U, target_user(U, _, _), L),
+    length(L, Count).
+
+missing_user(Login, FullName, Email) :-
+    target_user(Login, FullName, Email),
+    \+ curr_user(Login, _, _).
+
+%% Action: Create user (only if not exceeding max limit)
+action(create_user(Login, FullName, Email)) :-
+    missing_user(Login, FullName, Email),
+    total_curr_users(CurrC),
+    total_target_users(TargetC),
+    % Calculate net count roughly... Wait, better to just check total_target_users
+    % since declarative implies target state is truth.
+    TargetC =< 10.
+
+action(error_max_users_exceeded(TargetC)) :-
+    missing_user(_, _, _),
+    total_target_users(TargetC),
+    TargetC > 10.
+
+%% Update User
+drifted_user(Login, FullName, Email) :-
+    target_user(Login, FullName, Email),
+    curr_user(Login, CurrFullName, CurrEmail),
+    (FullName \= CurrFullName ; Email \= CurrEmail).
+
+action(update_user(Login, FullName, Email)) :-
+    drifted_user(Login, FullName, Email).
+
+%% Delete User
+deletable_user(Login) :-
+    target_delete_user(Login),
+    curr_user(Login, _, _).
+
+action(delete_user(Login)) :-
+    deletable_user(Login).
+
+%% ------------------- Roles -------------------
+%% Create Role
+missing_role(Name) :-
+    target_role(Name),
+    \+ curr_role(Name).
+
+action(create_role(Name)) :-
+    missing_role(Name).
+
+%% Update Role (Permissions Drift)
+%% Missing permissions
+missing_role_permission(Role, Perm) :-
+    target_role_permission(Role, Perm),
+    curr_role(Role),
+    \+ curr_role_permission(Role, Perm).
+
+%% Extraneous permissions
+extraneous_role_permission(Role, Perm) :-
+    curr_role_permission(Role, Perm),
+    target_role(Role),
+    \+ target_role_permission(Role, Perm).
+
+action(add_role_permission(Role, Perm)) :-
+    missing_role_permission(Role, Perm).
+
+action(remove_role_permission(Role, Perm)) :-
+    extraneous_role_permission(Role, Perm).
+
+%% Delete Role
+deletable_role(Name) :-
+    target_delete_role(Name),
+    curr_role(Name).
+
+action(delete_role(Name)) :-
+    deletable_role(Name).
+
+%% ------------------- Groups -------------------
+%% Create Group
+missing_group(Name) :-
+    target_group(Name),
+    \+ curr_group(Name).
+
+action(create_group(Name)) :-
+    missing_group(Name).
+
+%% Group Users
+missing_group_user(Group, User) :-
+    target_group_user(Group, User),
+    curr_group(Group),
+    curr_user(User, _, _),
+    \+ curr_group_user(Group, User).
+
+extraneous_group_user(Group, User) :-
+    curr_group_user(Group, User),
+    target_group(Group),
+    \+ target_group_user(Group, User).
+
+action(add_user_to_group(Group, User)) :-
+    missing_group_user(Group, User).
+
+action(remove_user_from_group(Group, User)) :-
+    extraneous_group_user(Group, User).
+
+%% Group Roles (Global)
+missing_group_role(Group, Role) :-
+    target_group_role(Group, Role),
+    curr_group(Group),
+    curr_role(Role),
+    \+ curr_group_role(Group, Role).
+
+extraneous_group_role(Group, Role) :-
+    curr_group_role(Group, Role),
+    target_group(Group),
+    \+ target_group_role(Group, Role).
+
+action(add_role_to_group(Group, Role)) :-
+    missing_group_role(Group, Role).
+
+action(remove_role_from_group(Group, Role)) :-
+    extraneous_group_role(Group, Role).
+
+%% Delete Group
+deletable_group(Name) :-
+    target_delete_group(Name),
+    curr_group(Name).
+
+action(delete_group(Name)) :-
+    deletable_group(Name).
+
+%% ------------------- Project Role Assignments -------------------
+missing_project_role(Project, Subject, Type, Role) :-
+    target_project_role(Project, Subject, Type, Role),
+    curr_project(ProjectId, _, Project),
+    \+ curr_project_role(Project, Subject, Type, Role).
+
+action(grant_project_role(Project, Subject, Type, Role)) :-
+    missing_project_role(Project, Subject, Type, Role).
+
+deletable_project_role(Project, Subject, Type, Role) :-
+    target_delete_project_role(Project, Subject, Type, Role),
+    curr_project_role(Project, Subject, Type, Role).
+
+extraneous_project_role(Project, Subject, Type, Role) :-
+    curr_project_role(Project, Subject, Type, Role),
+    target_project_role(_, _, _, _),
+    %% If we manage ANY role in this project we revoke unmanaged ones? 
+    %% Or do we strictly do declarative exact match per explicit definition?
+    %% Usually list implies exact match. If target_project_role isn't there, remove it.
+    %% But wait, what if another system manages other roles? 
+    %% For now let's stick to declarative `state: absent` logic for unmanaged, 
+    %% plus maybe strict drift if the config is meant to be exhaustive.
+    %% But our schema only has `target_delete_project_role`, so we just use that.
+    fail. 
+
+%% We use explicit delete for now
+action(revoke_project_role(Project, Subject, Type, Role)) :-
+    deletable_project_role(Project, Subject, Type, Role).
+
 
 %% 1. Bundles
 %% Ensure bundle exists if used by any field
@@ -386,6 +582,24 @@ action(delete_saved_query(Id)) :-
 %% =============================================================================
 %% DEPENDENCY GRAPH
 %% =============================================================================
+
+
+%% User Access Management Dependencies
+depends_on(add_user_to_group(_, U), create_user(U, _, _)).
+depends_on(add_user_to_group(G, _), create_group(G)).
+
+depends_on(add_role_to_group(_, R), create_role(R)).
+depends_on(add_role_to_group(G, _), create_group(G)).
+
+depends_on(add_role_permission(R, _), create_role(R)).
+
+depends_on(grant_project_role(_, S, 'user', _), create_user(S, _, _)).
+depends_on(grant_project_role(_, S, 'group', _), create_group(S)).
+depends_on(grant_project_role(_, _, _, R), create_role(R)).
+
+depends_on(delete_group(G), remove_user_from_group(G, _)).
+depends_on(delete_role(R), remove_role_from_group(_, R)).
+depends_on(delete_user(U), remove_user_from_group(_, U)).
 
 %% Value addition depends on bundle creation
 depends_on(add_bundle_value(B, _, _), ensure_bundle(B, _)).

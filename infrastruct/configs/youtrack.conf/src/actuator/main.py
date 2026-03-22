@@ -1209,6 +1209,186 @@ class YouTrackActuator:
     # PLAN EXECUTION
     # =========================================================================
     
+
+    # =========================================================================
+    # User Access Management Methods
+    # =========================================================================
+
+    def create_user(self, login: str, full_name: str, email: str) -> ActionResult:
+        if self.dry_run:
+            return ActionResult(f"create_user('{login}', '{full_name}', '{email}')", True, "dry-run")
+        try:
+            resp = self.session.post(f'{self.url}/api/admin/users', json={"login": login, "fullName": full_name, "email": email})
+            resp.raise_for_status()
+            logger.info(f"Created user {login}")
+            return ActionResult(f"create_user('{login}')", True, resp.json().get("id"))
+        except Exception as e:
+            logger.error(f"Failed to create user {login}: {e}")
+            return ActionResult(f"create_user('{login}')", False, error=str(e))
+
+    def update_user(self, login: str, full_name: str, email: str) -> ActionResult:
+        if self.dry_run:
+            return ActionResult(f"update_user('{login}', '{full_name}', '{email}')", True, "dry-run")
+        try:
+            resp = self.session.get(f'{self.url}/api/admin/users', params={'fields': 'id,login'})
+            resp.raise_for_status()
+            user_id = next((u['id'] for u in resp.json() if u['login'] == login), None)
+            if not user_id: return ActionResult(f"update_user('{login}')", False, error="User not found")
+            resp = self.session.post(f'{self.url}/api/admin/users/{user_id}', json={"fullName": full_name, "email": email})
+            resp.raise_for_status()
+            return ActionResult(f"update_user('{login}')", True, user_id)
+        except Exception as e:
+            return ActionResult(f"update_user('{login}')", False, error=str(e))
+
+    def delete_user(self, login: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"delete_user('{login}')", True, "dry-run")
+        try:
+            resp = self.session.get(f'{self.url}/api/admin/users', params={'fields': 'id,login'})
+            user_id = next((u['id'] for u in resp.json() if u['login'] == login), None)
+            if not user_id: return ActionResult(f"delete_user('{login}')", True)
+            self.session.delete(f'{self.url}/api/admin/users/{user_id}').raise_for_status()
+            return ActionResult(f"delete_user('{login}')", True, user_id)
+        except Exception as e:
+            return ActionResult(f"delete_user('{login}')", False, error=str(e))
+
+    def create_group(self, name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"create_group('{name}')", True, "dry-run")
+        try:
+            resp = self.session.post(f'{self.url}/api/admin/groups', json={"name": name})
+            resp.raise_for_status()
+            return ActionResult(f"create_group('{name}')", True, resp.json().get("id"))
+        except Exception as e:
+            return ActionResult(f"create_group('{name}')", False, error=str(e))
+
+    def delete_group(self, name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"delete_group('{name}')", True, "dry-run")
+        try:
+            resp = self.session.get(f'{self.url}/api/admin/groups', params={'fields': 'id,name'})
+            group_id = next((g['id'] for g in resp.json() if g['name'] == name), None)
+            if not group_id: return ActionResult(f"delete_group('{name}')", True)
+            self.session.delete(f'{self.url}/api/admin/groups/{group_id}').raise_for_status()
+            return ActionResult(f"delete_group('{name}')", True, group_id)
+        except Exception as e:
+            return ActionResult(f"delete_group('{name}')", False, error=str(e))
+
+    def add_user_to_group(self, group_name: str, user_login: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"add_user_to_group('{group_name}', '{user_login}')", True, "dry-run")
+        try:
+            g_id = next((g['id'] for g in self.session.get(f'{self.url}/api/admin/groups', params={'fields': 'id,name'}).json() if g['name'] == group_name), None)
+            u_id = next((u['id'] for u in self.session.get(f'{self.url}/api/admin/users', params={'fields': 'id,login'}).json() if u['login'] == user_login), None)
+            if not g_id or not u_id: return ActionResult(f"add_user_to_group('{group_name}', '{user_login}')", False, error="Not found")
+            self.session.post(f'{self.url}/api/admin/groups/{g_id}/users', json={"id": u_id}).raise_for_status()
+            return ActionResult(f"add_user_to_group('{group_name}', '{user_login}')", True)
+        except Exception as e:
+            return ActionResult(f"add_user_to_group('{group_name}', '{user_login}')", False, error=str(e))
+
+    def remove_user_from_group(self, group_name: str, user_login: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"remove_user_from_group('{group_name}', '{user_login}')", True, "dry-run")
+        try:
+            g_id = next((g['id'] for g in self.session.get(f'{self.url}/api/admin/groups', params={'fields': 'id,name'}).json() if g['name'] == group_name), None)
+            u_id = next((u['id'] for u in self.session.get(f'{self.url}/api/admin/users', params={'fields': 'id,login'}).json() if u['login'] == user_login), None)
+            if not g_id or not u_id: return ActionResult(f"remove_user_from_group('{group_name}', '{user_login}')", True)
+            self.session.delete(f'{self.url}/api/admin/groups/{g_id}/users/{u_id}').raise_for_status()
+            return ActionResult(f"remove_user_from_group('{group_name}', '{user_login}')", True)
+        except Exception as e:
+            return ActionResult(f"remove_user_from_group('{group_name}', '{user_login}')", False, error=str(e))
+
+    def create_role(self, name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"create_role('{name}')", True, "dry-run")
+        try:
+            self.session.post(f'{self.url}/api/admin/roles', json={"name": name}).raise_for_status()
+            return ActionResult(f"create_role('{name}')", True)
+        except Exception as e: return ActionResult(f"create_role('{name}')", False, error=str(e))
+
+    def delete_role(self, name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"delete_role('{name}')", True, "dry-run")
+        try:
+            r_id = next((r['id'] for r in self.session.get(f'{self.url}/api/admin/roles', params={'fields': 'id,name'}).json() if r['name'] == name), None)
+            if not r_id: return ActionResult(f"delete_role('{name}')", True)
+            self.session.delete(f'{self.url}/api/admin/roles/{r_id}').raise_for_status()
+            return ActionResult(f"delete_role('{name}')", True)
+        except Exception as e: return ActionResult(f"delete_role('{name}')", False, error=str(e))
+
+    def add_role_permission(self, role_name: str, perm_name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"add_role_permission('{role_name}', '{perm_name}')", True, "dry-run")
+        try:
+            r_id = next((r['id'] for r in self.session.get(f'{self.url}/api/admin/roles', params={'fields': 'id,name'}).json() if r['name'] == role_name), None)
+            p_id = next((p['id'] for p in self.session.get(f'{self.url}/api/admin/permissions', params={'fields': 'id,name'}).json() if p['name'] == perm_name), None)
+            if not r_id or not p_id: return ActionResult(f"add_role_permission('{role_name}', '{perm_name}')", False, error="Not found")
+            self.session.post(f'{self.url}/api/admin/roles/{r_id}/permissions', json={"id": p_id}).raise_for_status()
+            return ActionResult(f"add_role_permission('{role_name}', '{perm_name}')", True)
+        except Exception as e: return ActionResult(f"add_role_permission('{role_name}', '{perm_name}')", False, error=str(e))
+
+    def remove_role_permission(self, role_name: str, perm_name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"remove_role_permission('{role_name}', '{perm_name}')", True, "dry-run")
+        try:
+            r_id = next((r['id'] for r in self.session.get(f'{self.url}/api/admin/roles', params={'fields': 'id,name'}).json() if r['name'] == role_name), None)
+            p_id = next((p['id'] for p in self.session.get(f'{self.url}/api/admin/permissions', params={'fields': 'id,name'}).json() if p['name'] == perm_name), None)
+            if not r_id or not p_id: return ActionResult(f"remove_role_permission('{role_name}', '{perm_name}')", True)
+            self.session.delete(f'{self.url}/api/admin/roles/{r_id}/permissions/{p_id}').raise_for_status()
+            return ActionResult(f"remove_role_permission('{role_name}', '{perm_name}')", True)
+        except Exception as e: return ActionResult(f"remove_role_permission('{role_name}', '{perm_name}')", False, error=str(e))
+
+    def add_role_to_group(self, group_name: str, role_name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"add_role_to_group('{group_name}', '{role_name}')", True, "dry-run")
+        try:
+            g_id = next((g['id'] for g in self.session.get(f'{self.url}/api/admin/groups', params={'fields': 'id,name'}).json() if g['name'] == group_name), None)
+            r_id = next((r['id'] for r in self.session.get(f'{self.url}/api/admin/roles', params={'fields': 'id,name'}).json() if r['name'] == role_name), None)
+            if not g_id or not r_id: return ActionResult(f"add_role_to_group('{group_name}', '{role_name}')", False, error="Not found")
+            self.session.post(f'{self.url}/api/admin/groups/{g_id}/roles', json={"role": {"id": r_id}}).raise_for_status()
+            return ActionResult(f"add_role_to_group('{group_name}', '{role_name}')", True)
+        except Exception as e: return ActionResult(f"add_role_to_group('{group_name}', '{role_name}')", False, error=str(e))
+
+    def remove_role_from_group(self, group_name: str, role_name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"remove_role_from_group('{group_name}', '{role_name}')", True, "dry-run")
+        try:
+            group = next((g for g in self.session.get(f'{self.url}/api/admin/groups', params={'fields': 'id,name,roles(id,role(name))'}).json() if g['name'] == group_name), None)
+            if not group: return ActionResult(f"remove_role_from_group('{group_name}', '{role_name}')", True)
+            assign_id = next((r['id'] for r in group.get('roles', []) if r.get('role', {}).get('name') == role_name), None)
+            if not assign_id: return ActionResult(f"remove_role_from_group('{group_name}', '{role_name}')", True)
+            self.session.delete(f'{self.url}/api/admin/groups/{group["id"]}/roles/{assign_id}').raise_for_status()
+            return ActionResult(f"remove_role_from_group('{group_name}', '{role_name}')", True)
+        except Exception as e: return ActionResult(f"remove_role_from_group('{group_name}', '{role_name}')", False, error=str(e))
+
+    def grant_project_role(self, project_short_name: str, subject: str, subject_type: str, role_name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"grant_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", True, "dry-run")
+        try:
+            p_id = next((p['id'] for p in self.session.get(f'{self.url}/api/admin/projects', params={'fields': 'id,shortName'}).json() if p['shortName'] == project_short_name), None)
+            r_id = next((r['id'] for r in self.session.get(f'{self.url}/api/admin/roles', params={'fields': 'id,name'}).json() if r['name'] == role_name), None)
+
+            s_id = None
+            if subject_type == 'user':
+                s_id = next((u['id'] for u in self.session.get(f'{self.url}/api/admin/users', params={'fields': 'id,login'}).json() if u['login'] == subject), None)
+            else:
+                s_id = next((g['id'] for g in self.session.get(f'{self.url}/api/admin/groups', params={'fields': 'id,name'}).json() if g['name'] == subject), None)
+
+            if not all([p_id, r_id, s_id]): return ActionResult(f"grant_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", False, error="Not found")
+
+            payload = {"role": {"id": r_id}, "team": None}
+            if subject_type == 'user': payload["user"] = {"id": s_id}
+            else: payload["group"] = {"id": s_id}
+            self.session.post(f'{self.url}/api/admin/projects/{p_id}/projectRoles', json=payload).raise_for_status()
+            return ActionResult(f"grant_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", True)
+        except Exception as e: return ActionResult(f"grant_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", False, error=str(e))
+
+    def revoke_project_role(self, project_short_name: str, subject: str, subject_type: str, role_name: str) -> ActionResult:
+        if self.dry_run: return ActionResult(f"revoke_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", True, "dry-run")
+        try:
+            p_id = next((p['id'] for p in self.session.get(f'{self.url}/api/admin/projects', params={'fields': 'id,shortName'}).json() if p['shortName'] == project_short_name), None)
+            if not p_id: return ActionResult(f"revoke_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", True)
+
+            roles = self.session.get(f'{self.url}/api/admin/projects/{p_id}/projectRoles', params={'fields': 'id,role(name),user(login),group(name)'}).json()
+            target_id = None
+            for pr in roles:
+                if pr.get('role', {}).get('name') == role_name:
+                    if subject_type == 'user' and pr.get('user', {}).get('login') == subject: target_id = pr['id']
+                    elif subject_type == 'group' and pr.get('group', {}).get('name') == subject: target_id = pr['id']
+            if not target_id: return ActionResult(f"revoke_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", True)
+            self.session.delete(f'{self.url}/api/admin/projects/{p_id}/projectRoles/{target_id}').raise_for_status()
+            return ActionResult(f"revoke_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", True)
+        except Exception as e: return ActionResult(f"revoke_project_role('{project_short_name}', '{subject}', '{subject_type}', '{role_name}')", False, error=str(e))
+
+
     def execute_plan(self, actions: list[tuple]) -> list[ActionResult]:
         """Execute a list of actions from Prolog plan."""
         results = []
@@ -1510,6 +1690,43 @@ class YouTrackActuator:
                     error=wf_result.error
                 )
             
+
+            elif action_type == 'create_user':
+                result = self.create_user(args[0], args[1], args[2])
+            elif action_type == 'update_user':
+                result = self.update_user(args[0], args[1], args[2])
+            elif action_type == 'delete_user':
+                result = self.delete_user(args[0])
+            elif action_type == 'create_group':
+                result = self.create_group(args[0])
+            elif action_type == 'delete_group':
+                result = self.delete_group(args[0])
+            elif action_type == 'add_user_to_group':
+                result = self.add_user_to_group(args[0], args[1])
+            elif action_type == 'remove_user_from_group':
+                result = self.remove_user_from_group(args[0], args[1])
+            elif action_type == 'create_role':
+                result = self.create_role(args[0])
+            elif action_type == 'delete_role':
+                result = self.delete_role(args[0])
+            elif action_type == 'add_role_permission':
+                result = self.add_role_permission(args[0], args[1])
+            elif action_type == 'remove_role_permission':
+                result = self.remove_role_permission(args[0], args[1])
+            elif action_type == 'add_role_to_group':
+                result = self.add_role_to_group(args[0], args[1])
+            elif action_type == 'remove_role_from_group':
+                result = self.remove_role_from_group(args[0], args[1])
+            elif action_type == 'grant_project_role':
+                result = self.grant_project_role(args[0], args[1], args[2], args[3])
+            elif action_type == 'revoke_project_role':
+                result = self.revoke_project_role(args[0], args[1], args[2], args[3])
+            elif action_type == 'error_max_users_exceeded':
+                logger.error(f"Cannot execute plan: Maximum number of users exceeded ({args[0]} > 10).")
+                result = ActionResult(action="error_max_users_exceeded", success=False, error="Max 10 users allowed")
+
+
+
             # Tag operations
             elif action_type == 'create_tag':
                 # create_tag(Name, Color, UntagOnResolve, VisibleTo)
