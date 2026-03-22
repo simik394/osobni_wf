@@ -16,16 +16,21 @@ if [ ! -f "$PROFILES_JSON" ]; then
     exit 1
 fi
 
-echo "Prohledávám JSON a vytvářím strukturu v $TARGET_DIR..."
+# Počítáme s tím, že jq vypsal ID a úplný název oddělené mezerou
+jq -r '.[] | "\(.id) \(.name)"' "$PROFILES_JSON" | while read -r sys_id full_name; do
+    # Získáme první slovo z názvu
+    first_word=$(echo "$full_name" | awk '{print $1}' | tr '/' '-')
+    
+    # Ověříme, zda první slovo vypadá jako kód předmětu na VŠE (např. 4IT415, 1BP426, 44F402)
+    if [[ "$first_word" =~ ^[0-9A-Z]{4,8}$ ]]; then
+        subject_code="$first_word"
+    else
+        # Pokud název nezačíná klasickým statusem, použijeme numerické ID (např. 215406 u 'IS/ICT Project Management')
+        subject_code="$sys_id"
+    fi
 
-# Použijeme jq pro extrakci kódů předmětů
-# Očekáváme pole objektů, kde name: "4IZ451 Knowledge Discovery..." -> kód je první slovo
-# U "IS/ICT" nahradíme lomítko spojovníkem, aby nevznikla podsložka.
-subjects=$(jq -r '.[].name' "$PROFILES_JSON" | awk '{print $1}' | tr '/' '-')
-
-for subject_code in $subjects; do
     echo "--------------------------"
-    echo "Zpracovávám předmět: $subject_code"
+    echo "Zpracovávám předmět: $subject_code (původní název: $full_name)"
     
     SUBJECT_DIR="$TARGET_DIR/$subject_code"
     
