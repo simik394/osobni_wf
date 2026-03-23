@@ -18,7 +18,10 @@ class MoodleDataExtractor {
                 if (!linkLabel) continue;
                 
                 const href = linkLabel.href;
-                if (!href || href.includes('#')) continue;
+                if (!href) continue;
+                
+                const cleanHref = href.split('#')[0];
+                if (cleanHref.includes('javascript:')) continue;
                 
                 const title = linkLabel.textContent.trim();
 
@@ -83,7 +86,8 @@ class MoodleDataExtractor {
         const atts = [];
         document.querySelectorAll('a[href*="pluginfile.php"]').forEach(a => {
             if (!a.href.includes('user/icon')) {
-                atts.push({ url: a.href, text: a.innerText.trim() });
+                const text = (a.innerText || a.textContent || '').trim();
+                atts.push({ url: a.href, text: text });
             }
         });
         return atts;

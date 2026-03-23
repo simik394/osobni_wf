@@ -46,11 +46,21 @@ async function extractZip(zipPath, targetDir) {
 
         // Fallback if no courses found (might be on a different page now)
         if (courseLinks.length === 0) {
-            console.log("No courses found via dashboard links, trying direct navigation to 4IT415...");
-            courseLinks = [{ url: 'https://moodle.vse.cz/course/view.php?id=21750', title: '4IT415 Informační modelování organizací (2025/2026 LS)' }];
+            console.log("No courses found via dashboard links, trying direct navigation fallbacks...");
+            courseLinks = [
+                { url: 'https://moodle.vse.cz/course/view.php?id=21750', title: '4IT415 Informační modelování organizací (2025/2026 LS)' },
+                { url: 'https://moodle.vse.cz/course/view.php?id=21125', title: '4IT414 Řízení projektů IS/ICT (2025/2026 LS)' }
+            ];
         }
 
-        console.log(`Found ${courseLinks.length} target courses.`);
+        console.log(`Found ${courseLinks.length} total target courses.`);
+
+        const courseFilterIndex = process.argv.indexOf('--course');
+        if (courseFilterIndex > -1 && process.argv.length > courseFilterIndex + 1) {
+            const filter = process.argv[courseFilterIndex + 1];
+            courseLinks = courseLinks.filter(c => c.title.includes(filter) || c.url.includes(filter));
+            console.log(`Filtered to ${courseLinks.length} courses matching "${filter}".`);
+        }
 
         for (const course of courseLinks) {
             const cleanCourseTitle = sanitizePath(course.title);
@@ -79,19 +89,20 @@ async function extractZip(zipPath, targetDir) {
 
             for (let i = 0; i < Math.min(modules.length, limit); i++) {
                 const mod = modules[i];
-                const cleanSecName = sanitizePath(mod.section);
-                const cleanModName = sanitizePath(mod.name);
-                const modDir = path.join(courseDir, cleanSecName);
-                ensureDirSync(modDir);
+                try {
+                    const cleanSecName = sanitizePath(mod.section);
+                    const cleanModName = sanitizePath(mod.name);
+                    const modDir = path.join(courseDir, cleanSecName);
+                    ensureDirSync(modDir);
 
-                console.log(`  -> Processing [${mod.type}] ${mod.name}...`);
-                const randomDelay = Math.floor(500 + Math.random() * 500);
-                await smartGoto(workPage, mod.url, randomDelay);
+                    console.log(`  -> Processing [${mod.type}] ${mod.name}...`);
+                    const randomDelay = Math.floor(500 + Math.random() * 500);
+                    await smartGoto(workPage, mod.url, randomDelay);
 
-                const modHtml = await workPage.content();
+                    const modHtml = await workPage.content();
 
-                if (mod.type === 'resource') {
-                    let downloadUrl = Extractor.extractResourceLink(modHtml) || workPage.url();
+                    if (mod.type === 'resource') {
+                        let downloadUrl = Extractor.extractResourceLink(modHtml) || workPage.url();
 
                         try {
                             const res = await context.request.get(downloadUrl);
@@ -194,7 +205,10 @@ async function extractZip(zipPath, targetDir) {
                                     }
                                 }
                             } catch (e) {}
+                        }
                     }
+                } catch (err) {
+                    console.error(`  !! Error processing module [${mod.name}]:`, err.message);
                 }
             }
 
