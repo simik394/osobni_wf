@@ -513,7 +513,20 @@ notebook.command('download-all-artifacts [outputDir]')
                 console.log(`[CLI] Found ${textArtifacts.length} text artifacts to download.`);
 
                 let successCount = 0;
+                let skippedCount = 0;
                 for (const artifact of textArtifacts) {
+                    // Check if file already exists (text or image) to skip download
+                    const typePrefix = artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1);
+                    const safeTitle = artifact.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
+                    const predictedTxtPath = path.join(resolvedOutputDir, `${typePrefix}_${safeTitle}.txt`);
+                    const predictedPngPath = path.join(resolvedOutputDir, `${typePrefix}_${safeTitle}.png`);
+
+                    if (fs.existsSync(predictedTxtPath) || fs.existsSync(predictedPngPath)) {
+                        console.log(`[CLI] Skip: Artifact already downloaded -> ${predictedTxtPath.replace('.txt', '.[txt|png]')}`);
+                        skippedCount++;
+                        continue;
+                    }
+
                     console.log(`\n[CLI] Processing artifact: "${artifact.title}" (${artifact.type})`);
                     // Call downloadArtifact with the exact title
                     const success = await notebook.downloadArtifact(notebookTitle, artifact.title, resolvedOutputDir);
@@ -527,7 +540,7 @@ notebook.command('download-all-artifacts [outputDir]')
                     }
                 }
 
-                console.log(`\n✅ Successfully downloaded ${successCount}/${textArtifacts.length} artifacts.`);
+                console.log(`\n✅ Successfully downloaded ${successCount} artifacts (Skipped ${skippedCount}).`);
             });
         } else {
             console.log('📤 Queueing all artifacts download via Windmill...');

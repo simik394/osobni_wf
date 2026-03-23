@@ -1437,25 +1437,33 @@ export class NotebookLMClient {
             case 'table':
             case 'presentation':
             case 'other': {
-                // It's a text-based artifact, we need to click it to open, then extract the text
-                const itemLocator = this.page.locator('button.artifact-button-content, .artifact-button-content').nth(targetIndex);
-
-                // Click the artifact to open it in the reading pane
-                // Use a robust click strategy for virtual/scrollable lists where standard click might fail silently
-                await itemLocator.scrollIntoViewIfNeeded().catch(() => {});
+                // Use sequential keyboard navigation to bypass Angular Virtual Scroll
+                console.log(`[DEBUG] Navigating via keyboard to item index ${targetIndex}...`);
                 try {
-                    await itemLocator.click({ force: true, timeout: 3000 });
+                    const firstItem = this.page.locator('button.artifact-button-content, .artifact-button-content').first();
+                    await firstItem.scrollIntoViewIfNeeded().catch(() => {});
+                    await firstItem.focus();
+                    
+                    for (let i = 0; i < targetIndex; i++) {
+                        await this.page.keyboard.press('ArrowDown');
+                        await this.humanDelay(50);
+                    }
+                    
+                    // Press Enter to open the focused item
+                    await this.page.keyboard.press('Enter');
                 } catch (e) {
-                    await itemLocator.dispatchEvent('click');
+                    console.warn(`[DEBUG] Keyboard navigation failed, falling back to click: ${e}`);
+                    const itemLocator = this.page.locator('button.artifact-button-content, .artifact-button-content').nth(targetIndex);
+                    await itemLocator.click({ force: true }).catch(() => itemLocator.dispatchEvent('click'));
                 }
                 
-                console.log(`[DEBUG] Opened text artifact "${target.title}"`);
+                console.log(`[DEBUG] Opened artifact "${target.title}"`);
 
-                await this.humanDelay(1500); // Wait for content to load in the view
+                await this.humanDelay(2000); // Wait for content to load in the view
 
-                // The text is usually displayed in a markdown/prose container
-                const contentSelector = '.prose, .note-content, .artifact-content-container, article, note-editor, labs-tailwind-doc-viewer';
-                await this.page.waitForSelector(contentSelector, { timeout: 10000 }).catch(() => console.warn('[DEBUG] Content container might not have appeared'));
+                // Expanded selectors to capture Notes, Presentations, FAQ, Flashcards
+                const contentSelector = '.prose, .note-content, .artifact-content-container, article, note-editor, labs-tailwind-doc-viewer, .flashcard-container, .presentation-container, markdown-viewer';
+                await this.page.waitForSelector(contentSelector, { timeout: 10000 }).catch(() => console.warn('[DEBUG] Specific content container might not have appeared'));
 
                 const contentLocators = this.page.locator(contentSelector);
                 let textContent = '';
@@ -1463,40 +1471,62 @@ export class NotebookLMClient {
                     // Try to get the most substantial text block
                     textContent = await contentLocators.first().innerText();
                 } else {
-                    // Fallback to reading the body or dialog text if it opened in a modal
-                    console.log('[DEBUG] Trying fallback text extraction...');
-                    textContent = await this.page.locator('mat-dialog-container, .dialog-content').innerText().catch(() => '');
+                    // Fallback to reading the body or dialog text if it opened in a modal or side panel
+                    console.log('[DEBUG] Trying fallback text extraction across the whole visible modal or editor...');
+                    textContent = await this.page.locator('mat-dialog-container, .dialog-content, note-editor, .side-panel-content').innerText().catch(() => '');
                 }
 
                 if (!textContent || textContent.trim().length === 0) {
-                    console.error('[DEBUG] Failed to extract text content from artifact.');
-                    await this.page.keyboard.press('Escape');
-                    await this.humanDelay(1000);
-                    return false;
+                    console.log('[DEBUG] Artifact contains no extractable text. Capturing visual screenshot instead (Presentation/Flashcards/Timeline).');
+                    
+                    let isDir = false;
+                    try {
+                        isDir = fs.statSync(outputPathOrDir).isDirectory();
+                    } catch (e) {
+                        isDir = !path.extname(outputPathOrDir);
+                    }
+
+                    if (isDir) {
+                        const typePrefix = target.type.charAt(0).toUpperCase() + target.type.slice(1);
+                        const safeTitle = target.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
+                        const finalPngPath = path.join(outputPathOrDir, `${typePrefix}_${safeTitle}.png`);
+                        
+                        const dir = path.dirname(finalPngPath);
+                        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                        
+                        // Try to screenshot the inner modal/content container, fallback to the whole page
+                        const container = this.page.locator('.mat-mdc-dialog-container, mat-dialog-container, .dialog-content, note-editor, .side-panel-content').first();
+                        if (await container.count() > 0 && await container.isVisible()) {
+                            await container.screenshot({ path: finalPngPath });
+                        } else {
+                            await this.page.screenshot({ path: finalPngPath });
+                        }
+                        console.log(`[DEBUG] ✅ Saved visual artifact to: ${finalPngPath}`);
+                    }
+                } else {
+                    // Format output file path
+                    let isDir = false;
+                    try {
+                        isDir = fs.statSync(outputPathOrDir).isDirectory();
+                    } catch (e) {
+                        isDir = !path.extname(outputPathOrDir);
+                    }
+
+                    let finalPath = outputPathOrDir;
+                    if (isDir) {
+                        // Prefix with type
+                        const typePrefix = target.type.charAt(0).toUpperCase() + target.type.slice(1);
+                        const safeTitle = target.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
+                        finalPath = path.join(outputPathOrDir, `${typePrefix}_${safeTitle}.txt`);
+                    }
+
+                    // Ensure directory exists
+                    const dir = path.dirname(finalPath);
+                    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+                    fs.writeFileSync(finalPath, textContent);
+                    console.log(`[DEBUG] ✅ Saved text artifact to: ${finalPath}`);
                 }
-
-                // Format output file path
-                let isDir = false;
-                try {
-                    isDir = fs.statSync(outputPathOrDir).isDirectory();
-                } catch (e) {
-                    isDir = !path.extname(outputPathOrDir);
-                }
-
-                let finalPath = outputPathOrDir;
-                if (isDir) {
-                    // Prefix with type
-                    const typePrefix = target.type.charAt(0).toUpperCase() + target.type.slice(1);
-                    const safeTitle = target.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
-                    finalPath = path.join(outputPathOrDir, `${typePrefix}_${safeTitle}.txt`);
-                }
-
-                // Ensure directory exists
-                const dir = path.dirname(finalPath);
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-                fs.writeFileSync(finalPath, textContent);
-                console.log(`[DEBUG] ✅ Saved text artifact to: ${finalPath}`);
 
                 // Close the modal or view if there's a close button
                 const closeBtn = this.page.locator('button[aria-label*="Zavřít"], button[aria-label*="Close"], button mat-icon:has-text("collapse_content"), button mat-icon:has-text("close")').first();
