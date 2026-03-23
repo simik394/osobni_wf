@@ -252,19 +252,6 @@ notebook.command('sync')
         }
     });
 
-notebook.command('list')
-    .description('List notebooks')
-    .option('--local', 'Use local execution', true)
-    .action(async (opts) => {
-        if (opts.local) {
-            await runLocalNotebookAction(async (client, notebook) => {
-                const notebooks = await notebook.listNotebooks();
-                console.log(JSON.stringify(notebooks, null, 2));
-            });
-        } else {
-            await sendServerRequest('/notebook/list');
-        }
-    });
 
 notebook.command('stats <title>')
     .description('Get notebook stats')
