@@ -46,6 +46,7 @@ export abstract class BaseClient {
     protected options: ClientOptions;
     protected isInitialized = false;
     protected profileId: string = 'default';
+    protected isConnectedOverCDP: boolean = false;
 
     constructor(options: ClientOptions = {}) {
         this.options = { headless: config.headless, ...options };
@@ -234,6 +235,7 @@ export class PerplexityClient extends BaseClient {
                     // Method 1: Try connecting via standard CDP (http endpoint)
                     console.log(`Attempting connectOverCDP to ${endpoint}...`);
                     this.browser = await (chromium.connectOverCDP(endpoint as string, { timeout: 5000 }) as unknown as Browser);
+                    this.isConnectedOverCDP = true;
                     console.log('Connected via connectOverCDP');
                 } catch (e: any) {
                     console.log(`connectOverCDP failed: ${e.message}`);
@@ -270,6 +272,7 @@ export class PerplexityClient extends BaseClient {
                         }
 
                         this.browser = await (chromium.connectOverCDP(wsEndpoint) as unknown as Browser);
+                        this.isConnectedOverCDP = true;
                         console.log('Connected via chromium.connectOverCDP (Manual WS Fix)');
 
                     } catch (manualError: any) {
@@ -811,22 +814,34 @@ export class PerplexityClient extends BaseClient {
             console.error('Failed to save auth on shutdown:', e.message);
         }
 
-        // Close all pages
-        for (const session of this.sessions) {
-            await session.page.close().catch(() => { });
+        // Close all sessions we opened, but for CDP, let's NOT close pages so we don't accidentally close the remote browser tabs
+        if (!this.isConnectedOverCDP) {
+            for (const session of this.sessions) {
+                await session.page.close().catch(() => { });
+            }
         }
         this.sessions = [];
 
-        if (this.context) {
-            await this.context.close();
-            this.context = null;
+        if (this.isConnectedOverCDP) {
+            console.log('Disconnecting from CDP browser (leaving context active)...');
+            if (this.browser) {
+                // For a CDP connection, browser.close() just disconnects
+                await this.browser.close().catch(() => {});
+            }
+        } else {
+            console.log('Closing local browser instances...');
+            if (this.context) {
+                await this.context.close().catch(() => {});
+            }
+            if (this.browser) {
+                await this.browser.close().catch(() => {});
+            }
         }
-        if (this.browser) {
-            await this.browser.close();
-            this.browser = null;
-        }
+        
+        this.context = null;
+        this.browser = null;
         this.isInitialized = false;
         this.keepAlive = false;
-        console.log('Browser closed');
+        console.log('Browser shutdown complete');
     }
 }

@@ -33,7 +33,8 @@ export async function notifyNtfy(title: string, message: string, tags?: string[]
 // Helper to send request to server (returns data for programmatic use)
 export async function sendServerRequest(path: string, body: any = {}): Promise<any> {
     const port = config.port;
-    const url = `http://localhost:${port}${path}`;
+    const host = config.host;
+    const url = `http://${host}:${port}${path}`;
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -59,7 +60,8 @@ export async function sendServerRequest(path: string, body: any = {}): Promise<a
 // Helper to send request with SSE streaming (prints progress to console)
 export async function sendServerRequestWithSSE(path: string, body: any = {}): Promise<any> {
     const port = config.port;
-    const url = `http://localhost:${port}${path}`;
+    const host = config.host;
+    const url = `http://${host}:${port}${path}`;
     try {
         const response = await fetch(url, {
             method: 'POST',

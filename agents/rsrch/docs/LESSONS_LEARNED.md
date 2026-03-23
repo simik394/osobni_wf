@@ -125,4 +125,15 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 
 **References**: See [Browser Singleton Autopsy (2026-01-24)](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/2026-01-24_singleton_recovery_autopsy.md) for full details.
 
+## 2026-03-23: Local File Sync vs Windmill Architecture
 
+### 1. CDP Local File Streaming
+- **Feature**: Playwright's `connectOverCDP` has a powerful side-effect: calling `setInputFiles(localPaths)` on a script running *locally* will automatically stream those local files over the WebSocket to the remote browser.
+- **Problem**: While convenient, this bypasses the entire Windmill orchestration layer. The local CLI connects directly to the shared `rsrch-browser` container. If another Windmill job tries to use the browser simultaneously, they will collide in the same context.
+
+### 2. Architectural Purity vs Practicality
+- **The Pure Way**: File uploads intended for the production browser should run within a Windmill worker. This requires first syncing (`rsync`/`scp`) the local files to the server (`halvarm`), then triggering a Windmill job that reads those newly-local-to-server files and uploads them.
+- **The Pragmatic Way**: For ad-hoc, manual synchronization scripts running from a user's laptop, using `--local` with a remote CDP endpoint (`ws://halvarm:9223`) is significantly simpler as it avoids building file transport infrastructure. However, it violates the "Windmill handles all execution" rule.
+
+### 3. Server Port Mismatches
+- **Insight**: Always ensure port parity between the shared `config-defs.ts` and the actual Nomad deployment. The `rsrch` API was defined as `3055` but Nomad exposed it as `3030`. When debugging connectivity issues, `nc -z -w 2 host port` and checking Nomad/Docker directly are the fastest ways to diagnose missing services.

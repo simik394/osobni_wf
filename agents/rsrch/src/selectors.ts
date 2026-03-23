@@ -164,11 +164,11 @@ export interface NotebookLMSelectors {
 // Default selectors (fallback if YAML fails to load)
 const defaultSelectors: NotebookLMSelectors = {
     home: {
-        createNewButton: '.create-new-button',
-        projectButton: 'project-button',
-        projectButtonTitle: '.project-button-title',
-        projectCard: 'mat-card',
-        primaryActionButton: '.primary-action-button',
+        createNewButton: '.create-new-button, .create-new-action-button',
+        projectButton: 'project-button, .mat-mdc-row, mat-card:not(.create-new-action-button)',
+        projectButtonTitle: '.project-button-title, .title-column span, .mat-column-title span',
+        projectCard: 'mat-card, .mat-mdc-row',
+        primaryActionButton: '.primary-action-button, .mat-mdc-row, project-button',
     },
     notebook: {
         titleInput: 'input.title-input',

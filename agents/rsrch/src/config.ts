@@ -61,14 +61,18 @@ if (fs.existsSync(configPath)) {
 }
 
 // Merge configurations
-console.log(`[Config] DEBUG Environment:`);
-console.log(`  process.env.PORT: "${process.env.PORT}"`);
-console.log(`  process.env.NOMAD_PORT_http: "${process.env.NOMAD_PORT_http}"`);
+if (process.env.DEBUG || process.env.VERBOSE) {
+  console.log(`[Config] DEBUG Environment:`);
+  console.log(`  process.env.PORT: "${process.env.PORT}"`);
+  console.log(`  process.env.NOMAD_PORT_http: "${process.env.NOMAD_PORT_http}"`);
+}
 
 const envPort = process.env.PORT || process.env.NOMAD_PORT_http;
 const resolvedPort = envPort ? parseInt(envPort, 10) : (localConfig.port || DEFAULTS.RSRCH.API_PORT);
 
-console.log(`  Resolved Port: ${resolvedPort}`);
+if (process.env.DEBUG || process.env.VERBOSE) {
+  console.log(`  Resolved Port: ${resolvedPort}`);
+}
 
 const mergedConfig = {
   ...localConfig,

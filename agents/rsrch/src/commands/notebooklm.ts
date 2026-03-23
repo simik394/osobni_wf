@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { runLocalNotebookAction, sendServerRequest } from '../cli-utils';
+import { cliContext } from '../cli-context';
 import * as path from 'path';
 import * as fs from 'fs';
 import { config } from '../config';
@@ -8,27 +9,10 @@ import { getWindmillClient } from '../windmill-client';
 
 const notebook = new Command('notebook').description('NotebookLM commands');
 
-notebook.command('list')
-    .description('List all notebooks')
-    .option('--local', 'Use local execution', true)
-    .action(async (opts) => {
-        if (opts.local) {
-            await runLocalNotebookAction(async (client, notebook) => {
-                await notebook.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
-                await notebook.page.waitForSelector('.project-button, .project-card, .project-button-title', { timeout: 20000 });
-                const titles = await notebook.page.locator('.project-button-title, .title').allInnerTexts();
-                console.log('Available Notebooks:');
-                titles.map((t: string) => t.trim()).filter((t: string) => t.length > 0).forEach((t: string) => console.log(` - ${t}`));
-            });
-        } else {
-            await sendServerRequest('/notebook/list', {});
-        }
-    });
-
 notebook.command('add-web-source <url>')
     .description('Add a website source URL to a notebook')
     .option('--notebook <title>', 'Notebook title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (url, opts) => {
         await runLocalNotebookAction(async (client, notebook) => {
             if (opts.notebook) {
@@ -42,7 +26,7 @@ notebook.command('add-local-source <paths...>')
     .alias('add-file')
     .description('Upload local files or directories (e.g. PDF, TXT) to a notebook')
     .option('--notebook <title>', 'Notebook title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (filePaths, opts) => {
         let filesToUpload: string[] = [];
         
@@ -86,7 +70,7 @@ notebook.command('add-local-source <paths...>')
 notebook.command('add-drive-source <docNames>')
     .description('Add Google Drive sources (comma-separated)')
     .option('--notebook <title>', 'Notebook title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (docNamesStr, opts) => {
         const docNames = docNamesStr.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
         if (docNames.length === 0) {
@@ -137,7 +121,7 @@ notebook.command('generate-audio')
             console.log('⚡ Force mode: will regenerate even if audio already exists');
         }
 
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             console.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
             console.warn('   Routing through server -> Windmill to prevent race conditions.');
             console.warn('   Remove --local flag - it will be ignored.\n');
@@ -156,7 +140,7 @@ notebook.command('generate-audio')
 notebook.command('download-audio [outputPath]')
     .description('Download audio overview')
     .requiredOption('--notebook <title>', 'Notebook title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .option('--latest', 'Latest audio only', false)
     .option('--pattern <regex>', 'Audio title pattern')
     .action(async (outputPath, opts) => {
@@ -178,7 +162,7 @@ notebook.command('download-audio [outputPath]')
 notebook.command('download-all-audio [outputDir]')
     .description('Download all audio overviews')
     .requiredOption('--notebook <title>', 'Notebook title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .option('--limit <number>', 'Limit number of downloads', parseInt)
     .action(async (outputDir, opts) => {
         const finalOutputDir = outputDir || './audio_downloads';
@@ -191,12 +175,23 @@ notebook.command('download-all-audio [outputDir]')
         });
     });
 
+notebook.command('create <title>')
+    .description('Create a new notebook')
+    .option('--local', 'Use local execution', false)
+    .action(async (title, opts) => {
+        await runLocalNotebookAction(async (client, notebook) => {
+            console.log(`[CLI] Creating notebook: ${title}...`);
+            await notebook.createNotebook(title);
+            console.log(`✅ Successfully created notebook "${title}".`);
+        });
+    });
+
 notebook.command('sync')
     .description('Sync notebook(s) to graph')
     .option('--title <title>', 'Notebook title (sync single)')
     .option('--pattern <regex>', 'Regex pattern to filter notebooks')
     .option('-a, --audio', 'Download audio during sync')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (opts) => {
         const store = getGraphStore();
         const graphHost = config.falkor.host;
@@ -253,11 +248,25 @@ notebook.command('sync')
     });
 
 
+notebook.command('list')
+    .description('List notebooks')
+    .option('--local', 'Use local execution', false)
+    .action(async (opts) => {
+        if (opts.local || cliContext.get().local) {
+            await runLocalNotebookAction(async (client, notebook) => {
+                const notebooks = await notebook.listNotebooks();
+                console.log(JSON.stringify(notebooks, null, 2));
+            });
+        } else {
+            await sendServerRequest('/notebook/list');
+        }
+    });
+
 notebook.command('stats <title>')
     .description('Get notebook stats')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 const stats = await notebook.getNotebookStats(title);
                 console.log(JSON.stringify(stats, null, 2));
@@ -269,9 +278,9 @@ notebook.command('stats <title>')
 
 notebook.command('sources <title>')
     .description('List notebook sources')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 await notebook.openNotebook(title);
                 const sources = await notebook.getSources();
@@ -323,9 +332,9 @@ notebook.command('select-sources <notebookTitle> <sourcesOrRange>')
 
 notebook.command('delete-source <notebookTitle> <sourceTitle>')
     .description('Delete a source from a notebook by title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (notebookTitle, sourceTitle, opts) => {
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 await notebook.openNotebook(notebookTitle);
                 await notebook.deleteSource(sourceTitle);
@@ -340,9 +349,9 @@ notebook.command('delete-source <notebookTitle> <sourceTitle>')
 
 notebook.command('messages <title>')
     .description('Get notebook chat messages')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 await notebook.openNotebook(title);
                 const messages = await notebook.getChatMessages();
@@ -356,7 +365,7 @@ notebook.command('messages <title>')
 notebook.command('add-text <notebookTitle> <content>')
     .description('Add text or file content to notebook')
     .option('--source-title <title>', 'Custom source title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (notebookTitle, content, opts) => {
         let textContent = content;
 
@@ -379,7 +388,7 @@ notebook.command('add-text <notebookTitle> <content>')
             console.log(`[CLI] Read ${textContent.length} chars from stdin`);
         }
 
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 await notebook.addSourceText(textContent, opts.sourceTitle, notebookTitle);
                 console.log(`\n✓ Added text source to notebook "${notebookTitle}"`);
@@ -401,7 +410,7 @@ notebook.command('download-batch-audio')
     .description('Batch download audio from multiple notebooks')
     .requiredOption('--titles <titles>', 'Comma-separated titles or "all"')
     .requiredOption('--output <dir>', 'Output directory')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (opts) => {
         await runLocalNotebookAction(async (client, notebook) => {
             let notebooksToProcess: string[] = [];
@@ -474,11 +483,65 @@ notebook.command('download-artifact <notebookTitle> <artifactTitle> [outputPathO
         }
     });
 
+notebook.command('download-all-artifacts [outputDir]')
+    .description('Download all non-audio text artifacts (Briefing Doc, FAQ, Study Guide, etc.) from a notebook')
+    .requiredOption('--notebook <title>', 'Notebook title')
+    .option('--local', 'Use local execution', false)
+    .action(async (outputDir, opts) => {
+        const finalOutputDir = outputDir || './downloads';
+        const notebookTitle = opts.notebook;
+
+        if (opts.local || cliContext.get().local) {
+            await runLocalNotebookAction(async (client, notebook) => {
+                const fs = require('fs');
+                const path = require('path');
+                const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
+
+                if (!fs.existsSync(resolvedOutputDir)) {
+                    fs.mkdirSync(resolvedOutputDir, { recursive: true });
+                }
+
+                console.log(`[CLI] Downloading all non-audio artifacts from "${notebookTitle}" to: ${resolvedOutputDir}`);
+                
+                await notebook.page.reload({ waitUntil: 'domcontentloaded' });
+                await notebook.openNotebook(notebookTitle);
+                await notebook.humanDelay(2000);
+
+                const artifacts = await notebook.getStudioArtifacts();
+                const textArtifacts = artifacts.filter((a: any) => a.type !== 'audio');
+
+                console.log(`[CLI] Found ${textArtifacts.length} text artifacts to download.`);
+
+                let successCount = 0;
+                for (const artifact of textArtifacts) {
+                    console.log(`\n[CLI] Processing artifact: "${artifact.title}" (${artifact.type})`);
+                    // Call downloadArtifact with the exact title
+                    const success = await notebook.downloadArtifact(notebookTitle, artifact.title, resolvedOutputDir);
+                    if (success) {
+                        successCount++;
+                    } else {
+                        console.log(`[CLI] Warning: Artifact extraction failed. Resetting UI state...`);
+                        await notebook.page.reload({ waitUntil: 'domcontentloaded' });
+                        await notebook.openNotebook(notebookTitle);
+                        await notebook.humanDelay(2000);
+                    }
+                }
+
+                console.log(`\n✅ Successfully downloaded ${successCount}/${textArtifacts.length} artifacts.`);
+            });
+        } else {
+            console.log('📤 Queueing all artifacts download via Windmill...');
+            console.log('⚠️ Windmill does not currently have a dedicated `downloadAllArtifacts` script, falling back to local...');
+            console.log('   Please run with --local flag.');
+            process.exit(1);
+        }
+    });
+
 notebook.command('artifacts <title>')
     .description('Get notebook artifacts')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 await notebook.openNotebook(title);
                 const artifacts = await notebook.getStudioArtifacts();
@@ -492,9 +555,9 @@ notebook.command('artifacts <title>')
 notebook.command('audio-status')
     .description('Check audio status')
     .requiredOption('--notebook <title>', 'Notebook title')
-    .option('--local', 'Use local execution', true)
+    .option('--local', 'Use local execution', false)
     .action(async (opts) => {
-        if (opts.local) {
+        if (opts.local || cliContext.get().local) {
             await runLocalNotebookAction(async (client, notebook) => {
                 const status = await notebook.checkAudioStatus(opts.notebook);
                 console.log(JSON.stringify(status, null, 2));

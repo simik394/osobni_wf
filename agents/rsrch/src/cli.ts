@@ -23,7 +23,7 @@ program
         const opts = thisCommand.opts();
         cliContext.set({
             profileId: opts.profile,
-            cdpEndpoint: opts.cdp,
+            cdpEndpoint: opts.cdp || process.env.BROWSER_CDP_ENDPOINT,
             serverUrl: opts.server,
             local: opts.local,
             verbose: opts.verbose

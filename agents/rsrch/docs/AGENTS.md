@@ -4,6 +4,7 @@
 
 > [!IMPORTANT]
 > **This is the core architecture. All code must follow this pattern.**
+> **Full architecture diagram with Mermaid:** [architecture_diagram.md](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/architecture_diagram.md)
 
 ```
 ┌────────────────────────────────────────────────────────────────┐

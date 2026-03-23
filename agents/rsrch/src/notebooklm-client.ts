@@ -64,7 +64,7 @@ export class NotebookLMClient {
 
     async dumpState(prefix: string = 'debug') {
         const timestamp = Date.now();
-        const dataDir = path.join(process.cwd(), 'data');
+        const dataDir = '/tmp/rsrch_data';
         if (!require('fs').existsSync(dataDir)) {
             require('fs').mkdirSync(dataDir, { recursive: true });
         }
@@ -1441,13 +1441,20 @@ export class NotebookLMClient {
                 const itemLocator = this.page.locator('button.artifact-button-content, .artifact-button-content').nth(targetIndex);
 
                 // Click the artifact to open it in the reading pane
-                await itemLocator.click();
+                // Use a robust click strategy for virtual/scrollable lists where standard click might fail silently
+                await itemLocator.scrollIntoViewIfNeeded().catch(() => {});
+                try {
+                    await itemLocator.click({ force: true, timeout: 3000 });
+                } catch (e) {
+                    await itemLocator.dispatchEvent('click');
+                }
+                
                 console.log(`[DEBUG] Opened text artifact "${target.title}"`);
 
                 await this.humanDelay(1500); // Wait for content to load in the view
 
                 // The text is usually displayed in a markdown/prose container
-                const contentSelector = '.prose, .note-content, .artifact-content-container, article';
+                const contentSelector = '.prose, .note-content, .artifact-content-container, article, note-editor, labs-tailwind-doc-viewer';
                 await this.page.waitForSelector(contentSelector, { timeout: 10000 }).catch(() => console.warn('[DEBUG] Content container might not have appeared'));
 
                 const contentLocators = this.page.locator(contentSelector);
@@ -1463,6 +1470,8 @@ export class NotebookLMClient {
 
                 if (!textContent || textContent.trim().length === 0) {
                     console.error('[DEBUG] Failed to extract text content from artifact.');
+                    await this.page.keyboard.press('Escape');
+                    await this.humanDelay(1000);
                     return false;
                 }
 
@@ -1490,7 +1499,7 @@ export class NotebookLMClient {
                 console.log(`[DEBUG] ✅ Saved text artifact to: ${finalPath}`);
 
                 // Close the modal or view if there's a close button
-                const closeBtn = this.page.locator('button[aria-label="Zavřít"], button[aria-label="Close"], button mat-icon:has-text("close")').first();
+                const closeBtn = this.page.locator('button[aria-label*="Zavřít"], button[aria-label*="Close"], button mat-icon:has-text("collapse_content"), button mat-icon:has-text("close")').first();
                 if (await closeBtn.count() > 0 && await closeBtn.isVisible()) {
                     await closeBtn.click();
                     await this.humanDelay(500);
@@ -1697,10 +1706,10 @@ export class NotebookLMClient {
         const notebooks: Array<{ title: string; platformId: string; sourceCount: number }> = [];
 
         try {
-            // Wait for notebook cards to load
-            await this.page.waitForSelector('project-button, mat-card', { timeout: 15000 });
+            // Wait for notebook cards or table rows to load
+            await this.page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: 15000 });
 
-            const cards = this.page.locator('project-button');
+            const cards = this.page.locator(selectors.home.projectButton);
             const count = await cards.count();
             console.log(`[NotebookLM] Found ${count} notebooks`);
 
@@ -1708,13 +1717,14 @@ export class NotebookLMClient {
                 const card = cards.nth(i);
 
                 // Extract title
-                const titleEl = card.locator('.project-button-title');
-                const title = await titleEl.innerText().catch(() => `Notebook ${i + 1}`);
+                const titleEl = card.locator(selectors.home.projectButtonTitle);
+                const titleRaw = await titleEl.innerText().catch(() => `Notebook ${i + 1}`);
+                const title = titleRaw.replace(/\n+/g, ' ').trim();
 
-                // Extract source count (usually in subtitle like "3 sources")
-                const subtitleEl = card.locator('.project-button-subtitle, .source-count');
+                // Extract source count (usually in subtitle like "3 sources" or inside column)
+                const subtitleEl = card.locator('.project-button-subtitle, .source-count, .mat-column-numSources');
                 const subtitleText = await subtitleEl.innerText().catch(() => '');
-                const sourceMatch = subtitleText.match(/(\d+)\s*(sources?|zdrojů?|zdroje?)/i);
+                const sourceMatch = subtitleText.match(/(\d+)\s*(sources?|zdrojů?|zdroje?)/i) || subtitleText.match(/^(\d+)$/);
                 const sourceCount = sourceMatch ? parseInt(sourceMatch[1]) : 0;
 
                 // Get platformId from data attribute or by clicking
@@ -1729,6 +1739,7 @@ export class NotebookLMClient {
             }
         } catch (e: any) {
             console.error('[NotebookLM] Error listing notebooks:', e.message);
+            await this.dumpState('list_notebooks_fail');
         }
 
         return notebooks;

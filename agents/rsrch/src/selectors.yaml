@@ -15,12 +15,12 @@
 # ============================================================
 home:
   # Create new notebook button
-  createNewButton: ".create-new-button"
+  createNewButton: ".create-new-button, .create-button-wrapper button"
   # Project/notebook cards container
-  projectButton: "project-button"
-  projectButtonTitle: ".project-button-title"
-  projectCard: "mat-card"
-  primaryActionButton: ".primary-action-button"
+  projectButton: "project-button, tr.mat-mdc-row"
+  projectButtonTitle: ".project-button-title, .project-table-title"
+  projectCard: "mat-card, tr.mat-mdc-row"
+  primaryActionButton: ".primary-action-button, .project-table-title"
 
 # ============================================================
 # NOTEBOOK PAGE
