@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { config } from '../config';
 import { getGraphStore } from '../graph-store';
+import { getWindmillClient } from '../windmill-client';
 
 const notebook = new Command('notebook').description('NotebookLM commands');
 
@@ -251,19 +252,6 @@ notebook.command('sync')
         }
     });
 
-notebook.command('list')
-    .description('List notebooks')
-    .option('--local', 'Use local execution', true)
-    .action(async (opts) => {
-        if (opts.local) {
-            await runLocalNotebookAction(async (client, notebook) => {
-                const notebooks = await notebook.listNotebooks();
-                console.log(JSON.stringify(notebooks, null, 2));
-            });
-        } else {
-            await sendServerRequest('/notebook/list');
-        }
-    });
 
 notebook.command('stats <title>')
     .description('Get notebook stats')
@@ -291,6 +279,45 @@ notebook.command('sources <title>')
             });
         } else {
             await sendServerRequest('/notebook/sources', { title });
+        }
+    });
+
+
+notebook.command('rename-source <notebookTitle> <oldTitle> <newTitle>')
+    .description('Rename a source in a notebook')
+    .option('--local', 'Use local execution', true)
+    .action(async (notebookTitle, oldTitle, newTitle, opts) => {
+        if (opts.local) {
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(notebookTitle);
+                await notebook.renameSource(oldTitle, newTitle);
+                console.log(`✅ Successfully renamed source "${oldTitle}" to "${newTitle}" in notebook "${notebookTitle}".`);
+            });
+        } else {
+            console.log('📤 Queueing via Windmill...');
+            const windmill = getWindmillClient();
+            const result = await windmill.triggerNotebookLMRenameSource(notebookTitle, oldTitle, newTitle);
+            console.log(`\n✅ Windmill Job Queued: ${result.jobId || 'Failed'}`);
+            if (result.error) console.error(result.error);
+        }
+    });
+
+notebook.command('select-sources <notebookTitle> <sourcesOrRange>')
+    .description('Select sources for grounding. Provide comma-separated names or an index range like 1,3-5,!4')
+    .option('--local', 'Use local execution', true)
+    .action(async (notebookTitle, sourcesOrRange, opts) => {
+        if (opts.local) {
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(notebookTitle);
+                await notebook.selectSources(sourcesOrRange);
+                console.log(`✅ Successfully selected sources for notebook "${notebookTitle}".`);
+            });
+        } else {
+            console.log('📤 Queueing via Windmill...');
+            const windmill = getWindmillClient();
+            const result = await windmill.triggerNotebookLMSelectSources(notebookTitle, sourcesOrRange);
+            console.log(`\n✅ Windmill Job Queued: ${result.jobId || 'Failed'}`);
+            if (result.error) console.error(result.error);
         }
     });
 
@@ -408,6 +435,43 @@ notebook.command('download-batch-audio')
                 }
             }
         });
+    });
+
+notebook.command('download-artifact <notebookTitle> <artifactTitle> [outputPathOrDir]')
+    .description('Download a specific artifact (audio, text, note, etc.)')
+    .option('--local', 'Use local execution', true)
+    .option('--latest', 'Latest matching artifact only', false)
+    .option('--pattern', 'Treat the title as a regex pattern', false)
+    .action(async (notebookTitle, artifactTitle, outputPathOrDir, opts) => {
+        const finalOutputPath = outputPathOrDir || './downloads';
+
+        if (opts.local) {
+            await runLocalNotebookAction(async (client, notebook) => {
+                const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
+                console.log(`[CLI] Downloading artifact "${artifactTitle}"... Output: ${resolvedOutputPath}`);
+
+                const success = await notebook.downloadArtifact(notebookTitle, artifactTitle, resolvedOutputPath, {
+                    isPattern: opts.pattern,
+                    latestOnly: opts.latest
+                });
+
+                if (success) {
+                    console.log('✅ Artifact successfully downloaded.');
+                } else {
+                    console.log('❌ Failed to download artifact.');
+                    process.exit(1);
+                }
+            });
+        } else {
+            console.log('📤 Queueing via Windmill...');
+            const windmill = getWindmillClient();
+            const result = await windmill.triggerNotebookLMDownloadArtifact(notebookTitle, artifactTitle, finalOutputPath, {
+                isPattern: opts.pattern,
+                latestOnly: opts.latest
+            });
+            console.log(`\n✅ Windmill Job Queued: ${result.jobId || 'Failed'}`);
+            if (result.error) console.error(result.error);
+        }
     });
 
 notebook.command('artifacts <title>')

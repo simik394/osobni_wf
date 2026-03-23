@@ -362,6 +362,42 @@ export class WindmillClient {
     }
 
     /**
+     * NotebookLM commands via Windmill
+     */
+    async triggerNotebookLMRenameSource(notebookTitle: string, oldTitle: string, newTitle: string): Promise<WindmillJobResult> {
+        return this.triggerJob('f/notebooklm/rename_source', {
+            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || `ws://${process.env.RSRCH_HOST || 'localhost'}:${process.env.CDP_PORT || 9222}`,
+            notebook_title: notebookTitle,
+            old_title: oldTitle,
+            new_title: newTitle
+        });
+    }
+
+    async triggerNotebookLMSelectSources(notebookTitle: string, sourcesOrRange: string): Promise<WindmillJobResult> {
+        return this.triggerJob('f/notebooklm/select_sources', {
+            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || `ws://${process.env.RSRCH_HOST || 'localhost'}:${process.env.CDP_PORT || 9222}`,
+            notebook_title: notebookTitle,
+            sources_or_range: sourcesOrRange
+        });
+    }
+
+    async triggerNotebookLMDownloadArtifact(
+        notebookTitle: string,
+        artifactTitle: string,
+        outputPathOrDir: string,
+        options: { isPattern?: boolean, latestOnly?: boolean } = {}
+    ): Promise<WindmillJobResult> {
+        return this.triggerJob('f/notebooklm/download_artifact', {
+            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || `ws://${process.env.RSRCH_HOST || 'localhost'}:${process.env.CDP_PORT || 9222}`,
+            notebook_title: notebookTitle,
+            artifact_title: artifactTitle,
+            output_path_or_dir: outputPathOrDir,
+            latest_only: options.latestOnly || false,
+            is_pattern: options.isPattern || false
+        });
+    }
+
+    /**
      * Wait for a job to complete (polling)
      */
     async waitForJob(jobId: string, timeout = 60000, interval = 1000): Promise<any> {

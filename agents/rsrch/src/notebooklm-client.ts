@@ -245,8 +245,14 @@ export class NotebookLMClient {
         }
     }
 
-    async addSourceUrl(url: string) {
-        console.log(`Adding source URL: ${url}`);
+    async addSourceUrl(urlStr: string) {
+        const urls = urlStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (urls.length === 0) {
+            console.warn('No valid URLs provided.');
+            return;
+        }
+
+        console.log(`Adding source URL(s): ${urls.join(', ')}`);
 
         // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
         const sourcesTab = this.page.locator(selectors.sources.tab).filter({ hasText: new RegExp(selectors.sources.tabTextPattern, 'i') }).first();
@@ -259,49 +265,55 @@ export class NotebookLMClient {
             }
         }
 
-        // Find the "Web" or "Website" button. 
-        // It captures "Weby", "Website", "Link", etc.
-        // We pass the selector strings into the evaluate function context
-        const sourceBtn = await this.page.evaluateHandle((args) => {
-            const { buttonSelector, pattern } = args;
-            const buttons = Array.from(document.querySelectorAll(buttonSelector));
-            const regex = new RegExp(pattern, 'i');
-            return buttons.find(b => {
-                const text = b.textContent?.toLowerCase() || '';
-                return regex.test(text);
-            });
-        }, {
-            buttonSelector: selectors.sources.dropZoneButton,
-            pattern: selectors.sources.webSourcePattern
-        });
-
-        if (!sourceBtn) {
-            throw new Error('Website source button not found');
-        }
-
-        await sourceBtn.asElement()?.click();
-
         // The dialog uses a textarea for URLs
         const urlInputSelector = selectors.sources.urlInputTextarea;
-        try {
-            await this.page.waitForSelector(urlInputSelector, { timeout: 5000 });
-            await this.page.fill(urlInputSelector, url);
+        const submitSelector = selectors.sources.submitButton;
 
-            // Wait for the "Insert" button to become enabled (remove disabled class/attr)
-            const submitSelector = selectors.sources.submitButton;
-            await this.page.waitForFunction((sel: string) => {
-                const btn = document.querySelector(sel);
-                return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
-            }, submitSelector, { timeout: 5000 });
+        for (const url of urls) {
+            console.log(`[DEBUG] Adding URL: ${url}`);
 
-            await this.page.click(submitSelector);
+            // Find the "Web" or "Website" button.
+            // It captures "Weby", "Website", "Link", etc.
+            const sourceBtn = await this.page.evaluateHandle((args) => {
+                const { buttonSelector, pattern } = args;
+                const buttons = Array.from(document.querySelectorAll(buttonSelector));
+                const regex = new RegExp(pattern, 'i');
+                return buttons.find(b => {
+                    const text = b.textContent?.toLowerCase() || '';
+                    return regex.test(text);
+                });
+            }, {
+                buttonSelector: selectors.sources.dropZoneButton,
+                pattern: selectors.sources.webSourcePattern
+            });
 
-            // Wait for dialog to close
-            await this.page.waitForSelector(selectors.sources.dialogContainer, { state: 'hidden', timeout: 5000 });
+            if (!sourceBtn) {
+                throw new Error('Website source button not found');
+            }
 
-        } catch (e) {
-            console.error('Failed to fill URL source dialog', e);
-            throw e;
+            await sourceBtn.asElement()?.click();
+
+            try {
+                await this.page.waitForSelector(urlInputSelector, { timeout: 5000 });
+                await this.page.fill(urlInputSelector, url);
+
+                // Wait for the "Insert" button to become enabled (remove disabled class/attr)
+                await this.page.waitForFunction((sel: string) => {
+                    const btn = document.querySelector(sel);
+                    return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
+                }, submitSelector, { timeout: 5000 });
+
+                await this.page.click(submitSelector);
+
+                // Wait for dialog to close
+                await this.page.waitForSelector(selectors.sources.dialogContainer, { state: 'hidden', timeout: 5000 });
+
+                await this.humanDelay(1000); // small delay between adds
+
+            } catch (e) {
+                console.error(`Failed to add URL source: ${url}`, e);
+                throw e;
+            }
         }
     }
 
@@ -777,16 +789,68 @@ export class NotebookLMClient {
         }
     }
 
-    private async selectSources(sources: string[]) {
-        // If specific sources requested, deselect all first then select specific ones
-        if (!sources || sources.length === 0) {
+    /**
+     * Parse a range string into an array of 1-based indices.
+     * Supports formats like "1,3,5-8", "1-10,!4,!7", etc.
+     */
+    private parseIndexRanges(rangeStr: string, maxItems: number): number[] {
+        const selected = new Set<number>();
+        const excluded = new Set<number>();
+
+        const parts = rangeStr.split(',').map(s => s.trim());
+        for (const part of parts) {
+            if (part.startsWith('!')) {
+                // Exclusion
+                const num = parseInt(part.substring(1));
+                if (!isNaN(num)) excluded.add(num);
+            } else if (part.includes('-')) {
+                // Range
+                const [startStr, endStr] = part.split('-');
+                const start = parseInt(startStr);
+                const end = parseInt(endStr);
+                if (!isNaN(start) && !isNaN(end)) {
+                    for (let i = start; i <= end; i++) {
+                        if (i >= 1 && i <= maxItems) selected.add(i);
+                    }
+                }
+            } else {
+                // Single number
+                const num = parseInt(part);
+                if (!isNaN(num) && num >= 1 && num <= maxItems) selected.add(num);
+            }
+        }
+
+        // Remove excluded
+        for (const ex of excluded) {
+            selected.delete(ex);
+        }
+
+        return Array.from(selected).sort((a, b) => a - b);
+    }
+
+    /**
+     * Select specific sources. If the sources argument looks like an index range
+     * (e.g. "1,3,5-8"), it resolves the indices based on the current order in the UI.
+     * If an array of names is provided, it tries to match by title.
+     */
+    public async selectSources(sources: string[] | string) {
+        if (!sources || (Array.isArray(sources) && sources.length === 0)) {
             console.log('[DEBUG] No specific sources provided, using all sources');
             return;
         }
 
-        // 1. Deselect all sources - click Select-all twice to ensure clean slate
-        // When checkbox is "unchecked" it just means not ALL are selected, some may still be checked!
-        const selectAllInput = this.page.locator('input[aria-label="Vybrat všechny zdroje"], input[aria-label="Select all sources"]').first();
+        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                await sourcesTab.click();
+                await this.humanDelay(1000);
+            }
+        }
+
+        // 1. Deselect all sources to ensure clean slate
+        const selectAllInput = this.page.locator('input[aria-label="Vybrat všechny zdroje"], input[aria-label="Select all sources"], input[name="allsources"]').first();
 
         if (await selectAllInput.count() > 0) {
             const initialState = await selectAllInput.isChecked().catch(() => false);
@@ -795,53 +859,85 @@ export class NotebookLMClient {
             // Strategy: Click to SELECT ALL first, then click again to DESELECT ALL
             // This ensures a clean slate regardless of initial state
             if (!initialState) {
-                // Not all selected -> click to select all
                 await selectAllInput.click();
-                console.log('[DEBUG] Clicked to SELECT ALL first');
                 await this.humanDelay(500);
             }
-
             // Now all should be checked, click to uncheck all
             await selectAllInput.click();
-            console.log('[DEBUG] Clicked to DESELECT ALL');
             await this.humanDelay(500);
-
-            // Verify
-            const finalState = await selectAllInput.isChecked().catch(() => false);
-            console.log(`[DEBUG] Select-all final state: ${finalState} (should be false)`);
         } else {
             console.warn('[DEBUG] Select all input not found');
         }
 
-        // Small additional delay to ensure UI state is stable
+        // Wait for UI to stabilize
         await this.humanDelay(500);
 
-        // 2. Select specific sources using aria-label matching
-        // Browser subagent found: input[aria-label="{source_title}"]
-        console.log(`[DEBUG] Selecting specific sources: ${sources.join(', ')}`);
-        for (const sourceName of sources) {
-            // Try exact match first, then partial match
-            let sourceInput = this.page.locator(`input[aria-label="${sourceName}"]`).first();
-            if (await sourceInput.count() === 0) {
-                sourceInput = this.page.locator(`input[aria-label*="${sourceName}"]`).first();
+        let titlesToSelect: string[] = [];
+
+        // 2. Resolve indices if range string is provided
+        if (typeof sources === 'string') {
+            const currentSources = await this.extractSources();
+            const indicesToSelect = this.parseIndexRanges(sources, currentSources.length);
+            console.log(`[DEBUG] Parsed ranges "${sources}" to indices: ${indicesToSelect.join(', ')}`);
+
+            for (const idx of indicesToSelect) {
+                // Convert 1-based index to 0-based for array access
+                if (currentSources[idx - 1]) {
+                    titlesToSelect.push(currentSources[idx - 1].title);
+                }
+            }
+        } else {
+            titlesToSelect = sources;
+        }
+
+        console.log(`[DEBUG] Selecting specific sources: ${titlesToSelect.join(', ')}`);
+
+        // Find source items container
+        const sourceItems = this.page.locator('.single-source-container, source-list-item');
+        const count = await sourceItems.count();
+
+        for (const sourceName of titlesToSelect) {
+            let clicked = false;
+
+            // First try matching through the ordered list (more robust if there are duplicate labels)
+            for (let i = 0; i < count; i++) {
+                const item = sourceItems.nth(i);
+                const titleSpan = item.locator('.source-title, .title').first();
+                if (await titleSpan.count() > 0) {
+                    const titleText = await titleSpan.innerText();
+                    if (titleText.includes(sourceName) || sourceName.includes(titleText)) {
+                        const checkbox = item.locator('input[type="checkbox"]');
+                        if (await checkbox.count() > 0) {
+                            const isChecked = await checkbox.isChecked().catch(() => false);
+                            if (!isChecked) {
+                                await checkbox.click();
+                                clicked = true;
+                                await this.humanDelay(300);
+                            } else {
+                                clicked = true; // Already selected
+                            }
+                            break;
+                        }
+                    }
+                }
             }
 
-            if (await sourceInput.count() > 0) {
-                const isChecked = await sourceInput.isChecked().catch(() => false);
-                console.log(`[DEBUG] Source "${sourceName.substring(0, 40)}" isChecked: ${isChecked}`);
-                if (!isChecked) {
-                    await sourceInput.click();
-                    console.log(`[DEBUG] Clicked to select source: "${sourceName.substring(0, 40)}"`);
-                    await this.humanDelay(300);
-
-                    // Verify the click worked
-                    const nowChecked = await sourceInput.isChecked().catch(() => false);
-                    console.log(`[DEBUG] Source "${sourceName.substring(0, 40)}" now isChecked: ${nowChecked}`);
-                } else {
-                    console.log(`[DEBUG] Source "${sourceName.substring(0, 40)}" already checked (from previous state?)`);
+            // Fallback to aria-label match if not found in list
+            if (!clicked) {
+                let sourceInput = this.page.locator(`input[aria-label="${sourceName}"]`).first();
+                if (await sourceInput.count() === 0) {
+                    sourceInput = this.page.locator(`input[aria-label*="${sourceName}"]`).first();
                 }
-            } else {
-                console.warn(`[DEBUG] Source input not found for: "${sourceName.substring(0, 40)}"`);
+
+                if (await sourceInput.count() > 0) {
+                    const isChecked = await sourceInput.isChecked().catch(() => false);
+                    if (!isChecked) {
+                        await sourceInput.click();
+                        await this.humanDelay(300);
+                    }
+                } else {
+                    console.warn(`[DEBUG] Source input not found for: "${sourceName.substring(0, 40)}"`);
+                }
             }
         }
     }
@@ -1267,6 +1363,151 @@ export class NotebookLMClient {
         return false;
     }
 
+    /**
+     * Download an artifact by title or pattern.
+     * Delegates to downloadAudio for audio artifacts, or extracts text for text-based artifacts.
+     */
+    async downloadArtifact(notebookTitle: string, artifactTitleOrPattern: string, outputPathOrDir: string, options: { isPattern?: boolean, latestOnly?: boolean } = {}): Promise<boolean> {
+        if (notebookTitle) {
+            await this.openNotebook(notebookTitle);
+        }
+
+        console.log(`[DEBUG] Attempting to download artifact matching "${artifactTitleOrPattern}" to: ${outputPathOrDir}`);
+
+        await this.maximizeStudio();
+        await this.humanDelay(2000);
+
+        // Fetch all artifacts to find a match
+        const artifacts = await this.getStudioArtifacts();
+        let target = null;
+        let targetIndex = -1;
+
+        if (options.latestOnly && !options.isPattern) {
+            // Find the first matching title
+            targetIndex = artifacts.findIndex(a => a.title.toLowerCase() === artifactTitleOrPattern.toLowerCase());
+        } else if (options.isPattern) {
+            const regex = new RegExp(artifactTitleOrPattern, 'i');
+            targetIndex = artifacts.findIndex(a => regex.test(a.title));
+        } else {
+            // Exact match default
+            targetIndex = artifacts.findIndex(a => a.title === artifactTitleOrPattern);
+        }
+
+        if (targetIndex === -1) {
+            // Fallback: try loose matching
+            targetIndex = artifacts.findIndex(a => a.title.toLowerCase().includes(artifactTitleOrPattern.toLowerCase()));
+            if (targetIndex === -1) {
+                console.error(`[DEBUG] Artifact matching "${artifactTitleOrPattern}" not found.`);
+                return false;
+            }
+        }
+
+        target = artifacts[targetIndex];
+        console.log(`[DEBUG] Found target artifact: [${target.type}] "${target.title}"`);
+
+        const fs = require('fs');
+        const path = require('path');
+
+        switch (target.type) {
+            case 'audio': {
+                // Determine if outputPathOrDir is a directory or file path
+                let isDir = false;
+                try {
+                    isDir = fs.statSync(outputPathOrDir).isDirectory();
+                } catch (e) {
+                    // Path doesn't exist, check extension
+                    isDir = !path.extname(outputPathOrDir);
+                }
+
+                let finalPath = outputPathOrDir;
+                if (isDir) {
+                    const safeTitle = target.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+                    finalPath = path.join(outputPathOrDir, `Audio_${safeTitle}_${Date.now()}.mp3`);
+                }
+
+                return await this.downloadAudio(notebookTitle, finalPath, {
+                    audioTitlePattern: target.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Exact match pattern
+                });
+            }
+
+            case 'note':
+            case 'faq':
+            case 'briefing':
+            case 'timeline':
+            case 'table':
+            case 'presentation':
+            case 'other': {
+                // It's a text-based artifact, we need to click it to open, then extract the text
+                const itemLocator = this.page.locator('button.artifact-button-content, .artifact-button-content').nth(targetIndex);
+
+                // Click the artifact to open it in the reading pane
+                await itemLocator.click();
+                console.log(`[DEBUG] Opened text artifact "${target.title}"`);
+
+                await this.humanDelay(1500); // Wait for content to load in the view
+
+                // The text is usually displayed in a markdown/prose container
+                const contentSelector = '.prose, .note-content, .artifact-content-container, article';
+                await this.page.waitForSelector(contentSelector, { timeout: 10000 }).catch(() => console.warn('[DEBUG] Content container might not have appeared'));
+
+                const contentLocators = this.page.locator(contentSelector);
+                let textContent = '';
+                if (await contentLocators.count() > 0) {
+                    // Try to get the most substantial text block
+                    textContent = await contentLocators.first().innerText();
+                } else {
+                    // Fallback to reading the body or dialog text if it opened in a modal
+                    console.log('[DEBUG] Trying fallback text extraction...');
+                    textContent = await this.page.locator('mat-dialog-container, .dialog-content').innerText().catch(() => '');
+                }
+
+                if (!textContent || textContent.trim().length === 0) {
+                    console.error('[DEBUG] Failed to extract text content from artifact.');
+                    return false;
+                }
+
+                // Format output file path
+                let isDir = false;
+                try {
+                    isDir = fs.statSync(outputPathOrDir).isDirectory();
+                } catch (e) {
+                    isDir = !path.extname(outputPathOrDir);
+                }
+
+                let finalPath = outputPathOrDir;
+                if (isDir) {
+                    // Prefix with type
+                    const typePrefix = target.type.charAt(0).toUpperCase() + target.type.slice(1);
+                    const safeTitle = target.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
+                    finalPath = path.join(outputPathOrDir, `${typePrefix}_${safeTitle}.txt`);
+                }
+
+                // Ensure directory exists
+                const dir = path.dirname(finalPath);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+                fs.writeFileSync(finalPath, textContent);
+                console.log(`[DEBUG] ✅ Saved text artifact to: ${finalPath}`);
+
+                // Close the modal or view if there's a close button
+                const closeBtn = this.page.locator('button[aria-label="Zavřít"], button[aria-label="Close"], button mat-icon:has-text("close")').first();
+                if (await closeBtn.count() > 0 && await closeBtn.isVisible()) {
+                    await closeBtn.click();
+                    await this.humanDelay(500);
+                } else {
+                    await this.page.keyboard.press('Escape');
+                }
+
+                return true;
+            }
+
+            default: {
+                console.warn(`[DEBUG] Unknown artifact type: ${target.type}`);
+                return false;
+            }
+        }
+    }
+
     async downloadAllAudio(notebookTitle: string, outputDir: string, options: { limit?: number } = {}) {
         if (notebookTitle) {
             await this.openNotebook(notebookTitle);
@@ -1501,7 +1742,7 @@ export class NotebookLMClient {
         platformId: string;
         sources: Array<{ type: string; title: string; url?: string }>;
         audioOverviews: Array<{ title: string; hasTranscript: boolean }>;
-        artifacts: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'other'; title: string }>;
+        artifacts: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; title: string; details?: string; sourceCount?: number; absoluteTime?: string; id?: string }>;
         messages: Array<{ role: 'user' | 'ai'; contentPreview: string }>;
     }> {
         console.log(`[NotebookLM] Scraping notebook: ${title}`);
@@ -1555,8 +1796,8 @@ export class NotebookLMClient {
     /**
      * Extract sources from current notebook
      */
-    private async extractSources(): Promise<Array<{ type: string; title: string; url?: string }>> {
-        const sources: Array<{ type: string; title: string; url?: string }> = [];
+    private async extractSources(): Promise<Array<{ type: string; title: string; isSelected?: boolean; id?: string; url?: string }>> {
+        const sources: Array<{ type: string; title: string; isSelected?: boolean; id?: string; url?: string }> = [];
 
         try {
             // Switch to Sources tab
@@ -1585,16 +1826,40 @@ export class NotebookLMClient {
                 const titleEl = item.locator('.source-title, .title').first();
                 const title = await titleEl.innerText().catch(() => '');
 
+                // Check selection status
+                const checkbox = item.locator('input[type="checkbox"]');
+                let isSelected = false;
+                if (await checkbox.count() > 0) {
+                    isSelected = await checkbox.isChecked().catch(() => false);
+                } else {
+                    // Alternative checking methods (sometimes the class or aria-checked is used instead of a direct input)
+                    const ariaCheckbox = item.locator('[aria-checked="true"]');
+                    if (await ariaCheckbox.count() > 0) {
+                        isSelected = true;
+                    }
+                }
+
                 // Determine type from icon or class
                 const html = await item.innerHTML().catch(() => '');
                 let type = 'unknown';
-                if (html.includes('link') || html.includes('web')) type = 'url';
+                if (html.includes('link') || html.includes('web') || html.includes('language')) type = 'url';
+                else if (html.includes('drive_spreadsheet')) type = 'gsheet';
                 else if (html.includes('drive') || html.includes('doc')) type = 'gdoc';
-                else if (html.includes('pdf') || html.includes('picture_as_pdf')) type = 'pdf';
-                else if (html.includes('text') || html.includes('article')) type = 'text';
+                else if (html.includes('pdf') || html.includes('picture_as_pdf') || html.includes('drive_pdf')) type = 'pdf';
+                else if (html.includes('text') || html.includes('article') || html.includes('markdown')) type = 'text';
+
+                // Attempt to extract an ID from a button if available
+                let id = undefined;
+                const menuBtn = item.locator('button[id^="source-item-more-button-"]').first();
+                if (await menuBtn.count() > 0) {
+                    const btnId = await menuBtn.getAttribute('id');
+                    if (btnId) {
+                        id = btnId.replace('source-item-more-button-', '');
+                    }
+                }
 
                 if (title.trim()) {
-                    sources.push({ type, title: title.trim() });
+                    sources.push({ type, title: title.trim(), isSelected, id });
                 }
             }
         } catch (e: any) {
@@ -1709,12 +1974,43 @@ export class NotebookLMClient {
         return messages;
     }
 
+    private parseRelativeDateToAbsolute(relativeStr: string): Date | null {
+        if (!relativeStr) return null;
+        const now = new Date();
+
+        let match = relativeStr.match(/(?:Před|ago)\s*(\d+)\s*(?:h|hodin|hours?)/i);
+        if (!match) match = relativeStr.match(/(\d+)\s*(?:h|hodin|hours?)\s*(?:ago|Před)/i);
+        if (match) {
+            const hours = parseInt(match[1]);
+            now.setHours(now.getHours() - hours);
+            return now;
+        }
+
+        match = relativeStr.match(/(?:Před|ago)\s*(\d+)\s*(?:min|minutami|minutes?)/i);
+        if (!match) match = relativeStr.match(/(\d+)\s*(?:min|minutami|minutes?)\s*(?:ago|Před)/i);
+        if (match) {
+            const mins = parseInt(match[1]);
+            now.setMinutes(now.getMinutes() - mins);
+            return now;
+        }
+
+        match = relativeStr.match(/(?:Před|ago)\s*(\d+)\s*(?:dny|dní|days?|d)/i);
+        if (!match) match = relativeStr.match(/(\d+)\s*(?:dny|dní|days?|d)\s*(?:ago|Před)/i);
+        if (match) {
+            const days = parseInt(match[1]);
+            now.setDate(now.getDate() - days);
+            return now;
+        }
+
+        return null;
+    }
+
     /**
      * Get all studio artifacts from the current notebook.
      * Must be called after opening a notebook.
      */
-    async getStudioArtifacts(): Promise<Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'other'; title: string }>> {
-        const artifacts: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'other'; title: string }> = [];
+    async getStudioArtifacts(): Promise<Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; title: string; details?: string; sourceCount?: number; absoluteTime?: string; id?: string; }>> {
+        const artifacts: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; title: string; details?: string; sourceCount?: number; absoluteTime?: string; id?: string; }> = [];
 
         try {
             console.log('[NotebookLM] Extracting studio artifacts...');
@@ -1723,7 +2019,7 @@ export class NotebookLMClient {
 
             // Find artifact buttons/containers in the studio panel
             // Use button.artifact-button-content for 1:1 match (one element per artifact)
-            const artifactItems = this.page.locator('button.artifact-button-content');
+            const artifactItems = this.page.locator('button.artifact-button-content, .artifact-button-content');
             const count = await artifactItems.count();
             console.log(`[NotebookLM] Found ${count} studio artifacts`);
 
@@ -1733,10 +2029,10 @@ export class NotebookLMClient {
                 const html = await item.innerHTML().catch(() => '');
 
                 // Determine type based on icons/text
-                let type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'other' = 'other';
+                let type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other' = 'other';
                 if (html.includes('audio_magic_eraser') || text.toLowerCase().includes('audio') || text.toLowerCase().includes('přehled')) {
                     type = 'audio';
-                } else if (html.includes('description') || text.toLowerCase().includes('note') || text.toLowerCase().includes('poznámk')) {
+                } else if (html.includes('description') || html.includes('sticky_note_2') || text.toLowerCase().includes('note') || text.toLowerCase().includes('poznámk')) {
                     type = 'note';
                 } else if (html.includes('help') || text.toLowerCase().includes('faq') || text.toLowerCase().includes('otázk')) {
                     type = 'faq';
@@ -1744,13 +2040,57 @@ export class NotebookLMClient {
                     type = 'briefing';
                 } else if (html.includes('timeline') || text.toLowerCase().includes('timeline') || text.toLowerCase().includes('časová')) {
                     type = 'timeline';
+                } else if (html.includes('table_view')) {
+                    type = 'table';
+                } else if (html.includes('tablet')) {
+                    type = 'presentation';
+                } else if (html.includes('cards_star')) {
+                    type = 'other'; // E.g., Flashcards
                 }
 
-                // Extract title (first meaningful line)
-                const lines = text.split('\n').filter(l => l.trim() && !l.includes('play_arrow') && !l.includes('more_vert'));
-                const title = lines[0]?.trim() || `Artifact ${i + 1}`;
+                // Extract title
+                let title = `Artifact ${i + 1}`;
+                const titleSpan = item.locator('.artifact-title').first();
+                if (await titleSpan.count() > 0) {
+                    title = (await titleSpan.innerText().catch(() => '')).trim();
+                } else {
+                    const lines = text.split('\n').filter(l => l.trim() && !l.includes('play_arrow') && !l.includes('more_vert'));
+                    if (lines[0]) title = lines[0].trim();
+                }
 
-                artifacts.push({ type, title });
+                // Extract details
+                let details = undefined;
+                const detailsSpan = item.locator('.artifact-details').first();
+                if (await detailsSpan.count() > 0) {
+                    details = (await detailsSpan.innerText().catch(() => '')).trim();
+                }
+
+                // Parse details for source count and date
+                let sourceCount = undefined;
+                let absoluteTime = undefined;
+                if (details) {
+                    const sourceMatch = details.match(/(\d+)\s*zdroj/i) || details.match(/(\d+)\s*source/i);
+                    if (sourceMatch) {
+                        sourceCount = parseInt(sourceMatch[1]);
+                    }
+
+                    const parsedTime = this.parseRelativeDateToAbsolute(details);
+                    if (parsedTime) {
+                        absoluteTime = parsedTime.toISOString();
+                    }
+                }
+
+                // Extract ID
+                let id = undefined;
+                const labelSpan = item.locator('.artifact-labels').first();
+                if (await labelSpan.count() > 0) {
+                    const labelId = await labelSpan.getAttribute('id');
+                    if (labelId) {
+                        id = labelId.replace('artifact-labels-', '').replace('note-labels-', '');
+                    }
+                }
+
+                artifacts.push({ type, title, details, sourceCount, absoluteTime, id });
             }
         } catch (e: any) {
             console.error('[NotebookLM] Error extracting studio artifacts:', e.message);
@@ -1875,7 +2215,7 @@ export class NotebookLMClient {
     /**
      * Get sources from current notebook (public wrapper)
      */
-    async getSources(): Promise<Array<{ type: string; title: string; url?: string }>> {
+    async getSources(): Promise<Array<{ type: string; title: string; isSelected?: boolean; id?: string; url?: string }>> {
         return this.extractSources();
     }
 
@@ -1883,6 +2223,86 @@ export class NotebookLMClient {
      * Delete a source from the current notebook by title.
      * @param title The title of the source to delete.
      */
+    /**
+     * Rename a source from the current notebook by title.
+     * @param oldTitle The current title of the source
+     * @param newTitle The new title for the source
+     */
+    async renameSource(oldTitle: string, newTitle: string) {
+        console.log(`[NotebookLM] Attempting to rename source: "${oldTitle}" to "${newTitle}"`);
+
+        // Ensure we are on "Sources" tab
+        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                await sourcesTab.click();
+                await this.humanDelay(1000);
+            }
+        }
+
+        // Find the source item by title
+        const item = this.page.locator('.single-source-container, source-list-item').filter({
+            has: this.page.locator('.source-title, .title, span', { hasText: oldTitle })
+        }).first();
+
+        if (await item.count() === 0) {
+            console.error(`[NotebookLM] Error: Source "${oldTitle}" not found.`);
+            await this.dumpState('rename_source_not_found');
+            throw new Error(`Source "${oldTitle}" not found`);
+        }
+
+        // Find and click the 'more' options button (three vertical dots)
+        const moreBtn = item.locator('button').filter({
+            has: this.page.locator('mat-icon', { hasText: 'more_vert' })
+        }).first();
+
+        if (await moreBtn.count() === 0) {
+             throw new Error(`More options button for source "${oldTitle}" not found`);
+        }
+
+        await moreBtn.click();
+        await this.humanDelay(800);
+
+        // Click Rename/Přejmenovat from the menu
+        const renameOption = this.page.locator('button[role="menuitem"]').filter({
+            hasText: /Přejmenovat|Rename/i
+        }).first();
+
+        if (await renameOption.count() === 0) {
+            await this.page.keyboard.press('Escape');
+            throw new Error(`Rename menu option for source "${oldTitle}" not found`);
+        }
+
+        await renameOption.click();
+        await this.humanDelay(1000);
+
+        // Wait for the rename dialog and input
+        const inputSelector = 'mat-dialog-container input[type="text"], .rename-dialog input';
+        await this.page.waitForSelector(inputSelector, { timeout: 5000 });
+
+        // Fill the new title and submit
+        await this.page.fill(inputSelector, newTitle);
+        await this.humanDelay(300);
+
+        // The submit button inside the dialog
+        const submitBtn = this.page.locator('mat-dialog-container button').filter({
+            hasText: /Uložit|Save/i
+        }).first();
+
+        if (await submitBtn.count() > 0) {
+            await submitBtn.click();
+        } else {
+            // Fallback: pressing Enter
+            await this.page.keyboard.press('Enter');
+        }
+
+        // Wait for dialog to disappear
+        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 10000 });
+        console.log(`[NotebookLM] Successfully renamed source to: "${newTitle}"`);
+        await this.humanDelay(1000);
+    }
+
     async deleteSource(title: string) {
         console.log(`[NotebookLM] Attempting to delete source: "${title}"`);
 
