@@ -87,14 +87,37 @@ async function extractZip(zipPath, targetDir) {
                 continue;
             }
 
+            const isDiff = process.argv.includes('--diff');
+            const diffSummary = { new: [], existing: [], total: modules.length };
+
             for (let i = 0; i < Math.min(modules.length, limit); i++) {
                 const mod = modules[i];
                 try {
                     const cleanSecName = sanitizePath(mod.section);
                     const cleanModName = sanitizePath(mod.name);
                     const modDir = path.join(courseDir, cleanSecName);
-                    ensureDirSync(modDir);
+                    
+                    if (isDiff) {
+                        let exists = false;
+                        if (mod.type === 'folder') {
+                            exists = fs.existsSync(path.join(modDir, cleanModName)) || fs.existsSync(path.join(modDir, `${cleanModName}.zip`));
+                        } else if (mod.type === 'resource') {
+                            const files = fs.existsSync(modDir) ? fs.readdirSync(modDir) : [];
+                            exists = files.some(f => f.startsWith(cleanModName));
+                        } else {
+                            exists = fs.existsSync(path.join(modDir, `${cleanModName}.html`));
+                        }
 
+                        if (exists) {
+                            diffSummary.existing.push(mod.name);
+                        } else {
+                            diffSummary.new.push(mod.name);
+                            console.log(`  [NEW] ${mod.name} (${mod.type}) in ${mod.section}`);
+                        }
+                        continue;
+                    }
+
+                    ensureDirSync(modDir);
                     console.log(`  -> Processing [${mod.type}] ${mod.name}...`);
                     const randomDelay = Math.floor(500 + Math.random() * 500);
                     await smartGoto(workPage, mod.url, randomDelay);
@@ -210,6 +233,15 @@ async function extractZip(zipPath, targetDir) {
                 } catch (err) {
                     console.error(`  !! Error processing module [${mod.name}]:`, err.message);
                 }
+            }
+
+            if (isDiff) {
+                console.log(`\n--- Diff Summary for ${course.title} ---`);
+                console.log(`  Total Modules: ${diffSummary.total}`);
+                console.log(`  Existing:      ${diffSummary.existing.length}`);
+                console.log(`  New/Missing:   ${diffSummary.new.length}`);
+                if (diffSummary.new.length === 0) console.log("  => Everything is up to date locally.");
+                continue;
             }
 
             // Generate HTML Index
