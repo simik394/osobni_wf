@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y \
     socat \
     curl \
     jq \
+    gnupg \
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -20,8 +24,8 @@ COPY package.json .
 COPY agents/shared/package.json agents/shared/
 COPY agents/rsrch/package.json agents/rsrch/
 
-# 2. Install all dependencies (omitting dev)
-RUN npm install --omit=dev
+# 2. Install all dependencies (omitting dev) and force pino-pretty
+RUN npm install --omit=dev && npm install pino-pretty
 
 # 3. Copy built code and deployment scripts
 COPY agents/shared/dist agents/shared/dist
