@@ -206,7 +206,7 @@ export class BrowserClient extends BaseClient {
                 
                 // Inject cookies if available
                 const storageState = loadStorageState(profileId);
-                if (storageState?.cookies?.length > 0) {
+                if (storageState?.cookies?.length > 0 && this.context) {
                     await this.context.addCookies(storageState.cookies);
                 }
             }
@@ -255,9 +255,7 @@ export class BrowserClient extends BaseClient {
 
     async saveAuth() {
         if (!this.context) return;
-        const storageState = await this.context.storageState();
-        saveStorageState(this.profileId, storageState);
-        console.log(`[Profile] Saved auth state for profile '${this.profileId}'`);
+        await saveStorageState(this.context, this.profileId);
     }
 
     async createGeminiClient(): Promise<GeminiClient> {
@@ -268,7 +266,7 @@ export class BrowserClient extends BaseClient {
 
     async createNotebookLMClient(): Promise<NotebookLMClient> {
         if (!this.context) throw new Error('Browser not initialized');
-        const page = await getTab(this.context as any, 'notebooklm');
+        const page = await getTab(this.context as any, 'notebooklm' as any);
         return new NotebookLMClient(page);
     }
 
