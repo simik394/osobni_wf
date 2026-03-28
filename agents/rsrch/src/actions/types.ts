@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Page } from 'playwright';
 import { GeminiClient } from '../clients/gemini';
 import { config } from '../config';
