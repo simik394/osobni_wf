@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import { PerplexityClient } from '../client';
-import { cliContext } from '../cli-context';
-import { login } from '../auth';
+import { PerplexityClient } from '../clients/base';
+import { cliContext } from '../cli/context';
+import { login } from '../services/auth';
 import * as fs from 'fs';
 import { config } from '../config';
 
@@ -86,7 +86,7 @@ export const authCommand = new Command('auth')
     .description('Login to Perplexity (headless)')
     .action(async () => {
         const { profileId } = cliContext.get();
-        const { getStateDir } = await import('../profile');
+        const { getStateDir } = await import('../services/profile');
         const userDataDir = getStateDir(profileId);
         await login(userDataDir);
     });

@@ -4,7 +4,7 @@ import { config } from './config';
 import { selectors } from './selectors';
 import * as fs from 'fs';
 import * as path from 'path';
-import logger from './logger';
+import logger from './services/logger';
 
 // Add stealth plugin
 chromium.use(StealthPlugin());

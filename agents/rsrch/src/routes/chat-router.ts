@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { GeminiClient } from '../gemini-client';
-import { PerplexityClient } from '../client';
+import { GeminiClient } from '../clients/gemini';
+import { PerplexityClient } from '../clients/base';
 import { config } from '../config';
 import { 
     startChatCompletionTrace, 
     completeChatCompletionTrace, 
     failChatCompletionTrace, 
     estimateTokens 
-} from '../observability';
+} from '../services/observability';
 
 // --- Types ---
 export interface ChatMessage {

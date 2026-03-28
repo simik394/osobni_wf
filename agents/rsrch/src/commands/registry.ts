@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { getRegistry } from '../artifact-registry';
+import { getRegistry } from '../core/artifact-registry';
 
 const registry = new Command('registry').description('Artifact registry commands');
 

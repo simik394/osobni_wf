@@ -1,11 +1,11 @@
 import { Command } from 'commander';
-import { runLocalNotebookAction, sendServerRequest } from '../cli-utils';
-import { cliContext } from '../cli-context';
+import { runLocalNotebookAction, sendServerRequest } from '../cli/utils';
+import { cliContext } from '../cli/context';
 import * as path from 'path';
 import * as fs from 'fs';
 import { config } from '../config';
-import { getGraphStore } from '../graph-store';
-import { getWindmillClient } from '../windmill-client';
+import { getGraphStore } from '../core/graph-store';
+import { getWindmillClient } from '../clients/windmill';
 
 const notebook = new Command('notebook').description('NotebookLM commands');
 

@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import { sendServerRequest } from '../cli-utils';
-import { getGraphStore } from '../graph-store';
+import { sendServerRequest } from '../cli/utils';
+import { getGraphStore } from '../core/graph-store';
 import { config } from '../config';
-import { cliContext } from '../cli-context';
+import { cliContext } from '../cli/context';
 
 const graph = new Command('graph').description('Graph database commands');
 
@@ -197,7 +197,7 @@ graph.command('export')
         if (since) console.log(`[Export] Since: ${new Date(since).toISOString()} `);
         console.log(`[Export] Limit: ${opts.limit} \n`);
 
-        const { exportBulk } = await import('../exporter');
+        const { exportBulk } = await import('../services/exporter');
         try {
             const results = await exportBulk(opts.platform, {
                 format: opts.format,

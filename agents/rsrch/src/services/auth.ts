@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { config } from './config';
+import { config } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import logger from './logger';

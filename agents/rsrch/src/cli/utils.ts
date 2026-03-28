@@ -1,6 +1,6 @@
-import { config } from './config';
-import { PerplexityClient } from './client';
-import { cliContext } from './cli-context';
+import { config } from '../config';
+import { PerplexityClient } from '../clients/base';
+import { cliContext } from './context';
 
 export interface ServerOptions {
     server?: string;

@@ -12,8 +12,8 @@
 
 import { discordService } from './services/notification';
 import { config } from './config';
-import { PerplexityClient } from './client';
-import { GeminiClient } from './gemini-client';
+import { PerplexityClient } from './clients/base';
+import { GeminiClient } from './clients/gemini';
 import * as path from 'path';
 import * as fs from 'fs';
 

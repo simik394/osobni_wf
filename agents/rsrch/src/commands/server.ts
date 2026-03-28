@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { startServer } from '../server';
-import { sendServerRequest } from '../cli-utils';
+import { sendServerRequest } from '../cli/utils';
 
 export const serveCommand = new Command('serve')
     .description('Start HTTP server')

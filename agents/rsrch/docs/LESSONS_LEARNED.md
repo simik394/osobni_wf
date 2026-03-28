@@ -200,3 +200,22 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 4. **Always set explicit host environment variables** - Don't rely on defaults that assume localhost when running in Docker.
 
 
+---
+
+### [[5. Modular Refactor & Folder Reorganization (2026-03-28)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/2026-03-28_modular_refactor_cleanup.md)
+
+# Lessons Learned: Modular Refactor & Cleanup
+
+## 🏗️ Architectural Transition
+- **Decoupled Action Pattern:** Transitioning from monolithic client methods (e.g., `GeminiClient.uploadFiles`) to stateless actions in `src/actions/` using `UniversalContext` and standardized `Deps` improves portability and testability.
+- **Statelessness is Key:** Actions should not maintain internal state; they should receive everything they need (page, logger, selectors, timing helpers) via dependency injection.
+
+## 🛠️ Refactoring Challenges
+- **Relative Import Cascades:** Large-scale reorganization (e.g., merging core logic into `src/core/` and `src/services/`) triggers massive import breaks. Surgical, file-by-file correction is safer than bulk regex when dealing with deep directory nesting (`../` vs `../../`).
+- **Interface Bloat vs. Utility:** Standardizing `ActionDeps` is helpful, but making all fields mandatory can lead to "dummy" dependencies in simple actions. Use optional fields or `Partial<T>` to keep action calls clean.
+- **Tooling Precautions:** Global `sed` replacements for dependency injection (e.g., injecting `humanDelay` into all `{ selectors }` blocks) can accidentally corrupt `import` statements. Always scope regex to block patterns or use AST-aware tools if possible.
+
+## ✅ Verification
+- **TSC as Truth:** A final `npx tsc -p tsconfig.json --noEmit` is the ONLY way to guarantee that a 3,000+ line refactor hasn't left "silent" import or type errors in rarely used modules.
+
+---

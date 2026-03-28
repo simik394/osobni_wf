@@ -1,14 +1,14 @@
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 chromium.use(StealthPlugin());
-import { NotebookLMClient } from './notebooklm-client';
-import { GeminiClient } from './gemini-client';
+import { NotebookLMClient } from './notebooklm';
+import { GeminiClient } from './gemini';
 import { BrowserContext, Page, Browser } from 'playwright';
-import { config } from './config';
-import { selectors } from './selectors';
+import { config } from '../config';
+import { selectors } from '../selectors';
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
+import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from '../services/profile';
 import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
 
 interface Session {

@@ -1,7 +1,15 @@
 import { Router, Request, Response } from 'express';
-import { NotebookLMClient } from '../notebooklm-client';
-import { PerplexityClient } from '../client';
-import { GraphStore } from '../graph-store';
+import { GeminiClient } from '../clients/gemini';
+import { PerplexityClient } from '../clients/base';
+import { config } from '../config';
+import { 
+    startChatCompletionTrace, 
+    completeChatCompletionTrace, 
+    failChatCompletionTrace, 
+    estimateTokens 
+} from '../services/observability';
+import { NotebookLMClient } from '../clients/notebooklm';
+import { GraphStore } from '../core/graph-store';
 
 export interface NotebookRouterDeps {
     perplexityClient: PerplexityClient;
@@ -24,7 +32,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
     router.post('/list', async (req: Request, res: Response) => {
         try {
             const client = await getNotebookClient();
-            const notebooks = await client.listNotebooks();
+            const notebooks = await client!.listNotebooks();
             res.json(notebooks);
         } catch (e: any) {
             console.error('[NotebookRouter] List notebooks failed:', e);
@@ -39,7 +47,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
             console.log(`[NotebookRouter] Creating notebook: ${title}`);
             const client = await getNotebookClient();
-            await client.createNotebook(title);
+            await client!.createNotebook(title);
 
             res.json({ success: true, message: `Notebook '${title}' created` });
         } catch (e: any) {
@@ -56,11 +64,11 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
             const client = await getNotebookClient();
             if (notebookTitle) {
                 console.log(`[NotebookRouter] Switching to notebook: ${notebookTitle}`);
-                await client.openNotebook(notebookTitle);
+                await client!.openNotebook(notebookTitle);
             }
 
             console.log(`[NotebookRouter] Adding source: ${url}`);
-            await client.addSourceUrl(url);
+            await client!.addSourceUrl(url);
 
             res.json({ success: true, message: `Source added` });
         } catch (e: any) {
@@ -78,7 +86,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
             const client = await getNotebookClient();
             console.log(`[NotebookRouter] Adding Drive sources: ${docNames.join(', ')}`);
-            await client.addSourceFromDrive(docNames, notebookTitle);
+            await client!.addSourceFromDrive(docNames, notebookTitle);
 
             res.json({ success: true, message: `Drive sources added` });
         } catch (e: any) {
@@ -96,7 +104,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
             const client = await getNotebookClient();
             console.log(`[NotebookRouter] Adding text source (${text.length} chars) to notebook: ${notebookTitle || 'current'}`);
-            await client.addSourceText(text, sourceTitle, notebookTitle);
+            await client!.addSourceText(text, sourceTitle, notebookTitle);
 
             res.json({ success: true, message: 'Text source added' });
         } catch (e: any) {
@@ -108,20 +116,20 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
     router.post('/generate-audio', async (req: Request, res: Response) => {
         try {
             const { notebookTitle, sources, customPrompt, dryRun } = req.body;
-            const { getWindmillClient } = await import('../windmill-client');
+            const { getWindmillClient } = await import('../clients/windmill');
             const windmill = getWindmillClient();
 
             if (!windmill.isConfigured()) {
                 console.warn('[NotebookRouter] Windmill not configured, falling back to local execution');
                 const client = await getNotebookClient();
-                if (client.isBusy) {
+                if (client!.isBusy) {
                     return res.status(409).json({ success: false, error: 'NotebookLM client is busy. Use Windmill for queued execution.' });
                 }
                 const job = await graphStore.addJob('audio-generation', notebookTitle || 'default', { sources, customPrompt, dryRun });
                 (async () => {
                     try {
                         await graphStore.updateJobStatus(job.id, 'running');
-                        await client.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
+                        await client!.generateAudioOverview(notebookTitle, sources, customPrompt, true, dryRun);
                         await graphStore.updateJobStatus(job.id, 'completed', { result: { message: 'Audio generated' } });
                     } catch (err: any) {
                         await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
@@ -153,7 +161,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         try {
             const { notebookTitle } = req.body;
             const client = await getNotebookClient();
-            const status = await client.checkAudioStatus(notebookTitle);
+            const status = await client!.checkAudioStatus(notebookTitle);
             res.json({ success: true, ...status });
         } catch (e: any) {
             console.error('[NotebookRouter] Audio status failed:', e);
@@ -164,7 +172,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
     router.post('/dump', async (req: Request, res: Response) => {
         try {
             const client = await getNotebookClient();
-            const paths = await client.dumpState('manual_dump');
+            const paths = await client!.dumpState('manual_dump');
             res.json({ success: true, paths });
         } catch (e: any) {
             console.error('[NotebookRouter] Dump failed:', e);
@@ -193,7 +201,7 @@ export function createNotebookLMRouter(deps: NotebookRouterDeps) {
             const docNode = lineage.find(n => n.type === 'ResearchDoc' || n.type === 'Document');
             if (!docNode) return res.status(404).json({ error: 'ResearchDoc not found' });
 
-            const { getWindmillClient } = await import('../windmill-client');
+            const { getWindmillClient } = await import('../clients/windmill');
             const windmill = getWindmillClient();
 
             if (windmill.isConfigured()) {

@@ -8,14 +8,14 @@ import {
     executeGeminiCommand,
     executeGeminiStream,
     getOptionsWithGlobals
-} from '../cli-utils';
-import { ResearchInfo } from '../gemini-client';
-import { cliContext } from '../cli-context';
+} from '../cli/utils';
+import { ResearchInfo } from '../clients/gemini';
+import { cliContext } from '../cli/context';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { PerplexityClient } from '../client';
-import type { GeminiClient } from '../gemini-client';
-import { getGraphStore } from '../graph-store';
+import type { PerplexityClient } from '../clients/base';
+import type { GeminiClient } from '../clients/gemini';
+import { getGraphStore } from '../core/graph-store';
 
 const gemini = new Command('gemini').description('Gemini commands');
 
@@ -31,7 +31,7 @@ gemini.command('research <query>')
                 args: { query }
             });
             console.log('\n--- Windmill Response ---\n');
-            console.log(result?.data || result);
+            console.log(result);
             console.log('\n-----------------------\n');
         } catch (e: any) {
             console.error(`[CLI] Windmill execution failed: ${e.message}`);
@@ -612,9 +612,9 @@ async function ensureGeminiContext(
     reuseStrategy: 'reuse-any' | 'reuse-id' | 'force-new' = 'reuse-any',
     targetId?: string
 ): Promise<{ client: PerplexityClient, gemini: GeminiClient, cleanup: () => Promise<void> }> {
-    const { cliContext } = await import('../cli-context');
-    const { PerplexityClient: PClient } = await import('../client');
-    const { GeminiClient: GClient } = await import('../gemini-client');
+    const { cliContext } = await import('../cli/context');
+    const { PerplexityClient: PClient } = await import('../clients/base');
+    const { GeminiClient: GClient } = await import('../clients/gemini');
     const { getTab } = await import('@agents/shared/tab-pool');
 
     const { config } = await import('../config');
@@ -684,7 +684,7 @@ gemini.command('list-updates')
     .option('--limit <number>', 'Limit items to scan', (v) => parseInt(v), 50)
     .action(async (opts, cmd) => {
         const globalOpts = getOptionsWithGlobals(cmd);
-        const { getGraphStore } = await import('../graph-store');
+        const { getGraphStore } = await import('../core/graph-store');
         const { config } = await import('../config');
 
         // 1. Connect to GraphStore (read-only check mostly)
@@ -761,7 +761,7 @@ gemini.command('scrape-session <id>')
     .option('--local', 'Use local execution', true)
     .action(async (id, opts, cmd) => {
         const globalOpts = getOptionsWithGlobals(cmd);
-        const { getGraphStore } = await import('../graph-store');
+        const { getGraphStore } = await import('../core/graph-store');
         const { config } = await import('../config');
 
         const store = getGraphStore();
@@ -827,7 +827,7 @@ gemini.command('sync-conversations')
 
         if (globalOpts.local) {
             // Dev mode: direct browser + local FalkorDB
-            const { getGraphStore } = await import('../graph-store');
+            const { getGraphStore } = await import('../core/graph-store');
             const { config } = await import('../config');
             const store = getGraphStore();
             const graphHost = config.falkor.host;
@@ -962,7 +962,7 @@ gemini.command('upload-repo <repoUrl> [sessionId]')
     .option('--local', 'Use local execution', true)
     .action(async (repoUrl, sessionId, opts) => {
         await runLocalGeminiAction(async (client, gemini) => {
-            const { RepoLoader } = await import('../repo-loader');
+            const { RepoLoader } = await import('../core/repo-loader');
             const loader = new RepoLoader();
             try {
                 console.log(`\n[Repo] Processing repository: ${repoUrl}`);

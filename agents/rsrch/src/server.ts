@@ -1,9 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import { PerplexityClient } from './client';
-import { GeminiClient } from './gemini-client';
+import { PerplexityClient } from './clients/base';
+import { GeminiClient } from './clients/gemini';
 import { config } from './config';
-import { getGraphStore } from './graph-store';
+import { getGraphStore } from './core/graph-store';
 import { discordService } from './services/notification';
 
 // Import Modular Routers
@@ -33,10 +33,11 @@ async function getActiveGeminiClient(): Promise<GeminiClient> {
             console.log('[Server] Initializing browser for Gemini...');
             await client.init();
         }
-        activeGeminiClient = await client.createGeminiClient();
-        await activeGeminiClient.init();
+        const g = await client.createGeminiClient();
+        await g.init();
+        activeGeminiClient = g;
     }
-    return activeGeminiClient;
+    return activeGeminiClient!;
 }
 
 // ----------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { sendServerRequest } from '../cli-utils';
+import { sendServerRequest } from '../cli/utils';
 import * as path from 'path';
 
 export const unifiedCommand = new Command('unified')

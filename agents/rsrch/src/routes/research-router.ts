@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { GeminiClient } from '../gemini-client';
-import { PerplexityClient } from '../client';
-import { GraphStore } from '../graph-store';
+import { GeminiClient } from '../clients/gemini';
+import { PerplexityClient } from '../clients/base';
+import { GraphStore } from '../core/graph-store';
 import { markTabBusy, markTabFree } from '@agents/shared/tab-pool';
 import { discordService } from '../services/notification';
 
@@ -13,7 +13,6 @@ export interface ResearchRouterDeps {
 export function createResearchRouter(deps: ResearchRouterDeps) {
     const router = Router();
     const { perplexityClient, graphStore } = deps;
-    let activeGeminiClient: GeminiClient | null = null;
 
     router.post('/start', async (req: Request, res: Response) => {
         try {

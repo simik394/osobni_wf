@@ -10,7 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { getGraphStore } from './graph-store';
+import { getGraphStore } from '../core/graph-store';
 
 // Types matching graph-store and gemini-client
 

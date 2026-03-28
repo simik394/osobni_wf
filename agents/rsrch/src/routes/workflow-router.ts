@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PerplexityClient } from '../client';
-import { GeminiClient } from '../gemini-client';
-import { NotebookLMClient } from '../notebooklm-client';
-import { GraphStore } from '../graph-store';
-import { getRegistry } from '../artifact-registry';
+import { PerplexityClient } from '../clients/base';
+import { GeminiClient } from '../clients/gemini';
+import { NotebookLMClient } from '../clients/notebooklm';
+import { GraphStore } from '../core/graph-store';
+import { getRegistry } from '../core/artifact-registry';
 import { discordService } from '../services/notification';
 
 export interface WorkflowRouterDeps {

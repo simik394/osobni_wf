@@ -3,15 +3,15 @@ import { Page, Locator } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import { getRegistry } from './artifact-registry';
+import { getRegistry } from '../core/artifact-registry';
 import { getRsrchTelemetry } from '@agents/shared';
-import { selectors } from './selectors';
-import { getGraphStore } from './graph-store';
+import { selectors } from '../selectors';
+import { getGraphStore } from '../core/graph-store';
 import { 
     resetToNewChatAction, 
     setModelAction, 
     uploadFilesAction 
-} from './actions';
+} from '../actions';
 
 // Get telemetry instance
 const telemetry = getRsrchTelemetry();
@@ -138,7 +138,7 @@ export class GeminiClient extends EventEmitter {
      */
     async queryViaWindmill(query: string, sessionId?: string, model: 'pro' | 'thinking' | 'flash' = 'pro'): Promise<string> {
         console.log(`[GeminiClient] Delegating query to Windmill...`);
-        const { getWindmillClient } = await import('./windmill-client');
+        const { getWindmillClient } = await import('./windmill');
         const windmill = getWindmillClient();
 
         if (!windmill.isConfigured()) {
@@ -1494,7 +1494,7 @@ export class GeminiClient extends EventEmitter {
         sources?: Source[],
         model?: string
     } = {}): Promise<string | null> {
-        const { sendMessageAction } = await import('./actions/gemini/chat');
+        const { sendMessageAction } = await import('../actions/gemini/chat');
         return sendMessageAction(
             { page: this.page, log: (msg) => this.log(msg) },
             message,

@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import { listProfiles, getProfileInfo, deleteProfile, ensureProfileDir, getAuthFile } from '../profile';
+import { listProfiles, getProfileInfo, deleteProfile, ensureProfileDir, getAuthFile } from '../services/profile';
 import { DEFAULTS } from '@agents/shared';
-import { cliContext } from '../cli-context';
-import { listSourceProfiles, syncProfile, restartTarget, SYNC_TARGETS } from '../profile-sync';
+import { cliContext } from '../cli/context';
+import { listSourceProfiles, syncProfile, restartTarget, SYNC_TARGETS } from '../services/profile-sync';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';

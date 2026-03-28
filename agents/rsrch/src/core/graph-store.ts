@@ -1,8 +1,8 @@
 import { FalkorDB } from 'falkordb';
 import type Graph from 'falkordb/dist/src/graph';
 import { createHash } from 'crypto';
-import logger from './logger';
-import { NetworkError } from './errors';
+import logger from '../services/logger';
+import { NetworkError } from '../clients/errors';
 
 import {
     GraphJob,

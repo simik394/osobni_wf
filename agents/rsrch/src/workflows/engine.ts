@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'yaml';
 import { Workflow, WorkflowStep, WorkflowExecution, StepExecution } from './types';
-import { getGraphStore } from '../graph-store';
-import { PerplexityClient } from '../client';
+import { getGraphStore } from '../core/graph-store';
+import { PerplexityClient } from '../clients/base';
 
 export class WorkflowEngine {
     private workflows: Map<string, Workflow> = new Map();

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { cliContext } from './cli-context';
-import { serveCommand, stopCommand, shutdownCommand } from './commands/server';
-import { profileCommand } from './commands/profile';
-import { geminiCommand } from './commands/gemini';
-import { notebookCommand } from './commands/notebooklm';
-import { queryCommand, batchCommand, authCommand, loginCommand } from './commands/perplexity';
-import { graphCommand } from './commands/graph';
-import { registryCommand } from './commands/registry';
-import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from './commands/misc';
+import { cliContext } from './context';
+import { serveCommand, stopCommand, shutdownCommand } from '../commands/server';
+import { profileCommand } from '../commands/profile';
+import { geminiCommand } from '../commands/gemini';
+import { notebookCommand } from '../commands/notebooklm';
+import { queryCommand, batchCommand, authCommand, loginCommand } from '../commands/perplexity';
+import { graphCommand } from '../commands/graph';
+import { registryCommand } from '../commands/registry';
+import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from '../commands/misc';
 
 const program = new Command();
 

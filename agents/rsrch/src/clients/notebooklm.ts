@@ -1,7 +1,7 @@
 import { Page } from 'playwright';
 import * as path from 'path';
-import { config } from './config';
-import { selectors } from './selectors';
+import { config } from '../config';
+import { selectors } from '../selectors';
 import { 
     createNotebookAction,
     queryNotebookAction,
@@ -12,7 +12,7 @@ import {
     selectSourcesAction,
     uploadLocalFileAction,
     generateAudioOverviewAction
-} from './actions';
+} from '../actions';
 
 
 export class NotebookLMClient {
@@ -80,14 +80,14 @@ export class NotebookLMClient {
             { page: this.page, log: (msg) => this.log(msg) },
             { 
                 selectors, 
-                humanDelay: (ms) => this.humanDelay(ms) 
+                humanDelay: (ms: number) => this.humanDelay(ms) 
             },
             message
         );
     }
 
     private async notifyDiscord(message: string, isError: boolean = false) {
-        const { discordService } = await import('./services/notification');
+        const { discordService } = await import('../services/notification');
         await discordService.sendNotification(message, {
             title: isError ? 'NotebookLM Error' : 'NotebookLM Notification',
             priority: isError ? 'high' : 'default'
@@ -98,7 +98,7 @@ export class NotebookLMClient {
     async openNotebook(title: string) {
         return openNotebookAction(
             { page: this.page, log: (msg) => this.log(msg) },
-            { selectors },
+            { selectors, humanDelay: (ms: number) => this.humanDelay(ms) },
             title
         );
     }
@@ -107,7 +107,7 @@ export class NotebookLMClient {
         return addSourceUrlAction(
             { page: this.page, log: (msg) => this.log(msg) },
             urlStr,
-            { selectors, humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance) }
+            { selectors, humanDelay: (ms: number) => this.humanDelay(ms) }
         );
     }
 
@@ -126,8 +126,8 @@ export class NotebookLMClient {
             title,
             notebookTitle,
             {
-                openNotebook: (title) => this.openNotebook(title),
-                humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance)
+                openNotebook: (title: string) => this.openNotebook(title),
+                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance),
             }
         );
     }
@@ -144,7 +144,7 @@ export class NotebookLMClient {
             notebookTitle,
             {
                 openNotebook: (title) => this.openNotebook(title),
-                humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance)
+                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance)
             }
         );
     }
@@ -189,6 +189,7 @@ export class NotebookLMClient {
             { page: this.page, log: (msg) => this.log(msg) },
             { notebookTitle, sources, customPrompt, waitForCompletion, dryRun },
             {
+                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance),
                 enqueueTask: (name, task) => this.enqueueTask(name, task),
                 setIsBusy: (busy) => { this.isBusy = busy; },
                 getIsBusy: () => this.isBusy,
@@ -199,7 +200,6 @@ export class NotebookLMClient {
                 triggerAudioGeneration: (prompt, dry, title) => this.triggerAudioGeneration(prompt, dry ?? false, title),
                 waitForGeneration: (title) => this.waitForGeneration(title),
                 renameArtifact: (old, newT) => this.renameArtifact(old, newT),
-                humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance)
             }
         );
     }
@@ -366,7 +366,7 @@ export class NotebookLMClient {
             { page: this.page, log: (msg) => this.log(msg) },
             {
                 selectors,
-                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance)
+                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance),
             },
             sources
         );
