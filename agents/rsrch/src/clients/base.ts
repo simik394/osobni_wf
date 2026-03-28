@@ -285,25 +285,26 @@ export class BrowserClient extends BaseClient {
             console.error('Failed to save auth on shutdown:', e.message);
         }
 
-        if (!this.isConnectedOverCDP) {
+        if (!this.browser) return;
+        if (this.isConnectedOverCDP) {
+            // Over CDP, we just want to disconnect. Playwright does this on process exit or browser.close().
+            // To be safe and silent, we just nullify references.
+            this.browser = null;
+            this.context = null;
+            this.isInitialized = false;
+        } else {
+            console.log('Closing local browser...');
             for (const session of this.sessions) {
                 await session.page.close().catch(() => { });
             }
-        }
-        this.sessions = [];
-
-        if (this.isConnectedOverCDP) {
-            console.log('Disconnecting from CDP browser (leaving context and tabs active)...');
-        } else {
-            console.log('Closing local browser instances...');
-            if (this.context) await this.context.close().catch(() => {});
-            if (this.browser) await this.browser.close().catch(() => {});
+            this.sessions = [];
+            await this.browser.close().catch(() => {});
+            this.browser = null;
+            this.context = null;
+            this.isInitialized = false;
+            console.log('Browser shutdown complete');
         }
         
-        this.context = null;
-        this.browser = null;
-        this.isInitialized = false;
         this.keepAlive = false;
-        console.log('Browser shutdown complete');
     }
 }
