@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 import { cliContext } from './context';
 
 export interface ServerOptions {
@@ -118,10 +118,10 @@ export async function sendServerRequestWithSSE(path: string, body: any = {}): Pr
 }
 
 // Helper for local Notebook execution
-export async function runLocalNotebookAction(action: (client: PerplexityClient, notebook: any) => Promise<void>) {
+export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: any) => Promise<void>) {
     const { profileId, cdpEndpoint } = cliContext.get();
     console.log(`Running in LOCAL mode (profile: ${profileId})...`);
-    const client = new PerplexityClient({ profileId, cdpEndpoint });
+    const client = new BrowserClient({ profileId, cdpEndpoint });
     await client.init({ local: true, profileId, cdpEndpoint });
     const notebook = await client.createNotebookClient();
     try {
@@ -133,7 +133,7 @@ export async function runLocalNotebookAction(action: (client: PerplexityClient, 
 
 // Helper for local Gemini execution
 export async function runLocalGeminiAction(
-    action: (client: PerplexityClient, gemini: any) => Promise<void>, 
+    action: (client: BrowserClient, gemini: any) => Promise<void>, 
     options: string | { sessionId?: string, skipAuthCheck?: boolean, headless?: boolean } = {}, 
     hasLocalFlag: boolean = true
 ) {
@@ -146,7 +146,7 @@ export async function runLocalGeminiAction(
     if (isOptionsObj && (options as any).headless !== undefined) {
         clientOptions.headless = (options as any).headless;
     }
-    const client = new PerplexityClient(clientOptions);
+    const client = new BrowserClient(clientOptions);
     await client.init({ local: useLocalMode, profileId, cdpEndpoint });
     const gemini = await client.createGeminiClient();
     await gemini.init(options); // Pass options to init

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 import { GeminiClient } from '../clients/gemini';
 import { NotebookLMClient } from '../clients/notebooklm';
 import { GraphStore } from '../core/graph-store';
@@ -7,13 +7,13 @@ import { getRegistry } from '../core/artifact-registry';
 import { discordService } from '../services/notification';
 
 export interface WorkflowRouterDeps {
-    perplexityClient: PerplexityClient;
+    browserClient: BrowserClient;
     graphStore: GraphStore;
 }
 
 export function createWorkflowRouter(deps: WorkflowRouterDeps) {
     const router = Router();
-    const { perplexityClient, graphStore } = deps;
+    const { browserClient, graphStore } = deps;
     let notebookClient: NotebookLMClient | null = null;
     let activeGeminiClient: GeminiClient | null = null;
 
@@ -42,13 +42,13 @@ export function createWorkflowRouter(deps: WorkflowRouterDeps) {
 
                     // 1. Perplexity Research
                     console.log(`[Job ${job.id}] Step 1: Perplexity Research`);
-                    const pxResult = await perplexityClient.query(query, { deepResearch: false });
+                    const pxResult = await browserClient.query(query, { deepResearch: false });
                     if (!pxResult || !pxResult.answer) throw new Error('Perplexity query returned no answer.');
 
                     // 2. Gemini Deep Research
                     console.log(`[Job ${job.id}] Step 2: Gemini Deep Research`);
                     if (!activeGeminiClient) {
-                        activeGeminiClient = await perplexityClient.createGeminiClient();
+                        activeGeminiClient = await browserClient.createGeminiClient();
                         await activeGeminiClient.init();
                     }
 
@@ -80,7 +80,7 @@ Please use your Deep Research capabilities to expand on this...`;
                     // 4. NotebookLM Setup
                     console.log(`[Job ${job.id}] Step 4: NotebookLM Import`);
                     if (!notebookClient) {
-                        notebookClient = await perplexityClient.createNotebookClient();
+                        notebookClient = await browserClient.createNotebookClient();
                     }
                     const safeTitle = query.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 50).trim() || 'Research Podcast';
                     await notebookClient.createNotebook(safeTitle);
@@ -127,7 +127,7 @@ Please use your Deep Research capabilities to expand on this...`;
 
         const performPublish = async (sId: string, m: 'pr' | 'branch') => {
             console.log(`[Jules Automation] Publishing session ${sId} (mode: ${m})...`);
-            const julesClient = new PerplexityClient({ profileId: 'personal', headless: true });
+            const julesClient = new BrowserClient({ profileId: 'personal', headless: true });
             try {
                 await julesClient.init();
                 const notebook = await julesClient.createNotebookClient();

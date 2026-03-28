@@ -12,7 +12,7 @@
 
 import { discordService } from './services/notification';
 import { config } from './config';
-import { PerplexityClient } from './clients/base';
+import { BrowserClient } from './clients/base';
 import { GeminiClient } from './clients/gemini';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -61,7 +61,7 @@ export async function watchForResearch(options: Partial<WatcherOptions> = {}): P
 
 
     // Initialize client
-    const client = new PerplexityClient();
+    const client = new BrowserClient();
     await client.init();
     const gemini = await client.createGeminiClient();
     await gemini.init();
@@ -131,7 +131,7 @@ async function checkResearchState(gemini: GeminiClient): Promise<ResearchState> 
  * Process a completed research session
  */
 async function processCompletedResearch(
-    client: PerplexityClient,
+    client: BrowserClient,
     gemini: GeminiClient,
     state: ResearchState,
     opts: WatcherOptions
@@ -251,7 +251,7 @@ function sleep(ms: number): Promise<void> {
 export async function checkAndProcess(options: Partial<WatcherOptions> = {}): Promise<boolean> {
     const opts: WatcherOptions = { ...DEFAULT_OPTIONS, ...options };
 
-    const client = new PerplexityClient();
+    const client = new BrowserClient();
     await client.init();
 
     try {

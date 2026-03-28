@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { GeminiClient } from '../clients/gemini';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 import { config } from '../config';
 import { 
     startChatCompletionTrace, 
@@ -12,19 +12,19 @@ import { NotebookLMClient } from '../clients/notebooklm';
 import { GraphStore } from '../core/graph-store';
 
 export interface NotebookRouterDeps {
-    perplexityClient: PerplexityClient;
+    browserClient: BrowserClient;
     graphStore: GraphStore;
     notifyResearchComplete: (title: string, path?: string) => Promise<void>;
 }
 
 export function createNotebookRouter(deps: NotebookRouterDeps) {
     const router = Router();
-    const { perplexityClient, graphStore, notifyResearchComplete } = deps;
+    const { browserClient, graphStore, notifyResearchComplete } = deps;
     let notebookClient: NotebookLMClient | null = null;
 
     const getNotebookClient = async () => {
         if (!notebookClient) {
-            notebookClient = await perplexityClient.createNotebookClient();
+            notebookClient = await browserClient.createNotebookClient();
         }
         return notebookClient;
     };

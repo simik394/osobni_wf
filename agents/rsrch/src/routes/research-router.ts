@@ -1,18 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { GeminiClient } from '../clients/gemini';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 import { GraphStore } from '../core/graph-store';
 import { markTabBusy, markTabFree } from '@agents/shared/tab-pool';
 import { discordService } from '../services/notification';
 
 export interface ResearchRouterDeps {
-    perplexityClient: PerplexityClient;
+    browserClient: BrowserClient;
     graphStore: GraphStore;
 }
 
 export function createResearchRouter(deps: ResearchRouterDeps) {
     const router = Router();
-    const { perplexityClient, graphStore } = deps;
+    const { browserClient, graphStore } = deps;
 
     router.post('/start', async (req: Request, res: Response) => {
         try {
@@ -30,7 +30,7 @@ export function createResearchRouter(deps: ResearchRouterDeps) {
                     await graphStore.updateJobStatus(job.id, 'running');
                     
                     // Acquire fresh client/tab from pool
-                    jobClient = await perplexityClient.createGeminiClient();
+                    jobClient = await browserClient.createGeminiClient();
                     page = (jobClient as any).page;
                     await markTabBusy(page, job.id);
 

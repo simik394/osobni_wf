@@ -3,14 +3,14 @@ import * as path from 'path';
 import * as yaml from 'yaml';
 import { Workflow, WorkflowStep, WorkflowExecution, StepExecution } from './types';
 import { getGraphStore } from '../core/graph-store';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 
 export class WorkflowEngine {
     private workflows: Map<string, Workflow> = new Map();
-    private client: PerplexityClient;
+    private client: BrowserClient;
     private graphStore = getGraphStore();
 
-    constructor(client: PerplexityClient) {
+    constructor(client: BrowserClient) {
         this.client = client;
     }
 

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { GeminiClient } from '../clients/gemini';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 import { config } from '../config';
 import { 
     startChatCompletionTrace, 
@@ -64,13 +64,13 @@ function validateMessages(messages: ChatMessage[]): string | null {
 
 // --- Router Factory ---
 export function createChatRouter(deps: { 
-    perplexityClient: PerplexityClient,
+    browserClient: BrowserClient,
     getGeminiClient: () => Promise<GeminiClient>,
     proxyChatCompletion?: any,
     shouldBypass?: (headers: any) => boolean
 }) {
     const router = Router();
-    const { perplexityClient, getGeminiClient, proxyChatCompletion, shouldBypass } = deps;
+    const { browserClient, getGeminiClient, proxyChatCompletion, shouldBypass } = deps;
 
     router.get('/models', (req, res) => {
         res.json({
@@ -135,7 +135,7 @@ export function createChatRouter(deps: {
             // Non-streaming
             let responseText = '';
             if (model.includes('perplexity')) {
-                const result = await perplexityClient.query(prompt, { sessionId: request.session_id, sessionName: request.session });
+                const result = await browserClient.query(prompt, { sessionId: request.session_id, sessionName: request.session });
                 responseText = result?.answer || 'No response';
             } else {
                 const gemini = await getGeminiClient();

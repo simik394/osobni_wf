@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { PerplexityClient } from './clients/base';
+import { BrowserClient } from './clients/base';
 import { GeminiClient } from './clients/gemini';
 import { config } from './config';
 import { getGraphStore } from './core/graph-store';
@@ -20,7 +20,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // Initial State / Singletons
-const client = new PerplexityClient({ 
+const client = new BrowserClient({ 
     verbose: true,
     profileId: config.auth.profileId
 });
@@ -61,7 +61,7 @@ app.get('/health', (req, res) => {
 
 // Dependencies for Routers
 const dependencies = {
-    perplexityClient: client,
+    browserClient: client,
     getGeminiClient: getActiveGeminiClient,
     graphStore: graphStore,
     notifyResearchComplete: async (title: string, path?: string) => {

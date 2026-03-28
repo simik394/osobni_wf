@@ -13,7 +13,7 @@ import { ResearchInfo } from '../clients/gemini';
 import { cliContext } from '../cli/context';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { PerplexityClient } from '../clients/base';
+import type { BrowserClient } from '../clients/base';
 import type { GeminiClient } from '../clients/gemini';
 import { getGraphStore } from '../core/graph-store';
 
@@ -633,9 +633,9 @@ async function ensureGeminiContext(
     cdpEndpoint: string | undefined,
     reuseStrategy: 'reuse-any' | 'reuse-id' | 'force-new' = 'reuse-any',
     targetId?: string
-): Promise<{ client: PerplexityClient, gemini: GeminiClient, cleanup: () => Promise<void> }> {
+): Promise<{ client: BrowserClient, gemini: GeminiClient, cleanup: () => Promise<void> }> {
     const { cliContext } = await import('../cli/context');
-    const { PerplexityClient: PClient } = await import('../clients/base');
+    const { BrowserClient: PClient } = await import('../clients/base');
     const { GeminiClient: GClient } = await import('../clients/gemini');
     const { getTab } = await import('@agents/shared/tab-pool');
 

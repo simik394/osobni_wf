@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { PerplexityClient } from '../clients/base';
+import { BrowserClient } from '../clients/base';
 import { cliContext } from '../cli/context';
 import { login } from '../services/auth';
 import * as fs from 'fs';
@@ -15,7 +15,7 @@ export const queryCommand = new Command('query')
     .action(async (query, opts) => {
         const { profileId, cdpEndpoint } = cliContext.get();
         if (query) {
-            const client = new PerplexityClient({ profileId, cdpEndpoint });
+            const client = new BrowserClient({ profileId, cdpEndpoint });
             await client.init({ keepAlive: opts.keepAlive, profileId, cdpEndpoint });
             try {
                 await client.query(query, opts);
@@ -28,7 +28,7 @@ export const queryCommand = new Command('query')
                 console.log('No query argument provided. Reading from queries.json...');
                 const queries = JSON.parse(fs.readFileSync(config.paths.queriesFile, 'utf-8'));
                 if (Array.isArray(queries)) {
-                    const client = new PerplexityClient({ profileId, cdpEndpoint });
+                    const client = new BrowserClient({ profileId, cdpEndpoint });
                     await client.init({ profileId, cdpEndpoint });
                     try {
                         for (const q of queries) {
@@ -66,7 +66,7 @@ export const batchCommand = new Command('batch')
 
         console.log(`Found ${queries.length} queries in batch file.`);
 
-        const client = new PerplexityClient({ profileId, cdpEndpoint });
+        const client = new BrowserClient({ profileId, cdpEndpoint });
         await client.init({ profileId, cdpEndpoint });
 
         try {
@@ -95,7 +95,7 @@ export const loginCommand = new Command('login')
     .description('Interactive login for Docker/Remote')
     .action(async () => {
         const { profileId, cdpEndpoint } = cliContext.get();
-        const client = new PerplexityClient({ profileId, cdpEndpoint });
+        const client = new BrowserClient({ profileId, cdpEndpoint });
         await client.init({ profileId, cdpEndpoint });
 
         console.log('Opening Perplexity for interactive login...');
