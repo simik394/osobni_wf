@@ -270,6 +270,13 @@ export class BrowserClient extends BaseClient {
         return new NotebookLMClient(page);
     }
 
+    async openPage(url: string): Promise<Page> {
+        if (!this.context) throw new Error('Browser not initialized');
+        const page = await this.context.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        return page;
+    }
+
     async close() {
         if (this.keepAlive) {
             console.log('Browser kept alive (use shutdown() to force close)');
