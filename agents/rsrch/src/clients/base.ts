@@ -336,10 +336,10 @@ export class PerplexityClient extends BaseClient {
                 fs.mkdirSync(stateDir, { recursive: true });
             }
 
-            // Default to HEADED as per user preference ("NO HEADLESS")
             // In Local Mode inside Docker with Xvfb, we MUST set headless: false to use the display.
-            const headless = this.options.headless;
-            console.log(`Headless: ${headless} (Configured via options)`);
+            // Override options if FORCE_LOCAL_BROWSER is set, ensuring VNC visibility
+            const headless = process.env.FORCE_LOCAL_BROWSER === 'true' ? false : this.options.headless;
+            console.log(`Headless: ${headless} (Forced to false in Local Mode for VNC visibility)`);
 
             console.log(`Launching persistent context from: ${stateDir}`);
             // Force slowMo 100 for Google account safety (User Rule)
@@ -358,7 +358,9 @@ export class PerplexityClient extends BaseClient {
                     '--disable-gpu',
                     '--disable-dev-shm-usage',
                     '--no-first-run',
-                    '--no-default-browser-check'
+                    '--no-default-browser-check',
+                    '--password-store=basic',
+                    '--use-mock-keychain'
                 ],
                 ignoreDefaultArgs: ['--enable-automation'],
                 viewport: { width: 1280, height: 1024 }
