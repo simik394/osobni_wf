@@ -25,3 +25,4 @@ agents/shared/node_modules/
 node_modules/
 agents/rsrch/data/
 agents/rsrch/playwright/
+agents/rsrch/src/test-*
