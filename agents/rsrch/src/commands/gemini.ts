@@ -658,7 +658,7 @@ async function ensureGeminiContext(
                 const existing = pages.find((p: any) => p.url().includes('gemini.google.com'));
                 if (existing) {
                     console.log('[CLI] Reusing existing Gemini tab (fast mode)');
-                    gemini = new GClient(existing);
+                    gemini = new GClient(existing as any);
                 } else {
                     gemini = await client.createGeminiClient();
                 }
@@ -669,8 +669,8 @@ async function ensureGeminiContext(
             // Try to find specific ID
             try {
                 const browser = (client as any).browser || ((client as any).context?.browser());
-                const page = await getTab(browser || (client as any).context, 'gemini', targetId);
-                gemini = new GClient(page);
+                const page = await getTab(browser || (client as any).context as any, 'gemini' as any, targetId);
+                gemini = new GClient(page as any);
             } catch (e) {
                 console.log(`[CLI] Could not find/reuse tab for ${targetId}, creating new...`);
                 gemini = await client.createGeminiClient();
