@@ -38,19 +38,22 @@ echo "Using Chromium binary: $CHROME_BIN"
 
 # Start pure Chromium on Display 99 with the debug port open
 $CHROME_BIN \
+    --display=:99 \
     --remote-debugging-port=9223 \
     --remote-debugging-address=0.0.0.0 \
     --user-data-dir=/opt/rsrch/profiles/fresh/state \
     --no-sandbox \
     --disable-setuid-sandbox \
     --disable-gpu \
+    --disable-gpu-compositing \
+    --ozone-platform=x11 \
     --disable-dev-shm-usage \
     --window-size=1280,1024 \
     --no-first-run \
     --no-default-browser-check \
     --password-store=basic \
     --use-mock-keychain \
-    "https://gemini.google.com/app" &
+    "https://gemini.google.com/app" > /tmp/chrome.log 2>&1 &
 
 CHROMIUM_PID=$!
 
