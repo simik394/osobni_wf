@@ -29,6 +29,14 @@ export class NotebookLMClient {
         }
     }
 
+    private getContext(): any {
+        return {
+            page: this.page,
+            log: (msg: string) => this.log(msg),
+            config,
+        };
+    }
+
     /**
      * Humanized delay with randomization for anti-detection.
      * @param baseMs Base delay in milliseconds
@@ -42,12 +50,12 @@ export class NotebookLMClient {
     }
 
     async init() {
-        await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+        await this.page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
     }
 
     async createNotebook(title: string) {
         return createNotebookAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             title,
             { selectors, dumpState: (prefix) => this.dumpState(prefix) }
         );
@@ -77,7 +85,7 @@ export class NotebookLMClient {
 
     async query(message: string): Promise<string> {
         return queryNotebookAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             { 
                 selectors, 
                 humanDelay: (ms: number) => this.humanDelay(ms) 
@@ -97,7 +105,7 @@ export class NotebookLMClient {
 
     async openNotebook(title: string) {
         return openNotebookAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             { selectors, humanDelay: (ms: number) => this.humanDelay(ms) },
             title
         );
@@ -105,7 +113,7 @@ export class NotebookLMClient {
 
     async addSourceUrl(urlStr: string) {
         return addSourceUrlAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             urlStr,
             { selectors, humanDelay: (ms: number) => this.humanDelay(ms) }
         );
@@ -121,7 +129,7 @@ export class NotebookLMClient {
      */
     async addSourceText(text: string, title?: string, notebookTitle?: string) {
         return addSourceTextAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             text,
             title,
             notebookTitle,
@@ -139,7 +147,7 @@ export class NotebookLMClient {
      */
     async addSourceFromDrive(docNames: string[], notebookTitle?: string) {
         return addSourceFromDriveAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             docNames,
             notebookTitle,
             {
@@ -151,7 +159,7 @@ export class NotebookLMClient {
 
     async uploadLocalFile(filePath: string | string[]) {
         return uploadLocalFileAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             { 
                 selectors, 
                 humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance) 
@@ -186,7 +194,7 @@ export class NotebookLMClient {
 
     async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = false, dryRun: boolean = false): Promise<{ success: boolean; artifactTitle?: string }> {
         return generateAudioOverviewAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             { notebookTitle, sources, customPrompt, waitForCompletion, dryRun },
             {
                 humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance),
@@ -363,7 +371,7 @@ export class NotebookLMClient {
      */
     public async selectSources(sources: string[] | string) {
         return selectSourcesAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             {
                 selectors,
                 humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance),
@@ -1195,7 +1203,7 @@ export class NotebookLMClient {
         sourceCount: number;
     }>> {
         console.log('[NotebookLM] Listing notebooks...');
-        await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+        await this.page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
         await this.humanDelay(2000);
 
         const notebooks: Array<{ title: string; platformId: string; sourceCount: number }> = [];

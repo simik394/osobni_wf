@@ -16,7 +16,7 @@ export async function resetToNewChatAction(
     log('Resetting to new chat...');
 
     const url = page.url();
-    if (url === 'https://gemini.google.com/app' || url === 'https://gemini.google.com/app/') {
+    if (url === ctx.config.urls.gemini + '/app' || url === 'https://gemini.google.com/app/') {
         // Already on home, but might have state
     }
 
@@ -30,11 +30,11 @@ export async function resetToNewChatAction(
 
     if (!clicked) {
         log('New Chat button not found, forcing navigation to /app', 'warn');
-        await page.goto('https://gemini.google.com/app');
+        await page.goto(ctx.config.urls.gemini + '/app');
     }
 
     try {
-        await page.waitForURL('https://gemini.google.com/app', { timeout: 5000 }).catch(() => { });
+        await page.waitForURL(ctx.config.urls.gemini + '/app', { timeout: 5000 }).catch(() => { });
         const input = page.locator('div[contenteditable="true"], textarea').first();
         await input.waitFor({ state: 'visible', timeout: 5000 });
 

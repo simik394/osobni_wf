@@ -27,10 +27,10 @@ export async function openNotebookAction(
         log('On different notebook, navigating to home first...');
     }
 
-    await page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+    await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
 
     try {
-        await page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: 20000 });
+        await page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: ctx.config.timeouts.navigation });
 
         const candidates = page.locator(selectors.home.projectButton).filter({ 
             has: page.locator(selectors.home.projectButtonTitle, { hasText: title }) 

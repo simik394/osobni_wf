@@ -12,7 +12,7 @@ export async function createNotebookAction(
 
     log(`Creating notebook: ${title}`);
     try {
-        await page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+        await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
 
         const createBtnSelector = deps.selectors.home.createNewButton;
         await page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });

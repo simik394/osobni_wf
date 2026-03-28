@@ -5,6 +5,7 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { getRegistry } from '../core/artifact-registry';
 import { getRsrchTelemetry } from '@agents/shared';
+import { config } from '../config';
 import { selectors } from '../selectors';
 import { getGraphStore } from '../core/graph-store';
 import { 
@@ -12,6 +13,7 @@ import {
     setModelAction, 
     uploadFilesAction 
 } from '../actions';
+import { UniversalContext } from '../actions/types';
 
 // Get telemetry instance
 const telemetry = getRsrchTelemetry();
@@ -132,6 +134,14 @@ export class GeminiClient extends EventEmitter {
         }
     }
 
+    private getContext(): UniversalContext {
+        return {
+            page: this.page,
+            log: (msg: string, level?: 'info' | 'warn' | 'error') => this.log(msg, level),
+            config,
+        };
+    }
+
     /**
      * Execute query via Windmill (New Architecture)
      *Delegates the entire interaction to a robust Windmill script.
@@ -181,7 +191,7 @@ export class GeminiClient extends EventEmitter {
 
         const targetUrl = sessionId
             ? `https://gemini.google.com/app/${sessionId}`
-            : 'https://gemini.google.com/app';
+            : config.urls.gemini + '/app';
         this.progress(`Navigating to: ${targetUrl}`, 'init');
         await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
 
@@ -264,7 +274,7 @@ export class GeminiClient extends EventEmitter {
      */
     async resetToNewChat(): Promise<void> {
         return resetToNewChatAction(
-            { page: this.page, log: (msg, lvl) => this.log(msg, lvl) },
+            this.getContext(),
             { selectors }
         );
     }
@@ -502,7 +512,7 @@ export class GeminiClient extends EventEmitter {
             // Ensure we are on the main app page or a session page
             if (!this.page.url().includes('gemini.google.com/app')) {
                 console.log('[Gemini] Navigating to main app for research docs...');
-                await this.page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+                await this.page.goto(config.urls.gemini + '/app', { waitUntil: 'domcontentloaded' });
             }
 
             // Wait for page to fully load
@@ -659,7 +669,7 @@ export class GeminiClient extends EventEmitter {
             // Ensure we're on Gemini
             const url = this.page.url();
             if (!url.includes('gemini.google.com')) {
-                await this.page.goto('https://gemini.google.com/app', { waitUntil: 'networkidle' });
+                await this.page.goto(config.urls.gemini + '/app', { waitUntil: 'networkidle' });
                 await this.page.waitForTimeout(2000);
             }
 
@@ -1193,7 +1203,7 @@ export class GeminiClient extends EventEmitter {
      */
     async setModel(modelName: string): Promise<boolean> {
         return setModelAction(
-            { page: this.page, log: (msg, lvl) => this.log(msg, lvl) },
+            this.getContext(),
             { selectors },
             modelName
         );
@@ -1204,7 +1214,7 @@ export class GeminiClient extends EventEmitter {
      */
     async uploadFiles(filePaths: string[]): Promise<boolean> {
         return uploadFilesAction(
-            { page: this.page, log: (msg, lvl) => this.log(msg, lvl) },
+            this.getContext(),
             { selectors, telemetry },
             filePaths
         );
@@ -1235,7 +1245,7 @@ export class GeminiClient extends EventEmitter {
 
         // Ensure we are on app
         if (!this.page.url().includes('gemini.google.com/app')) {
-            await this.page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+            await this.page.goto(config.urls.gemini + '/app', { waitUntil: 'domcontentloaded' });
             await this.page.waitForTimeout(2000);
         }
 
@@ -1496,7 +1506,7 @@ export class GeminiClient extends EventEmitter {
     } = {}): Promise<string | null> {
         const { sendMessageAction } = await import('../actions/gemini/chat');
         return sendMessageAction(
-            { page: this.page, log: (msg) => this.log(msg) },
+            this.getContext(),
             message,
             options,
             {
@@ -2418,7 +2428,7 @@ export class GeminiClient extends EventEmitter {
             // First, we need to go back to Gemini if we navigated away
             const currentUrl = this.page.url();
             if (!currentUrl.includes('gemini.google.com')) {
-                await this.page.goto('https://gemini.google.com/app', { waitUntil: 'domcontentloaded' });
+                await this.page.goto(config.urls.gemini + '/app', { waitUntil: 'domcontentloaded' });
                 await this.page.waitForTimeout(2000);
             }
 

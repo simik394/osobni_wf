@@ -5,8 +5,6 @@ import { z } from 'zod';
 import { DEFAULTS } from '@agents/shared';
 
 const configSchema = z.object({
-  url: z.string().url().default('https://www.perplexity.ai'),
-  headless: z.coerce.boolean().default(false),
   host: z.string().default(DEFAULTS.RSRCH.HOST),
   port: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.API_PORT),
   vncPort: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.VNC_PORT),
@@ -14,6 +12,19 @@ const configSchema = z.object({
   browserWsEndpoint: z.string().optional(),
   browserCdpEndpoint: z.string().optional(),
   remoteDebuggingPort: z.coerce.number().int().positive().optional(),
+  headless: z.coerce.boolean().default(false),
+  timeouts: z.object({
+    standard: z.coerce.number().int().positive().default(10000),
+    navigation: z.coerce.number().int().positive().default(30000),
+    generation: z.coerce.number().int().positive().default(90000),
+    poll: z.coerce.number().int().positive().default(1000),
+    interaction: z.coerce.number().int().positive().default(500),
+  }).default({}),
+  urls: z.object({
+    perplexity: z.string().url().default('https://www.perplexity.ai'),
+    gemini: z.string().url().default('https://gemini.google.com'),
+    notebooklm: z.string().url().default('https://notebooklm.google.com'),
+  }).default({}),
   auth: z.object({
     userDataDir: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'user-data')),
     authFile: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'auth.json')),
@@ -71,6 +82,19 @@ function loadConfig() {
     browserWsEndpoint: process.env.BROWSER_WS_ENDPOINT || localConfig.browserWsEndpoint,
     browserCdpEndpoint: process.env.BROWSER_CDP_ENDPOINT || localConfig.browserCdpEndpoint,
     remoteDebuggingPort: process.env.REMOTE_DEBUGGING_PORT || localConfig.remoteDebuggingPort,
+    headless: process.env.HEADLESS !== undefined ? process.env.HEADLESS === 'true' : localConfig.headless,
+    timeouts: {
+      standard: process.env.RSRCH_TIMEOUT_STANDARD ? parseInt(process.env.RSRCH_TIMEOUT_STANDARD) : localConfig.timeouts?.standard,
+      navigation: process.env.RSRCH_TIMEOUT_NAVIGATION ? parseInt(process.env.RSRCH_TIMEOUT_NAVIGATION) : localConfig.timeouts?.navigation,
+      generation: process.env.RSRCH_TIMEOUT_GENERATION ? parseInt(process.env.RSRCH_TIMEOUT_GENERATION) : localConfig.timeouts?.generation,
+      poll: process.env.RSRCH_TIMEOUT_POLL ? parseInt(process.env.RSRCH_TIMEOUT_POLL) : localConfig.timeouts?.poll,
+      interaction: process.env.RSRCH_TIMEOUT_INTERACTION ? parseInt(process.env.RSRCH_TIMEOUT_INTERACTION) : localConfig.timeouts?.interaction,
+    },
+    urls: {
+      perplexity: process.env.RSRCH_URL_PERPLEXITY || localConfig.urls?.perplexity,
+      gemini: process.env.RSRCH_URL_GEMINI || localConfig.urls?.gemini,
+      notebooklm: process.env.RSRCH_URL_NOTEBOOKLM || localConfig.urls?.notebooklm,
+    },
     auth: {
       userDataDir: process.env.PERPLEXITY_USER_DATA_DIR || localConfig.auth?.userDataDir,
       authFile: process.env.AUTH_FILE || localConfig.auth?.authFile,

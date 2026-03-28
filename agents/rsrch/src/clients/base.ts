@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from '../services/profile';
 import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
+import { UniversalContext } from '../actions/types';
 
 interface Session {
     id: string;
@@ -69,6 +70,15 @@ export abstract class BaseClient {
     isBrowserInitialized(): boolean {
         // Check actual state, not just the flag
         return this.isInitialized && (this.browser !== null || this.context !== null);
+    }
+
+    protected getContext(): UniversalContext {
+        if (!this.page) throw new Error('Browser not initialized');
+        return {
+            page: this.page,
+            log: (msg, level) => this.log(msg),
+            config,
+        };
     }
 }
 
@@ -483,7 +493,7 @@ export class PerplexityClient extends BaseClient {
             if (currentUrl.includes('perplexity.ai/search/')) {
                 console.log('Already on a search page. Monitoring thread state...');
             } else {
-                await page.goto(config.url);
+                await page.goto(config.urls.perplexity);
             }
 
             // Wait for input
@@ -514,7 +524,7 @@ export class PerplexityClient extends BaseClient {
             if (!inputSelector) {
                 if (currentUrl.includes('perplexity.ai/search/')) {
                     console.log('Could not find input on search page. Navigating to home...');
-                    await page.goto(config.url);
+                    await page.goto(config.urls.perplexity);
                     // Retry finding selector
                     for (const selector of pSelectors) {
                         try {

@@ -35,7 +35,7 @@ export async function runQuery(queryText: string) {
     const page = await context.newPage();
 
     try {
-        await page.goto(config.url);
+        await page.goto(config.urls.perplexity);
         // await page.waitForLoadState('networkidle'); // Too slow
 
         // Wait for input - faster check

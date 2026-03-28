@@ -36,7 +36,7 @@ export async function generateAudioOverviewAction(
                 await deps.openNotebook(notebookTitle);
             } else {
                 log('[DEBUG] No notebook specified, navigating to NotebookLM homepage...');
-                await page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
+                await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
                 await deps.humanDelay(2000);
             }
 

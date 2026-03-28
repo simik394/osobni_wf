@@ -52,8 +52,8 @@ export async function login(userDataDir?: string) {
     const page = await context.newPage();
 
     try {
-        logger.info(`Navigating to ${config.url} ...`);
-        await page.goto(config.url);
+        logger.info(`Navigating to ${config.urls.perplexity} ...`);
+        await page.goto(config.urls.perplexity);
 
         // Also open NotebookLM in a new tab
         logger.info('Opening NotebookLM in a new tab...');

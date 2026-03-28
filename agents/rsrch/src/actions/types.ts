@@ -11,6 +11,7 @@ import { GraphStore } from '../core/graph-store';
 export interface UniversalContext {
     page: Page;
     log: (message: string, level?: 'info' | 'warn' | 'error') => void;
+    config: typeof config;
 }
 
 /**
