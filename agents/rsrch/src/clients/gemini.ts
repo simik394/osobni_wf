@@ -1652,7 +1652,15 @@ export class GeminiClient extends EventEmitter {
                     const code = pre.querySelector('code');
                     const lang = pre.getAttribute('data-language') || '';
                     const content = code ? code.innerText : pre.innerText;
-                    pre.outerHTML = `\n\`\`\`${lang}\n${content}\n\`\`\`\n`;
+                    pre.outerHTML = `\n\`\`\`${lang}\n${content.trim()}\n\`\`\`\n`;
+                });
+
+                // List Preservation (Explicitly add bullets without destroying nested sub-lists)
+                const listItems = clone.querySelectorAll('li');
+                listItems.forEach((li: any) => {
+                    const bullet = li.parentElement && li.parentElement.tagName === 'OL' ? '1. ' : '* ';
+                    const bulletNode = document.createTextNode(bullet);
+                    li.insertBefore(bulletNode, li.firstChild);
                 });
 
                 // Link & Citation Discovery
