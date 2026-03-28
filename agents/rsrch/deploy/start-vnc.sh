@@ -27,9 +27,35 @@ VNC_PID=$!
 # Wait for X11 to stabilize
 sleep 2
 
-echo "Launching interactive terminal..."
-# Start a nice dark xterm for the user
-xterm -geometry 100x30+10+10 -bg "#1e1e1e" -fg "#cccccc" -fa "Monospace" -fs 11 -e bash &
+echo "Launching standalone pure Chromium for VNC..."
+# Find playwright's chromium or fallback
+CHROME_BIN=$(find /ms-playwright -name chrome -type f -executable | head -n 1)
+if [ -z "$CHROME_BIN" ]; then
+    CHROME_BIN="/usr/bin/google-chrome"
+fi
+
+echo "Using Chromium binary: $CHROME_BIN"
+
+# Start pure Chromium on Display 99 with the debug port open
+$CHROME_BIN \
+    --remote-debugging-port=9223 \
+    --remote-debugging-address=0.0.0.0 \
+    --user-data-dir=/opt/rsrch/profiles/fresh/state \
+    --no-sandbox \
+    --disable-setuid-sandbox \
+    --disable-gpu \
+    --disable-dev-shm-usage \
+    --window-size=1280,1024 \
+    --no-first-run \
+    --no-default-browser-check \
+    --password-store=basic \
+    --use-mock-keychain \
+    "https://gemini.google.com/app" &
+
+CHROMIUM_PID=$!
+
+# Wait for Chromium to stabilize
+sleep 3
 
 echo "Starting Main Application..."
 # Using absolute path to ensure it works even if PATH is different in container
@@ -41,11 +67,13 @@ if [ ! -f "$ENTRYPOINT" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
+    export BROWSER_CDP_ENDPOINT="http://127.0.0.1:9223"
     exec node "$ENTRYPOINT" serve --port 3055
 else
     # Allow passing arguments correctly
+    export BROWSER_CDP_ENDPOINT="http://127.0.0.1:9223"
     exec node "$ENTRYPOINT" "$@"
 fi
 
 # Cleanup on exit (will only reach if exec is replaced by something else)
-kill $XVFB_PID $VNC_PID
+kill $XVFB_PID $VNC_PID $CHROMIUM_PID
