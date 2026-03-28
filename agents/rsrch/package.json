@@ -4,7 +4,7 @@
   "description": "Automated researcher agent using Perplexity AI and Gemini",
   "main": "src/cli.ts",
   "bin": {
-    "rsrch": "dist/cli.js"
+    "rsrch": "dist/cli/main.js"
   },
   "scripts": {
     "rsrch": "ts-node src/cli.ts",
@@ -39,11 +39,13 @@
     "js-yaml": "^4.1.1",
     "langfuse": "^3.38.6",
     "pino": "^8.19.0",
+    "pino-pretty": "^10.3.1",
     "playwright": "^1.57.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-core": "^21.5.0",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "uuid": "^13.0.0",
+    "winston": "^3.11.0",
     "yaml": "^2.8.2",
     "zod": "^3.25.76"
   },
@@ -54,7 +56,6 @@
     "@types/node": "^20.19.27",
     "@vitest/ui": "^1.6.0",
     "msw": "^2.2.14",
-    "pino-pretty": "^10.3.1",
     "ts-node": "^10.9.1",
     "typescript": "^5.9.3",
     "vitest": "^1.6.0"
