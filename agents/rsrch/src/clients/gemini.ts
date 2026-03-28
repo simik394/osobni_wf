@@ -1623,11 +1623,47 @@ export class GeminiClient extends EventEmitter {
                     }
                 });
 
-                // Diagram Support
+                // Diagram Support (SVG)
                 const SVGs = clone.querySelectorAll('svg');
                 SVGs.forEach((svg: any, i: number) => {
                     const label = svg.getAttribute('aria-label') || `Diagram ${i + 1}`;
                     svg.outerHTML = `\n> [!NOTE]\n> [${label}] (Visual Diagram)\n`;
+                });
+
+                // Image Support (Raster)
+                const imgs = clone.querySelectorAll('img');
+                imgs.forEach((img: any) => {
+                    const alt = img.getAttribute('alt') || 'image';
+                    const src = img.getAttribute('src') || '';
+                    if (src && !src.startsWith('data:')) {
+                        img.outerHTML = `![${alt}](${src})`;
+                    }
+                });
+
+                // Hyperlink Preservation (Non-citations)
+                const allLinks = clone.querySelectorAll('a:not([data-attribution-url]):not([href*="google.com/search"])');
+                allLinks.forEach((a: any) => {
+                    const url = a.getAttribute('href');
+                    const text = a.innerText.trim();
+                    if (url && url.startsWith('http') && text) {
+                        a.outerHTML = `[${text}](${url})`;
+                    }
+                });
+
+                // Table Support (HTML to GFM)
+                const tables = clone.querySelectorAll('table');
+                tables.forEach((table: any) => {
+                    let mdTable = '\n';
+                    const rows = Array.from(table.querySelectorAll('tr'));
+                    rows.forEach((row: any, i: number) => {
+                        const cells = Array.from(row.querySelectorAll('th, td'));
+                        const cellText = cells.map((c: any) => c.innerText.replace(/\n/g, ' ').trim());
+                        mdTable += `| ${cellText.join(' | ')} |\n`;
+                        if (i === 0) {
+                            mdTable += `| ${cells.map(() => '---').join(' | ')} |\n`;
+                        }
+                    });
+                    table.outerHTML = mdTable + '\n';
                 });
 
                 return {
