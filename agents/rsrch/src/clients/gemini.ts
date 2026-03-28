@@ -1520,6 +1520,7 @@ export class GeminiClient extends EventEmitter {
                 telemetry,
                 verbose: this.verbose,
                 getLatestResponse: () => this.getLatestResponse(),
+                getLatestResponseData: () => this.getLatestResponseData(),
                 getCurrentSessionId: () => this.getCurrentSessionId(),
                 getGraphStore: () => getGraphStore(),
                 dumpState: (prefix) => this.dumpState(prefix)
@@ -1553,18 +1554,111 @@ export class GeminiClient extends EventEmitter {
         return responses;
     }
 
-    async getLatestResponse(): Promise<string | null> {
+    async getLatestResponseData(): Promise<{ text: string, markdown: string, sources: Array<{ index: number, url: string, title: string }>, thoughts?: string } | null> {
         try {
             const responseElements = this.page.locator(selectors.gemini.chat.response);
             const count = await responseElements.count();
             if (count === 0) return null;
 
             const lastResponse = responseElements.nth(count - 1);
-            return await lastResponse.innerText().catch(() => null);
+
+            // 1. Extract Thoughts if possible
+            let thoughts: string | undefined;
+            const thoughtToggleSelector = selectors.gemini.chat.thoughtToggle;
+            const thoughtContainerSelector = selectors.gemini.chat.thoughtContainer;
+
+            if (thoughtToggleSelector && thoughtContainerSelector) {
+                try {
+                    const thoughtToggle = lastResponse.locator(thoughtToggleSelector).first();
+                    if (await thoughtToggle.isVisible({ timeout: 1000 })) {
+                        // Check if already expanded or needs click
+                        const container = lastResponse.locator(thoughtContainerSelector).first();
+                        if (!(await container.isVisible())) {
+                            await thoughtToggle.click();
+                            await this.page.waitForTimeout(500);
+                        }
+                        thoughts = await container.innerText();
+                    }
+                } catch (e) {
+                    // Ignore thought extraction errors
+                }
+            }
+
+            // 2. Enhanced extraction via page.evaluate
+            const data = await lastResponse.evaluate((container, sel) => {
+                const clone = container.cloneNode(true) as HTMLElement;
+                const sourcesArray: { index: number; url: string; title: string }[] = [];
+
+                // LaTeX Math Support
+                const mathElements = clone.querySelectorAll('mjx-container, .math, .katex');
+                mathElements.forEach((el: any) => {
+                    const tex = el.getAttribute('tex') || el.innerText || '';
+                    if (tex) {
+                        const isDisplay = el.tagName === 'MJX-CONTAINER' && el.getAttribute('display') === 'true';
+                        el.outerHTML = isDisplay ? `\n$$\n${tex}\n$$\n` : `$${tex}$`;
+                    }
+                });
+
+                // Code Block Preservation
+                const preBlocks = clone.querySelectorAll('pre');
+                preBlocks.forEach((pre: any) => {
+                    const code = pre.querySelector('code');
+                    const lang = pre.getAttribute('data-language') || '';
+                    const content = code ? code.innerText : pre.innerText;
+                    pre.outerHTML = `\n\`\`\`${lang}\n${content}\n\`\`\`\n`;
+                });
+
+                // Citation extraction
+                const links = clone.querySelectorAll('a[href*="google.com/search"], a[data-attribution-url]');
+                links.forEach((a: any) => {
+                    const url = a.getAttribute('data-attribution-url') || a.getAttribute('href');
+                    const text = a.innerText.trim();
+                    if (url && url.startsWith('http')) {
+                        let sourceIndex = sourcesArray.findIndex(s => s.url === url);
+                        if (sourceIndex === -1) {
+                            sourceIndex = sourcesArray.length;
+                            sourcesArray.push({ index: sourceIndex + 1, url, title: text || 'Source' });
+                        }
+                        a.innerText = `[^${sourceIndex + 1}]`;
+                    }
+                });
+
+                // Diagram Support
+                const SVGs = clone.querySelectorAll('svg');
+                SVGs.forEach((svg: any, i: number) => {
+                    const label = svg.getAttribute('aria-label') || `Diagram ${i + 1}`;
+                    svg.outerHTML = `\n> [!NOTE]\n> [${label}] (Visual Diagram)\n`;
+                });
+
+                return {
+                    text: clone.innerText,
+                    sources: sourcesArray
+                };
+            }, selectors.gemini.chat);
+
+            let markdown = data.text;
+            if (data.sources.length > 0) {
+                markdown += '\n\n### Sources\n';
+                data.sources.forEach(s => {
+                    markdown += `[^${s.index}]: [${s.title}](${s.url})\n`;
+                });
+            }
+
+            return {
+                text: data.text,
+                markdown: markdown.trim(),
+                sources: data.sources,
+                thoughts
+            };
         } catch (e) {
-            console.error('[Gemini] Failed to get latest response:', e);
+            console.error('[Gemini] Failed to get latest response data:', e);
             return null;
         }
+    }
+
+    async getLatestResponse(): Promise<string | null> {
+        const data = await this.getLatestResponseData();
+        return data ? data.markdown : null;
     }
 
     async getResponse(index: number): Promise<string | null> {

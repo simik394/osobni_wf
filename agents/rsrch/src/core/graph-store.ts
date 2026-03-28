@@ -1312,31 +1312,77 @@ s.title = $title,
     }
 
     /**
-     * Adds a GeminiQuery node and links it to a GeminiSession.
+     * Adds a GeminiQuery node and links it to a Session.
      */
     async addGeminiQuery(data: { sessionId: string; query: string }): Promise<void> {
-        const queryId = `gq_${Date.now()}_${Math.random().toString(36).substring(2, 8)} `;
+        const queryId = `gq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
         const query = `
-MATCH(gs: GeminiSession { sessionId: $sessionId })
-CREATE(gq: GeminiQuery {
-    queryId: $queryId,
-    sessionId: $sessionId,
-    query: $query,
-    createdAt: $now
-})
-CREATE(gs) - [: HAS_QUERY] -> (gq)
-    `;
+            MATCH (s:Session { platformId: $sessionId, platform: 'gemini' })
+            CREATE (gq:GeminiQuery {
+                id: $queryId,
+                query: $query,
+                createdAt: $now
+            })
+            CREATE (s)-[:HAS_QUERY]->(gq)
+        `;
         try {
             await this._executeQuery(query, {
                 params: {
                     sessionId: data.sessionId,
                     query: data.query,
-                    queryId: queryId,
+                    queryId,
                     now: Date.now(),
                 },
             });
         } catch (e) {
             console.error('[GraphStore] addGeminiQuery error:', e);
+        }
+    }
+
+    /**
+     * Adds a rich Turn to a Gemini Session, including citations and thoughts.
+     */
+    async addGeminiTurn(data: {
+        sessionId: string;
+        role: 'user' | 'assistant';
+        content: string;
+        citations?: Array<{ url: string; title: string }>;
+        thoughts?: string;
+    }): Promise<void> {
+        if (!this.graph) return;
+
+        const turnId = `gt_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const query = `
+            MATCH (s:Session { platformId: $sessionId, platform: 'gemini' })
+            CREATE (t:Turn {
+                id: $turnId,
+                role: $role,
+                content: $content,
+                thoughts: $thoughts,
+                createdAt: $now
+            })
+            CREATE (s)-[:HAS_TURN]->(t)
+        `;
+
+        try {
+            await this._executeQuery(query, {
+                params: {
+                    sessionId: data.sessionId,
+                    role: data.role,
+                    content: data.content,
+                    thoughts: data.thoughts || '',
+                    turnId,
+                    now: Date.now()
+                }
+            });
+
+            if (data.citations && data.citations.length > 0) {
+                await this.mergeCitationsBatch(data.citations.map(c => ({ url: c.url, text: c.title })));
+                const urls = data.citations.map(c => c.url);
+                await this.linkCitationsToTurn(turnId, urls);
+            }
+        } catch (e) {
+            console.error('[GraphStore] addGeminiTurn error:', e);
         }
     }
 

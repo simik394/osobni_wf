@@ -34,6 +34,7 @@ export async function sendMessageAction(
         telemetry: any;
         verbose: boolean;
         getLatestResponse: () => Promise<string | null>;
+        getLatestResponseData?: () => Promise<{ text: string, markdown: string, sources: any[], thoughts?: string } | null>;
         getCurrentSessionId: () => string | null;
         getGraphStore: () => any;
         dumpState: (prefix: string) => Promise<any>;
@@ -157,7 +158,9 @@ export async function sendMessageAction(
             elapsed += pollInterval;
         }
 
-        const response = await deps.getLatestResponse();
+        const richData = deps.getLatestResponseData ? await deps.getLatestResponseData() : null;
+        const response = richData ? richData.markdown : await deps.getLatestResponse();
+        
         console.log(`[Gemini] Response received (${response?.length || 0} chars)`);
 
         // Track in GraphStore
@@ -167,7 +170,27 @@ export async function sendMessageAction(
             if (graphStore && graphStore.getIsConnected()) {
                 const sessionTitle = await page.title().then(t => t.replace('Gemini - ', '').trim()).catch(() => message.substring(0, 50));
                 await graphStore.createOrUpdateGeminiSession({ sessionId, title: sessionTitle });
-                await graphStore.addGeminiQuery({ sessionId, query: message });
+                
+                // Store turns with rich data support
+                if (richData) {
+                    // Record User turn
+                    await graphStore.addGeminiTurn({ 
+                        sessionId, 
+                        role: 'user', 
+                        content: message 
+                    });
+                    // Record Assistant turn with citations and thoughts
+                    await graphStore.addGeminiTurn({
+                        sessionId,
+                        role: 'assistant',
+                        content: richData.markdown,
+                        citations: richData.sources,
+                        thoughts: richData.thoughts
+                    });
+                } else {
+                    // Fallback to old behavior
+                    await graphStore.addGeminiQuery({ sessionId, query: message });
+                }
             }
         }
 

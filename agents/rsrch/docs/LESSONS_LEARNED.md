@@ -219,3 +219,17 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **TSC as Truth:** A final `npx tsc -p tsconfig.json --noEmit` is the ONLY way to guarantee that a 3,000+ line refactor hasn't left "silent" import or type errors in rarely used modules.
 
 ---
+---
+
+### [[4. Gemini Rich Content Parsing (2026-03-28)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/2026-03-28_gemini_parsing_autopsy.md)
+
+# Lessons Learned: Gemini Rich Content Parsing
+
+## High-Fidelity DOM Extraction
+- **Problem**: Standard `innerText()` is destructive for structured AI output. It flattens LaTeX ($ / $$), strips URLs from indexed citations ([1], [2]), and mangles code block whitespace.
+- **Solution**: **DOM Cloning + Selective Transformation.** By cloning the message element in `page.evaluate`, we can replace fragile UI components (like `mjx-container` for math or attribution links) with stable Markdown equivalents *before* calling `innerText`. This preserves the AI's intended formatting while capturing underlying metadata.
+- **LaTeX Detection**: Gemini uses MathJax (`mjx-container`). Extracting the `tex` attribute directly from these elements is far more reliable than regex-parsing the resulting plain text.
+
+## From Chat History to Research Graph
+- **Architecture**: AI responses should not be stored as simple strings. Mapping them to `Session -> Turn -> Citation` nodes in FalkorDB enables "Source Provenance".
+- **Consistency**: Centralizing extraction in `GeminiClient.getLatestResponseData()` ensures that both the CLI, Windmill flows, and future agents benefit from the same high-fidelity parsing logic.
