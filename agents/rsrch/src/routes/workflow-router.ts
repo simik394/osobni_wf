@@ -80,7 +80,7 @@ Please use your Deep Research capabilities to expand on this...`;
                     // 4. NotebookLM Setup
                     console.log(`[Job ${job.id}] Step 4: NotebookLM Import`);
                     if (!notebookClient) {
-                        notebookClient = await browserClient.createNotebookClient();
+                        notebookClient = await browserClient.createNotebookLMClient();
                     }
                     const safeTitle = query.replace(/[^a-zA-Z0-9 ]/g, '').substring(0, 50).trim() || 'Research Podcast';
                     await notebookClient.createNotebook(safeTitle);
@@ -130,7 +130,7 @@ Please use your Deep Research capabilities to expand on this...`;
             const julesClient = new BrowserClient({ profileId: 'personal', headless: true });
             try {
                 await julesClient.init();
-                const notebook = await julesClient.createNotebookClient();
+                const notebook = await julesClient.createNotebookLMClient();
                 const page = notebook.page;
                 await page.goto(`https://jules.google.com/session/${sId}`, { waitUntil: 'networkidle', timeout: 60000 });
                 await page.waitForTimeout(2000);

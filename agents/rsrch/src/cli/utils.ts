@@ -123,7 +123,7 @@ export async function runLocalNotebookAction(action: (client: BrowserClient, not
     console.log(`Running in LOCAL mode (profile: ${profileId})...`);
     const client = new BrowserClient({ profileId, cdpEndpoint });
     await client.init({ local: true, profileId, cdpEndpoint });
-    const notebook = await client.createNotebookClient();
+    const notebook = await client.createNotebookLMClient();
     try {
         await action(client, notebook);
     } finally {

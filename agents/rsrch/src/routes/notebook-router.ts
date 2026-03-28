@@ -24,7 +24,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
     const getNotebookClient = async () => {
         if (!notebookClient) {
-            notebookClient = await browserClient.createNotebookClient();
+            notebookClient = await browserClient.createNotebookLMClient();
         }
         return notebookClient;
     };

@@ -170,7 +170,7 @@ export class WorkflowEngine {
                     rawResult = "Executed Perplexity Query (Text capture not fully implemented in CLI)";
                  }
             } else if (step.agent === 'notebooklm') {
-                const notebook = await this.client.createNotebookClient();
+                const notebook = await this.client.createNotebookLMClient();
                 if (step.action === 'audio') {
                     // params: notebookTitle, sources, prompt
                     if (params.notebookTitle) await notebook.openNotebook(params.notebookTitle);

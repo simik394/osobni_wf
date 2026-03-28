@@ -154,7 +154,7 @@ async function processCompletedResearch(
                 fs.mkdirSync(opts.audioFolder, { recursive: true });
             }
 
-            const notebook = await client.createNotebookClient();
+            const notebook = await client.createNotebookLMClient();
 
             // Create notebook with research title
             const notebookTitle = `Research: ${title}`;
