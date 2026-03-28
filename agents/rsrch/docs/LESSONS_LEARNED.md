@@ -16,20 +16,15 @@ This is a living record of technical challenges, architectural discoveries, and 
 - **Self-Healing Startup:** Entrypoint scripts MUST explicitly `rm -f` `SingletonLock` and `LOCK` files before starting the browser.
 - **Docker CDP:** Use `--remote-allow-origins=*` and internal Docker DNS for container talk. Rewrite `webSocketDebuggerUrl` if necessary.
 
-### 🎙️ NotebookLM Interfacing
-- **Modal UI Instability:** NotebookLM retains stale mat-dialog elements. Isolate upload sequences (sequential Bash loops) to clear SPA state between runs.
-- **Content Extraction:** Scrape `#region-main` HTML, convert to clean `.txt` (stripping tags) before upload to reduce token waste and improve grounding.
-
-### 🛠️ Performance & Infrastructure
-- **Playwright Version Parity:** Base image Playwright version must exactly match `package.json` or launch will silently hang.
-- **"Turbo" Dev Loop:** Build locally (`npm run build`) and sync `dist/` to a lean image. Reduces deployment from >5m to ~45s.
-
 ---
 
-## 📜 Historical Detailed Logs
+## 📜 Historical Detailed Logs (Verbatim)
 
-<details>
-<summary><b>1. Architectural Discovery (2026-01-24) - Windmill vs. CDP</b></summary>
+### [[1. Architectural Discovery (2026-01-24) - Windmill vs. CDP]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/lessons_learned_architecture.md)
+
+# Lessons Learned: Architectural Discovery
+
+## Incident: Windmill vs. CDP Architecture (2026-01-24)
 
 ### Context
 I spent significant time debugging and "fixing" local CDP/VNC connections for the `rsrch` agent, assuming the server was meant to drive the browser directly. The user later pointed out that this was a "wrong assumption" and that Windmill was the intended solution.
@@ -37,64 +32,169 @@ I spent significant time debugging and "fixing" local CDP/VNC connections for th
 ### Root Cause
 - I relied on the **current state of the code** (legacy `GeminiClient` with direct CDP calls) as the source of truth for the architecture.
 - I missed the **Strategic Plan** (`agents/rsrch/docs/STRATEGIC_PLAN.md`) which explicitly stated the goal of moving to "Windmill flows that compose research operations" and "Complete Windmill integration".
+- I focused on `architecture_matrix.md` which described the *mechanics* of connectivity (CDP + Socat) but not the *execution model* (Server driving CDP vs. Windmill driving CDP).
 
 ### Lessons
-1.  **Read Strategic Docs First:** Check `docs/STRATEGIC_PLAN.md` before major refactoring.
-2.  **Code != Architecture:** Existing code represents past decisions, not necessarily the future.
-3.  **Search for Orchestrator:** If a project mentions Windmill, assume it handles the heavy lifting.
+1.  **Read Strategic Docs First:** Before starting major refactoring or fixes, check `docs/STRATEGIC_PLAN.md` or similar high-level documents. They often contradict the current (legacy) code implementation.
+2.  **Code != Architecture:** Existing code often represents "technical debt" or "past decisions," not necessarily the future direction.
+3.  **Search for "Windmill" or "Orchestrator":** If a project mentions an orchestrator (like Windmill), assume it's meant to handle the heavy lifting (like browser automation), rather than just being a trigger for the server.
 
-</details>
+### Action Items
+- When starting in a new codebase, run `find . -name "*PLAN.md"` or `find . -name "*ARCHITECTURE.md"`.
+- Verify if "current implementation" matches "strategic goals" before optimizing the current implementation.
 
-<details>
-<summary><b>2. NotebookLM Interfacing Detail</b></summary>
+---
 
-### Modal UI Instability
-- **Root Cause**: NotebookLM maintains multiple `<add-sources-dialog>` elements. 
-- **Effect**: Blind locators may lock onto an older, invisible dialog. 
-- **Solution**: Avoid generic click fallbacks with `{ force: true }`. Isolate the entire browser context sequence (run uploads one-by-one).
+### [[2. NotebookLM Interfacing Detail]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/lessons_learned_notebooklm.md)
 
-### Batch Upload Isolation
-- **Problem**: Large loops inside Playwright frequently hung. 
-- **Solution**: A sequential Bash script `for f in ...; do rsrch notebook add-local-source "$f"; done` is much more reliable. Each file upload utilizes a fresh connection, clearing lingering overlays.
+# NotebookLM Interfacing Lessons Learned
 
-### HTML Scraping & Text Conversion
-- **Problem**: LMS platforms (like Moodle) store content in `mod/page` or `mod/book`. Simply downloading attachments missed 70% of content.
-- **Solution**: Extract `innerHTML` of `#region-main` and convert to plain `.txt` (stripping tags) before upload.
+## Modal UI Instability
+- **Root Cause**: NotebookLM (and many Angular/SPA apps) maintains multiple `<add-sources-dialog>` elements or `<mat-dialog-container>` in the DOM from previous UI states. 
+- **Effect**: Blind Playwright locators (e.g., `.first()`) may lock onto an older, invisible dialog instance that is hidden by the current active backdrop (`cdk-overlay-backdrop`). Calling `click()` on elements within that stale wrapper freezes Playwright because the overlay indefinitely blocks pointer events.
+- **Solution**: Avoid generic click fallbacks with `{ force: true }` because forcing the click disables the browser's native 'trusted event', which is required to invoke the `filechooser`. To combat DOM pollution, isolate the entire browser context sequence (run uploads one-by-one with isolated Node sessions) rather than keeping an SPAs state alive indefinitely across loops.
 
-</details>
+## Batch Upload Isolation
+- **Problem**: When passing 9 PDFs through `waitForEvent('filechooser')` inside a large `for` loop, the script frequently hung. NotebookLM's uploader state occasionally stalls out or changes intermediate selectors.
+- **Solution**: A sequential Bash script `for f in ...; do rsrch notebook add-local-source "$f"; done` provides a much higher rate of success. Each file upload utilizes a fresh connection to the remote CDP browser, which clears any lingering dialog overlays and UI bugs between runs. It completely mitigates memory leaks and SPA component desync.
 
-<details>
-<summary><b>3. Technical Autopsy: Browser Singleton Recovery (2026-01-24)</b></summary>
+## HTML Scraping & Text Conversion
+- **Problem**: Many LMS platforms (like Moodle) store their primary instructional content in `mod/page` or `mod/book` modules rather than just PDF files. Simply downloading attachments missed 70% of the course content.
+- **Solution**: A tailored scraper using `jsdom` or Playwright can extract the `innerHTML` of the `#region-main` or `[role="main"]` area.
+- **Optimization**: Converting extracted HTML to plain `.txt` (stripping tags) before uploading to NotebookLM is crucial. This reduces token waste, eliminates noise from navigation/sidebar elements, and improves the quality of the AI's grounding by providing clean, content-focused data.
+- **Deduplication**: Use `rsrch notebook sources <title>` to audit the current state before batching, as re-running scripts can easily lead to source duplication in the UI.
 
-### The "Silent Hang" Mystery
-**Actual Cause: Playwright Version Mismatch.**
-- Playwright's Node.js wrapper looked for a binary that didn't exist in the container due to version drift. It hung silently.
+---
 
-### The `package.json` Fragility
-**Failure:** relies on relative lookups (`../package.json`) in compiled containerized code.
-**Resolution:** Harden metadata lookups. Hardcode versions or create local metadata failsafes during the build.
+### [[3. Browser Singleton Recovery Autopsy (2026-01-24)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/2026-01-24_singleton_recovery_autopsy.md)
 
-### The "Stale Lock" Blockade
-**Actual Cause:** Stale `SingletonLock` files in persistent profile directory.
-**Fix:** Implemented a "Self-Healing" startup script that purges locks.
+# Technical Autopsy: Browser Singleton Recovery (2026-01-24)
 
-### The "Turbo" Dev Loop
-**The New Standard:** "Build Local, Deploy Dist". Propagate only `dist/` and `package.json`. Result: ~45 second total deployment time.
+## Executive Summary
+The Browser Singleton (API + VNC + Chromium in one container) was broken and crash-looping. The recovery process revealed several layers of architectural fragility, culminating in a stable, optimized "Turbo" deployment strategy and a unified execution environment.
 
-</details>
+## 1. The "Silent Hang" Mystery
+### **Experience**
+The container would start, log "Launching persistent context", and then... nothing. No error, no crash, just a silent wait.
+### **Mismatch / Misunderstanding**
+We assumed the environment (system libraries, X11) was the issue.
+### **Actual Cause**
+**Playwright Version Mismatch.**
+- **Local Machine**: Playwright `v1.58.0` (compiled code expects binaries at `/ms-playwright/chromium-1208`).
+- **Container**: `mcr.microsoft.com/playwright:v1.57.0-jammy` (libraries at `/ms-playwright/chromium-1200`).
+- **Result**: Playwright's Node.js wrapper looked for a binary that didn't exist. Instead of throwing a clean "File Not Found", it hung or failed silently until we enabled `DEBUG=pw:api`.
 
-<details>
-<summary><b>4. Docker CDP Connection Fix (2026-01-11)</b></summary>
+## 2. The `package.json` Fragility
+### **Experience**
+Even after fixing the version, the server failed with `Cannot find module '../package.json'`.
+### **Failure**
+We tried to fix it by traversing the directory tree (`while (currentDir !== root)...`), but the nested `dist/rsrch/src/` structure combined with Docker's limited volume/context mapping made relative lookups unreliable.
+### **Resolution**
+Harden metadata lookups. **Hardcode versions or create local metadata failsafes** during the build step. Never rely on `../package.json` traversals in compiled containerized code.
 
-### Host Header Validation
-Chrome's CDP endpoint rejects non-localhost Host headers.
-**Solution:** Added `--remote-allow-origins=*`.
+## 3. The "Stale Lock" Blockade
+### **Experience**
+Manual restarts of the container often resulted in the browser failing to launch.
+### **Actual Cause**
+**Stale `SingletonLock` files.**
+- Chromium's persistent profile directory on the host (`/opt/rsrch/profiles/...`) retained lock files from previous crashed instances.
+- New container instances saw these locks and refused to start.
+### **Fix**
+Implemented a "Self-Healing" startup script (`start-vnc.sh`) that explicitly purges `SingletonLock` and `LOCK` files before calling the main application.
 
-### Port Mapping & Internal DNS
-**Solution:** Changed `BROWSER_CDP_ENDPOINT` to use Docker internal DNS: `http://chromium:9223`. Avoid `host.docker.internal`.
+## 4. The "Turbo" Dev Loop Revolution
+### **Misunderstanding**
+We initially tried to "Build Remote" (running `tsc` inside the container) to ensure matching environments.
+### **Failure**
+Remote builds were slow (> 5 minutes), prone to RAM exhaustion on `halvarm`, and hard to debug.
+### **The New Standard: "Build Local, Deploy Dist"**
+1.  **Local Compilaton**: Run `npm run build` locally (takes seconds).
+2.  **Rsync Sync**: Propagate only the `dist/` folders and `package.json` to the remote build context.
+3.  **Lean Dockerfile**: The unified image now just copies binaries and package metadata. No compilation occurs in the container.
+4.  **Result**: **~45 second total deployment time.**
 
-### Host Header Rewriting
-The CDP endpoint returns `webSocketDebuggerUrl` using `localhost`, breaking cross-container clients.
-**Solution:** Node.js HTTP/WebSocket proxy rewrites the Host to `localhost` and rewrites return URLs.
+## 5. Architectural Shift: The Singleton
+Moving away from sidecars:
+- **OLD**: API Container + Chromium Sidecar (network dependency issues).
+- **NEW**: **The Singleton Image.** API, VNC, and Chromium share the same PID namespace and filesystem. This eliminates "Host unreachable" errors and simplified Windmill orchestration (Port 9223 is ALWAYS there if the API is there).
 
-</details>
+---
+**Status**: 🟢 RESTORED & STABLE
+**Lessons Anchored in**: `LESSONS_LEARNED.md`
+
+---
+
+### [[4. Docker CDP Connection Fix (2026-01-11)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/lessons-learned-docker-cdp-fix.md)
+
+# Lessons Learned: Docker CDP Connection Fix
+
+**Date**: 2026-01-11  
+**Issue**: rsrch Docker container could not connect to Chrome browser for Gemini queries
+
+## Problem Summary
+
+The `perplexity-server` Docker container was unable to connect to the `rsrch-chromium` container via Chrome DevTools Protocol (CDP), resulting in "Context not initialized" errors when attempting Gemini research queries.
+
+## Root Causes
+
+### 1. Host Header Validation
+Chrome's CDP endpoint rejects connections with non-localhost Host headers by default. When connecting via Docker networking (e.g., `host.docker.internal:9223`), Chrome's security check fails.
+
+**Solution**: Added `--remote-allow-origins=*` flag to Chrome arguments in `browser/server.js`.
+
+### 2. Port Mapping Confusion
+The initial configuration used `host.docker.internal:9225` which required traffic to exit the Docker network, re-enter via port mapping, and then reach the container. This added unnecessary complexity and latency.
+
+**Solution**: Changed `BROWSER_CDP_ENDPOINT` to use Docker internal DNS: `http://chromium:9223` - containers communicate directly on the internal network.
+
+### 3. Host Header Rewriting
+Even with `--remote-allow-origins=*`, the Chrome CDP endpoint returns `webSocketDebuggerUrl` endpoints using `localhost`, which breaks when the connecting client (perplexity-server) is in a different container.
+
+**Solution**: Replaced the simple `socat` TCP proxy with a Node.js HTTP/WebSocket proxy that:
+- Rewrites the `Host` header to `localhost` before forwarding to Chrome
+- Rewrites `webSocketDebuggerUrl` in CDP JSON responses to use Docker service names
+
+### 4. FalkorDB Connection Default
+The FalkorDB connection defaults to `localhost` if `FALKORDB_HOST` is not set. Inside Docker, `localhost` resolves to the container itself, not the FalkorDB service.
+
+**Solution**: Added `FALKORDB_HOST=falkordb` environment variable and `depends_on` for proper startup ordering.
+
+## Key Files Modified
+
+1. **`docker-compose.yml`**
+   - `BROWSER_CDP_ENDPOINT=http://chromium:9223`
+   - `FALKORDB_HOST=falkordb`
+   - Added `depends_on: [chromium, falkordb]`
+
+2. **`browser/server.js`**
+   - Added `--remote-allow-origins=*` to Chrome flags
+   - Replaced socat with Node.js HTTP/WS proxy
+   - URL rewriting for `webSocketDebuggerUrl`
+
+3. **`src/server.ts`**
+   - Added lazy browser initialization in `/gemini/research` endpoint
+
+## Verification Commands
+
+```bash
+# Check all containers are running
+docker compose ps
+
+# Verify health endpoint shows all dependencies OK
+curl -s http://localhost:3001/health | jq .
+
+# Test Gemini research
+curl -X POST http://localhost:3001/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini-rsrch","messages":[{"role":"user","content":"What is 2+2?"}]}'
+```
+
+## Takeaways
+
+1. **Use Docker internal DNS for container-to-container communication** - Avoid `host.docker.internal` when both services are in the same Docker network.
+
+2. **Chrome CDP requires special handling for non-localhost connections** - The `--remote-allow-origins=*` flag is essential.
+
+3. **URL rewriting may be necessary** - CDP responses contain hardcoded hostnames that need to be rewritten for cross-container compatibility.
+
+4. **Always set explicit host environment variables** - Don't rely on defaults that assume localhost when running in Docker.
