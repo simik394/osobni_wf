@@ -4,8 +4,14 @@ import { sendServerRequest } from '../cli/utils';
 
 export const serveCommand = new Command('serve')
     .description('Start HTTP server')
-    .action(async () => {
+    .option('--port <number>', 'Port to listen on', '3055')
+    .action(async (opts) => {
+        if (opts.port) {
+            process.env.PORT = opts.port;
+        }
         await startServer();
+        // Keep the process alive
+        await new Promise(() => {});
     });
 
 export const stopCommand = new Command('stop')

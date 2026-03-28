@@ -50,4 +50,4 @@ program.addCommand(geminiCommand);
 program.addCommand(graphCommand);
 program.addCommand(registryCommand);
 
-program.parse(process.argv);
+program.parseAsync(process.argv);

@@ -132,15 +132,24 @@ export async function runLocalNotebookAction(action: (client: PerplexityClient, 
 }
 
 // Helper for local Gemini execution
-export async function runLocalGeminiAction(action: (client: PerplexityClient, gemini: any) => Promise<void>, sessionId?: string, hasLocalFlag: boolean = true) {
+export async function runLocalGeminiAction(
+    action: (client: PerplexityClient, gemini: any) => Promise<void>, 
+    options: string | { sessionId?: string, skipAuthCheck?: boolean, headless?: boolean } = {}, 
+    hasLocalFlag: boolean = true
+) {
     const { profileId, cdpEndpoint } = cliContext.get();
     // If CDP endpoint is provided, force REMOTE mode
     const useLocalMode = cdpEndpoint ? false : hasLocalFlag;
     console.log(`Running Gemini in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
-    const client = new PerplexityClient({ profileId, cdpEndpoint });
+    const isOptionsObj = typeof options === 'object' && options !== null;
+    const clientOptions: any = { profileId, cdpEndpoint };
+    if (isOptionsObj && (options as any).headless !== undefined) {
+        clientOptions.headless = (options as any).headless;
+    }
+    const client = new PerplexityClient(clientOptions);
     await client.init({ local: useLocalMode, profileId, cdpEndpoint });
     const gemini = await client.createGeminiClient();
-    await gemini.init(sessionId); // Pass sessionId to navigate directly
+    await gemini.init(options); // Pass options to init
     try {
         await action(client, gemini);
     } finally {

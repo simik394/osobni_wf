@@ -28,6 +28,7 @@ const configSchema = z.object({
   auth: z.object({
     userDataDir: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'user-data')),
     authFile: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'auth.json')),
+    profileId: z.string().default('default'),
   }),
   notifications: z.object({
     discordWebhookUrl: z.string().url().optional(),
@@ -98,6 +99,7 @@ function loadConfig() {
     auth: {
       userDataDir: process.env.PERPLEXITY_USER_DATA_DIR || localConfig.auth?.userDataDir,
       authFile: process.env.AUTH_FILE || localConfig.auth?.authFile,
+      profileId: process.env.RSRCH_PROFILE_ID || localConfig.auth?.profileId || 'default',
     },
     notifications: {
       discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK || localConfig.notifications?.discordWebhookUrl,

@@ -14,13 +14,16 @@ import { createChatRouter, createGeminiRouter } from './routes/chat-router';
 
 // Initialize App
 const app = express();
-const port = config.port || process.env.PORT || 3000;
+const port = Number(config.port || process.env.PORT || 3000);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // Initial State / Singletons
-const client = new PerplexityClient({ verbose: true });
+const client = new PerplexityClient({ 
+    verbose: true,
+    profileId: config.auth.profileId
+});
 const graphStore = getGraphStore();
 let activeGeminiClient: GeminiClient | null = null;
 
@@ -112,9 +115,17 @@ export async function startServer() {
         }
     }
 
-    app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}`);
-        console.log(`Mode: ${process.env.USE_WINDMILL === 'true' ? 'Windmill Passive' : 'Local Execution'}`);
+    return new Promise((resolve, reject) => {
+        const server = app.listen(port, '0.0.0.0', () => {
+            console.log(`Server running at http://0.0.0.0:${port}`);
+            console.log(`Mode: ${process.env.USE_WINDMILL === 'true' ? 'Windmill Passive' : 'Local Execution'}`);
+            // Keep the process alive or handle close events if needed
+        });
+
+        server.on('error', (err) => {
+            console.error('[Server] Failed to start:', err);
+            reject(err);
+        });
     });
 }
 
