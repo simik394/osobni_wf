@@ -26,3 +26,4 @@ node_modules/
 agents/rsrch/data/
 agents/rsrch/playwright/
 agents/rsrch/src/test-*
+agents/rsrch/tests/**
