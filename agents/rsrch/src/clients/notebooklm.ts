@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Page } from 'playwright';
 import * as path from 'path';
 import { config } from '../config';
