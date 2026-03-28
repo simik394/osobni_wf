@@ -503,12 +503,15 @@ notebook.command('download-all-artifacts [outputDir]')
 
                 console.log(`[CLI] Downloading all non-audio artifacts from "${notebookTitle}" to: ${resolvedOutputDir}`);
                 
-                await notebook.page.reload({ waitUntil: 'domcontentloaded' });
+                // Ensure page is ready
+                await notebook.page.goto('https://notebooklm.google.com/').catch(() => {});
+                await notebook.humanDelay(3000); // Wait for auth/load to settle in headed mode
                 await notebook.openNotebook(notebookTitle);
                 await notebook.humanDelay(2000);
 
                 const artifacts = await notebook.getStudioArtifacts();
-                const textArtifacts = artifacts.filter((a: any) => a.type !== 'audio');
+                // Skip the first 9 fixed generator tiles (Audio, Presentation, etc.) as they are not artifacts themselves
+                const textArtifacts = artifacts.slice(9).filter((a: any) => a.type !== 'audio');
 
                 console.log(`[CLI] Found ${textArtifacts.length} text artifacts to download.`);
 

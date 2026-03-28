@@ -14,7 +14,10 @@ Priority: `process.env` > `config.json` > Defaults
 |----------|------|---------|------|
 | `URL` | `url` | `https://www.perplexity.ai` | string |
 | `HEADLESS` | `headless` | false | boolean |
-| `PORT` | `port` | 3099 | number |
+| `HOST` | `host` | DEFAULTS.RSRCH.HOST | string |
+| `PORT` | `port` | DEFAULTS.RSRCH.API_PORT | number |
+| `VNCPORT` | `vncPort` | DEFAULTS.RSRCH.VNC_PORT | number |
+| `CHROMIUMPORT` | `chromiumPort` | DEFAULTS.RSRCH.CHROMIUM_PORT | number |
 | `BROWSERWSENDPOINT` | `browserWsEndpoint` | *Optional* | string |
 | `BROWSERCDPENDPOINT` | `browserCdpEndpoint` | *Optional* | string |
 | `REMOTEDEBUGGINGPORT` | `remoteDebuggingPort` | *Optional* | number |

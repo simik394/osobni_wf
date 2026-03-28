@@ -1,4 +1,6 @@
 import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+chromium.use(StealthPlugin());
 import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { BrowserContext, Page, Browser } from 'playwright';

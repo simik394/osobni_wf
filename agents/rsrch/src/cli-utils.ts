@@ -122,7 +122,7 @@ export async function runLocalNotebookAction(action: (client: PerplexityClient, 
     const { profileId, cdpEndpoint } = cliContext.get();
     console.log(`Running in LOCAL mode (profile: ${profileId})...`);
     const client = new PerplexityClient({ profileId, cdpEndpoint });
-    await client.init({ profileId, cdpEndpoint });
+    await client.init({ local: true, profileId, cdpEndpoint });
     const notebook = await client.createNotebookClient();
     try {
         await action(client, notebook);

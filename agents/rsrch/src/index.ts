@@ -430,6 +430,70 @@ async function main() {
                 logger.info('Server mode for download-all-audio not yet implemented. Use --local.');
             }
 
+        } else if (subArg1 === 'download-all-artifacts') {
+            // rsrch notebook download-all-artifacts [output_dir] --notebook <Title> [--local]
+            let notebookTitle: string | undefined = undefined;
+            let outputDir: string = './downloads'; 
+            
+            if (subArg2 && !subArg2.startsWith('--')) {
+                outputDir = subArg2;
+            }
+
+            for (let i = 2; i < args.length; i++) {
+                if (args[i] === '--notebook') {
+                    notebookTitle = args[i + 1];
+                    i++;
+                }
+            }
+
+            if (!notebookTitle) {
+                logger.error('Usage: rsrch notebook download-all-artifacts [output_dir] --notebook "Title" [--local]');
+                process.exit(1);
+            }
+
+            if (isLocalExecution()) {
+                await runLocalNotebookAction({}, async (client, notebook) => {
+                    const resolvedOutputDir = path.resolve(process.cwd(), outputDir);
+                    logger.info(`[CLI] Downloading all artifacts from "${notebookTitle}" to: ${resolvedOutputDir}`);
+                    
+                    await notebook.openNotebook(notebookTitle as string);
+                    await notebook.humanDelay(2000);
+
+                    const artifacts = await notebook.getStudioArtifacts();
+                    // Skip the first 9 fixed generator tiles (Audio, Presentation, etc.) as they are not artifacts themselves
+                    const textArtifacts = artifacts.slice(9).filter((a: any) => a.type !== 'audio');
+
+                    console.log(`[CLI] Found ${textArtifacts.length} non-audio artifacts.`);
+
+                    let successCount = 0;
+                    let skippedCount = 0;
+                    for (const artifact of textArtifacts) {
+                        const typePrefix = artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1);
+                        const safeTitle = artifact.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
+                        const predictedTxtPath = path.join(resolvedOutputDir, `${typePrefix}_${safeTitle}.txt`);
+                        const predictedPngPath = path.join(resolvedOutputDir, `${typePrefix}_${safeTitle}.png`);
+
+                        if (fs.existsSync(predictedTxtPath) || fs.existsSync(predictedPngPath)) {
+                            console.log(`[CLI] Skip: Already exists -> ${predictedTxtPath.replace('.txt', '.[txt|png]')}`);
+                            skippedCount++;
+                            continue;
+                        }
+
+                        console.log(`\n[CLI] Processing: "${artifact.title}" (${artifact.type})`);
+                        const success = await notebook.downloadArtifact('', artifact.title, resolvedOutputDir);
+                        if (success) {
+                            successCount++;
+                        } else {
+                            console.log(`[CLI] Failed: ${artifact.title}`);
+                        }
+                    }
+
+                    console.log(`\n✅ Finished. Success: ${successCount}, Skipped: ${skippedCount}`);
+                });
+            } else {
+                logger.info('Server mode not implemented. Use --local.');
+            }
+
         } else if (subArg1 === 'sync') {
             // rsrch notebook sync [--title "Title"] [-a] [--local]
             let title: string | undefined = undefined;

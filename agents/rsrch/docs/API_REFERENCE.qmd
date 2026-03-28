@@ -439,7 +439,7 @@ Send message (alias for chat with explicit session)
 curl -X POST http://localhost:3055/gemini/send-message
 ```
 
-_Source: [server.ts:L1740](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1740)_
+_Source: [server.ts:L1741](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1741)_
 
 ***
 ## POST `/gemini/open-session`
@@ -452,7 +452,7 @@ Open session
 curl -X POST http://localhost:3055/gemini/open-session
 ```
 
-_Source: [server.ts:L1802](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1802)_
+_Source: [server.ts:L1803](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1803)_
 
 ***
 ## POST `/gemini/sync-conversations`
@@ -465,7 +465,7 @@ Sync conversations to FalkorDB
 curl -X POST http://localhost:3055/gemini/sync-conversations
 ```
 
-_Source: [server.ts:L1821](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1821)_
+_Source: [server.ts:L1822](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1822)_
 
 ***
 ## POST `/gemini/get-responses`
@@ -478,7 +478,7 @@ Get responses from current session
 curl -X POST http://localhost:3055/gemini/get-responses
 ```
 
-_Source: [server.ts:L1945](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1945)_
+_Source: [server.ts:L1946](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1946)_
 
 ***
 ## GET `/gemini/gems`
@@ -491,7 +491,7 @@ List Gems
 curl -X GET http://localhost:3055/gemini/gems
 ```
 
-_Source: [server.ts:L1967](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1967)_
+_Source: [server.ts:L1968](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1968)_
 
 ***
 ## POST `/gemini/open-gem`
@@ -504,7 +504,7 @@ Open Gem
 curl -X POST http://localhost:3055/gemini/open-gem
 ```
 
-_Source: [server.ts:L1983](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1983)_
+_Source: [server.ts:L1984](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L1984)_
 
 ***
 ## POST `/gemini/chat-gem`
@@ -517,7 +517,7 @@ Chat with Gem
 curl -X POST http://localhost:3055/gemini/chat-gem
 ```
 
-_Source: [server.ts:L2002](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2002)_
+_Source: [server.ts:L2003](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2003)_
 
 ***
 ## POST `/gemini/list-research-docs`
@@ -530,7 +530,7 @@ List Research Docs
 curl -X POST http://localhost:3055/gemini/list-research-docs
 ```
 
-_Source: [server.ts:L2022](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2022)_
+_Source: [server.ts:L2023](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2023)_
 
 ***
 ## POST `/research-to-podcast`
@@ -543,7 +543,7 @@ Unified Unified Research to Podcast Endpoint
 curl -X POST http://localhost:3055/research-to-podcast
 ```
 
-_Source: [server.ts:L2050](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2050)_
+_Source: [server.ts:L2051](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2051)_
 
 ***
 ## POST `/jules/publish-session`
@@ -554,7 +554,7 @@ _Source: [server.ts:L2050](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/s
 curl -X POST http://localhost:3055/jules/publish-session
 ```
 
-_Source: [server.ts:L2275](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2275)_
+_Source: [server.ts:L2276](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2276)_
 
 ***
 ## POST `/jules/publish-selected`
@@ -565,7 +565,7 @@ _Source: [server.ts:L2275](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/s
 curl -X POST http://localhost:3055/jules/publish-selected
 ```
 
-_Source: [server.ts:L2301](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2301)_
+_Source: [server.ts:L2302](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2302)_
 
 ***
 ## POST `/jules/publish-all`
@@ -576,7 +576,7 @@ _Source: [server.ts:L2301](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/s
 curl -X POST http://localhost:3055/jules/publish-all
 ```
 
-_Source: [server.ts:L2348](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2348)_
+_Source: [server.ts:L2349](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2349)_
 
 ***
 ## GET `/jules/sessions/:sessionId`
@@ -587,6 +587,6 @@ _Source: [server.ts:L2348](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/s
 curl -X GET http://localhost:3055/jules/sessions/:sessionId
 ```
 
-_Source: [server.ts:L2368](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2368)_
+_Source: [server.ts:L2369](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/server.ts#L2369)_
 
 ***

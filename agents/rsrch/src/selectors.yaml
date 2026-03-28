@@ -17,8 +17,8 @@ home:
   # Create new notebook button
   createNewButton: ".create-new-button, .create-button-wrapper button"
   # Project/notebook cards container
-  projectButton: "project-button, tr.mat-mdc-row"
-  projectButtonTitle: ".project-button-title, .project-table-title"
+  projectButton: "project-button, tr.mat-mdc-row, .mat-mdc-row"
+  projectButtonTitle: ".project-button-title, .project-table-title, .title-column, .title"
   projectCard: "mat-card, tr.mat-mdc-row"
   primaryActionButton: ".primary-action-button, .project-table-title"
 

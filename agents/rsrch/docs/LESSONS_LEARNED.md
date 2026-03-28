@@ -1,139 +1,74 @@
-# LESSONS LEARNED - rsrch Authentication
+# Lessons Learned - rsrch Project
 
-### Valid Windmill Local Emulation
-To emulate production behavior locally (using local heavy containerized browser but local server logic):
-1. **Bypass Windmill**: Set `USE_WINDMILL=false` to force local execution instead of delegation.
-2. **Connect to Container**: Set `BROWSER_CDP_ENDPOINT=http://localhost:9225` (mapped port) to use the `rsrch-chromium` container.
-3. **Use Production CLI**: Use `rsrch gemini send-message` which uses SSE.
-This allows iterating on server/browser logic without waiting for Windmill deployment loops.
-
-## 2026-01-18: Auth Restoration Post-Mortem
-
-### What Was Broken
-- **Windmill Relative Imports**: When deploying Windmill scripts that import from parent directories (e.g. `../../dist`), ensure the import path depth matches the folder structure in Windmill. Windmill scripts in folders (e.g. `f/rsrch/script.ts`) effectively run deeper than local source handling might suggest during build time if not careful with `bun` or module resolution.
-
-1. **CDP Endpoint Disabled**
-   - `docker-compose.yml` had `BROWSER_CDP_ENDPOINT` commented out
-   - rsrch server was running in "Local Mode" (launching its own browser in container)
-   - But the local browser had NO authenticated session
-
-2. **Encrypted Cookie Files**
-   - `profile-sync.ts` copied raw SQLite files (Cookies, Login Data, etc.)
-   - **PROBLEM**: Chromium encrypts cookies with user-specific key
-   - Copied files are UNREADABLE by destination browser
-   - This explains why synced cookies never worked
-
-3. **auth.json vs Raw Files Mismatch**
-   - `loadStorageState()` expects Playwright JSON format (`auth.json`)
-   - profile-sync copied raw browser SQLite files to `state/` directory
-   - `addCookies()` injection was attempted but persistent context already loaded stale cookies
-   - Format mismatch: JSON injection can't override SQLite-loaded cookies
-
-4. **Playwright Browser Detection**
-   - Even with stealth plugin, Google detects Playwright automation
-   - "This browser may not be secure" error blocks manual login
-   - Cannot authenticate fresh session in Playwright-controlled browser
-
-5. **default Profile Missing auth.json**
-   - `~/.rsrch/profiles/default/` had `state/` directory but no `auth.json`
-   - `work/` and `personal/` profiles HAD valid auth.json but wrong profile was used
-
-### What Fixed It
-
-1. **VNC Login to Browser Container**
-   - User logs into Google manually via VNC (localhost:5902)
-   - Container's persistent browser maintains session
-   - No Playwright fingerprinting issues
-
-2. **Enabled CDP Connection**
-   - Uncommented `BROWSER_CDP_ENDPOINT=http://chromium:9223`
-   - rsrch server connects to pre-authenticated browser via CDP
-   - No need to transfer cookies at all
-
-3. **Cloned Chromium Profile to Container**
-   - Copied `~/.config/chromium/Profile 1` to `~/.config/rsrch/user-data`
-   - Fixed permissions (sudo rm root-owned files)
-   - This gave container a starting profile, but user still needed VNC login
-
-### KEY INSIGHT
-
-**Don't try to transfer auth credentials. Let user login once in the target browser.**
-
-The entire profile-sync approach is fundamentally flawed because:
-- Raw cookie files are encrypted per-browser
-- Playwright's storageState JSON works but browser fingerprinting blocks Google login
-- Only reliable method: user logs in directly to the production browser
-
-### Git Reference
-
-Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
+This is a living record of technical challenges, architectural discoveries, and critical fixes. **Always consult this document at the start of a task.**
 
 ---
 
-## Previous Lessons Learned
+## 🔐 Authentication & Profiles
 
-- **Tool Definitions Mapping**: Windmill script schemas in YAML are primarily for the Windmill UI. The MCP server (`main.go`) has its own `inputSchema` definition which MUST be kept in sync with the underlying Go scripts to ensure parameters are correctly passed.
-- **MCP Descriptions**: Avoid naming tools after transient model names (e.g., "Gemini Pro") if they actually represent a specific capability/mode (e.g., "Deep Research"). This prevents user confusion when models evolve.
-- **Session Continuity**: For agents to effectively use multi-turn tools, the `session_id` must be explicitly exposed in the tool schema, even if the underlying API supports it implicitly or via conversation history.
+### Auth Strategy: target-browser login
+- **The Problem:** Trying to sync raw Chromium SQLite files (Cookies, Login Data) failed because Chromium encrypts them with user-specific keys. Playwright's `auth.json` injection was often blocked by Google's "Insecure Browser" detection.
+- **The Solution:** Use VNC to log in directly to the target production browser container. Once authenticated, the persistent context maintains the session without fragile file transfers.
+- **Key Insight:** Don't try to transfer auth credentials. Let the user login once in the production browser environment.
 
-- **Local Mode & Auth Injection**: When using Playwright's `launchPersistentContext` in Local Mode (manual launch), cookies from `auth.json` are NOT automatically loaded. You MUST explicitly inject them using `context.addCookies` after context creation to restore authenticated sessions from synced profiles.
+### Local CDP Emulation
+- To emulate production locally: Set `USE_WINDMILL=false` and `BROWSER_CDP_ENDPOINT=http://localhost:9225` (mapped container port). This allows rapid iteration on server logic without Windmill deployment loops.
 
-## 2026-01-18: CLI Production Refactor & Deployment
+---
 
-### What Was Done
-1.  **Refactored CLI to Production-First**: All read commands (`list-sessions`, `get-research-info`, etc.) now default to server API.
-    - Added `--local` flag for development loop.
-    - Added global `--server` option.
+## 🏗️ Architecture & Execution
 
-2.  **Server Endpoint Completeness**: 
-    - **Lesson**: When refactoring CLI to use server, ALWAYS verify server implements the corresponding endpoint.
-    - **Incident**: `list-research-docs` was refactored in CLI but missing on server, causing 404. Had to quick-fix server.
+### Code != Architecture (Strategic Planning)
+- **Incident:** Spent time fixing direct CDP connections when the strategic goal was moving to Windmill orchestration.
+- **Lesson:** Always check `STRATEGIC_PLAN.md` before refactoring. Existing code often represents technical debt, not the intended future direction.
 
-3.  **Deployment & Bottenecks**:
-    - **Lesson**: Large Docker image uploads from local machine (via `docker save | ssh load`) are bandwidth-constrained.
-    - **Solution**: Rely on GitHub Actions/CI for building and pushing images from cloud to registry, then pull on server.
-    
-4.  **Nomad Recovery**:
-    - **Lesson**: Verify location of Nomad job files (`.nomad.hcl`) before stopping jobs.
-    - **Incident**: Stopped job expecting to run local file, but file wasn't present. Had to find it on server (`/opt/nomad/jobs/rsrch.nomad.hcl`).
+### The Singleton Image Advantage
+- ... (existing)
 
-## 2026-01-18: SSE Streaming & Thought Expansion
+### Docker CDP Connection (Host Header Fix)
+- **The Problem:** Chrome's CDP endpoint rejects connections with non-localhost Host headers by default (security feature).
+- **The Solution:** Use `--remote-allow-origins=*` flag in Chrome arguments and ensure internal Docker DNS (`http://chromium:9223`) is used for container-to-container talk.
+- **Key Insight:** CDP responses often contain hardcoded `localhost` URLs; clients must resolve hostnames to IPs to bypass Host header checks.
 
-### 1. Streaming "Thoughts" from Reasoning Models
-- **Challenge**: New Gemini reasoning models (Gemini 2.0 Flash Thinking) hide reasoning behind a collapsed UI element ("Show reasoning" / "Myšlenkový proces").
-- **Solution**:
-    - **Auto-Expansion**: Implemented a check in the scraping loop (`GeminiClient.sendMessage`) to detect `button[aria-label="Show reasoning"]`.
-    - **Action**: Script automatically clicks the button if `aria-expanded="false"`.
-    - **Result**: The reasoning text becomes part of the DOM and is captured by standard `innerText()` scraping, allowing it to be streamed via SSE seamlessly.
+### Self-Healing Startup
+- **Stale Locks:** Chromium's persistent profile directory often retains `SingletonLock` or `LOCK` files after a crash, blocking future launches.
+- **Fix:** Entrypoint scripts MUST explicitly `rm -f` these lock files before starting the browser.
 
-### 2. SSE on CLI
-- **Issue**: Naive printing in CLI caused overwrites of previous multi-line chunks.
-- **Fix**: Implemented delta-based printing or full-text replacement with caret management.
-- **Protocol**: `Accept: text/event-stream` header is CRITICAL for server to trigger streaming mode. Always verify headers when debugging 404/empty responses.
+---
 
-## 2026-01-23: Codebase Refactoring & Type Safety
-1.  **Dynamic Import Aliasing**: When importing a class dynamically (e.g. `const { GeminiClient } = await import(...)`) that shares a name with a type import (`import type { GeminiClient }`), use aliasing (`const { GeminiClient: ClientClass }`) to avoid compiler errors where the type name shadows the value.
-2.  **Private Property Access**: When refactoring classes with `private` members (like `page` in `GeminiClient`), ensure public API methods (like `goto`, `wait`) are exposed for consumers (CLI/Scripts) to avoid breaking external code that previously relied on loose access.
-3.  **Template Literal Syntax**: Be extremely careful with template literals in TypeScript. A single astray backtick in a file can cause cascading syntax errors that are difficult to pinpoint, often manifesting as "Unexpected token" errors far from the source.
+## 🎙️ NotebookLM Interfacing
 
-## 2026-01-24: Browser Singleton Recovery & Loop Optimization
+### Modal UI Instability
+- **The Problem:** SPA/Angular apps like NotebookLM retain stale mat-dialog elements in the DOM. Blind locators (`.first()`) might hit invisible, inactive dialogs.
+- **The Solution:** Isolate upload sequences. Sequential Bash loops (upload one-by-one) are more reliable than large JS loops, as each run clears the SPA state and lingering overlays.
 
-1.  **Playwright Version Parity**: Compiled code caches binary paths (e.g., `/ms-playwright/chromium-1208` for `v1.58.0`). If the Docker base image version doesn't EXACTLY match the library version in `package.json`, browser launch will silently hang or fail.
-2.  **Self-Healing Startup**: Always purge `SingletonLock` and `LOCK` files in entrypoint scripts for containerized Chromium with persistent profiles. Stale locks from previous container crashes are a primary cause of "Initialization Hangs".
-3.  **Turbo Dev Loop (Build Local, Deploy Dist)**: For monorepos, building TypeScript locally and syncing `dist/` folders to a "Lean" Docker image is 10x faster and more reliable than remote container builds.
-4.  **Singleton Architecture**: Combining API and Browser into a single image (exposed via Port 3055 and CDP 9223) is significantly more stable than sidecar network delegation for orchestration.
+### Content Extraction (Moodle/LMS)
+- **Insight:** Simply downloading PDF attachments misses the majority of course content (stored in pages/books).
+- **The Solution:** Scrape the `#region-main` HTML, convert to clean `.txt` (stripping tags), and upload as text. This reduces token waste and improves AI grounding quality.
 
-**References**: See [Browser Singleton Autopsy (2026-01-24)](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/2026-01-24_singleton_recovery_autopsy.md) for full details.
+---
 
-## 2026-03-23: Local File Sync vs Windmill Architecture
+## 🛠️ Performance & Infrastructure
 
-### 1. CDP Local File Streaming
-- **Feature**: Playwright's `connectOverCDP` has a powerful side-effect: calling `setInputFiles(localPaths)` on a script running *locally* will automatically stream those local files over the WebSocket to the remote browser.
-- **Problem**: While convenient, this bypasses the entire Windmill orchestration layer. The local CLI connects directly to the shared `rsrch-browser` container. If another Windmill job tries to use the browser simultaneously, they will collide in the same context.
+### Playwright Version Parity
+- **The Problem:** If the Docker base image Playwright version doesn't exactly match the library in `package.json`, browser launch silently hangs (looking for non-existent binary paths like `/ms-playwright/chromium-1208`).
+- **Fix:** Ensure base image (`mcr.microsoft.com/playwright`) and `package.json` versions are perfectly aligned. Use `DEBUG=pw:api` to diagnose silent hangs.
 
-### 2. Architectural Purity vs Practicality
-- **The Pure Way**: File uploads intended for the production browser should run within a Windmill worker. This requires first syncing (`rsync`/`scp`) the local files to the server (`halvarm`), then triggering a Windmill job that reads those newly-local-to-server files and uploads them.
-- **The Pragmatic Way**: For ad-hoc, manual synchronization scripts running from a user's laptop, using `--local` with a remote CDP endpoint (`ws://halvarm:9223`) is significantly simpler as it avoids building file transport infrastructure. However, it violates the "Windmill handles all execution" rule.
+### "Turbo" Dev Loop (Build Local, Deploy Dist)
+- **Strategy:** Compile TypeScript locally (`npm run build`) and sync only the `dist/` folder to a "Lean" Docker image.
+- **Result:** Reduces deployment time from >5 minutes (remote build) to ~45 seconds. Avoids RAM exhaustion on resource-constrained servers.
 
-### 3. Server Port Mismatches
-- **Insight**: Always ensure port parity between the shared `config-defs.ts` and the actual Nomad deployment. The `rsrch` API was defined as `3055` but Nomad exposed it as `3030`. When debugging connectivity issues, `nc -z -w 2 host port` and checking Nomad/Docker directly are the fastest ways to diagnose missing services.
+### CDP Local File Streaming
+- **Feature:** `setInputFiles(localPaths)` in a local script connected via CDP to a remote browser automatically streams the files over WebSocket.
+- **Risk:** This bypasses Windmill orchestration and can cause collisions in shared browser contexts. Use for ad-hoc sync only.
+
+---
+
+## 📝 General Process
+
+### conventional Commit requirement
+- Use YouTrack issue IDs in commits (e.g., `TOOLS-123: fix typo`). 
+- Missing trail of change is unacceptable.
+
+### Proof of Work
+- Every completed issue/task must have proof (screenshot, log, video) attached to the tracking system before closing.

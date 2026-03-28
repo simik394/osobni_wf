@@ -470,23 +470,9 @@ _Source: [graph.ts:L266](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/com
 ***
 ## NOTEBOOKLM Commands
 
-### `create <title>`
+### `add-web-source <url>`
 
-Create a notebook
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--local` | Use local execution |
-
-
-_Source: [notebooklm.ts:L10](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L10)_
-
-***
-### `add-source <url>`
-
-Add a source URL to a notebook
+Add a website source URL to a notebook
 
 **Options:**
 
@@ -496,7 +482,22 @@ Add a source URL to a notebook
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L23](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L23)_
+_Source: [notebooklm.ts:L12](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L12)_
+
+***
+### `add-local-source <paths...>`
+
+Upload local files or directories (e.g. PDF, TXT) to a notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--notebook <title>` | Notebook title |
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L25](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L25)_
 
 ***
 ### `add-drive-source <docNames>`
@@ -511,7 +512,7 @@ Add Google Drive sources (comma-separated)
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L36](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L36)_
+_Source: [notebooklm.ts:L70](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L70)_
 
 ***
 ### `generate-audio`
@@ -531,7 +532,7 @@ Generate audio for sources
 | `--local` | Use local execution (Deprecated) |
 
 
-_Source: [notebooklm.ts:L52](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L52)_
+_Source: [notebooklm.ts:L86](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L86)_
 
 ***
 ### `download-audio [outputPath]`
@@ -547,7 +548,7 @@ Download audio overview
 | `--pattern <regex>` | Audio title pattern |
 
 
-_Source: [notebooklm.ts:L106](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L106)_
+_Source: [notebooklm.ts:L140](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L140)_
 
 ***
 ### `download-all-audio [outputDir]`
@@ -562,7 +563,21 @@ Download all audio overviews
 | `--limit <number>` | Limit number of downloads |
 
 
-_Source: [notebooklm.ts:L128](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L128)_
+_Source: [notebooklm.ts:L162](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L162)_
+
+***
+### `create <title>`
+
+Create a new notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L178](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L178)_
 
 ***
 ### `sync`
@@ -579,7 +594,7 @@ Sync notebook(s) to graph
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L144](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L144)_
+_Source: [notebooklm.ts:L189](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L189)_
 
 ***
 ### `list`
@@ -593,7 +608,7 @@ List notebooks
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L205](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L205)_
+_Source: [notebooklm.ts:L251](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L251)_
 
 ***
 ### `stats <title>`
@@ -607,7 +622,7 @@ Get notebook stats
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L219](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L219)_
+_Source: [notebooklm.ts:L265](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L265)_
 
 ***
 ### `sources <title>`
@@ -621,7 +636,49 @@ List notebook sources
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L233](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L233)_
+_Source: [notebooklm.ts:L279](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L279)_
+
+***
+### `rename-source <notebookTitle> <oldTitle> <newTitle>`
+
+Rename a source in a notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L295](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L295)_
+
+***
+### `select-sources <notebookTitle> <sourcesOrRange>`
+
+Select sources for grounding. Provide comma-separated names or an index range like 1,3-5,!4
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L314](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L314)_
+
+***
+### `delete-source <notebookTitle> <sourceTitle>`
+
+Delete a source from a notebook by title
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L333](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L333)_
 
 ***
 ### `messages <title>`
@@ -635,7 +692,7 @@ Get notebook chat messages
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L248](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L248)_
+_Source: [notebooklm.ts:L350](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L350)_
 
 ***
 ### `add-text <notebookTitle> <content>`
@@ -650,7 +707,7 @@ Add text or file content to notebook
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L263](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L263)_
+_Source: [notebooklm.ts:L365](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L365)_
 
 ***
 ### `download-batch-audio`
@@ -664,7 +721,37 @@ Batch download audio from multiple notebooks
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L307](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L307)_
+_Source: [notebooklm.ts:L409](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L409)_
+
+***
+### `download-artifact <notebookTitle> <artifactTitle> [outputPathOrDir]`
+
+Download a specific artifact (audio, text, note, etc.)
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+| `--latest` | Latest matching artifact only |
+| `--pattern` | Treat the title as a regex pattern |
+
+
+_Source: [notebooklm.ts:L449](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L449)_
+
+***
+### `download-all-artifacts [outputDir]`
+
+Download all non-audio text artifacts (Briefing Doc, FAQ, Study Guide, etc.) from a notebook
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Use local execution |
+
+
+_Source: [notebooklm.ts:L486](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L486)_
 
 ***
 ### `artifacts <title>`
@@ -678,7 +765,7 @@ Get notebook artifacts
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L347](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L347)_
+_Source: [notebooklm.ts:L556](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L556)_
 
 ***
 ### `audio-status`
@@ -692,14 +779,14 @@ Check audio status
 | `--local` | Use local execution |
 
 
-_Source: [notebooklm.ts:L362](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L362)_
+_Source: [notebooklm.ts:L571](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L571)_
 
 ***
 ### `sources-without-audio`
 
 List sources without generated audio
 
-_Source: [notebooklm.ts:L377](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L377)_
+_Source: [notebooklm.ts:L586](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L586)_
 
 ***
 ## PROFILE Commands
@@ -708,21 +795,21 @@ _Source: [notebooklm.ts:L377](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/sr
 
 List all profiles
 
-_Source: [profile.ts:L13](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L13)_
+_Source: [profile.ts:L14](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L14)_
 
 ***
 ### `info [profileId]`
 
 Show profile details
 
-_Source: [profile.ts:L30](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L30)_
+_Source: [profile.ts:L31](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L31)_
 
 ***
 ### `delete <profileId>`
 
 Delete a profile
 
-_Source: [profile.ts:L43](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L43)_
+_Source: [profile.ts:L44](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L44)_
 
 ***
 ### `sync-to-remote [profileId]`
@@ -733,12 +820,11 @@ Export auth from local browser and sync to remote server
 
 | Flag | Description |
 |------|-------------|
-| `--remote <host>` | Remote host (e.g., halvarm or user@host) |
 | `--cdp-port <port>` | Local CDP port |
 | `--remote-path <path>` | Remote profiles path |
 
 
-_Source: [profile.ts:L51](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L51)_
+_Source: [profile.ts:L52](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L52)_
 
 ***
 ### `sync`
@@ -750,12 +836,11 @@ Copy browser auth from local Cromite/Chromium to rsrch container
 | Flag | Description |
 |------|-------------|
 | `--source <path>` | Source browser profile path (e.g., ~/.config/chromium/ |
-| `--target <name>` | Target: local | halvarm |
 | `--list-sources` | List available source profiles |
 | `--restart` | Restart target browser after sync |
 
 
-_Source: [profile.ts:L140](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L140)_
+_Source: [profile.ts:L142](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/profile.ts#L142)_
 
 ***
 ## REGISTRY Commands

@@ -78,8 +78,9 @@ rsrch graph lineage <AudioID>
 
 | Document | Description |
 |----------|-------------|
-| [CLI.md](./docs/CLI.md) | **Complete Command Reference** |
-| [API.md](./docs/API.md) | HTTP API Endpoints |
-| [USER_GUIDE.md](./docs/USER_GUIDE.md) | Detailed Workflows & Guides |
-| [AGENTS.md](./docs/AGENTS.md) | Integration with other Agents |
-| [Local CDP Guide](./docs/local_cdp_workflow.md) | **How to use your local browser with Rsrch** |
+| [CLI_REFERENCE.qmd](./docs/CLI_REFERENCE.qmd) | **Generated Command Reference** |
+| [API_REFERENCE.qmd](./docs/API_REFERENCE.qmd) | Generated API Endpoints |
+| [DEVELOPMENT.md](./docs/DEVELOPMENT.md) | **Process, Architecture & Protocol Guide** |
+| [LESSONS_LEARNED.md](./docs/LESSONS_LEARNED.md) | Historical context & critical fixes |
+| [ARCHITECTURE.qmd](./docs/ARCHITECTURE.qmd) | Visual Dependency Graph |
+| [Local CDP Guide](./docs/local_cdp_workflow.md) | How to use your local browser |

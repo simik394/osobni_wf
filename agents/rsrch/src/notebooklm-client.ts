@@ -207,40 +207,69 @@ export class NotebookLMClient {
             // Wait for any project button to appear to ensure list is loaded
             await this.page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: 20000 });
 
-            console.log(`[DEBUG] Searching for notebook: ${title}`);
-            // Use specific locator for the project card
-            // We look for a project-button that contains the title element with exact text
-            const cardLocator = this.page.locator(selectors.home.projectButton).filter({ has: this.page.locator(selectors.home.projectButtonTitle, { hasText: title }) }).first();
-
-            // Fallback: loose text match if exact structure fails
-            if (await cardLocator.count() === 0) {
-                console.log('[DEBUG] Exact locator failed, trying loose text match...');
-                const looseLocator = this.page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`).filter({ hasText: title }).first();
-                if (await looseLocator.count() > 0) {
-                    console.log('[DEBUG] Found via loose match. Clicking...');
-                    await looseLocator.click();
+            console.log(`[DEBUG] Searching for notebook: "${title}"`);
+            const candidates = this.page.locator(selectors.home.projectButton).filter({ 
+                has: this.page.locator(selectors.home.projectButtonTitle, { hasText: title }) 
+            });
+            const count = await candidates.count();
+            
+            let targetCard = null;
+            if (count === 0) {
+                console.log('[DEBUG] Exact structure match failed, trying loose text match on any row/card...');
+                const looseCandidates = this.page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`).filter({ hasText: title });
+                if (await looseCandidates.count() > 0) {
+                    targetCard = looseCandidates.first();
                 } else {
                     throw new Error(`Notebook with title "${title}" not found.`);
                 }
+            } else if (count > 1) {
+                console.log(`[DEBUG] Found ${count} candidates for "${title}". Picking the one with most sources...`);
+                // Simple heuristic: pick the one with most sources text
+                let bestIdx = 0;
+                let maxSources = -1;
+                for (let i = 0; i < count; i++) {
+                    const text = await candidates.nth(i).innerText().catch(() => '');
+                    const match = text.match(/(\d+)\s*(zdroj|source)/i);
+                    const sourceCount = match ? parseInt(match[1]) : 0;
+                    if (sourceCount > maxSources) {
+                        maxSources = sourceCount;
+                        bestIdx = i;
+                    }
+                }
+                targetCard = candidates.nth(bestIdx);
             } else {
-                console.log('[DEBUG] Found notebook card. Clicking primary action button...');
-                const actionBtn = cardLocator.locator(selectors.home.primaryActionButton);
+                targetCard = candidates.first();
+            }
+
+            if (targetCard) {
+                console.log('[DEBUG] Found target notebook. Clicking...');
+                const actionBtn = targetCard.locator(selectors.home.primaryActionButton).first();
                 if (await actionBtn.count() > 0 && await actionBtn.isVisible()) {
                     await actionBtn.click();
                 } else {
-                    await cardLocator.click();
+                    await targetCard.click();
                 }
             }
 
-            // Wait for navigation to notebook URL
-            await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 15000 });
+            // Handle possible account picker or login screen if session expired
+            const accountPicker = this.page.locator('div:has-text("Choose an account"), #account-picker');
+            if (await accountPicker.count() > 0 && await accountPicker.isVisible()) {
+                console.log('[NotebookLM] Account picker detected. Waiting up to 60s for manual sign-in...');
+                await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 60000 });
+            } else {
+                // Wait for navigation to notebook URL
+                await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 15000 });
+            }
             console.log('[DEBUG] Notebook opened successfully (URL match).');
 
-        } catch (e) {
-            console.error('Failed to open notebook', e);
+        } catch (e: any) {
+            console.error('[NotebookLM] Failed to open notebook:', e.message || e);
             const dataDir = path.join(process.cwd(), 'data');
             if (!require('fs').existsSync(dataDir)) require('fs').mkdirSync(dataDir, { recursive: true });
-            await this.page.screenshot({ path: path.join(dataDir, `open-notebook-fail-${Date.now()}.png`) });
+            
+            if (this.page && !this.page.isClosed()) {
+                await this.page.screenshot({ path: path.join(dataDir, `open-notebook-fail-${Date.now()}.png`) }).catch(() => {});
+            }
             throw e;
         }
     }
@@ -1437,54 +1466,95 @@ export class NotebookLMClient {
             case 'table':
             case 'presentation':
             case 'other': {
-                // Use sequential keyboard navigation to bypass Angular Virtual Scroll
-                console.log(`[DEBUG] Navigating via keyboard to item index ${targetIndex}...`);
-                try {
-                    const firstItem = this.page.locator('button.artifact-button-content, .artifact-button-content').first();
-                    await firstItem.scrollIntoViewIfNeeded().catch(() => {});
-                    await firstItem.focus();
+                // Ensure Studio is maximized
+                await this.maximizeStudio();
+                const studioPanel = this.page.locator('section.studio-panel, .studio-panel').first();
+                if (await studioPanel.count() === 0) {
+                    throw new Error('Studio panel not visible');
+                }
+
+                // SPECIAL FLOW for Presentations/Blueprints: Use native "Download PDF" from the Sidebar Menu
+                if (target.type === 'presentation' || target.type === 'table') {
+                    console.log(`[DEBUG] Target is visual (${target.type}). Attempting Sidebar "More" menu download...`);
                     
-                    for (let i = 0; i < targetIndex; i++) {
-                        await this.page.keyboard.press('ArrowDown');
-                        await this.humanDelay(50);
+                    // Surgical selector for the item and its "More" button
+                    const item = studioPanel.locator('.artifact-stretched-button').nth(targetIndex);
+                    // The more button is usually an 'artifact-more-button' inside the same container
+                    const moreBtn = item.locator('xpath=..').locator('.artifact-more-button, [aria-label*="Možnosti"], [aria-label*="More"]').first();
+                    
+                    if (await moreBtn.count() > 0) {
+                        await moreBtn.scrollIntoViewIfNeeded().catch(() => {});
+                        await moreBtn.click();
+                        await this.humanDelay(1000);
+                        
+                        // Look for "Stáhnout dokument PDF" or "Download PDF"
+                        const downloadBtn = this.page.locator('button.mat-mdc-menu-item, [role="menuitem"]').filter({ 
+                            hasText: /Stáhnout dokument PDF|Download PDF|Stáhnout PowerPoint|Download PowerPoint/i 
+                        }).first();
+                        
+                        if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
+                            console.log(`[DEBUG] Found download button in menu: ${await downloadBtn.innerText()}`);
+                            const downloadPromise = this.page.waitForEvent('download', { timeout: 30000 });
+                            await downloadBtn.click();
+                            try {
+                                const download = await downloadPromise;
+                                let isDir = false;
+                                try { isDir = fs.statSync(outputPathOrDir).isDirectory(); } catch(e) { isDir = !path.extname(outputPathOrDir); }
+                                
+                                const finalPath = isDir ? path.join(outputPathOrDir, download.suggestedFilename()) : outputPathOrDir;
+                                await download.saveAs(finalPath);
+                                console.log(`[DEBUG] ✅ Downloaded visual artifact to: ${finalPath}`);
+                                
+                                // Menu usually closes automatically after click
+                                return true;
+                            } catch (e) {
+                                console.error(`[DEBUG] PDF/PPT Download failed: ${e}`);
+                                // Fallback to scraping/screenshotting below
+                            }
+                        } else {
+                            console.warn('[DEBUG] Download option not found in sidebar menu. Closing menu...');
+                            await this.page.keyboard.press('Escape');
+                            await this.humanDelay(500);
+                        }
                     }
-                    
-                    // Press Enter to open the focused item
-                    await this.page.keyboard.press('Enter');
-                } catch (e) {
-                    console.warn(`[DEBUG] Keyboard navigation failed, falling back to click: ${e}`);
-                    const itemLocator = this.page.locator('button.artifact-button-content, .artifact-button-content').nth(targetIndex);
+                }
+
+                // STANDARD FLOW: Open and Scrape
+                console.log(`[DEBUG] Attempting to open artifact "${target.title}" (index ${targetIndex})...`);
+                const itemLocator = studioPanel.locator('.artifact-stretched-button').nth(targetIndex);
+                if (await itemLocator.count() > 0) {
+                    await itemLocator.scrollIntoViewIfNeeded().catch(() => {});
                     await itemLocator.click({ force: true }).catch(() => itemLocator.dispatchEvent('click'));
+                } else {
+                    console.warn(`[DEBUG] Item at index ${targetIndex} not found, trying keyword search...`);
+                    await studioPanel.locator('.artifact-stretched-button').filter({ hasText: target.title }).first().click().catch(() => {});
                 }
                 
-                console.log(`[DEBUG] Opened artifact "${target.title}"`);
-
-                await this.humanDelay(2000); // Wait for content to load in the view
+                console.log(`[DEBUG] Waiting for artifact content layer...`);
+                await this.humanDelay(2500); // Wait for content load
 
                 // Expanded selectors to capture Notes, Presentations, FAQ, Flashcards
-                const contentSelector = '.prose, .note-content, .artifact-content-container, article, note-editor, labs-tailwind-doc-viewer, .flashcard-container, .presentation-container, markdown-viewer';
-                await this.page.waitForSelector(contentSelector, { timeout: 10000 }).catch(() => console.warn('[DEBUG] Specific content container might not have appeared'));
+                // Added [contenteditable] and specific editor classes
+                const contentSelector = '.prose, .note-content, .artifact-content-container, article, note-editor, labs-tailwind-doc-viewer, .flashcard-container, .presentation-container, markdown-viewer, [contenteditable="true"], .ql-editor';
+                await this.page.waitForSelector(contentSelector, { timeout: 10000 }).catch(() => {});
 
                 const contentLocators = this.page.locator(contentSelector);
                 let textContent = '';
                 if (await contentLocators.count() > 0) {
-                    // Try to get the most substantial text block
-                    textContent = await contentLocators.first().innerText();
-                } else {
-                    // Fallback to reading the body or dialog text if it opened in a modal or side panel
-                    console.log('[DEBUG] Trying fallback text extraction across the whole visible modal or editor...');
-                    textContent = await this.page.locator('mat-dialog-container, .dialog-content, note-editor, .side-panel-content').innerText().catch(() => '');
+                    // Try to get text from the most specific prominent container
+                    textContent = await contentLocators.first().innerText().catch(() => '');
+                } 
+                
+                if (!textContent || textContent.trim().length < 10) {
+                    console.log('[DEBUG] Trying fallback text extraction from dialog/side-panel...');
+                    textContent = await this.page.locator('mat-dialog-container, .dialog-content, note-editor, .side-panel-content, labs-tailwind-doc-viewer, .artifact-view-container').first().allInnerTexts().then(texts => texts.join('\n')).catch(() => '');
                 }
 
-                if (!textContent || textContent.trim().length === 0) {
-                    console.log('[DEBUG] Artifact contains no extractable text. Capturing visual screenshot instead (Presentation/Flashcards/Timeline).');
+                if (!textContent || textContent.trim().length < 10) {
+                    console.log('[DEBUG] Artifact contains no extractable text. Capturing visual screenshot...');
                     
                     let isDir = false;
-                    try {
-                        isDir = fs.statSync(outputPathOrDir).isDirectory();
-                    } catch (e) {
-                        isDir = !path.extname(outputPathOrDir);
-                    }
+                    try { isDir = fs.statSync(outputPathOrDir).isDirectory(); } catch(e) { isDir = !path.extname(outputPathOrDir); }
 
                     if (isDir) {
                         const typePrefix = target.type.charAt(0).toUpperCase() + target.type.slice(1);
@@ -1494,33 +1564,27 @@ export class NotebookLMClient {
                         const dir = path.dirname(finalPngPath);
                         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                         
-                        // Try to screenshot the inner modal/content container, fallback to the whole page
-                        const container = this.page.locator('.mat-mdc-dialog-container, mat-dialog-container, .dialog-content, note-editor, .side-panel-content').first();
+                        // Try to screenshot the inner modal container
+                        const container = this.page.locator('.mat-mdc-dialog-container, mat-dialog-container, .dialog-content, note-editor, .side-panel-content, labs-tailwind-doc-viewer').first();
                         if (await container.count() > 0 && await container.isVisible()) {
                             await container.screenshot({ path: finalPngPath });
                         } else {
                             await this.page.screenshot({ path: finalPngPath });
                         }
-                        console.log(`[DEBUG] ✅ Saved visual artifact to: ${finalPngPath}`);
+                        console.log(`[DEBUG] ✅ Saved visual screenshot to: ${finalPngPath}`);
                     }
                 } else {
-                    // Format output file path
+                    // Save text
                     let isDir = false;
-                    try {
-                        isDir = fs.statSync(outputPathOrDir).isDirectory();
-                    } catch (e) {
-                        isDir = !path.extname(outputPathOrDir);
-                    }
+                    try { isDir = fs.statSync(outputPathOrDir).isDirectory(); } catch(e) { isDir = !path.extname(outputPathOrDir); }
 
                     let finalPath = outputPathOrDir;
                     if (isDir) {
-                        // Prefix with type
                         const typePrefix = target.type.charAt(0).toUpperCase() + target.type.slice(1);
                         const safeTitle = target.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
                         finalPath = path.join(outputPathOrDir, `${typePrefix}_${safeTitle}.txt`);
                     }
 
-                    // Ensure directory exists
                     const dir = path.dirname(finalPath);
                     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
@@ -1528,7 +1592,7 @@ export class NotebookLMClient {
                     console.log(`[DEBUG] ✅ Saved text artifact to: ${finalPath}`);
                 }
 
-                // Close the modal or view if there's a close button
+                // Close the modal or view
                 const closeBtn = this.page.locator('button[aria-label*="Zavřít"], button[aria-label*="Close"], button mat-icon:has-text("collapse_content"), button mat-icon:has-text("close")').first();
                 if (await closeBtn.count() > 0 && await closeBtn.isVisible()) {
                     await closeBtn.click();
@@ -2055,86 +2119,102 @@ export class NotebookLMClient {
 
         try {
             console.log('[NotebookLM] Extracting studio artifacts...');
-            await this.maximizeStudio();
-            await this.humanDelay(1000);
+            await this.maximizeStudio().catch(() => {});
+            await this.humanDelay(2500);
 
-            // Find artifact buttons/containers in the studio panel
-            // Use button.artifact-button-content for 1:1 match (one element per artifact)
-            const artifactItems = this.page.locator('button.artifact-button-content, .artifact-button-content');
+            // Using the absolute path confirmed by the subagent: div.right-panel (Studio side)
+            const studioPanel = this.page.locator('div.right-panel, section.studio-panel, .studio-panel').first();
+            if (await studioPanel.count() === 0) {
+                console.error('[NotebookLM] Studio panel not found.');
+                return [];
+            }
+
+            // Artifact items live in .panel-content-scrollable within the right panel.
+            const scrollable = studioPanel.locator('div.panel-content-scrollable, .panel-content-scrollable').first();
+            const container = (await scrollable.count() > 0) ? scrollable : studioPanel;
+            
+            const artifactItems = container.locator('.artifact-stretched-button');
             const count = await artifactItems.count();
-            console.log(`[NotebookLM] Found ${count} studio artifacts`);
+            console.log(`[NotebookLM] Found ${count} artifact items in studio-panel`);
 
             for (let i = 0; i < count; i++) {
                 const item = artifactItems.nth(i);
-                const text = await item.innerText().catch(() => '');
-                const html = await item.innerHTML().catch(() => '');
+                
+                // Surgical extraction of title from .artifact-title (discovered via subagent)
+                const titleLoc = item.locator('.artifact-title, div.artifact-title').first();
+                let titleText = '';
+                if (await titleLoc.count() > 0) {
+                    titleText = await titleLoc.evaluate(el => (el as HTMLElement).innerText.trim()).catch(() => '');
+                }
+                
+                // Surgical extraction of icon (used for type detection)
+                const iconLoc = item.locator('mat-icon, .artifact-icon, .mat-icon').first();
+                let iconText = '';
+                if (await iconLoc.count() > 0) {
+                    iconText = await iconLoc.evaluate(el => (el as HTMLElement).innerText.trim()).catch(() => '');
+                }
 
-                // Determine type based on icons/text
+                // If surgical extraction failed, try a broader approach or fallback
+                if (!titleText || titleText.length < 2) {
+                    titleText = `Artifact ${i + 1}`;
+                }
+
+                if (titleText !== `Artifact ${i + 1}`) {
+                    console.log(`[DEBUG] Found artifact ${i}: "${titleText}" (icon: ${iconText})`);
+                }
+
+                // Determine type based on icon text
                 let type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other' = 'other';
-                if (html.includes('audio_magic_eraser') || text.toLowerCase().includes('audio') || text.toLowerCase().includes('přehled')) {
-                    type = 'audio';
-                } else if (html.includes('description') || html.includes('sticky_note_2') || text.toLowerCase().includes('note') || text.toLowerCase().includes('poznámk')) {
-                    type = 'note';
-                } else if (html.includes('help') || text.toLowerCase().includes('faq') || text.toLowerCase().includes('otázk')) {
-                    type = 'faq';
-                } else if (html.includes('summarize') || text.toLowerCase().includes('briefing') || text.toLowerCase().includes('brief')) {
-                    type = 'briefing';
-                } else if (html.includes('timeline') || text.toLowerCase().includes('timeline') || text.toLowerCase().includes('časová')) {
-                    type = 'timeline';
-                } else if (html.includes('table_view')) {
-                    type = 'table';
-                } else if (html.includes('tablet')) {
-                    type = 'presentation';
-                } else if (html.includes('cards_star')) {
-                    type = 'other'; // E.g., Flashcards
+                if (iconText.includes('audio_magic_eraser')) type = 'audio';
+                else if (iconText.includes('sticky_note_2') || iconText.includes('description')) type = 'note';
+                else if (iconText.includes('help') || titleText.toLowerCase().includes('faq')) type = 'faq';
+                else if (iconText.includes('auto_tab_group')) {
+                    if (titleText.toLowerCase().includes('faq')) type = 'faq';
+                    else type = 'briefing';
+                }
+                else if (iconText.includes('timeline')) type = 'timeline';
+                else if (iconText.includes('table_view')) type = 'table';
+                else if (iconText.includes('tablet')) type = 'presentation';
+                else if (iconText.includes('subscriptions')) type = 'other';
+                else if (iconText.includes('cards_star')) type = 'other';
+                else if (iconText.includes('flowchart')) type = 'other';
+
+                // Extract metadata (sources, date) from .artifact-metadata
+                let detailsResult = '';
+                const metadataLoc = item.locator('.artifact-metadata').first();
+                if (await metadataLoc.count() > 0) {
+                    detailsResult = (await metadataLoc.innerText().catch(() => '')).trim();
                 }
 
-                // Extract title
-                let title = `Artifact ${i + 1}`;
-                const titleSpan = item.locator('.artifact-title').first();
-                if (await titleSpan.count() > 0) {
-                    title = (await titleSpan.innerText().catch(() => '')).trim();
-                } else {
-                    const lines = text.split('\n').filter(l => l.trim() && !l.includes('play_arrow') && !l.includes('more_vert'));
-                    if (lines[0]) title = lines[0].trim();
-                }
-
-                // Extract details
-                let details = undefined;
-                const detailsSpan = item.locator('.artifact-details').first();
-                if (await detailsSpan.count() > 0) {
-                    details = (await detailsSpan.innerText().catch(() => '')).trim();
-                }
-
-                // Parse details for source count and date
                 let sourceCount = undefined;
                 let absoluteTime = undefined;
-                if (details) {
-                    const sourceMatch = details.match(/(\d+)\s*zdroj/i) || details.match(/(\d+)\s*source/i);
-                    if (sourceMatch) {
-                        sourceCount = parseInt(sourceMatch[1]);
-                    }
-
-                    const parsedTime = this.parseRelativeDateToAbsolute(details);
-                    if (parsedTime) {
-                        absoluteTime = parsedTime.toISOString();
-                    }
+                if (detailsResult) {
+                    const sourceMatch = detailsResult.match(/(\d+)\s*zdroj/i) || detailsResult.match(/(\d+)\s*source/i);
+                    if (sourceMatch) sourceCount = parseInt(sourceMatch[1]);
+                    
+                    const parsedTime = (this as any).parseRelativeDateToAbsolute(detailsResult);
+                    if (parsedTime) absoluteTime = parsedTime.toISOString();
                 }
 
-                // Extract ID
+                // Extract artifact ID from attributes/labels
                 let id = undefined;
                 const labelSpan = item.locator('.artifact-labels').first();
                 if (await labelSpan.count() > 0) {
                     const labelId = await labelSpan.getAttribute('id');
-                    if (labelId) {
-                        id = labelId.replace('artifact-labels-', '').replace('note-labels-', '');
-                    }
+                    if (labelId) id = labelId.replace('artifact-labels-', '').replace('note-labels-', '');
                 }
 
-                artifacts.push({ type, title, details, sourceCount, absoluteTime, id });
+                artifacts.push({
+                    type,
+                    title: titleText,
+                    details: detailsResult,
+                    sourceCount,
+                    absoluteTime,
+                    id
+                });
             }
         } catch (e: any) {
-            console.error('[NotebookLM] Error extracting studio artifacts:', e.message);
+            console.error(`[NotebookLM] Error extracting studio artifacts: ${e.message}`);
         }
 
         return artifacts;
@@ -2264,6 +2344,52 @@ export class NotebookLMClient {
      * Delete a source from the current notebook by title.
      * @param title The title of the source to delete.
      */
+    async deleteSource(title: string): Promise<boolean> {
+        console.log(`[NotebookLM] Deleting source: "${title}"`);
+        try {
+            // Find the source item by title
+            const item = this.page.locator('.single-source-container, source-list-item').filter({
+                has: this.page.locator('.source-title, .title, span', { hasText: title })
+            }).first();
+
+            if (await item.count() === 0) {
+                console.error(`[NotebookLM] Error: Source "${title}" not found.`);
+                return false;
+            }
+
+            // Find and click the 'more' options button
+            const moreBtn = item.locator('button').filter({
+                has: this.page.locator('mat-icon', { hasText: 'more_vert' })
+            }).first();
+
+            await moreBtn.click();
+            await this.humanDelay(800);
+
+            // Click Delete/Odstranit from the menu
+            const deleteOption = this.page.locator('button[role="menuitem"]').filter({
+                hasText: /Odstranit|Delete/i
+            }).first();
+
+            await deleteOption.click();
+            await this.humanDelay(800);
+
+            // Confirm deletion in dialog
+            const confirmBtn = this.page.locator('mat-dialog-container button').filter({
+                hasText: /Odstranit|Smazat|Delete/i
+            }).first();
+            
+            if (await confirmBtn.count() > 0) {
+                await confirmBtn.click();
+                await this.humanDelay(1500);
+            }
+
+            return true;
+        } catch (e: any) {
+            console.error(`[NotebookLM] Error deleting source: ${e.message}`);
+            return false;
+        }
+    }
+
     /**
      * Rename a source from the current notebook by title.
      * @param oldTitle The current title of the source
@@ -2341,77 +2467,6 @@ export class NotebookLMClient {
         // Wait for dialog to disappear
         await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 10000 });
         console.log(`[NotebookLM] Successfully renamed source to: "${newTitle}"`);
-        await this.humanDelay(1000);
-    }
-
-    async deleteSource(title: string) {
-        console.log(`[NotebookLM] Attempting to delete source: "${title}"`);
-
-        // Ensure we are on "Sources" tab
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
-        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
-            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                await sourcesTab.click();
-                await this.humanDelay(1000);
-            }
-        }
-
-        // Find the source item by title
-        // We use the same selectors as in extractSources
-        const item = this.page.locator('.single-source-container, source-list-item').filter({
-            has: this.page.locator('.source-title, .title, span', { hasText: title })
-        }).first();
-
-        if (await item.count() === 0) {
-            console.error(`[NotebookLM] Error: Source "${title}" not found.`);
-            // Dump state for debugging if title match fails
-            await this.dumpState('delete_source_not_found');
-            throw new Error(`Source "${title}" not found`);
-        }
-
-        // Find and click the 'more' options button (three vertical dots)
-        const moreBtn = item.locator('button').filter({ 
-            has: this.page.locator('mat-icon', { hasText: 'more_vert' }) 
-        }).first();
-        
-        if (await moreBtn.count() === 0) {
-             throw new Error(`More options button for source "${title}" not found`);
-        }
-        
-        await moreBtn.click();
-        await this.humanDelay(800);
-
-        // Click Delete/Odstranit from the menu
-        const deleteOption = this.page.locator('button[role="menuitem"]').filter({ 
-            hasText: /Odstranit|Smazat|Remove|Delete/i 
-        }).first();
-        
-        if (await deleteOption.count() === 0) {
-            // fallback: check if menu opened but selector failed, try hitting escape to clean up
-            await this.page.keyboard.press('Escape');
-            throw new Error(`Delete menu option for source "${title}" not found`);
-        }
-        
-        await deleteOption.click();
-        await this.humanDelay(1000);
-
-        // Handle confirmation dialog
-        const confirmBtn = this.page.locator('mat-dialog-container button').filter({ 
-            hasText: /Odstranit|Smazat|Remove|Delete|vymazat/i 
-        }).first();
-        
-        if (await confirmBtn.count() > 0) {
-            await confirmBtn.click();
-        } else {
-            console.log('[NotebookLM] Warning: Confirmation button not found by text, trying last button in dialog');
-            const lastBtn = this.page.locator('mat-dialog-container button').last();
-            await lastBtn.click();
-        }
-
-        // Wait for dialog to disappear to confirm operation completion
-        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 10000 });
-        console.log(`[NotebookLM] Successfully deleted source: "${title}"`);
         await this.humanDelay(1000);
     }
 }
