@@ -231,7 +231,6 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **LaTeX Detection**: Gemini uses MathJax (`mjx-container`). Extracting the `tex` attribute directly from these elements is far more reliable than regex-parsing the resulting plain text.
 - **Defensive Heuristics**: Instead of relying on specific internal attributes like `data-attribution-url` (which Gemini often changes), use broad tag selectors (`table`, `a`, `mjx-`) combined with text-length and URL-subsequence matching to identify citations and tables.
 
-## Windmill & Concurrency
-- **Worker-Level Blocking**: In the current architecture, a `GeminiClient` request via Windmill occupied a worker for the entire duration of the AI's response generation (typically 20-60s). 
-- **Recommendation**: For high-volume research, move to a **Job-Status Polling** model. The initial request should return a `jobId` immediately, and the client should poll a separate "result" endpoint. This prevents long-running AI generations from exhausting the Windmill worker pool.
+- **Implementation: Submit & Return Architecture**: We've transitioned to a decoupled **Submit** (heavy worker) and **Watch** (lightweight worker) pattern. This immediately releases the primary Windmill worker after prompt delivery, delegating monitoring to a secondary "Watcher" agent that connects to the existing CDP tab.
+- **Async State Hygiene**: Implementing a `PENDING` state in FalkorDB *before* the watcher completes ensures that sessions are trackable even if a generation fails or the watcher job is interrupted. This provides a clear audit trail for long-running research tasks.
 - **Remote CDP Reliability**: Remote browsers (on `halvarm:9223`) can be transient. Automation scripts MUST handle `Target closed` errors gracefully and provide detailed `dumpState` diagnostics for headless debugging.
