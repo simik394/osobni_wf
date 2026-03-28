@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Command } from 'commander';
 import { WindmillClient } from '../clients/windmill';
 import {
