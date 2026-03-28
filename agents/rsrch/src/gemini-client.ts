@@ -7,6 +7,11 @@ import { getRegistry } from './artifact-registry';
 import { getRsrchTelemetry } from '@agents/shared';
 import { selectors } from './selectors';
 import { getGraphStore } from './graph-store';
+import { 
+    resetToNewChatAction, 
+    setModelAction, 
+    uploadFilesAction 
+} from './actions';
 
 // Get telemetry instance
 const telemetry = getRsrchTelemetry();
@@ -120,9 +125,10 @@ export class GeminiClient extends EventEmitter {
     /**
      * @deprecated Legacy direct CDP method. Use queryViaWindmill instead.
      */
-    private log(message: string) {
-        if (this.verbose) {
-            console.log(`[Gemini] ${message}`);
+    private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
+        if (this.verbose || level === 'error' || level === 'warn') {
+            const prefix = level === 'info' ? '[Gemini]' : `[Gemini][${level.toUpperCase()}]`;
+            console.log(`${prefix} ${message}`);
         }
     }
 
@@ -255,78 +261,12 @@ export class GeminiClient extends EventEmitter {
 
     /**
      * Resets the current session to a new chat.
-     * Use this before starting a new request to ensure a clean state
-     * (e.g. to disable Deep Research mode from previous session).
      */
     async resetToNewChat(): Promise<void> {
-        console.log('[Gemini] Resetting to new chat...');
-
-        // 1. Check if we are already on the new chat page (URL ends with /app)
-        const url = this.page.url();
-        if (url === 'https://gemini.google.com/app' || url === 'https://gemini.google.com/app/') {
-            // Even if URL is correct, we might have text in input or old state.
-            // Best to still click "New Chat" if visible to be sure.
-        }
-
-        // 2. Try clicking "New Chat" button
-        let clicked = false;
-        const newChatBtn = this.page.locator(selectors.gemini.chat.newChat).first();
-        if (await newChatBtn.isVisible().catch(() => false)) {
-            console.log(`[Gemini] Clicking New Chat...`);
-            await newChatBtn.click();
-            clicked = true;
-        }
-
-        if (!clicked) {
-            console.log('[Gemini] New Chat button not found, forcing navigation to /app');
-            await this.page.goto('https://gemini.google.com/app');
-        }
-
-        // 3. Wait for standard greeting or empty state
-        try {
-            // Wait for URL to stabilize
-            await this.page.waitForURL('https://gemini.google.com/app', { timeout: 5000 }).catch(() => { });
-
-            // Wait for empty input
-            const input = this.page.locator('div[contenteditable="true"], textarea').first();
-            await input.waitFor({ state: 'visible', timeout: 5000 });
-
-            // Check if Deep Research toggle is active and disable it if so
-            try {
-                // The toggle usually appears as a chip/button in the input area
-                const toggleSelector = selectors.gemini.deepResearch.toggle || 'button:has-text("Deep Research")';
-                const drToggle = this.page.locator(toggleSelector).first();
-                if (await drToggle.isVisible({ timeout: 1000 }).catch(() => false)) {
-                    console.log('[Gemini] Deep Research mode detected active. Disabling...');
-                    // Try to click the close button specifically if possible
-                    const closeSelector = selectors.gemini.deepResearch.closeButton;
-
-                    let closeClicked = false;
-                    if (closeSelector) {
-                        const closeBtn = this.page.locator(closeSelector).first();
-                        if (await closeBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                            await closeBtn.click();
-                            closeClicked = true;
-                        }
-                    }
-
-                    if (!closeClicked) {
-                        // Fallback: Click the toggle itself (might open menu, or toggle off)
-                        await drToggle.click();
-                    }
-                    await this.page.waitForTimeout(500);
-                }
-            } catch (e) {
-                // Ignore errors disabling deep research
-            }
-
-            this.deepResearchEnabled = false;
-
-        } catch (e) {
-            console.warn('[Gemini] Wait for new chat state timed out, but proceeding.');
-        }
-
-        console.log('[Gemini] Reset complete.');
+        return resetToNewChatAction(
+            { page: this.page, log: (msg, lvl) => this.log(msg, lvl) },
+            { selectors }
+        );
     }
 
     getCurrentSessionId(): string | null {
@@ -1250,193 +1190,24 @@ export class GeminiClient extends EventEmitter {
 
     /**
      * Set the Gemini model via UI interaction.
-     * 
-     * @param modelName - Model identifier (e.g., "gemini-2.0-flash", "thinking", "pro")
-     * @returns true if switch succeeded
      */
     async setModel(modelName: string): Promise<boolean> {
-        console.log(`[Gemini] Switching model to: ${modelName}`);
-        try {
-            // 1. Click model dropdown trigger
-            // Try explicit selectors first, then broad fallbacks
-            const triggers = [
-                selectors.gemini.model.trigger,
-                'button[aria-haspopup="menu"]',
-                'button[aria-label*="Model"]',
-                'button:has-text("Gemini")',
-                '[data-test-id="model-selector"]'
-            ];
-
-            let triggerFound = false;
-            for (const selector of triggers) {
-                const el = this.page.locator(selector).first();
-                if (await el.isVisible().catch(() => false)) {
-                    console.log(`[Gemini] Found model trigger via: ${selector}`);
-                    await el.click();
-                    triggerFound = true;
-                    break;
-                }
-            }
-
-            await this.page.waitForTimeout(1000);
-
-
-
-            if (!triggerFound) {
-                console.warn('[Gemini] Primary model triggers failed, trying layout-specific locations...');
-                // Try looking for the "Gemini Advanced" or model name badge that often acts as a dropdown
-                const headerBadge = this.page.locator('chat-app-bar button, .model-selector-button').first();
-                if (await headerBadge.isVisible()) {
-                    await headerBadge.click();
-                    triggerFound = true;
-                } else {
-                    console.warn('[Gemini] Model selector user trigger not found');
-                    await this.dumpState('model_trigger_missing');
-                    return false;
-                }
-            }
-
-            await this.page.waitForTimeout(1000);
-
-            // 2. Select model based on name
-            const name = modelName.toLowerCase();
-            let targetSelector = '';
-
-            // Map API/CLI names to UI labels
-            if (name.includes('flash') || name.includes('quick') || name.includes('rych')) {
-                // "Gemini 2.0 Flash" or "Rychlý"
-                targetSelector = selectors.gemini.model.flash;
-            } else if (name.includes('think') || name.includes('deep') || name.includes('mysl')) {
-                // "Gemini 2.0 Flash Thinking" or "S myšlením"
-                targetSelector = selectors.gemini.model.thinking;
-            } else if (name.includes('pro') || name.includes('advanced')) {
-                // "Gemini Advanced" or "Pro"
-                targetSelector = selectors.gemini.model.pro;
-            } else {
-                console.warn(`[Gemini] Unknown model nickname: ${modelName}, trying direct text match`);
-                targetSelector = `text="${modelName}"`;
-            }
-
-            // Split selector by | to try multiple options
-            const options = targetSelector.split('|');
-            let optionClicked = false;
-
-            for (const optSelector of options) {
-                const el = this.page.locator(optSelector).first();
-                // We use a short timeout because we're iterating checks
-                if (await el.isVisible({ timeout: 1000 }).catch(() => false)) {
-                    console.log(`[Gemini] Found model option: ${optSelector}`);
-                    await el.click();
-                    optionClicked = true;
-                    break;
-                }
-            }
-
-            if (optionClicked) {
-                console.log(`[Gemini] Selected model: ${modelName}`);
-                await this.page.waitForTimeout(1000); // Wait for switch to take effect
-                return true;
-            } else {
-                console.error(`[Gemini] Model option not found for: ${modelName} (tried: ${targetSelector})`);
-                await this.dumpState('model_option_missing');
-                // Close menu if open by clicking body or Escape
-                await this.page.keyboard.press('Escape');
-                return false;
-            }
-        } catch (e: any) {
-            console.error(`[Gemini] Error setting model: ${e.message}`);
-            return false;
-        }
+        return setModelAction(
+            { page: this.page, log: (msg, lvl) => this.log(msg, lvl) },
+            { selectors },
+            modelName
+        );
     }
 
     /**
      * Upload files to the current Gemini chat session.
      */
     async uploadFiles(filePaths: string[]): Promise<boolean> {
-        try {
-            console.log(`[Gemini] Uploading ${filePaths.length} files...`);
-
-            // 1. Open "+" menu
-            const plusBtn = this.page.locator(selectors.gemini.upload.button).first();
-            try {
-                // Try primary selector
-                await plusBtn.waitFor({ state: 'visible', timeout: 3000 });
-                await plusBtn.click();
-            } catch (e) {
-                console.warn('[Gemini] Primary upload selector failed, trying getByRole fallback...');
-                // Fallback to robust role-based location
-                const fallbackBtn = this.page.getByRole('button', { name: /nahrávání|Upload|Přidat|Attach|Add/i }).first();
-                if (await fallbackBtn.isVisible()) {
-                    await fallbackBtn.click();
-                } else {
-                    console.error('[Gemini] Upload (+) button not visible (primary and fallback)');
-                    await this.dumpState('upload_btn_missing');
-                    return false;
-                }
-            }
-            await this.page.waitForTimeout(1000);
-
-            // 2. Choose "Upload files" / "Nahrát soubory"
-            // Note: The input[type="file"] might be hidden but accessible. 
-            // Often clicking the menu item triggers the system dialog, which we must intercept with setInputFiles.
-            // BETTER: Directly attach to the input[type="file"] if present in DOM, 
-            // but usually it's better to use the specific menu flow if the input is created dynamically.
-
-            // Checking if file input is available directly or after clicking "Upload files"
-            let fileInput = this.page.locator(selectors.gemini.upload.fileInput).first();
-
-            // First try hidden file input with data-test-id (most reliable)
-            const hiddenFileInput = this.page.locator('[data-test-id="hidden-local-file-upload-button"] input[type="file"], [data-test-id*="file-upload"] input[type="file"], input[type="file"]').first();
-            if (await hiddenFileInput.count() > 0) {
-                console.log('[Gemini] Found hidden file input via data-test-id, setting files directly...');
-                await hiddenFileInput.setInputFiles(filePaths);
-            } else if (await fileInput.count() > 0) {
-                console.log('[Gemini] Found file input, setting files directly...');
-                await fileInput.setInputFiles(filePaths);
-            } else {
-                // Click "Upload files" menu item to spawn input or trigger dialog
-                const uploadItem = this.page.locator(selectors.gemini.upload.uploadFile).first();
-                // Wait for menu item
-                try { await uploadItem.waitFor({ state: 'visible', timeout: 3000 }); } catch (e) { }
-
-                if (await uploadItem.isVisible()) {
-                    // Start waiting for file chooser before clicking
-                    const fileChooserPromise = this.page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null);
-                    await uploadItem.click();
-
-                    const fileChooser = await fileChooserPromise;
-                    if (fileChooser) {
-                        await fileChooser.setFiles(filePaths);
-                    } else {
-                        // Fallback: try setting input directly again if it appeared
-                        const lateInput = this.page.locator(selectors.gemini.upload.fileInput).first();
-                        if (await lateInput.count() > 0) {
-                            await lateInput.setInputFiles(filePaths);
-                        } else {
-                            console.error('[Gemini] File chooser did not appear and input not found');
-                            return false;
-                        }
-                    }
-                } else {
-                    console.error('[Gemini] "Upload files" menu item not found');
-                    await this.dumpState('upload_option_missing');
-                    // Close menu
-                    await this.page.keyboard.press('Escape');
-                    return false;
-                }
-            }
-
-            // 3. Wait for upload to complete
-            // Look for progress indicators or specific upload chips
-            console.log('[Gemini] Waiting for files to process...');
-            await this.page.waitForTimeout(2000 * filePaths.length); // Basic wait, can be improved by checking for spinners
-
-            return true;
-        } catch (e: any) {
-            console.error(`[Gemini] Upload files failed: ${e.message}`);
-            await this.dumpState('upload_files_fail');
-            return false;
-        }
+        return uploadFilesAction(
+            { page: this.page, log: (msg, lvl) => this.log(msg, lvl) },
+            { selectors, telemetry },
+            filePaths
+        );
     }
 
     /**
@@ -1723,170 +1494,29 @@ export class GeminiClient extends EventEmitter {
         sources?: Source[],
         model?: string
     } = {}): Promise<string | null> {
-        const { waitForResponse = true, resetSession, onProgress, files = [], sources = [], model } = options;
-
-        console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
-
-        await this.checkAuth();
-
-        // Handle Session Reset FIRST (before injections)
-        if (resetSession) {
-            await this.resetToNewChat();
-        }
-
-        if (model) {
-            await this.setModel(model);
-        }
-
-        // 1. Upload files (legacy argument)
-        if (files.length > 0) {
-            await this.uploadFiles(files);
-        }
-
-        // 2. Inject Sources (new argument)
-        if (sources.length > 0) {
-            await this.injectSources(sources);
-        }
-
-        // Start trace for this message exchange
-        // Start trace for this message exchange
-        const trace = telemetry.startTrace('gemini:send-message', {
-            messageLength: message.length,
-            waitForResponse
-        });
-
-        // Start generation tracking for LLM call
-        const generation = telemetry.startGeneration(trace, message, 'gemini-2.0-flash');
-
-        try {
-            const input = this.page.locator(selectors.gemini.chat.input).first();
-            await input.waitFor({ state: 'visible', timeout: 10000 });
-
-            const responsesBefore = await this.page.locator(selectors.gemini.chat.response).count();
-
-            // 3. Send Message
-            if (message) {
-                await this.injectText(message);
+        const { sendMessageAction } = await import('./actions/gemini/chat');
+        return sendMessageAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            message,
+            options,
+            {
+                checkAuth: () => this.checkAuth(),
+                setModel: (model) => this.setModel(model),
+                uploadFiles: (files) => this.uploadFiles(files),
+                injectSources: (sources) => this.injectSources(sources),
+                injectText: (text) => this.injectText(text),
+                resetToNewChat: () => this.resetToNewChat(),
+                selectors,
+                telemetry,
+                verbose: this.verbose,
+                getLatestResponse: () => this.getLatestResponse(),
+                getCurrentSessionId: () => this.getCurrentSessionId(),
+                getGraphStore: () => getGraphStore(),
+                dumpState: (prefix) => this.dumpState(prefix)
             }
-            await this.page.waitForTimeout(300);
-
-            // Click Send button (Enter key doesn't work reliably in Docker/VNC)
-            let sendClicked = false;
-            const sendBtn = this.page.locator(selectors.gemini.chat.send).first();
-            if (await sendBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                await sendBtn.click();
-                sendClicked = true;
-            }
-
-            if (!sendClicked) {
-                console.log('[Gemini] No Send button found, trying Enter key...');
-                await input.press('Enter');
-            }
-
-            if (!waitForResponse) {
-                telemetry.endGeneration(generation, 'No response awaited');
-                telemetry.endTrace(trace, 'Fire and forget', true);
-                return null;
-            }
-
-            console.log('[Gemini] Waiting for response...');
-            const maxWait = 90000; // Increased timeout for long responses
-            const pollInterval = 1000;
-            let elapsed = 0;
-            let lastResponseLength = 0;
-            let stableCount = 0;
-
-            const onProgress = options.onProgress;
-
-            while (elapsed < maxWait) {
-                const responsesNow = await this.page.locator(selectors.gemini.chat.response).count();
-                if (responsesNow > responsesBefore) {
-                    // Response started generating
-                    const latestResponse = this.page.locator(selectors.gemini.chat.response).last();
-
-                    // Check for thought toggle and expand (Deep Research / Reasoning models)
-                    if (selectors.gemini.chat.thoughtToggle) {
-                        try {
-                            const toggle = latestResponse.locator(selectors.gemini.chat.thoughtToggle).first();
-                            if (await toggle.isVisible({ timeout: 100 }).catch(() => false)) {
-                                const expanded = await toggle.getAttribute('aria-expanded') === 'true';
-                                if (!expanded) {
-                                    if (this.verbose) console.log('[Gemini] Expanding thought/reasoning block...');
-                                    await toggle.click({ timeout: 500 }).catch(() => { });
-                                    await this.page.waitForTimeout(200); // Allow animation/DOM update
-                                }
-                            }
-                        } catch (err) {
-                            // Ignore expansion errors
-                        }
-                    }
-
-                    // Force grab full text, including expanded reasoning
-                    // Note: If expanded, the reasoning text should be part of innerText
-                    let currentText = await latestResponse.innerText().catch(() => '');
-
-                    // If we have a separate thought container that isn't being captured by parent innerText for some reason:
-                    if (selectors.gemini.chat.thoughtContainer) {
-                        const thoughts = latestResponse.locator(selectors.gemini.chat.thoughtContainer).first();
-                        if (await thoughts.isVisible().catch(() => false)) {
-                            // Sometimes innerText of parent misses dynamically loaded shadow/iframe content? 
-                            // Unlikely for Gemini, but let's be safe.
-                            // Actually, standard Gemini behavior: once expanded, it's just a div.
-                        }
-                    }
-
-                    // Stream progress if callback provided
-                    if (onProgress && currentText.length > lastResponseLength) {
-                        onProgress(currentText);
-                    }
-
-                    if (currentText.length > 0 && currentText.length === lastResponseLength) {
-                        stableCount++;
-                        if (stableCount >= 2) { // 2s stable -> done
-                            console.log('[Gemini] Response stabilized');
-                            break;
-                        }
-                    } else {
-                        stableCount = 0;
-                        lastResponseLength = currentText.length;
-                    }
-                }
-                await this.page.waitForTimeout(pollInterval);
-                elapsed += pollInterval;
-            }
-
-            const response = await this.getLatestResponse();
-            console.log(`[Gemini] Response received (${response?.length || 0} chars)`);
-
-            // Track session in FalkorDB
-            const sessionId = this.getCurrentSessionId();
-            if (sessionId) {
-                const graphStore = getGraphStore();
-                if (graphStore.getIsConnected()) {
-                    const sessionTitle = await this.page.title().then(t => t.replace('Gemini - ', '').trim()).catch(() => message.substring(0, 50));
-                    await graphStore.createOrUpdateGeminiSession({ sessionId, title: sessionTitle });
-                    await graphStore.addGeminiQuery({ sessionId, query: message });
-                }
-            }
-
-            // End generation with response
-            telemetry.endGeneration(generation, response || '');
-            telemetry.addScore(trace, 'response_length', response?.length || 0);
-            telemetry.endTrace(trace, response?.substring(0, 200), true);
-
-            return response;
-
-        } catch (e) {
-            console.error('[Gemini] Failed to send message:', e);
-            await this.dumpState('send_message_fail');
-
-            telemetry.trackError(trace, e as Error);
-            telemetry.endGeneration(generation, '');
-            telemetry.endTrace(trace, undefined, false);
-
-            return null;
-        }
+        );
     }
+
 
     async getResponses(): Promise<string[]> {
         console.log('[Gemini] Getting all responses...');

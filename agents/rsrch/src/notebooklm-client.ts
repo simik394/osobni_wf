@@ -2,6 +2,17 @@ import { Page } from 'playwright';
 import * as path from 'path';
 import { config } from './config';
 import { selectors } from './selectors';
+import { 
+    createNotebookAction,
+    queryNotebookAction,
+    openNotebookAction,
+    addSourceUrlAction,
+    addSourceTextAction,
+    addSourceFromDriveAction,
+    selectSourcesAction,
+    uploadLocalFileAction,
+    generateAudioOverviewAction
+} from './actions';
 
 
 export class NotebookLMClient {
@@ -35,31 +46,11 @@ export class NotebookLMClient {
     }
 
     async createNotebook(title: string) {
-        console.log(`Creating notebook: ${title}`);
-        try {
-            await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
-
-            // Wait for "New Notebook" button
-            const createBtnSelector = selectors.home.createNewButton;
-            await this.page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });
-
-            // Click and wait for navigation
-            await this.page.click(createBtnSelector);
-
-            // Wait for title input
-            const titleInputSelector = selectors.notebook.titleInput;
-            await this.page.waitForSelector(titleInputSelector, { state: 'visible', timeout: 15000 });
-
-            // Set title
-            await this.page.fill(titleInputSelector, title);
-            await this.page.keyboard.press('Enter'); // Confirm title
-
-            await this.page.waitForTimeout(2000);
-        } catch (e) {
-            console.error('Error creating notebook:', e);
-            await this.dumpState('create_error');
-            throw e;
-        }
+        return createNotebookAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            title,
+            { selectors, dumpState: (prefix) => this.dumpState(prefix) }
+        );
     }
 
     async dumpState(prefix: string = 'debug') {
@@ -85,66 +76,14 @@ export class NotebookLMClient {
     }
 
     async query(message: string): Promise<string> {
-        console.log(`[NotebookLM] Sending query: "${message}"`);
-
-        try {
-            // Wait for input to be visible AND enabled (sources may still be processing)
-            const inputSelector = selectors.chat.input;
-            console.log('[NotebookLM] Waiting for chat input to be enabled...');
-
-            // First wait for element to appear
-            await this.page.waitForSelector(inputSelector, { state: 'visible', timeout: 60000 });
-
-            // Then wait specifically for it to become enabled (not disabled)
-            await this.page.waitForFunction(
-                (sel: string) => {
-                    const el = document.querySelector(sel) as HTMLTextAreaElement | null;
-                    return el && !el.disabled;
-                },
-                inputSelector,
-                { timeout: 60000 }
-            );
-
-            console.log('[NotebookLM] Chat input enabled. Filling query...');
-            await this.page.fill(inputSelector, message);
-            await this.humanDelay(800);
-
-            // Click send
-            const sendSelector = selectors.chat.submitButton;
-            await this.page.click(sendSelector);
-
-            // Wait for thinking indicator (short timeout as it appears quickly)
-            // Then wait for it to disappear (long timeout for generation)
-            try {
-                const indicator = selectors.chat.thinkingIndicator;
-                await this.page.waitForSelector(indicator, { timeout: 5000 });
-                await this.page.waitForSelector(indicator, { state: 'hidden', timeout: 60000 });
-            } catch (e) {
-                console.log('[NotebookLM] Warning: Thinking indicator flow timed out or skipped. Checking for message anyway.');
-            }
-
-            // Small settle delay
-            await this.humanDelay(1000);
-
-            // Get response
-            // We want the last message that is NOT the user message if possible,
-            // or just the last message and assume it's the model.
-            // In NotebookLM, model messages usually have specific classes like 'model-message' or 'message-bubble' 
-            // vs 'user-message'.
-
-            // Using a generic approach: fetch last message content
-            const lastMsgSelector = selectors.chat.lastMessage;
-            await this.page.waitForSelector(lastMsgSelector, { timeout: 10000 });
-            const response = await this.page.textContent(lastMsgSelector);
-
-            console.log(`[NotebookLM] Response received (${response?.length} chars)`);
-            return response || '';
-
-        } catch (e) {
-            console.error('[NotebookLM] Query failed:', e);
-            await this.dumpState('query_failure');
-            throw e;
-        }
+        return queryNotebookAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            { 
+                selectors, 
+                humanDelay: (ms) => this.humanDelay(ms) 
+            },
+            message
+        );
     }
 
     private async notifyDiscord(message: string, isError: boolean = false) {
@@ -157,181 +96,19 @@ export class NotebookLMClient {
 
 
     async openNotebook(title: string) {
-        console.log(`Opening notebook: ${title}`);
-
-        // Check if we're already on a notebook page - avoid unnecessary navigation
-        const currentUrl = this.page.url();
-        if (currentUrl.includes('/notebook/')) {
-            // Already on a notebook - check if it's the right one
-            // First try page title, but also consider URL-based check
-            const pageTitle = await this.page.title().catch(() => '');
-
-            // If page title matches, we're definitely on the right notebook
-            if (pageTitle && (pageTitle.includes(title) || (title.length > 30 && pageTitle.includes(title.substring(0, 25))))) {
-                console.log(`[DEBUG] Already on notebook: ${title}, skipping navigation`);
-                return;
-            }
-
-            // If URL contains /notebook/ and we just need to confirm, wait a bit for title
-            if (pageTitle === '' || pageTitle === 'NotebookLM') {
-                await this.page.waitForTimeout(1500);
-                const retryTitle = await this.page.title().catch(() => '');
-                if (retryTitle.includes(title) || (title.length > 30 && retryTitle.includes(title.substring(0, 25)))) {
-                    console.log(`[DEBUG] Already on notebook (after title load): ${title}, skipping navigation`);
-                    return;
-                }
-            }
-
-            console.log(`[DEBUG] On different notebook (${pageTitle}), navigating to home first...`);
-        }
-
-        await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
-
-        // Network idle is too slow (background polling). 
-        // We rely on waiting for specific selectors instead.
-        // await this.page.waitForLoadState('networkidle'); 
-
-        try {
-            // Wait for any project button to appear to ensure list is loaded
-            await this.page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: 20000 });
-
-            console.log(`[DEBUG] Searching for notebook: "${title}"`);
-            const candidates = this.page.locator(selectors.home.projectButton).filter({ 
-                has: this.page.locator(selectors.home.projectButtonTitle, { hasText: title }) 
-            });
-            const count = await candidates.count();
-            
-            let targetCard = null;
-            if (count === 0) {
-                console.log('[DEBUG] Exact structure match failed, trying loose text match on any row/card...');
-                const looseCandidates = this.page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`).filter({ hasText: title });
-                if (await looseCandidates.count() > 0) {
-                    targetCard = looseCandidates.first();
-                } else {
-                    throw new Error(`Notebook with title "${title}" not found.`);
-                }
-            } else if (count > 1) {
-                console.log(`[DEBUG] Found ${count} candidates for "${title}". Picking the one with most sources...`);
-                // Simple heuristic: pick the one with most sources text
-                let bestIdx = 0;
-                let maxSources = -1;
-                for (let i = 0; i < count; i++) {
-                    const text = await candidates.nth(i).innerText().catch(() => '');
-                    const match = text.match(/(\d+)\s*(zdroj|source)/i);
-                    const sourceCount = match ? parseInt(match[1]) : 0;
-                    if (sourceCount > maxSources) {
-                        maxSources = sourceCount;
-                        bestIdx = i;
-                    }
-                }
-                targetCard = candidates.nth(bestIdx);
-            } else {
-                targetCard = candidates.first();
-            }
-
-            if (targetCard) {
-                console.log('[DEBUG] Found target notebook. Clicking...');
-                const actionBtn = targetCard.locator(selectors.home.primaryActionButton).first();
-                if (await actionBtn.count() > 0 && await actionBtn.isVisible()) {
-                    await actionBtn.click();
-                } else {
-                    await targetCard.click();
-                }
-            }
-
-            // Handle possible account picker or login screen if session expired
-            const accountPicker = this.page.locator('div:has-text("Choose an account"), #account-picker');
-            if (await accountPicker.count() > 0 && await accountPicker.isVisible()) {
-                console.log('[NotebookLM] Account picker detected. Waiting up to 60s for manual sign-in...');
-                await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 60000 });
-            } else {
-                // Wait for navigation to notebook URL
-                await this.page.waitForURL(selectors.notebook.urlPattern, { timeout: 15000 });
-            }
-            console.log('[DEBUG] Notebook opened successfully (URL match).');
-
-        } catch (e: any) {
-            console.error('[NotebookLM] Failed to open notebook:', e.message || e);
-            const dataDir = path.join(process.cwd(), 'data');
-            if (!require('fs').existsSync(dataDir)) require('fs').mkdirSync(dataDir, { recursive: true });
-            
-            if (this.page && !this.page.isClosed()) {
-                await this.page.screenshot({ path: path.join(dataDir, `open-notebook-fail-${Date.now()}.png`) }).catch(() => {});
-            }
-            throw e;
-        }
+        return openNotebookAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            { selectors },
+            title
+        );
     }
 
     async addSourceUrl(urlStr: string) {
-        const urls = urlStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-        if (urls.length === 0) {
-            console.warn('No valid URLs provided.');
-            return;
-        }
-
-        console.log(`Adding source URL(s): ${urls.join(', ')}`);
-
-        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        const sourcesTab = this.page.locator(selectors.sources.tab).filter({ hasText: new RegExp(selectors.sources.tabTextPattern, 'i') }).first();
-        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
-            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                console.log('[DEBUG] Switching to Sources tab...');
-                await sourcesTab.click();
-                await this.humanDelay(1000);
-            }
-        }
-
-        // The dialog uses a textarea for URLs
-        const urlInputSelector = selectors.sources.urlInputTextarea;
-        const submitSelector = selectors.sources.submitButton;
-
-        for (const url of urls) {
-            console.log(`[DEBUG] Adding URL: ${url}`);
-
-            // Find the "Web" or "Website" button.
-            // It captures "Weby", "Website", "Link", etc.
-            const sourceBtn = await this.page.evaluateHandle((args) => {
-                const { buttonSelector, pattern } = args;
-                const buttons = Array.from(document.querySelectorAll(buttonSelector));
-                const regex = new RegExp(pattern, 'i');
-                return buttons.find(b => {
-                    const text = b.textContent?.toLowerCase() || '';
-                    return regex.test(text);
-                });
-            }, {
-                buttonSelector: selectors.sources.dropZoneButton,
-                pattern: selectors.sources.webSourcePattern
-            });
-
-            if (!sourceBtn) {
-                throw new Error('Website source button not found');
-            }
-
-            await sourceBtn.asElement()?.click();
-
-            try {
-                await this.page.waitForSelector(urlInputSelector, { timeout: 5000 });
-                await this.page.fill(urlInputSelector, url);
-
-                // Wait for the "Insert" button to become enabled (remove disabled class/attr)
-                await this.page.waitForFunction((sel: string) => {
-                    const btn = document.querySelector(sel);
-                    return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
-                }, submitSelector, { timeout: 5000 });
-
-                await this.page.click(submitSelector);
-
-                // Wait for dialog to close
-                await this.page.waitForSelector(selectors.sources.dialogContainer, { state: 'hidden', timeout: 5000 });
-
-                await this.humanDelay(1000); // small delay between adds
-
-            } catch (e) {
-                console.error(`Failed to add URL source: ${url}`, e);
-                throw e;
-            }
-        }
+        return addSourceUrlAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            urlStr,
+            { selectors, humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance) }
+        );
     }
 
     /**
@@ -343,96 +120,16 @@ export class NotebookLMClient {
      * @param notebookTitle Optional notebook to open first
      */
     async addSourceText(text: string, title?: string, notebookTitle?: string) {
-        if (notebookTitle) {
-            await this.openNotebook(notebookTitle);
-        }
-
-        console.log(`[NotebookLM] Adding pasted text source (${text.length} chars)...`);
-
-        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
-        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
-            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                console.log('[DEBUG] Switching to Sources tab...');
-                await sourcesTab.click();
-                await this.humanDelay(1000);
+        return addSourceTextAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            text,
+            title,
+            notebookTitle,
+            {
+                openNotebook: (title) => this.openNotebook(title),
+                humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance)
             }
-        }
-
-        // Click "Add sources" button
-        const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
-        if (await addSourceBtn.count() === 0) {
-            throw new Error('"Add sources" button not found');
-        }
-        await addSourceBtn.click();
-        await this.humanDelay(1000);
-
-        // Click "Pasted text" / "Vložený text" / "Copied text" button
-        const pasteBtn = this.page.locator('button.drop-zone-icon-button').filter({
-            hasText: /Pasted text|Vložený text|Copied text|Zkopírovaný text|Text/i
-        }).first();
-
-        if (await pasteBtn.count() === 0) {
-            // Fallback: try to find by icon or other text
-            const altPasteBtn = this.page.locator('button.drop-zone-icon-button').filter({
-                hasText: /content_paste|paste/i
-            }).first();
-
-            if (await altPasteBtn.count() > 0) {
-                await altPasteBtn.click();
-            } else {
-                // Debug: log available buttons
-                const allBtns = this.page.locator('button.drop-zone-icon-button');
-                const count = await allBtns.count();
-                console.log(`[DEBUG] Available source buttons (${count}):`);
-                for (let i = 0; i < count; i++) {
-                    const btnText = await allBtns.nth(i).innerText();
-                    console.log(`  - ${btnText}`);
-                }
-                throw new Error('"Pasted text" source button not found');
-            }
-        } else {
-            await pasteBtn.click();
-        }
-
-        await this.humanDelay(1000);
-
-        // Fill the title input if present
-        if (title) {
-            const titleInput = this.page.locator('mat-dialog-container input[type="text"], mat-dialog-container input.title-input').first();
-            if (await titleInput.count() > 0 && await titleInput.isVisible()) {
-                await titleInput.fill(title);
-                console.log(`[DEBUG] Set source title: ${title}`);
-            }
-        }
-
-        // Fill the text content textarea
-        const textareaSelector = 'mat-dialog-container textarea';
-        try {
-            await this.page.waitForSelector(textareaSelector, { timeout: 5000 });
-            await this.page.fill(textareaSelector, text);
-            console.log(`[DEBUG] Filled text content (${text.length} chars)`);
-
-            // Wait for the submit button to become enabled
-            const submitSelector = 'mat-dialog-container button.mat-primary';
-            await this.page.waitForFunction((sel: string) => {
-                const btn = document.querySelector(sel);
-                return btn && !btn.classList.contains('mat-mdc-button-disabled') && !btn.hasAttribute('disabled');
-            }, submitSelector, { timeout: 5000 });
-
-            await this.page.click(submitSelector);
-            console.log('[DEBUG] Submitted pasted text source');
-
-            // Wait for dialog to close
-            await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 10000 });
-            console.log('[NotebookLM] Pasted text source added successfully');
-
-        } catch (e) {
-            console.error('[NotebookLM] Failed to add pasted text source:', e);
-            await this.dumpState('paste_text_error');
-            throw e;
-        }
+        );
     }
 
     /**
@@ -441,160 +138,26 @@ export class NotebookLMClient {
      * @param notebookTitle Optional notebook to open first
      */
     async addSourceFromDrive(docNames: string[], notebookTitle?: string) {
-        if (notebookTitle) {
-            await this.openNotebook(notebookTitle);
-        }
-
-        console.log(`[DEBUG] Adding Google Drive sources: ${docNames.join(', ')}`);
-
-        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        // In narrow view, "Add sources" is only visible in Sources tab.
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
-        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
-            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                console.log('[DEBUG] Switching to Sources tab...');
-                await sourcesTab.click();
-                await this.humanDelay(1000);
+        return addSourceFromDriveAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            docNames,
+            notebookTitle,
+            {
+                openNotebook: (title) => this.openNotebook(title),
+                humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance)
             }
-        }
-
-        // Click "Add sources" button
-        const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
-        if (await addSourceBtn.count() === 0) {
-            throw new Error('"Add sources" button not found');
-        }
-        await addSourceBtn.click();
-        await this.humanDelay(1000);
-
-        // Click "Disk" (Google Drive) button in the dialog
-        const driveBtn = this.page.locator('button.drop-zone-icon-button').filter({ hasText: /Disk|Drive/i }).first();
-        if (await driveBtn.count() === 0) {
-            // Try alternative selector
-            const altDriveBtn = this.page.getByText('Disk').first();
-            if (await altDriveBtn.count() > 0) {
-                await altDriveBtn.click();
-            } else {
-                throw new Error('Google Drive button not found');
-            }
-        } else {
-            await driveBtn.click();
-        }
-
-        // Wait for Drive picker iframe to load
-        await this.page.waitForTimeout(2000);
-
-        // The Google Drive picker is in an iframe
-        const pickerFrame = this.page.frameLocator('iframe').first();
-
-        for (const docName of docNames) {
-            console.log(`[DEBUG] Searching for document: ${docName}`);
-
-            // Use the search box to find the document
-            const searchInput = pickerFrame.locator('input[type="text"]').first();
-            if (await searchInput.count() > 0) {
-                await searchInput.fill(docName);
-                await this.page.waitForTimeout(1500); // Wait for search results
-
-                // Click on the first matching result
-                const fileRow = pickerFrame.locator(`div[role="option"], div[role="row"]`).filter({ hasText: docName }).first();
-                if (await fileRow.count() > 0) {
-                    await fileRow.click();
-                    console.log(`[DEBUG] Selected: ${docName}`);
-                } else {
-                    console.warn(`[DEBUG] Document not found: ${docName}`);
-                }
-            }
-        }
-
-        // Click "Vybrat" (Select) button to confirm selection
-        const selectBtn = pickerFrame.locator('button').filter({ hasText: /Vybrat|Select/i });
-        if (await selectBtn.count() > 0 && await selectBtn.isEnabled()) {
-            await selectBtn.click();
-            console.log('[DEBUG] Confirmed Drive source selection.');
-            await this.page.waitForTimeout(2000);
-        } else {
-            console.warn('[DEBUG] Select button not found or disabled. No files selected?');
-        }
+        );
     }
 
     async uploadLocalFile(filePath: string | string[]) {
-        const pathsArr = Array.isArray(filePath) ? filePath : [filePath];
-        console.log(`[NotebookLM] Uploading local file(s): ${pathsArr.join(', ')}`);
-
-        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
-        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
-            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                console.log('[DEBUG] Switching to Sources tab...');
-                await sourcesTab.click();
-                await this.humanDelay(1000);
-            }
-        }
-
-        // Check if "Add sources" dialog is already open (NotebookLM auto-opens after new notebook)
-        const dialogVisible = await this.page.locator('add-sources-dialog, mat-dialog-container:has(add-sources-dialog), [role="dialog"]:has(add-sources-dialog)').count() > 0;
-
-        if (!dialogVisible) {
-            // Click "Add sources" button only if dialog not already open
-            const addSourceBtn = this.page.locator('button').filter({ hasText: /Přidat zdroje|Add sources/i }).first();
-            if (await addSourceBtn.count() === 0) {
-                throw new Error('"Add sources" button not found');
-            }
-            await addSourceBtn.click();
-            await this.humanDelay(1000);
-        } else {
-            console.log('[NotebookLM] Add sources dialog already open, skipping button click');
-        }
-
-        // Find the file input. Usually it's hidden or handled via a button that triggers file picker.
-        // In Playwright, we can handle the file chooser event.
-
-        const fileChooserPromise = this.page.waitForEvent('filechooser', { timeout: 10000 });
-
-        // The UI shows a drop zone with "vyberte" (select) link. Try multiple selectors:
-        // 1. Text link "vyberte" or "select" within the dialog
-        // 2. The drop zone button
-        // 3. Any clickable element with upload_file icon
-
-        const dialogLocator = this.page.locator('add-sources-dialog').first();
-        const selectLink = dialogLocator.locator('span.select-files-link, a:has-text("vyberte"), a:has-text("select")').first();
-        const uploadBtn = dialogLocator.locator('button').filter({ hasText: /Nahrát soubor|Upload file|Upload/i }).first();
-        const iconBtn = dialogLocator.locator('mat-icon:has-text("upload_file")').locator('..').first();
-
-        if (await selectLink.count() > 0 && await selectLink.isVisible()) {
-            console.log('[NotebookLM] Clicking select link...');
-            await selectLink.click();
-        } else if (await uploadBtn.count() > 0 && await uploadBtn.isVisible()) {
-            console.log('[NotebookLM] Clicking upload button...');
-            await uploadBtn.click();
-        } else if (await iconBtn.count() > 0 && await iconBtn.isVisible()) {
-            console.log('[NotebookLM] Clicking icon button...');
-            await iconBtn.click();
-        } else {
-            // Last resort: click anywhere in the drop zone area
-            const dropZone = dialogLocator.locator('.drop-zone, [class*="drop-zone"], .file-upload-area').first();
-            if (await dropZone.count() > 0) {
-                console.log('[NotebookLM] Clicking drop zone...');
-                await dropZone.click();
-            } else {
-                throw new Error('Upload source button/link not found');
-            }
-        }
-
-        const fileChooser = await fileChooserPromise;
-        await fileChooser.setFiles(filePath);
-        console.log('[NotebookLM] File(s) selected.');
-
-        // Wait for upload to complete
-        // usually the dialog closes automatically or we verify the file appears in source list.
-        // Let's wait for dialog to close.
-        await this.page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 60000 });
-
-        // Verify in source list?
-        // Simple delay for now.
-        await this.humanDelay(2000);
+        return uploadLocalFileAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            { 
+                selectors, 
+                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance) 
+            },
+            filePath
+        );
     }
 
     private taskQueue: Promise<any> = Promise.resolve();
@@ -622,75 +185,23 @@ export class NotebookLMClient {
     }
 
     async generateAudioOverview(notebookTitle?: string, sources?: string[], customPrompt?: string, waitForCompletion: boolean = false, dryRun: boolean = false): Promise<{ success: boolean; artifactTitle?: string }> {
-        return this.enqueueTask(`Generate Audio: ${notebookTitle}`, async () => {
-            if (this.isBusy) {
-                // Should technically not happen due to queue, but good safety
-                console.warn('[NotebookLM] Client marked as busy inside queue. Nested call?');
+        return generateAudioOverviewAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            { notebookTitle, sources, customPrompt, waitForCompletion, dryRun },
+            {
+                enqueueTask: (name, task) => this.enqueueTask(name, task),
+                setIsBusy: (busy) => { this.isBusy = busy; },
+                getIsBusy: () => this.isBusy,
+                openNotebook: (title) => this.openNotebook(title),
+                getAudioArtifactTitles: () => this.getAudioArtifactTitles(),
+                selectSources: (sources) => this.selectSources(sources),
+                maximizeStudio: () => this.maximizeStudio(),
+                triggerAudioGeneration: (prompt, dry, title) => this.triggerAudioGeneration(prompt, dry ?? false, title),
+                waitForGeneration: (title) => this.waitForGeneration(title),
+                renameArtifact: (old, newT) => this.renameArtifact(old, newT),
+                humanDelay: (baseMs, variance) => this.humanDelay(baseMs, variance)
             }
-            this.isBusy = true;
-            try {
-                if (notebookTitle) {
-                    await this.openNotebook(notebookTitle);
-                } else {
-                    console.log('[DEBUG] No notebook specified, navigating to NotebookLM homepage...');
-                    await this.page.goto('https://notebooklm.google.com/', { waitUntil: 'domcontentloaded' });
-                    await this.humanDelay(2000);
-                }
-
-                // SNAPSHOT: Get existing audio artifacts to identify the new one later
-                const existingAudioTitles = await this.getAudioArtifactTitles();
-                console.log(`[DEBUG] Existing audio artifacts: [${existingAudioTitles.join(', ')}]`);
-
-                // Handle Source Selection if provided
-                if (sources && sources.length > 0) {
-                    console.log(`[DEBUG] Selecting sources: ${sources.join(', ')}`);
-                    await this.selectSources(sources);
-                }
-
-                // Ensure Studio is open
-                await this.maximizeStudio();
-                await this.humanDelay(500);
-
-                // Trigger Generation (click Generate or Customize -> Generate)
-                const triggered = await this.triggerAudioGeneration(customPrompt, dryRun, notebookTitle);
-
-                if (!triggered) {
-                    return { success: false, artifactTitle: undefined };
-                }
-
-                if (dryRun) return { success: true };
-
-                if (waitForCompletion) {
-                    await this.waitForGeneration(notebookTitle);
-
-                    // Identify the new artifact
-                    const postGenTitles = await this.getAudioArtifactTitles();
-                    const newArtifacts = postGenTitles.filter(t => !existingAudioTitles.includes(t));
-
-                    if (newArtifacts.length === 1) {
-                        const newTitle = newArtifacts[0];
-                        console.log(`[DEBUG] Identified new audio artifact: "${newTitle}"`);
-
-                        // RENAME to ensure uniqueness
-                        const uniqueName = `Audio ${new Date().toISOString().slice(0, 19).replace('T', ' ')}` + (customPrompt ? ' - Custom' : '');
-                        await this.renameArtifact(newTitle, uniqueName);
-
-                        return { success: true, artifactTitle: uniqueName };
-                    } else if (newArtifacts.length > 1) {
-                        console.warn(`[DEBUG] Multiple new artifacts found: ${newArtifacts.join(', ')}. Renaming first one.`);
-                        // Rename the first one found as a fallback
-                        return { success: true, artifactTitle: newArtifacts[0] };
-                    } else {
-                        console.warn('[DEBUG] No new artifact title found after generation.');
-                    }
-                }
-
-                return { success: true };
-
-            } finally {
-                this.isBusy = false;
-            }
-        });
+        );
     }
 
     private async getAudioArtifactTitles(): Promise<string[]> {
@@ -851,112 +362,14 @@ export class NotebookLMClient {
      * If an array of names is provided, it tries to match by title.
      */
     public async selectSources(sources: string[] | string) {
-        if (!sources || (Array.isArray(sources) && sources.length === 0)) {
-            console.log('[DEBUG] No specific sources provided, using all sources');
-            return;
-        }
-
-        // RESPONSIVE UI HANDLING: Ensure we are on "Zdroje" (Sources) tab
-        const sourcesTab = this.page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
-        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
-            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
-            if (!isSelected) {
-                await sourcesTab.click();
-                await this.humanDelay(1000);
-            }
-        }
-
-        // 1. Deselect all sources to ensure clean slate
-        const selectAllInput = this.page.locator('input[aria-label="Vybrat všechny zdroje"], input[aria-label="Select all sources"], input[name="allsources"]').first();
-
-        if (await selectAllInput.count() > 0) {
-            const initialState = await selectAllInput.isChecked().catch(() => false);
-            console.log(`[DEBUG] Select-all initial state: ${initialState}`);
-
-            // Strategy: Click to SELECT ALL first, then click again to DESELECT ALL
-            // This ensures a clean slate regardless of initial state
-            if (!initialState) {
-                await selectAllInput.click();
-                await this.humanDelay(500);
-            }
-            // Now all should be checked, click to uncheck all
-            await selectAllInput.click();
-            await this.humanDelay(500);
-        } else {
-            console.warn('[DEBUG] Select all input not found');
-        }
-
-        // Wait for UI to stabilize
-        await this.humanDelay(500);
-
-        let titlesToSelect: string[] = [];
-
-        // 2. Resolve indices if range string is provided
-        if (typeof sources === 'string') {
-            const currentSources = await this.extractSources();
-            const indicesToSelect = this.parseIndexRanges(sources, currentSources.length);
-            console.log(`[DEBUG] Parsed ranges "${sources}" to indices: ${indicesToSelect.join(', ')}`);
-
-            for (const idx of indicesToSelect) {
-                // Convert 1-based index to 0-based for array access
-                if (currentSources[idx - 1]) {
-                    titlesToSelect.push(currentSources[idx - 1].title);
-                }
-            }
-        } else {
-            titlesToSelect = sources;
-        }
-
-        console.log(`[DEBUG] Selecting specific sources: ${titlesToSelect.join(', ')}`);
-
-        // Find source items container
-        const sourceItems = this.page.locator('.single-source-container, source-list-item');
-        const count = await sourceItems.count();
-
-        for (const sourceName of titlesToSelect) {
-            let clicked = false;
-
-            // First try matching through the ordered list (more robust if there are duplicate labels)
-            for (let i = 0; i < count; i++) {
-                const item = sourceItems.nth(i);
-                const titleSpan = item.locator('.source-title, .title').first();
-                if (await titleSpan.count() > 0) {
-                    const titleText = await titleSpan.innerText();
-                    if (titleText.includes(sourceName) || sourceName.includes(titleText)) {
-                        const checkbox = item.locator('input[type="checkbox"]');
-                        if (await checkbox.count() > 0) {
-                            const isChecked = await checkbox.isChecked().catch(() => false);
-                            if (!isChecked) {
-                                await checkbox.click();
-                                clicked = true;
-                                await this.humanDelay(300);
-                            } else {
-                                clicked = true; // Already selected
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Fallback to aria-label match if not found in list
-            if (!clicked) {
-                let sourceInput = this.page.locator(`input[aria-label="${sourceName}"]`).first();
-                if (await sourceInput.count() === 0) {
-                    sourceInput = this.page.locator(`input[aria-label*="${sourceName}"]`).first();
-                }
-
-                if (await sourceInput.count() > 0) {
-                    const isChecked = await sourceInput.isChecked().catch(() => false);
-                    if (!isChecked) {
-                        await sourceInput.click();
-                        await this.humanDelay(300);
-                    }
-                } else {
-                    console.warn(`[DEBUG] Source input not found for: "${sourceName.substring(0, 40)}"`);
-                }
-            }
-        }
+        return selectSourcesAction(
+            { page: this.page, log: (msg) => this.log(msg) },
+            {
+                selectors,
+                humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance)
+            },
+            sources
+        );
     }
 
     private async triggerAudioGeneration(customPrompt: string | undefined, dryRun: boolean, notebookTitle?: string): Promise<boolean> {

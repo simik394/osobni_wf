@@ -1,0 +1,190 @@
+import { UniversalContext } from '../types';
+
+export interface Source {
+    type: 'text' | 'file' | 'url';
+    content: string; // text content, file path, or URL
+    filename?: string;
+}
+
+export interface SendMessageOptions {
+    waitForResponse?: boolean;
+    resetSession?: boolean;
+    onProgress?: (text: string) => void;
+    files?: string[];
+    sources?: Source[];
+    model?: string;
+}
+
+/**
+ * Sends a message to Gemini and waits for a response.
+ * Uses dependency injection to avoid circular imports with GeminiClient.
+ */
+export async function sendMessageAction(
+    ctx: UniversalContext,
+    message: string,
+    options: SendMessageOptions = {},
+    deps: {
+        checkAuth: () => Promise<void>;
+        setModel: (model: string) => Promise<boolean>;
+        uploadFiles: (files: string[]) => Promise<boolean>;
+        injectSources: (sources: Source[]) => Promise<void>;
+        injectText: (text: string) => Promise<void>;
+        resetToNewChat: () => Promise<void>;
+        selectors: any;
+        telemetry: any;
+        verbose: boolean;
+        getLatestResponse: () => Promise<string | null>;
+        getCurrentSessionId: () => string | null;
+        getGraphStore: () => any;
+        dumpState: (prefix: string) => Promise<any>;
+    }
+): Promise<string | null> {
+    const { waitForResponse = true, resetSession, onProgress, files = [], sources = [], model } = options;
+    const { page, log } = ctx;
+
+    console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
+
+    // Ensure we are logged in
+    await deps.checkAuth();
+
+    // Set model if requested
+    if (model) {
+        await deps.setModel(model);
+    }
+
+    // Upload files if any
+    if (files.length > 0) {
+        await deps.uploadFiles(files);
+    }
+
+    // Inject sources if any
+    if (sources.length > 0) {
+        await deps.injectSources(sources);
+    }
+
+    // Reset session for isolation if requested
+    if (resetSession) {
+        await deps.resetToNewChat();
+    }
+
+    // Start telemetry trace
+    const trace = deps.telemetry.startTrace('gemini:send-message', {
+        messageLength: message.length,
+        waitForResponse
+    });
+
+    // Start generation tracking
+    const generation = deps.telemetry.startGeneration(trace, message, 'gemini-2.0-flash');
+
+    try {
+        const input = page.locator(deps.selectors.gemini.chat.input).first();
+        await input.waitFor({ state: 'visible', timeout: 10000 });
+
+        const responsesBefore = await page.locator(deps.selectors.gemini.chat.response).count();
+
+        if (message) {
+            await deps.injectText(message);
+        }
+
+        await page.waitForTimeout(300);
+
+        // Click Send button
+        let sendClicked = false;
+        const sendBtn = page.locator(deps.selectors.gemini.chat.send).first();
+        if (await sendBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+            await sendBtn.click();
+            sendClicked = true;
+        }
+
+        if (!sendClicked) {
+            console.log('[Gemini] No Send button found, trying Enter key...');
+            await input.press('Enter');
+        }
+
+        if (!waitForResponse) {
+            deps.telemetry.endGeneration(generation, 'No response awaited');
+            deps.telemetry.endTrace(trace, 'Fire and forget', true);
+            return null;
+        }
+
+        console.log('[Gemini] Waiting for response...');
+        const maxWait = 90000;
+        const pollInterval = 1000;
+        let elapsed = 0;
+        let lastResponseLength = 0;
+        let stableCount = 0;
+
+        while (elapsed < maxWait) {
+            const responsesNow = await page.locator(deps.selectors.gemini.chat.response).count();
+            if (responsesNow > responsesBefore) {
+                const latestResponse = page.locator(deps.selectors.gemini.chat.response).last();
+
+                // Handle common Gemini reasoning/thought blocks
+                if (deps.selectors.gemini.chat.thoughtToggle) {
+                    try {
+                        const toggle = latestResponse.locator(deps.selectors.gemini.chat.thoughtToggle).first();
+                        if (await toggle.isVisible({ timeout: 100 }).catch(() => false)) {
+                            const expanded = await toggle.getAttribute('aria-expanded') === 'true';
+                            if (!expanded) {
+                                if (deps.verbose) console.log('[Gemini] Expanding thought/reasoning block...');
+                                await toggle.click({ timeout: 500 }).catch(() => { });
+                                await page.waitForTimeout(200);
+                            }
+                        }
+                    } catch (err) {
+                        // ignore error
+                    }
+                }
+
+                let currentText = await latestResponse.innerText().catch(() => '');
+
+                if (onProgress && currentText.length > lastResponseLength) {
+                    onProgress(currentText);
+                }
+
+                if (currentText.length > 0 && currentText.length === lastResponseLength) {
+                    stableCount++;
+                    if (stableCount >= 2) {
+                        console.log('[Gemini] Response stabilized');
+                        break;
+                    }
+                } else {
+                    stableCount = 0;
+                    lastResponseLength = currentText.length;
+                }
+            }
+            await page.waitForTimeout(pollInterval);
+            elapsed += pollInterval;
+        }
+
+        const response = await deps.getLatestResponse();
+        console.log(`[Gemini] Response received (${response?.length || 0} chars)`);
+
+        // Track in GraphStore
+        const sessionId = deps.getCurrentSessionId();
+        if (sessionId) {
+            const graphStore = deps.getGraphStore();
+            if (graphStore && graphStore.getIsConnected()) {
+                const sessionTitle = await page.title().then(t => t.replace('Gemini - ', '').trim()).catch(() => message.substring(0, 50));
+                await graphStore.createOrUpdateGeminiSession({ sessionId, title: sessionTitle });
+                await graphStore.addGeminiQuery({ sessionId, query: message });
+            }
+        }
+
+        deps.telemetry.endGeneration(generation, response || '');
+        deps.telemetry.addScore(trace, 'response_length', response?.length || 0);
+        deps.telemetry.endTrace(trace, response?.substring(0, 200), true);
+
+        return response;
+
+    } catch (e) {
+        console.error('[Gemini] Failed to send message:', e);
+        await deps.dumpState('send_message_fail');
+
+        deps.telemetry.trackError(trace, e as Error);
+        deps.telemetry.endGeneration(generation, '');
+        deps.telemetry.endTrace(trace, undefined, false);
+
+        return null;
+    }
+}
