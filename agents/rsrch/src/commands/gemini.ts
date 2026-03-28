@@ -1111,4 +1111,50 @@ gemini.command('chat-gem <gemNameOrId> <message>')
         }
     });
 
+gemini.command('stress-test')
+    .description('Run a complex production stress test to verify parsing fidelity (Math, Tables, Citations)')
+    .option('--local', 'Use local execution', false)
+    .option('--model <name>', 'Gemini Model name')
+    .action(async (opts, cmdObj) => {
+        const options = getOptionsWithGlobals(cmdObj);
+        const useServer = !options.local;
+        
+        const stressPrompt = `
+Provide a comprehensive summary of Neural Scaling Laws. 
+Your response MUST include:
+1. A complex markdown table comparing at least 3 LLM scaling research papers (e.g. Kaplan et al., Hoffmann et al./Chinchilla, Scaling Laws for Neural Language Models).
+2. At least two LaTeX mathematical formulas representing the scaling equations (using $ and $$ notation).
+3. At least 5 distinct citations to academic sources with clickable links or attribution markers.
+4. A Python code block demonstrating a basic power-law calculation for compute optimal training.
+5. A nested list of primary bottlenecks in scaling (Compute, Data, Memory) with specific sub-bullet points for each.
+        `.trim();
+
+        console.log(`[CLI] 🚀 Starting Production Stress Test...`);
+        
+        if (useServer) {
+            console.log(`[CLI] Submitting stress prompt to server (async)...`);
+            const result = await executeGeminiCommand('chat', { 
+                message: stressPrompt, 
+                waitForResponse: false,
+                model: opts.model 
+            }, { server: cliContext.get().serverUrl });
+            
+            const sessionId = result.data?.sessionId;
+            console.log(`\n✓ Stress Test Submitted.`);
+            console.log(`  Session ID: ${sessionId}`);
+            console.log(`\n  To watch progress, run:`);
+            console.log(`  rsrch watch ${sessionId}\n`);
+        } else {
+            console.log(`[CLI] Running stress test locally...`);
+            await runLocalGeminiAction(async (client, gemini) => {
+                if (opts.model) await gemini.setModel(opts.model);
+                console.log('[CLI] Sending complex prompt...');
+                await gemini.sendMessage(stressPrompt, {
+                    onProgress: (text: string) => process.stdout.write(text)
+                });
+                console.log('\n\n--- Stress Test Result ---');
+            });
+        }
+    });
+
 export const geminiCommand = gemini;
