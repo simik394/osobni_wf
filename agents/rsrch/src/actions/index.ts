@@ -4,6 +4,8 @@ export * from './types';
 export * from './gemini/chat';
 export * from './gemini/session';
 export * from './gemini/upload';
+export * from './gemini/submit-message';
+export * from './gemini/watch-response';
 
 // NotebookLM Actions
 export * from './notebooklm/create-notebook';

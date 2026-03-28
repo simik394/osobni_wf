@@ -229,7 +229,9 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **Problem**: Standard `innerText()` is destructive for structured AI output. It flattens LaTeX ($ / $$), strips URLs from indexed citations ([1], [2]), and mangles code block whitespace.
 - **Solution**: **DOM Cloning + Selective Transformation.** By cloning the message element in `page.evaluate`, we can replace fragile UI components (like `mjx-container` for math or attribution links) with stable Markdown equivalents *before* calling `innerText`. This preserves the AI's intended formatting while capturing underlying metadata.
 - **LaTeX Detection**: Gemini uses MathJax (`mjx-container`). Extracting the `tex` attribute directly from these elements is far more reliable than regex-parsing the resulting plain text.
+- **Defensive Heuristics**: Instead of relying on specific internal attributes like `data-attribution-url` (which Gemini often changes), use broad tag selectors (`table`, `a`, `mjx-`) combined with text-length and URL-subsequence matching to identify citations and tables.
 
-## From Chat History to Research Graph
-- **Architecture**: AI responses should not be stored as simple strings. Mapping them to `Session -> Turn -> Citation` nodes in FalkorDB enables "Source Provenance".
-- **Consistency**: Centralizing extraction in `GeminiClient.getLatestResponseData()` ensures that both the CLI, Windmill flows, and future agents benefit from the same high-fidelity parsing logic.
+## Windmill & Concurrency
+- **Worker-Level Blocking**: In the current architecture, a `GeminiClient` request via Windmill occupied a worker for the entire duration of the AI's response generation (typically 20-60s). 
+- **Recommendation**: For high-volume research, move to a **Job-Status Polling** model. The initial request should return a `jobId` immediately, and the client should poll a separate "result" endpoint. This prevents long-running AI generations from exhausting the Windmill worker pool.
+- **Remote CDP Reliability**: Remote browsers (on `halvarm:9223`) can be transient. Automation scripts MUST handle `Target closed` errors gracefully and provide detailed `dumpState` diagnostics for headless debugging.

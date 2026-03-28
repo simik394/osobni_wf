@@ -1,8 +1,8 @@
 import { chromium, Page } from 'playwright';
 import { selectors } from '../src/selectors';
 import { config } from '../src/config';
-import { sendMessageAction } from '../src/actions/gemini/chat';
-import { setModelAction, resetToNewChatAction } from '../src/actions/gemini/session';
+import { sendMessageAction, submitMessageAction } from '../src/actions';
+import { setModelAction, resetToNewChatAction } from '../src/actions';
 import { getRsrchTelemetry } from '@agents/shared';
 import { getGraphStore } from '../src/core/graph-store';
 import { UniversalContext } from '../src/actions/types';
@@ -16,9 +16,10 @@ export async function main(
     browser_ws_endpoint: string,
     message: string,
     session_id?: string,
-    model: 'pro' | 'flash' | 'thinking' = 'pro'
+    model: 'pro' | 'flash' | 'thinking' = 'pro',
+    waitForResponse: boolean = true
 ) {
-    console.log(`[Windmill] Starting Gemini Interaction (Model: ${model}, Session: ${session_id || 'new'})`);
+    console.log(`[Windmill] Starting Gemini Interaction (Model: ${model}, Session: ${session_id || 'new'}, wait: ${waitForResponse})`);
 
     const telemetry = getRsrchTelemetry();
     let browser = null;
@@ -45,9 +46,9 @@ export async function main(
         };
 
         const deps = {
-            checkAuth: async () => { /* Assume pre-authenticated in persistent profile */ },
+            checkAuth: async () => { /* Assume pre-authenticated */ },
             setModel: async (m: string) => setModelAction(ctx, { selectors }, m),
-            uploadFiles: async (f: string[]) => { console.log('File upload not implemented in this script'); return false; },
+            uploadFiles: async (f: string[]) => { console.log('File upload not implemented'); return false; },
             injectSources: async () => { },
             injectText: async (text: string) => {
                 const input = page.locator(selectors.gemini.chat.input).first();
@@ -61,12 +62,18 @@ export async function main(
                 const latest = page.locator(selectors.gemini.chat.response).last();
                 return await latest.innerText().catch(() => null);
             },
+            getLatestResponseData: async () => {
+                const { GeminiClient } = await import('../src/clients/gemini');
+                const client = new GeminiClient(page, { verbose: true });
+                return await client.getLatestResponseData();
+            },
             getCurrentSessionId: () => {
                 const url = page.url();
-                return url.split('/app/')[1] || null;
+                const parts = url.split('/app/');
+                return parts.length > 1 ? parts[1].split('?')[0] : null;
             },
             getGraphStore: () => getGraphStore(),
-            dumpState: async (prefix: string) => { console.log(`[Dump] Would dump state with prefix: ${prefix}`); }
+            dumpState: async (prefix: string) => { console.log(`[Dump] ${prefix}`); }
         };
 
         // 3. Navigation
@@ -74,7 +81,7 @@ export async function main(
             ? `${config.urls.gemini}/app/${session_id}`
             : `${config.urls.gemini}/app`;
 
-        if (page.url() !== targetUrl) {
+        if (!page.url().includes(`/app/${session_id || ''}`)) {
             console.log(`[Windmill] Navigating to ${targetUrl}...`);
             await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
         }
@@ -84,7 +91,12 @@ export async function main(
             await deps.setModel(model);
         }
 
-        // 5. Send Message using modular action
+        // 5. Interaction
+        if (!waitForResponse) {
+            const { sessionId } = await submitMessageAction(ctx, message, {}, deps);
+            return { success: true, session_id: sessionId, status: 'pending' };
+        }
+
         const finalResponse = await sendMessageAction(ctx, message, { waitForResponse: true }, deps);
 
         return {

@@ -9,10 +9,12 @@ export interface FalkorDBNode {
     [key: string]: unknown;
 }
 
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'pending';
+
 export interface GraphJob {
     id: string;
     type: 'query' | 'deepResearch' | 'audio-generation' | 'research-to-podcast' | 'syncConversations';
-    status: 'queued' | 'running' | 'completed' | 'failed';
+    status: JobStatus;
     query: string;
     options?: Record<string, unknown>;
     result?: unknown;
@@ -21,6 +23,8 @@ export interface GraphJob {
     startedAt?: number;
     completedAt?: number;
 }
+
+export type ResearchStatus = 'queued' | 'pending' | 'extracting' | 'completed' | 'failed';
 
 export interface Entity {
     id: string;
@@ -43,6 +47,8 @@ export interface Session {
     externalId: string;
     query: string;
     title?: string;
+    status?: ResearchStatus;
+    lastWatcherJobId?: string;
     createdAt: number;
 }
 

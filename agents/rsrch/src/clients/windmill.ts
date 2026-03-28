@@ -362,6 +362,16 @@ export class WindmillClient {
     }
 
     /**
+     * Trigger a Watcher job for an existing Gemini session.
+     */
+    async triggerGeminiWatch(sessionId: string): Promise<WindmillJobResult> {
+        return this.executeJob('f/rsrch/gemini_watch', {
+            browser_ws_endpoint: process.env.BROWSER_WS_ENDPOINT || `ws://${process.env.RSRCH_HOST || 'localhost'}:${process.env.CDP_PORT || 9222}`,
+            session_id: sessionId
+        });
+    }
+
+    /**
      * NotebookLM commands via Windmill
      */
     async triggerNotebookLMRenameSource(notebookTitle: string, oldTitle: string, newTitle: string): Promise<WindmillJobResult> {

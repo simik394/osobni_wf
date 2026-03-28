@@ -1279,30 +1279,42 @@ MATCH(d: Document { id: '${escapeString(documentId)}' }), (a: Audio { id: '${esc
     async createOrUpdateGeminiSession(data: {
         sessionId?: string;
         id?: string;
-        title: string;
-        isDeepResearch?: boolean
+        title?: string;
+        isDeepResearch?: boolean;
+        status?: string;
+        lastWatcherJobId?: string;
     }): Promise<void> {
         const sessionId = data.sessionId || data.id;
         if (!sessionId) return;
 
+        let setClause = `
+            s.isDeepResearch = $isDeepResearch,
+            s.updatedAt = $now
+        `;
+        if (data.title) setClause += `, s.title = $title`;
+        if (data.status) setClause += `, s.status = $status`;
+        if (data.lastWatcherJobId) setClause += `, s.lastWatcherJobId = $lastWatcherJobId`;
+
         const query = `
-MERGE(s: Session { platformId: $sessionId, platform: 'gemini' })
+            MERGE(s: Session { platformId: $sessionId, platform: 'gemini' })
             ON CREATE SET
-s.id = "session_gemini_" + $sessionId,
-    s.title = $title,
-    s.isDeepResearch = $isDeepResearch,
-    s.createdAt = $now
+                s.id = "session_gemini_" + $sessionId,
+                s.title = $title,
+                s.isDeepResearch = $isDeepResearch,
+                s.status = $status,
+                s.lastWatcherJobId = $lastWatcherJobId,
+                s.createdAt = $now
             ON MATCH SET
-s.title = $title,
-    s.isDeepResearch = $isDeepResearch,
-    s.updatedAt = $now
+                ${setClause}
         `;
         try {
             await this._executeQuery(query, {
                 params: {
                     sessionId,
-                    title: data.title,
+                    title: data.title || 'Untitled Session',
                     isDeepResearch: !!data.isDeepResearch,
+                    status: data.status || 'unknown',
+                    lastWatcherJobId: data.lastWatcherJobId || '',
                     now: Date.now()
                 }
             });

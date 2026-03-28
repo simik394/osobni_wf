@@ -11,7 +11,10 @@ import { getGraphStore } from '../core/graph-store';
 import { 
     resetToNewChatAction, 
     setModelAction, 
-    uploadFilesAction 
+    uploadFilesAction,
+    sendMessageAction,
+    submitMessageAction,
+    watchResponseAction
 } from '../actions';
 import { UniversalContext } from '../actions/types';
 
@@ -143,16 +146,90 @@ export class GeminiClient extends EventEmitter {
     }
 
     /**
-     * Execute query via Windmill (New Architecture)
-     *Delegates the entire interaction to a robust Windmill script.
+     * Sends a message and waits for a full response (Synchronous/Legacy).
      */
-    async queryViaWindmill(query: string, sessionId?: string, model: 'pro' | 'thinking' | 'flash' = 'pro'): Promise<string> {
-        console.log(`[GeminiClient] Delegating query to Windmill...`);
+    async sendMessage(message: string, options: any = {}): Promise<string | null> {
+        return sendMessageAction(this.getContext(), message, options, {
+            checkAuth: () => this.checkAuth(),
+            setModel: (m) => this.setModel(m),
+            uploadFiles: (f) => this.uploadFiles(f),
+            injectSources: (s) => this.injectSources(s),
+            injectText: (t) => this.injectText(t),
+            resetToNewChat: () => this.resetToNewChat(),
+            getLatestResponse: () => this.getLatestResponse(),
+            getLatestResponseData: () => this.getLatestResponseData(),
+            getCurrentSessionId: () => this.getCurrentSessionId(),
+            getGraphStore: () => getGraphStore(),
+            dumpState: (p) => this.dumpState(p),
+            selectors,
+            telemetry,
+            verbose: this.verbose
+        });
+    }
+
+    /**
+     * Submits a message and returns immediately.
+     */
+    async submitMessage(message: string, options: any = {}): Promise<{ sessionId: string | null, success: boolean }> {
+        return submitMessageAction(this.getContext(), message, options, {
+            checkAuth: () => this.checkAuth(),
+            setModel: (m) => this.setModel(m),
+            uploadFiles: (f) => this.uploadFiles(f),
+            injectSources: (s) => this.injectSources(s),
+            injectText: (t) => this.injectText(t),
+            resetToNewChat: () => this.resetToNewChat(),
+            getCurrentSessionId: () => this.getCurrentSessionId(),
+            getGraphStore: () => getGraphStore(),
+            selectors,
+            telemetry,
+            verbose: this.verbose
+        });
+    }
+
+    /**
+     * Watches an existing session for a response and extracts it.
+     */
+    async watchResponse(options: any = {}): Promise<{ success: boolean, markdown?: string }> {
+        return watchResponseAction(this.getContext(), options, {
+            selectors,
+            getLatestResponseData: () => this.getLatestResponseData(),
+            getGraphStore: () => getGraphStore(),
+            verbose: this.verbose
+        });
+    }
+
+    /**
+     * Execute query via Windmill (New Architecture)
+     * Delegates the entire interaction to a robust Windmill script.
+     */
+    async queryViaWindmill(query: string, options: { 
+        sessionId?: string, 
+        model?: 'pro' | 'thinking' | 'flash',
+        async?: boolean 
+    } = {}): Promise<string> {
+        const { sessionId, model = 'pro', async = false } = options;
+        console.log(`[GeminiClient] Delegating query to Windmill (async=${async})...`);
         const { getWindmillClient } = await import('./windmill');
         const windmill = getWindmillClient();
 
         if (!windmill.isConfigured()) {
             throw new Error('Windmill is not configured. Cannot execute robust query.');
+        }
+
+        if (async) {
+            // 1. Submit the message (this job should be non-blocking in its own logic or handled via trigger)
+            const submitJob = await windmill.triggerGeminiInteraction({
+                message: query,
+                session_id: sessionId,
+                model,
+                waitForResponse: false // Tell windmill the initial script should just submit and exit
+            });
+
+            if (!submitJob.success) throw new Error(`Submit failed: ${submitJob.error}`);
+
+            // 2. We'd usually get the sessionId back from the submit job output, 
+            // but for now we return the jobId to track.
+            return `Submitted. JobId: ${submitJob.jobId}`;
         }
 
         const job = await windmill.triggerGeminiInteraction({
@@ -1496,37 +1573,6 @@ export class GeminiClient extends EventEmitter {
     }
 
 
-    async sendMessage(message: string, options: {
-        waitForResponse?: boolean,
-        resetSession?: boolean,
-        onProgress?: (text: string) => void,
-        files?: string[],
-        sources?: Source[],
-        model?: string
-    } = {}): Promise<string | null> {
-        const { sendMessageAction } = await import('../actions/gemini/chat');
-        return sendMessageAction(
-            this.getContext(),
-            message,
-            options,
-            {
-                checkAuth: () => this.checkAuth(),
-                setModel: (model) => this.setModel(model),
-                uploadFiles: (files) => this.uploadFiles(files),
-                injectSources: (sources) => this.injectSources(sources),
-                injectText: (text) => this.injectText(text),
-                resetToNewChat: () => this.resetToNewChat(),
-                selectors,
-                telemetry,
-                verbose: this.verbose,
-                getLatestResponse: () => this.getLatestResponse(),
-                getLatestResponseData: () => this.getLatestResponseData(),
-                getCurrentSessionId: () => this.getCurrentSessionId(),
-                getGraphStore: () => getGraphStore(),
-                dumpState: (prefix) => this.dumpState(prefix)
-            }
-        );
-    }
 
 
     async getResponses(): Promise<string[]> {
@@ -1589,12 +1635,13 @@ export class GeminiClient extends EventEmitter {
                 const clone = container.cloneNode(true) as HTMLElement;
                 const sourcesArray: { index: number; url: string; title: string }[] = [];
 
-                // LaTeX Math Support
-                const mathElements = clone.querySelectorAll('mjx-container, .math, .katex');
+                // LaTeX/Math Support (Broad Match)
+                const mathElements = clone.querySelectorAll('mjx-container, .math, .katex, [class*="math"]');
                 mathElements.forEach((el: any) => {
-                    const tex = el.getAttribute('tex') || el.innerText || '';
+                    const tex = el.getAttribute('tex') || el.getAttribute('data-tex') || el.innerText || '';
                     if (tex) {
-                        const isDisplay = el.tagName === 'MJX-CONTAINER' && el.getAttribute('display') === 'true';
+                        const isDisplay = (el.tagName === 'MJX-CONTAINER' && el.getAttribute('display') === 'true') || 
+                                          el.classList.contains('display-math');
                         el.outerHTML = isDisplay ? `\n$$\n${tex}\n$$\n` : `$${tex}$`;
                     }
                 });
@@ -1608,18 +1655,33 @@ export class GeminiClient extends EventEmitter {
                     pre.outerHTML = `\n\`\`\`${lang}\n${content}\n\`\`\`\n`;
                 });
 
-                // Citation extraction
-                const links = clone.querySelectorAll('a[href*="google.com/search"], a[data-attribution-url]');
+                // Link & Citation Discovery
+                // We look for any links. Citations in Gemini often have google search URLs.
+                const links = clone.querySelectorAll('a');
                 links.forEach((a: any) => {
                     const url = a.getAttribute('data-attribution-url') || a.getAttribute('href');
                     const text = a.innerText.trim();
+                    
                     if (url && url.startsWith('http')) {
-                        let sourceIndex = sourcesArray.findIndex(s => s.url === url);
-                        if (sourceIndex === -1) {
-                            sourceIndex = sourcesArray.length;
-                            sourcesArray.push({ index: sourceIndex + 1, url, title: text || 'Source' });
+                        // If it looks like a citation (short text or specific attr or search result)
+                        const isSearchLink = url.includes('google.com/search');
+                        const attrUrl = a.getAttribute('data-attribution-url');
+                        const looksLikeCitation = (text.length < 6 && /^[0-9\[\]]+$/.test(text)) || isSearchLink || attrUrl;
+
+                        if (looksLikeCitation) {
+                            const finalUrl = attrUrl || url;
+                            let sourceIndex = sourcesArray.findIndex(s => s.url === finalUrl);
+                            if (sourceIndex === -1) {
+                                sourceIndex = sourcesArray.length;
+                                // Try to extract a clean title (e.g., "Nature" from "Nature [2]")
+                                const cleanTitle = text.replace(/\[\d+\]/g, '').trim() || 'Source';
+                                sourcesArray.push({ index: sourceIndex + 1, url: finalUrl, title: cleanTitle });
+                            }
+                            a.innerText = `[^${sourceIndex + 1}]`;
+                        } else if (text) {
+                            // Regular link preservation
+                            a.outerHTML = `[${text}](${url})`;
                         }
-                        a.innerText = `[^${sourceIndex + 1}]`;
                     }
                 });
 
@@ -1640,21 +1702,14 @@ export class GeminiClient extends EventEmitter {
                     }
                 });
 
-                // Hyperlink Preservation (Non-citations)
-                const allLinks = clone.querySelectorAll('a:not([data-attribution-url]):not([href*="google.com/search"])');
-                allLinks.forEach((a: any) => {
-                    const url = a.getAttribute('href');
-                    const text = a.innerText.trim();
-                    if (url && url.startsWith('http') && text) {
-                        a.outerHTML = `[${text}](${url})`;
-                    }
-                });
-
                 // Table Support (HTML to GFM)
+                // We convert ANY HTML table inside the response to GFM
                 const tables = clone.querySelectorAll('table');
                 tables.forEach((table: any) => {
                     let mdTable = '\n';
                     const rows = Array.from(table.querySelectorAll('tr'));
+                    if (rows.length === 0) return;
+
                     rows.forEach((row: any, i: number) => {
                         const cells = Array.from(row.querySelectorAll('th, td'));
                         const cellText = cells.map((c: any) => c.innerText.replace(/\n/g, ' ').trim());
