@@ -410,25 +410,42 @@ export class GraphStore {
     }
 
     /**
-     * Clean up stale PendingAudios (older than 1 hour)
+     * Clean up stale PendingAudios (older than specified age)
      */
-    async cleanupStalePendingAudios(maxAgeMs = 60 * 60 * 1000): Promise<number> {
+    async cleanupStalePendingAudios(maxAgeMs = 60 * 60 * 1000, dryRun = false): Promise<number> {
         if (!this.graph) throw new Error('Not connected');
 
         const cutoff = Date.now() - maxAgeMs;
-        const result = await this.graph.query<any[]>(`
-            MATCH (pa:PendingAudio)
-            WHERE pa.createdAt < ${cutoff} AND pa.status IN ['queued', 'started', 'generating']
-            WITH pa, pa.id as id
-            DETACH DELETE pa
-            RETURN count(*) as deleted
-        `);
+        const query = dryRun 
+            ? `MATCH (pa:PendingAudio) WHERE pa.createdAt < ${cutoff} AND pa.status IN ['queued', 'started', 'generating'] RETURN count(*) as count`
+            : `MATCH (pa:PendingAudio) WHERE pa.createdAt < ${cutoff} AND pa.status IN ['queued', 'started', 'generating'] WITH pa DETACH DELETE pa RETURN count(*) as count`;
 
-        const deleted = (result.data?.[0] as any)?.deleted || 0;
-        if (deleted > 0) {
-            logger.info(`[GraphStore] Cleaned up ${deleted} stale PendingAudio nodes`);
+        const result = await this.graph.query<any[]>(query);
+        const count = (result.data?.[0] as any)?.count || 0;
+        
+        if (!dryRun && count > 0) {
+            logger.info(`[GraphStore] Cleaned up ${count} stale PendingAudio nodes`);
         }
-        return deleted;
+        return count;
+    }
+
+    /**
+     * Clean up orphaned nodes (nodes with no relationships)
+     */
+    async cleanupOrphanedNodes(dryRun = false): Promise<number> {
+        if (!this.graph) throw new Error('Not connected');
+
+        const query = dryRun
+            ? `MATCH (n) WHERE NOT (n)--() RETURN count(*) as count`
+            : `MATCH (n) WHERE NOT (n)--() WITH n DETACH DELETE n RETURN count(*) as count`;
+
+        const result = await this.graph.query<any[]>(query);
+        const count = (result.data?.[0] as any)?.count || 0;
+
+        if (!dryRun && count > 0) {
+            logger.info(`[GraphStore] Cleaned up ${count} orphaned nodes`);
+        }
+        return count;
     }
 
     // =========================

@@ -1,11 +1,16 @@
-
-import { chromium } from 'playwright';
+import { chromium, Page } from 'playwright';
+import { selectors } from '../src/selectors';
+import { config } from '../src/config';
+import { sendMessageAction } from '../src/actions/gemini/chat';
+import { setModelAction, resetToNewChatAction } from '../src/actions/gemini/session';
+import { getRsrchTelemetry } from '@agents/shared';
+import { getGraphStore } from '../src/core/graph-store';
+import { UniversalContext } from '../src/actions/types';
 
 /**
  * Windmill Script: Gemini Interaction
  * 
- * connect to the running browser, executre a prompt, and return the result.
- * This runs as a single atomic job to avoid network latency of individual CDP frames.
+ * connect to the running browser, execute a prompt, and return the result.
  */
 export async function main(
     browser_ws_endpoint: string,
@@ -15,81 +20,77 @@ export async function main(
 ) {
     console.log(`[Windmill] Starting Gemini Interaction (Model: ${model}, Session: ${session_id || 'new'})`);
 
+    const telemetry = getRsrchTelemetry();
     let browser = null;
+    
     try {
         // 1. Connect to Browser
         console.log(`[Windmill] Connecting to browser at ${browser_ws_endpoint}...`);
         browser = await chromium.connectOverCDP(browser_ws_endpoint);
 
-        // 2. Get the correct context (Persistent Context is usually the default one)
         const context = browser.contexts()[0];
-        if (!context) {
-            throw new Error('No browser context found. Is the browser container running with persistent profile?');
-        }
+        if (!context) throw new Error('No browser context found.');
 
-        // 3. Get or Create Page
-        // We try to find an existing Gemini tab or create new one
         let page = context.pages().find(p => p.url().includes('gemini.google.com'));
         if (!page) {
             console.log('[Windmill] No active Gemini tab, creating new one...');
             page = await context.newPage();
-        } else {
-            console.log('[Windmill] Reuse existing Gemini tab');
         }
 
-        // 4. Navigate
+        // 2. Prepare Workflow context/deps
+        const ctx: UniversalContext = {
+            page,
+            log: (msg) => console.log(`[Gemini] ${msg}`),
+            config
+        };
+
+        const deps = {
+            checkAuth: async () => { /* Assume pre-authenticated in persistent profile */ },
+            setModel: async (m: string) => setModelAction(ctx, { selectors }, m),
+            uploadFiles: async (f: string[]) => { console.log('File upload not implemented in this script'); return false; },
+            injectSources: async () => { },
+            injectText: async (text: string) => {
+                const input = page.locator(selectors.gemini.chat.input).first();
+                await input.fill(text);
+            },
+            resetToNewChat: async () => resetToNewChatAction(ctx, { selectors }),
+            selectors,
+            telemetry,
+            verbose: true,
+            getLatestResponse: async () => {
+                const latest = page.locator(selectors.gemini.chat.response).last();
+                return await latest.innerText().catch(() => null);
+            },
+            getCurrentSessionId: () => {
+                const url = page.url();
+                return url.split('/app/')[1] || null;
+            },
+            getGraphStore: () => getGraphStore(),
+            dumpState: async (prefix: string) => { console.log(`[Dump] Would dump state with prefix: ${prefix}`); }
+        };
+
+        // 3. Navigation
         const targetUrl = session_id
-            ? `https://gemini.google.com/app/${session_id}`
-            : 'https://gemini.google.com/app';
+            ? `${config.urls.gemini}/app/${session_id}`
+            : `${config.urls.gemini}/app`;
 
         if (page.url() !== targetUrl) {
             console.log(`[Windmill] Navigating to ${targetUrl}...`);
             await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
         }
 
-        // 5. Basic Interactions
-        // TODO: Import shared selectors if possible, or duplicate for robustness/independence
-        // For this POC script, we use hardcoded selectors for robustness
-        const selectors = {
-            input: 'div[contenteditable="true"], textarea',
-            sendButton: 'button[aria-label*="Send"], button[aria-label*="Odeslat"]', // Multilingual support
-            response: 'model-response', // Custom element usually
-        };
+        // 4. Set Model if needed
+        if (model !== 'pro') {
+            await deps.setModel(model);
+        }
 
-        // Wait for input
-        await page.waitForSelector(selectors.input, { timeout: 15000 });
+        // 5. Send Message using modular action
+        const finalResponse = await sendMessageAction(ctx, message, { waitForResponse: true }, deps);
 
-        // Type message
-        console.log('[Windmill] Typing message...');
-        await page.fill(selectors.input, message);
-
-        // Click Send
-        console.log('[Windmill] Sending...');
-        // Sometimes typing is enough, sometimes need to click
-        await page.click(selectors.sendButton);
-
-        // Wait for response
-        // Logic: Wait for the *new* response to appear. 
-        // This is tricky without streaming, but for a simplified script we can wait for the "stop generating" button to disappear?
-        // Or wait for the last model-response to be non-empty and stable?
-
-        // Simple heuristic: Wait 2 seconds, then wait for streaming to stop
-        await page.waitForTimeout(2000);
-
-        // Extract last response
-        // ... (Implementation detail to be refined)
-
-        const responseText = await page.evaluate(() => {
-            const responses = document.querySelectorAll('model-response');
-            if (responses.length === 0) return null;
-            return (responses[responses.length - 1] as HTMLElement).innerText;
-        });
-
-        console.log('[Windmill] Interaction complete.');
         return {
             success: true,
-            response: responseText,
-            session_id: page.url().split('/app/')[1] // Return new session ID if one was created
+            response: finalResponse,
+            session_id: deps.getCurrentSessionId()
         };
 
     } catch (error: any) {
@@ -99,14 +100,6 @@ export async function main(
             error: error.message
         };
     } finally {
-        if (browser) {
-            // We do NOT close the browser as it is a persistent service
-            // We might close the page if we opened a new one, but for state persistence maybe keep it?
-            // Let's disconnect.
-            await browser.close(); // close() on connected CDP browser just disconnects, doesn't kill process usually?
-            // Actually browser.close() kills it if launched, but for connectOverCDP it might just disconnect.
-            // Safer to just disconnect if method exists, or check docs. 
-            // Playwright connectOverCDP -> close() disconnects.
-        }
+        if (browser) await browser.close();
     }
 }

@@ -10,8 +10,8 @@
  * It relies on the pre-built 'rsrch' package in ../dist
  */
 
-import { PerplexityClient } from '../../dist/client';
-import { config } from '../../dist/config';
+import { PerplexityClient } from '../src/clients/base';
+import { config } from '../src/config';
 import * as path from 'path';
 import * as dns from 'node:dns';
 
