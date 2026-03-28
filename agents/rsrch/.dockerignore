@@ -38,5 +38,6 @@ _progress/
 
 # Playwright cache (installed in base image)
 .cache/
-# Playwright cache (installed in base image)
-.cache/
+
+# Test sources
+agents/rsrch/src/test-*
