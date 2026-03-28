@@ -39,7 +39,7 @@ describe('selectors', () => {
       const result = reloadSelectors();
 
       // Verify defaults are returned
-      expect(result.home.createNewButton).toBe('.create-new-button');
+      expect(result.home.createNewButton).toBe('.create-new-button, .create-new-action-button');
       expect(result.notebook.titleInput).toBe('input.title-input');
 
       // Verify fs.existsSync was called
@@ -94,7 +94,7 @@ notebook:
 
       const result = reloadSelectors();
 
-      expect(result.home.createNewButton).toBe('.create-new-button');
+      expect(result.home.createNewButton).toBe('.create-new-button, .create-new-action-button');
       expect(consoleSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -151,7 +151,7 @@ home:
       // We are verifying that the proxy correctly accesses the underlying loaded object.
 
       const homeSelectors = selectors.home;
-      expect(homeSelectors.createNewButton).toBe('.create-new-button');
+      expect(homeSelectors.createNewButton).toBe('.create-new-button, .create-new-action-button');
     });
 
 // end snippet should-trigger-loadselectors-when-accessing-a-prop

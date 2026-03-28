@@ -213,26 +213,43 @@ describe('GeminiClient', () => {
     describe('sendMessage', () => {
 
 // start snippet should-fill-the-input-press-enter-and-wait-for-a-r
-        it('should fill the input, press Enter, and wait for a response', async () => {
+        it('should send a message and wait for a response', async () => {
             const message = 'Hello, Gemini!';
             const mockInput = createMockLocator(true);
+            // injectText reads innerText to check if empty
+            mockInput.innerText = vi.fn().mockResolvedValue('');
             const mockResponse = createMockLocator(true, 'Response text');
             mockResponse.last = vi.fn().mockReturnThis();
 
+            // Track response count to simulate new response appearing
+            let responseCount = 0;
+
             mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div[contenteditable="true"]')) {
+                if (selector.includes('Sign in')) {
+                    return createMockLocator(false); // Not signed out
+                }
+                if (selector.includes('contenteditable') || selector.includes('rich-textarea') || selector.includes('chat-input')) {
                     return mockInput;
                 }
                 if (selector.includes('model-response')) {
-                    return mockResponse;
+                    responseCount++;
+                    // First call: 0 responses (before send), subsequent: 1 response
+                    const loc = createMockLocator(true, 'Response text');
+                    loc.count = vi.fn().mockResolvedValue(responseCount > 1 ? 1 : 0);
+                    loc.last = vi.fn().mockReturnThis();
+                    loc.nth = vi.fn().mockReturnThis();
+                    return loc;
+                }
+                if (selector.includes('send') || selector.includes('Send') || selector.includes('Odeslat')) {
+                    return createMockLocator(true); // Send button visible
                 }
                 return createMockLocator(false);
             });
 
             const response = await client.sendMessage(message);
 
-            expect(mockInput.fill).toHaveBeenCalledWith(message);
-            expect(mockInput.press).toHaveBeenCalledWith('Enter');
+            // The new API uses injectText (click + type) instead of fill
+            expect(mockInput.click).toHaveBeenCalled();
             expect(response).toBe('Response text');
         });
 
@@ -242,10 +259,27 @@ describe('GeminiClient', () => {
 
         it('should return null if waitForResponse is false', async () => {
             const message = 'Fire and forget';
-            const response = await client.sendMessage(message, false);
+            const mockInput = createMockLocator(true);
+            mockInput.innerText = vi.fn().mockResolvedValue('');
+
+            mockPage.locator.mockImplementation((selector) => {
+                if (selector.includes('Sign in')) {
+                    return createMockLocator(false);
+                }
+                if (selector.includes('contenteditable') || selector.includes('rich-textarea') || selector.includes('chat-input')) {
+                    return mockInput;
+                }
+                if (selector.includes('send') || selector.includes('Send') || selector.includes('Odeslat')) {
+                    return createMockLocator(true);
+                }
+                if (selector.includes('model-response')) {
+                    return createMockLocator(false);
+                }
+                return createMockLocator(false);
+            });
+
+            const response = await client.sendMessage(message, { waitForResponse: false });
             expect(response).toBeNull();
-            // Ensure we don't wait for response
-            expect(mockPage.waitForTimeout).toHaveBeenCalledTimes(1);
         });
 
 // end snippet should-return-null-if-waitforresponse-is-false
@@ -276,22 +310,39 @@ describe('GeminiClient', () => {
 
         it('should handle response stabilization', async () => {
             const mockInput = createMockLocator(true);
+            mockInput.innerText = vi.fn().mockResolvedValue('');
             const mockResponse = createMockLocator(true, 'Initial response');
             mockResponse.last = vi.fn().mockReturnThis();
 
+            let responseCallCount = 0;
 
             mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('div[contenteditable="true"]')) return mockInput;
-                if (selector.includes('model-response')) return mockResponse;
-                return createMockLocator(true);
+                if (selector.includes('Sign in')) {
+                    return createMockLocator(false); // Not signed out
+                }
+                if (selector.includes('contenteditable') || selector.includes('rich-textarea') || selector.includes('chat-input')) {
+                    return mockInput;
+                }
+                if (selector.includes('model-response')) {
+                    responseCallCount++;
+                    const loc = createMockLocator(true, 'Initial response');
+                    // First call returns 0 (before send), then 1 (response appeared)
+                    loc.count = vi.fn().mockResolvedValue(responseCallCount > 1 ? 1 : 0);
+                    loc.last = vi.fn().mockReturnThis();
+                    loc.nth = vi.fn().mockReturnThis();
+                    // Simulate stabilization: text grows then stabilizes
+                    loc.innerText = vi.fn()
+                        .mockResolvedValueOnce('Initial response')
+                        .mockResolvedValueOnce('Initial response, more text')
+                        .mockResolvedValueOnce('Initial response, more text')
+                        .mockResolvedValue('Initial response, more text');
+                    return loc;
+                }
+                if (selector.includes('send') || selector.includes('Send') || selector.includes('Odeslat')) {
+                    return createMockLocator(true);
+                }
+                return createMockLocator(false);
             });
-
-            // Simulate response text changing and then stabilizing
-            mockResponse.innerText
-                .mockResolvedValueOnce('Initial response')
-                .mockResolvedValueOnce('Initial response, more text')
-                .mockResolvedValueOnce('Initial response, more text') // Stable
-                .mockResolvedValueOnce('Initial response, more text'); // Stable again
 
             await client.sendMessage('test');
 
