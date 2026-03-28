@@ -5,7 +5,6 @@ import { NotebookLMClient } from '../notebooklm-client';
 import { GraphStore } from '../graph-store';
 import { getRegistry } from '../artifact-registry';
 import { discordService } from '../services/notification';
-import { notifyJobCompleted } from '../discord';
 
 export interface WorkflowRouterDeps {
     perplexityClient: PerplexityClient;
@@ -37,7 +36,7 @@ export function createWorkflowRouter(deps: WorkflowRouterDeps) {
             (async () => {
                 try {
                     await graphStore.updateJobStatus(job.id, 'running');
-                    notifyJobCompleted(job.id, 'Unified Flow Started', query, true, 'Starting automated research pipeline...');
+                    await discordService.notifyJobCompletion(job.id, 'Unified Flow Started', query, true, 'Starting automated research pipeline...');
 
                     const registry = getRegistry();
 
@@ -108,12 +107,12 @@ Please use your Deep Research capabilities to expand on this...`;
                     }
 
                     await graphStore.updateJobStatus(job.id, 'completed', { result: { docTitle, docUrl, audioGenerated: true, sessionId, docId } });
-                    notifyJobCompleted(job.id, 'Unified Flow Completed', query, true, `Podcast generated for "${query}".`);
+                    await discordService.notifyJobCompletion(job.id, 'Unified Flow Completed', query, true, `Podcast generated for "${query}".`);
 
                 } catch (err: any) {
                     console.error(`[WorkflowRouter] Job ${job.id} failed:`, err);
                     await graphStore.updateJobStatus(job.id, 'failed', { error: err.message });
-                    notifyJobCompleted(job.id, 'Unified Flow Failed', query, false, err.message);
+                    await discordService.notifyJobCompletion(job.id, 'Unified Flow Failed', query, false, err.message);
                 }
             })();
         } catch (e: any) {

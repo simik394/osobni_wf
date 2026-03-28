@@ -5,6 +5,7 @@ import { NotebookLMClient } from './notebooklm-client';
 import { GeminiClient } from './gemini-client';
 import { BrowserContext, Page, Browser } from 'playwright';
 import { config } from './config';
+import { selectors } from './selectors';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from './profile';
@@ -488,18 +489,18 @@ export class PerplexityClient extends BaseClient {
             // Wait for input
             console.log('Looking for query input...');
 
-            const selectors = Array.isArray(config.selectors.queryInput)
-                ? [...config.selectors.queryInput]
-                : [config.selectors.queryInput];
+            const pSelectors = Array.isArray(selectors.perplexity.queryInput)
+                ? [...selectors.perplexity.queryInput]
+                : [selectors.perplexity.queryInput];
 
-            if (config.selectors.followUpInput) {
-                selectors.push(config.selectors.followUpInput);
+            if (selectors.perplexity.followUpInput) {
+                pSelectors.push(selectors.perplexity.followUpInput);
             }
             // Add fallback selectors
-            selectors.push('textarea[placeholder*="Ask"]', 'div[contenteditable="true"]');
+            pSelectors.push('textarea[placeholder*="Ask"]', 'div[contenteditable="true"]');
 
             let inputSelector = '';
-            for (const selector of selectors) {
+            for (const selector of pSelectors) {
                 try {
                     await page.waitForSelector(selector, { timeout: 2000 });
                     inputSelector = selector;
@@ -515,7 +516,7 @@ export class PerplexityClient extends BaseClient {
                     console.log('Could not find input on search page. Navigating to home...');
                     await page.goto(config.url);
                     // Retry finding selector
-                    for (const selector of selectors) {
+                    for (const selector of pSelectors) {
                         try {
                             await page.waitForSelector(selector, { timeout: 2000 });
                             inputSelector = selector;
@@ -530,7 +531,7 @@ export class PerplexityClient extends BaseClient {
             }
 
             // Capture initial answer count BEFORE submitting
-            const initialAnswerCount = await page.locator(config.selectors.answerContainer).count();
+            const initialAnswerCount = await page.locator(selectors.perplexity.answerContainer).count();
             console.log(`Initial answer count: ${initialAnswerCount}`);
 
             // Toggle Deep Research if requested
@@ -565,7 +566,7 @@ export class PerplexityClient extends BaseClient {
 
             // Wait for the NEW container to appear
             while (pollingAttempts < maxPollingAttempts) {
-                const currentCount = await page.locator(config.selectors.answerContainer).count();
+                const currentCount = await page.locator(selectors.perplexity.answerContainer).count();
                 if (currentCount > initialAnswerCount) {
                     newAnswerIndex = currentCount - 1; // 0-based index of the last one
                     console.log(`New answer container detected at index ${newAnswerIndex} (Total: ${currentCount})`);
@@ -577,7 +578,7 @@ export class PerplexityClient extends BaseClient {
 
             if (pollingAttempts >= maxPollingAttempts) {
                 console.warn("Timed out waiting for new answer container count to increase. Checking current count...");
-                const currentCount = await page.locator(config.selectors.answerContainer).count();
+                const currentCount = await page.locator(selectors.perplexity.answerContainer).count();
                 if (currentCount > 0) {
                     newAnswerIndex = currentCount - 1;
                     console.log(`Fallback: Using last available answer container at index ${newAnswerIndex}`);
@@ -588,7 +589,7 @@ export class PerplexityClient extends BaseClient {
 
             // Stability check logic...
             console.log(`Monitoring stability of answer at index ${newAnswerIndex}...`);
-            const answerLocator = page.locator(config.selectors.answerContainer).nth(newAnswerIndex);
+            const answerLocator = page.locator(selectors.perplexity.answerContainer).nth(newAnswerIndex);
 
             let lastText = '';
             let stableCount = 0;
@@ -700,7 +701,7 @@ export class PerplexityClient extends BaseClient {
                     sources,
                     thoughts
                 };
-            }, [newAnswerIndex, config.selectors.answerContainer]);
+            }, [newAnswerIndex, selectors.perplexity.answerContainer]);
 
             // --- Markdown Formatting ---
             let markdown = `### Answer\n\n${data.answer}\n\n`;

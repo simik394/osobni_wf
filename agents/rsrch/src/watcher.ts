@@ -10,10 +10,10 @@
  *   rsrch watch --folder ~/audio   # Save audio to specific folder
  */
 
+import { discordService } from './services/notification';
+import { config } from './config';
 import { PerplexityClient } from './client';
-import { GeminiClient, ResearchInfo } from './gemini-client';
-import { NotebookLMClient } from './notebooklm-client';
-import { notifyResearchComplete, loadConfigFromEnv } from './notify';
+import { GeminiClient } from './gemini-client';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -57,8 +57,8 @@ export async function watchForResearch(options: Partial<WatcherOptions> = {}): P
     }
     console.log('');
 
-    // Load notification config
-    loadConfigFromEnv();
+    // Notification config is handled by NotificationService/config
+
 
     // Initialize client
     const client = new PerplexityClient();
@@ -189,7 +189,11 @@ async function processCompletedResearch(
 
     // Send notification
     console.log('\n📬 Sending notification...');
-    await notifyResearchComplete(title, audioPath);
+    await discordService.sendNotification(title + (audioPath ? ' (with audio)' : ''), { 
+        title: 'Research Complete',
+        url: audioPath ? `file://${audioPath}` : undefined
+    });
+
     console.log('✅ Notification sent!');
 }
 
@@ -246,8 +250,6 @@ function sleep(ms: number): Promise<void> {
  */
 export async function checkAndProcess(options: Partial<WatcherOptions> = {}): Promise<boolean> {
     const opts: WatcherOptions = { ...DEFAULT_OPTIONS, ...options };
-
-    loadConfigFromEnv();
 
     const client = new PerplexityClient();
     await client.init();

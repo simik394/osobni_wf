@@ -148,23 +148,11 @@ export class NotebookLMClient {
     }
 
     private async notifyDiscord(message: string, isError: boolean = false) {
-        const webhookUrl = config.notifications?.discordWebhookUrl;
-        if (!webhookUrl) return;
-
-        console.log('[NotebookLM] Sending Discord notification...');
-        try {
-            await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    content: message,
-                    username: 'NotebookLM Bot',
-                    avatar_url: 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg' // Optional
-                })
-            });
-        } catch (e) {
-            console.error('[NotebookLM] Failed to send Discord notification:', e);
-        }
+        const { discordService } = await import('./services/notification');
+        await discordService.sendNotification(message, {
+            title: isError ? 'NotebookLM Error' : 'NotebookLM Notification',
+            priority: isError ? 'high' : 'default'
+        });
     }
 
 

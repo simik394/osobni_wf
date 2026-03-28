@@ -41,11 +41,13 @@ export const notifyCommand = new Command('notify')
     .option('--title <title>', 'Notification title')
     .option('--priority <level>', 'Priority (low|default|high|urgent)', 'default')
     .action(async (message, opts) => {
-        const { sendNotification, loadConfigFromEnv } = await import('../notify');
-        loadConfigFromEnv();
+        const { discordService } = await import('../services/notification');
         console.log(`📬 Sending notification: "${message}"`);
-        const results = await sendNotification(message, { title: opts.title, priority: opts.priority });
-        console.log('Results:', results);
+        const results = await discordService.sendNotification(message, { 
+            title: opts.title || 'CLI Notification', 
+            priority: opts.priority 
+        });
+        console.log('Notification sent via Discord/Ntfy.');
     });
 
 import { DEFAULTS } from '@agents/shared';

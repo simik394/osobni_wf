@@ -153,6 +153,12 @@ export interface GeminiSelectors {
     };
 }
 
+export interface PerplexitySelectors {
+    queryInput: string | string[];
+    followUpInput: string;
+    answerContainer: string;
+}
+
 export interface NotebookLMSelectors {
     home: HomeSelectors;
     notebook: NotebookSelectors;
@@ -162,6 +168,7 @@ export interface NotebookLMSelectors {
     download: DownloadSelectors;
     chat: ChatSelectors;
     gemini: GeminiSelectors;
+    perplexity: PerplexitySelectors;
 }
 
 // ============================================================

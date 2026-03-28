@@ -4,7 +4,6 @@ import { PerplexityClient } from '../client';
 import { GraphStore } from '../graph-store';
 import { markTabBusy, markTabFree } from '@agents/shared/tab-pool';
 import { discordService } from '../services/notification';
-import { notifyJobCompleted } from '../discord';
 
 export interface ResearchRouterDeps {
     perplexityClient: PerplexityClient;
@@ -42,13 +41,11 @@ export function createResearchRouter(deps: ResearchRouterDeps) {
                     const result = await jobClient.startDeepResearch(query, gem);
                     await graphStore.updateJobStatus(job.id, 'completed', { result });
 
-                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl);
-                    notifyJobCompleted(job.id, 'Deep Research', query, true, result.googleDocTitle);
+                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl, result.googleDocUrl);
                 } catch (e: any) {
                     console.error(`[ResearchRouter] Job ${job.id} failed:`, e);
                     await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });
                     await discordService.notifyJobCompletion(job.id, 'Deep Research', query, false, e.message);
-                    notifyJobCompleted(job.id, 'Deep Research', query, false, e.message);
                 } finally {
                     if (page) await markTabFree(page);
                 }

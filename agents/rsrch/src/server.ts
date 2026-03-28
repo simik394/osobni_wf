@@ -99,7 +99,7 @@ app.use('/gemini', createGeminiRouter(dependencies));
 // Server Startup
 // ----------------------------------------------------------------------------
 
-async function start() {
+export async function startServer() {
     console.log('--- Rsrch Agent Server (Modular) ---');
     
     if (process.env.PREINTI_BROWSER === 'true') {
@@ -117,7 +117,9 @@ async function start() {
     });
 }
 
-start().catch(err => {
-    console.error('SERVER FATAL ERROR:', err);
-    process.exit(1);
-});
+if (require.main === module) {
+    startServer().catch(err => {
+        console.error('SERVER FATAL ERROR:', err);
+        process.exit(1);
+    });
+}

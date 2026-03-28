@@ -1,6 +1,7 @@
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { config } from './config';
+import { selectors } from './selectors';
 import * as fs from 'fs';
 import * as path from 'path';
 import logger from './logger';
@@ -40,12 +41,12 @@ export async function runQuery(queryText: string) {
         // Wait for input - faster check
         logger.info('Looking for query input...');
 
-        const selectors = Array.isArray(config.selectors.queryInput)
-            ? config.selectors.queryInput
-            : [config.selectors.queryInput];
+        const qSelectors = Array.isArray(selectors.perplexity.queryInput)
+            ? selectors.perplexity.queryInput
+            : [selectors.perplexity.queryInput];
 
         let inputSelector = '';
-        for (const selector of selectors) {
+        for (const selector of qSelectors) {
             try {
                 // Reduced timeout for faster failover
                 await page.waitForSelector(selector, { timeout: 2000 });
@@ -69,7 +70,7 @@ export async function runQuery(queryText: string) {
         logger.info('Query submitted. Waiting for answer...');
 
         // Wait for answer container to appear
-        await page.waitForSelector(config.selectors.answerContainer, { timeout: 30000 });
+        await page.waitForSelector(selectors.perplexity.answerContainer, { timeout: 30000 });
 
         // Faster completion detection:
         // 1. Check for "Stop generating" button disappearance (primary signal)
@@ -91,7 +92,7 @@ export async function runQuery(queryText: string) {
                 const maxRetries = 60;
 
                 for (let i = 0; i < maxRetries; i++) {
-                    const currentText = await page.textContent(config.selectors.answerContainer);
+                    const currentText = await page.textContent(selectors.perplexity.answerContainer);
                     if (currentText && currentText === lastText && currentText.length > 50) {
                         stableCount++;
                         if (stableCount >= 2) { // Stable for 1 second (faster than before)
@@ -109,7 +110,7 @@ export async function runQuery(queryText: string) {
             logger.info('Error during completion check, assuming done:', e);
         }
 
-        const answer = await page.textContent(config.selectors.answerContainer);
+        const answer = await page.textContent(selectors.perplexity.answerContainer);
 
         const result = {
             query: queryText,

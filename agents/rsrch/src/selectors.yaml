@@ -203,3 +203,10 @@ gemini:
     photos: 'text="Fotky"|text="Photos"'
     importCode: 'text="Importovat kód"|text="Import code"'
     notebooklm: 'text="NotebookLM"'
+# ============================================================
+# PERPLEXITY SELECTORS
+# ============================================================
+perplexity:
+  queryInput: ["textarea[placeholder*='Ask']", "div[contenteditable='true']"]
+  followUpInput: 'textarea[placeholder*="follow-up"]'
+  answerContainer: "div.prose, .answer-content, [class*='answer-']"
