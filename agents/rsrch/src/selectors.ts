@@ -2,7 +2,7 @@
  * NotebookLM Selector Configuration
  * 
  * Loads selector configuration from selectors.yaml for easier maintenance.
- * When NotebookLM UI changes, update selectors.yaml instead of client code.
+ * When NotebookLM/Gemini UI changes, update selectors.yaml instead of client code.
  * 
  * @module selectors
  */
@@ -11,7 +11,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'yaml';
 
-// Type definitions for selector categories
+// ============================================================
+// TYPE DEFINITIONS
+// ============================================================
+
 export interface HomeSelectors {
     createNewButton: string;
     projectButton: string;
@@ -86,6 +89,7 @@ export interface ChatSelectors {
     messageContainer: string;
     lastMessage: string;
     thinkingIndicator: string;
+    thoughtToggle?: string;
 }
 
 export interface GeminiSelectors {
@@ -104,7 +108,6 @@ export interface GeminiSelectors {
         thinking: string;
         pro: string;
     };
-
     chat: {
         app: string;
         input: string;
@@ -161,147 +164,15 @@ export interface NotebookLMSelectors {
     gemini: GeminiSelectors;
 }
 
-// Default selectors (fallback if YAML fails to load)
-const defaultSelectors: NotebookLMSelectors = {
-    home: {
-        createNewButton: '.create-new-button, .create-new-action-button',
-        projectButton: 'project-button, .mat-mdc-row, mat-card:not(.create-new-action-button)',
-        projectButtonTitle: '.project-button-title, .title-column span, .mat-column-title span',
-        projectCard: 'mat-card, .mat-mdc-row',
-        primaryActionButton: '.primary-action-button, .mat-mdc-row, project-button',
-    },
-    notebook: {
-        titleInput: 'input.title-input',
-        urlPattern: '**/notebook/**',
-    },
-    sources: {
-        tab: 'div[role="tab"]',
-        tabTextPattern: 'Zdroje|Sources',
-        addSourcesButton: 'Přidat zdroje|Add sources',
-        dropZoneButton: 'button.drop-zone-icon-button',
-        webSourcePattern: 'web|link|site',
-        pasteTextPattern: 'Pasted text|Vložený text|Copied text|Zkopírovaný text|Text',
-        drivePattern: 'Disk|Drive',
-        urlInputTextarea: 'mat-dialog-container textarea',
-        submitButton: 'mat-dialog-container button.mat-primary',
-        dialogContainer: 'mat-dialog-container',
-        selectAllInputEn: 'input[aria-label="Select all sources"]',
-        selectAllInputCs: 'input[aria-label="Vybrat všechny zdroje"]',
-        drivePickerFrame: 'iframe',
-        driveSearchInput: 'input[type="text"]',
-        driveFileRow: 'div[role="option"], div[role="row"]',
-        driveSelectButton: 'Vybrat|Select',
-    },
-    studio: {
-        maximizeButton: 'button[aria-label="Maximalizovat"]',
-        artifactButton: 'button.artifact-button-content',
-        artifactLibraryItem: 'artifact-library-item',
-        artifactTitle: '.artifact-title',
-        audioIcon: 'audio_magic_eraser',
-        audioIconPattern: 'audio',
-        moreMenuButton: 'button[aria-label*="More"], button[aria-label*="Další"]',
-        moreMenuIcon: 'button mat-icon:has-text("more_vert")',
-        menuItem: 'button[role="menuitem"]',
-        renameOption: 'Rename|Přejmenovat',
-        downloadOption: 'Stáhnout|Download',
-        renameInput: 'input[type="text"].rename-input, mat-dialog-container input',
-    },
-    audio: {
-        customizeButtonEn: 'button[aria-label="Customize audio overview"]',
-        customizeButtonCs: 'button[aria-label="Přizpůsobit audio přehled"]',
-        customizeTextareaCs: 'textarea[aria-label="Textové pole"]',
-        customizeTextareaPlaceholder: 'textarea[placeholder*="Co byste mohli"]',
-        generateButtonCs: 'button:has-text("Vygenerovat")',
-        generateButtonEn: 'button:has-text("Generate")',
-        audioOverviewButtonCs: '[aria-label="Audio přehled"]',
-        audioOverviewButtonEn: '[aria-label="Audio Overview"]',
-        audioOverviewButtonText: 'button:has-text("Audio přehled")',
-        generatingIndicatorCs: 'Generování',
-        generatingIndicatorEn: 'Generating',
-    },
-    download: {
-        moreButton: 'button mat-icon:has-text("more_vert")',
-        downloadMenuItemCs: 'Stáhnout',
-        downloadMenuItemEn: 'Download',
-        menuVisible: '[role="menu"]',
-    },
-    chat: {
-        input: 'textarea[placeholder*="Začněte psát"], textarea[placeholder*="Tady můžete pokládat"], textarea[placeholder*="Ask a question"]',
-        submitButton: 'button[aria-label*="Odeslat"], button[aria-label*="Submit"], button[aria-label*="Send"]',
-        messageContainer: 'conversation-view',
-        lastMessage: 'message-bubble:last-of-type .message-content, user-message:last-of-type .message-content',
-        thinkingIndicator: 'mat-progress-bar, mat-spinner',
-    },
-    gemini: {
-        auth: {
-            acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše")',
-            dismiss: 'button:has-text("Ne, díky"), button:has-text("No thanks")',
-            signIn: 'button:has-text("Sign in")',
-            welcome: 'button:has-text("Got it")',
-        },
-        model: {
-            // New UI often uses a button with "Gemini Advanced" or just the model name
-            trigger: '[data-test-id="bard-mode-menu-button"], [aria-label="Otevřít výběr režimu"], button[aria-label*="Model"], button[aria-label*="model"], button[data-test-id="model-selector"]',
-            menu: '[role="menu"], .mat-menu-panel',
-            item: '[role="menuitem"], button[role="menuitem"]',
-            advanced: 'button:has-text("Advanced")',
-            // Enhanced selectors for various languages and DOM structures
-            flash: 'text="Rychlý"|text="Flash"|[data-test-id*="flash"]',
-            thinking: 'text="S myšlením"|text="Deep Think"|text="Thinking"|[data-test-id*="thinking"]',
-            pro: 'text="Pro"|text="Gemini Pro"|[data-test-id*="pro"]',
-        },
-
-        chat: {
-            app: 'chat-app',
-            input: 'div[contenteditable="true"]',
-            send: 'button[aria-label*="Send"]',
-            response: 'model-response',
-            history: '.chat-history-list',
-            newChat: 'button[aria-label*="New chat"]',
-            thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header, button[aria-label*="Zobrazit uvažování"], button:has-text("Zobrazit uvažování"), button:has-text("Show reasoning")',
-            thoughtContainer: '.thought-process-content, .reasoning-content, .model-response-reasoning',
-        },
-        sidebar: {
-            menu: 'button[aria-label*="Main menu"]',
-            conversations: 'div.conversation[role="button"]',
-            showMore: 'button:has-text("Show more")',
-            myStuff: 'text=/My Stuff/i',
-            gems: 'text=/Gem/i',
-        },
-        deepResearch: {
-            panel: 'deep-research-immersive-panel',
-            documentCard: 'div.library-item-card',
-            documentTitle: '.title',
-            toolbarTitle: 'h2.title-text',
-            immersiveTitle: 'h1',
-            toggle: 'button[aria-label*="Deep Research"], button[aria-label*="Hloubkový výzkum"]',
-            closeButton: 'button[aria-label*="Close Deep Research"], button[aria-label*="Zavřít hloubkový výzkum"]',
-        },
-        gems: {
-            card: '[class*="gem-card"]',
-            name: '.title',
-            create: 'button:has-text("Create")',
-            nameInput: 'input[placeholder*="name" i]',
-            instructionInput: 'textarea[placeholder*="instruction" i]',
-            save: 'button:has-text("Save")',
-        },
-        upload: {
-            button: 'button[aria-label*="Add" i]',
-            fileInput: 'input[type="file"]',
-            uploadFile: 'button:has-text("Upload")',
-            drive: 'text="Přidat z Disku"|text="Drive"',
-            photos: 'text="Fotky"|text="Photos"',
-            importCode: 'text="Importovat kód"|text="Import code"',
-            notebooklm: 'text="NotebookLM"',
-        }
-    }
-};
+// ============================================================
+// CONFIG LOADER
+// ============================================================
 
 let cachedSelectors: NotebookLMSelectors | null = null;
 
 /**
  * Load selectors from YAML configuration file.
- * Falls back to hardcoded defaults if file is missing or invalid.
+ * The YAML MUST exist as it is the primary source of truth.
  */
 export function loadSelectors(): NotebookLMSelectors {
     if (cachedSelectors) {
@@ -312,16 +183,14 @@ export function loadSelectors(): NotebookLMSelectors {
         const yamlPath = path.join(__dirname, 'selectors.yaml');
         if (fs.existsSync(yamlPath)) {
             const content = fs.readFileSync(yamlPath, 'utf-8');
-            const parsed = yaml.parse(content) as NotebookLMSelectors;
-            cachedSelectors = { ...defaultSelectors, ...parsed };
+            cachedSelectors = yaml.parse(content) as NotebookLMSelectors;
             console.log('[Selectors] Loaded from selectors.yaml');
         } else {
-            console.warn('[Selectors] selectors.yaml not found, using defaults');
-            cachedSelectors = defaultSelectors;
+            throw new Error(`[Selectors] Critical failure: selectors.yaml not found at ${yamlPath}`);
         }
     } catch (error) {
-        console.error('[Selectors] Failed to load selectors.yaml:', error);
-        cachedSelectors = defaultSelectors;
+        console.error('[Selectors] Fatal Error:', error);
+        throw error; // We want to crash early if configuration is missing
     }
 
     return cachedSelectors;
@@ -329,7 +198,6 @@ export function loadSelectors(): NotebookLMSelectors {
 
 /**
  * Force reload of selectors from YAML file.
- * Useful for testing or hot-reloading configuration.
  */
 export function reloadSelectors(): NotebookLMSelectors {
     cachedSelectors = null;
@@ -338,10 +206,11 @@ export function reloadSelectors(): NotebookLMSelectors {
 
 /**
  * Get all selectors (lazy-loaded and cached).
+ * Returns a categories proxy for easy access: selectors.home.createNewButton
  */
 export const selectors = new Proxy({} as NotebookLMSelectors, {
-    get: (_, category: keyof NotebookLMSelectors) => {
-        return loadSelectors()[category];
+    get: (_, category: string) => {
+        return (loadSelectors() as any)[category];
     },
 });
 

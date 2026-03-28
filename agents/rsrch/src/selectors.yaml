@@ -162,6 +162,8 @@ gemini:
     app: 'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]'
     input: 'div[contenteditable="true"], textarea, input[type="text"]'
     send: 'button[aria-label*="Send"], button[aria-label*="Odeslat"], button[data-testid="send-button"], button[type="submit"], button:has(svg[class*="send"]), button:has(path[d*="M2.01"]), div[contenteditable] ~ button'
+    thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header, button[aria-label*="Zobrazit uvažování"], button:has-text("Zobrazit uvažování"), button:has-text("Show reasoning")'
+    thoughtContainer: ".thought-process-content, .reasoning-content, .model-response-reasoning"
     # Response container - multiple fallbacks for UI changes
     # model-response: Primary container element
     # structured-content-container: Element containing formatted AI output
