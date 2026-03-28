@@ -1,4 +1,4 @@
-job "rsrch" {
+job "rsrch-browser" {
   datacenters = ["oci-eu"]
   type        = "service"
 
@@ -20,6 +20,7 @@ job "rsrch" {
 
       config {
         image = "localhost:5001/rsrch:latest"
+        force_pull = true
         network_mode = "host"
         
         # Use direct bind mounts as Nomad dynamic volumes are not configured
@@ -47,19 +48,21 @@ job "rsrch" {
 
       env {
         FORCE_LOCAL_BROWSER = "true"
-        PORT = "3055"
+        PORT = "${NOMAD_PORT_http}"
+        DISPLAY = ":99"
+        RSRCH_PROFILE_ID = "fresh"
         WINDMILL_URL = "http://localhost:8000"
         WINDMILL_WORKSPACE = "admins"
         WINDMILL_TOKEN = "wt_aec5ae03026acc90ddbc4f4714c9ed7d"
-        AUTH_FILE = "/app/config/auth.json"
+        # AUTH_FILE = "/app/config/auth.json"
         USER_DATA_DIR = "/secrets/user-data"
         PROFILES_DIR = "/opt/rsrch/profiles"
         DEBUG = "pw:browser,pw:api,rsrch:*"
       }
 
       resources {
-        cpu    = 800
-        memory = 2048
+        cpu    = 2000
+        memory = 4096
       }
 
       service {

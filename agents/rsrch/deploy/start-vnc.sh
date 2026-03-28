@@ -20,8 +20,8 @@ echo "Starting Fluxbox..."
 fluxbox &
 
 # Start x11vnc with explicit name and cleanup
-echo "Starting x11vnc..."
-x11vnc -display $DISPLAY -forever -nopw -create -shared -rfbport 5900 -desktop "RSRCH-PROD" &
+echo "Starting x11vnc on $DISPLAY..."
+x11vnc -display $DISPLAY -forever -nopw -shared -rfbport 5900 -desktop "RSRCH-PROD" &
 VNC_PID=$!
 
 # Wait for X11 to stabilize
