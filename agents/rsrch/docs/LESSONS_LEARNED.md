@@ -234,3 +234,23 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **Implementation: Submit & Return Architecture**: We've transitioned to a decoupled **Submit** (heavy worker) and **Watch** (lightweight worker) pattern. This immediately releases the primary Windmill worker after prompt delivery, delegating monitoring to a secondary "Watcher" agent that connects to the existing CDP tab.
 - **Async State Hygiene**: Implementing a `PENDING` state in FalkorDB *before* the watcher completes ensures that sessions are trackable even if a generation fails or the watcher job is interrupted. This provides a clear audit trail for long-running research tasks.
 - **Remote CDP Reliability**: Remote browsers (on `halvarm:9223`) can be transient. Automation scripts MUST handle `Target closed` errors gracefully and provide detailed `dumpState` diagnostics for headless debugging.
+
+---
+
+### [6. Native Build Loop & Registry Overrides (2026-03-28)]
+
+# Lessons Learned: Cloud Instance Deploying 
+
+## The Registry Mismatch Anti-Pattern
+- **Problem**: Attempting to `docker push` from a local laptop daemon to an insecure (HTTP) remote registry on a Tailscale node (`halvarm:5000`) will fail with `connection reset by peer` because Docker attempts HTTPS first, which acts as a block if internal TLS mapping isn't perfect.
+- **Problem 2 (Docker Save)**: Using `docker save | ssh docker load` to bypass the registry is conceptually clean but practically unusable over a VPN link for large images (e.g. 2GB Playwright images).
+
+## The Native Build Loop
+- **Solution**: The most robust way to deploy to `halvarm` is to **build natively on the cloud instance**. 
+- **The Catch (Node Versioning)**: The host OS of the VPS often has outdated Node runtimes (e.g. v12), causing `npm run build` to fail natively on the host before `docker build` even starts.
+- **The Complete Native Flow**:
+  1. Compile the TypeScript files *locally* (`npm run build`).
+  2. Sync the source code **AND** the compiled `dist/` directories via `rsync`.
+  3. Execute `docker build` remotely via SSH.
+  4. Restart the Nomad allocation (`nomad alloc stop`).
+- **Git Hygiene**: Avoid pushing rapid, untested WIP iterations to git just to trigger CI on the server. Test via `rsync` native builds first, then formally commit and push via Git to ensure the architecture relies on verified history.

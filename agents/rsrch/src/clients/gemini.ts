@@ -263,7 +263,17 @@ export class GeminiClient extends EventEmitter {
         this.emit('progress', { type: 'log', message: logMsg, phase, timestamp: Date.now() });
     }
 
-    async init(sessionId?: string) {
+    async init(options: string | { sessionId?: string, skipAuthCheck?: boolean } = {}) {
+        let sessionId: string | undefined;
+        let skipAuthCheck = false;
+
+        if (typeof options === 'string') {
+            sessionId = options;
+        } else {
+            sessionId = options.sessionId;
+            skipAuthCheck = !!options.skipAuthCheck;
+        }
+
         this.progress('Initializing...', 'init');
 
         const targetUrl = sessionId
@@ -299,10 +309,13 @@ export class GeminiClient extends EventEmitter {
         }
 
         const signInButton = this.page.locator(selectors.gemini.auth.signIn);
-        if (await signInButton.count() > 0) {
+        const signInVisible = await signInButton.count() > 0 && await signInButton.first().isVisible();
+        if (signInVisible && !skipAuthCheck) {
             console.warn('[Gemini] Sign in required.');
             await this.dumpState('gemini_auth_required');
             throw new Error('Gemini requires authentication. Please run rsrch auth first.');
+        } else if (signInVisible && skipAuthCheck) {
+            console.log('[Gemini] Sign in required (Auth Mode - staying open for manual login).');
         }
 
         const closeButtons = this.page.locator(selectors.gemini.auth.welcome);

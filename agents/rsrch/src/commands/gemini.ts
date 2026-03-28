@@ -18,6 +18,30 @@ import type { GeminiClient } from '../clients/gemini';
 import { getGraphStore } from '../core/graph-store';
 
 const gemini = new Command('gemini').description('Gemini commands');
+ 
+gemini.command('auth')
+    .description('Launch interactive browser for manual authentication')
+    .option('--local', 'Use local execution', true)
+    .action(async (opts) => {
+        // Use skipAuthCheck to prevent the client from throwing before we can sign in
+        await runLocalGeminiAction(async (client, g) => {
+            console.log('\n🔐 Interactive Authentication Mode');
+            console.log('   Browser is open in VNC (display :99)');
+            console.log('   Please sign in to Gemini manually.');
+            console.log('\n   Press Enter here when finished to save and exit...\n');
+            
+            // Navigate to Gemini home
+            await g.goto('https://gemini.google.com/app');
+            
+            // Wait for user in CLI
+            const readline = await import('node:readline');
+            const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+            await new Promise(resolve => rl.question('>> Press [ENTER] to close browser and save session...', () => {
+                rl.close();
+                resolve(null);
+            }));
+        }, { skipAuthCheck: true });
+    });
 
 gemini.command('research <query>')
     .description('Execute a Google Gemini research query (Deep Research)')
@@ -261,8 +285,6 @@ gemini.command('open-session <identifier>')
                 const sessionId = gemini.getCurrentSessionId();
                 console.log(`\nSession opened: ${sessionId} `);
                 console.log(`URL: https://gemini.google.com/app/${sessionId}\n`);
-            } else {
-                console.error(`Failed to open session: ${identifier}`);
             }
         });
     });
@@ -1130,20 +1152,34 @@ Your response MUST include:
         `.trim();
 
         console.log(`[CLI] 🚀 Starting First Real-World Test...`);
+        console.log(`[CLI] Prompt: "${testPrompt.substring(0, 80)}..."`);
         
         if (useServer) {
-            console.log(`[CLI] Submitting test prompt to server (async)...`);
-            const result = await executeGeminiCommand('chat', { 
-                message: testPrompt, 
-                waitForResponse: false,
-                model: opts.model 
-            }, { server: cliContext.get().serverUrl });
+            console.log(`[CLI] Submitting via /gemini/research (SSE streaming)...`);
+            const serverUrl = options.server || cliContext.get().serverUrl;
             
-            const sessionId = result.data?.sessionId;
-            console.log(`\n✓ Test Submitted.`);
-            console.log(`  Session ID: ${sessionId}`);
-            console.log(`\n  To watch progress and extract results, run:`);
-            console.log(`  rsrch watch ${sessionId}\n`);
+            try {
+                const result = await executeGeminiStream('research', { 
+                    query: testPrompt
+                }, { server: serverUrl }, (data: any) => {
+                    if (data.type === 'progress' && data.text) {
+                        process.stdout.write(data.text);
+                    } else if (data.type === 'log' && data.message) {
+                        console.log(`[Server] ${data.message}`);
+                    } else if (data.type === 'result') {
+                        console.log('\n\n--- ✅ Test Result Received ---');
+                        console.log(JSON.stringify(data.data, null, 2));
+                        console.log('-------------------------------\n');
+                    }
+                });
+                
+                if (!result) {
+                    console.log('\n[CLI] Stream completed without explicit result object.');
+                }
+            } catch (e: any) {
+                console.error(`[CLI] ❌ Test failed: ${e.message}`);
+                process.exit(1);
+            }
         } else {
             console.log(`[CLI] Running first real-world test locally...`);
             await runLocalGeminiAction(async (client, gemini) => {

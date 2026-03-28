@@ -20,8 +20,8 @@
 
 # Even within included agents, ignore some things
 agents/shared/node_modules/
-agents/shared/dist/
-agents/rsrch/node_modules/
-agents/rsrch/dist/
+# agents/shared/dist/
+# agents/rsrch/dist/
+node_modules/
 agents/rsrch/data/
 agents/rsrch/playwright/
