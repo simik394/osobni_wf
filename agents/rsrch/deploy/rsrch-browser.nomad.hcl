@@ -27,13 +27,13 @@ job "rsrch-browser" {
       driver = "docker"
 
       config {
-        image        = "rsrch-browser:v2"
+        image        = "localhost:5001/rsrch:latest"
         force_pull   = false
         network_mode = "host"
         shm_size     = 1073741824
 
         volumes = [
-          "/home/sim/.rsrch/profiles/fresh/state:/app/user-data",
+          "/home/sim/.rsrch/profiles/default/state:/app/user-data",
         ]
       }
 

@@ -152,3 +152,30 @@ Ephemeral CLI or Windmill worker that connects to the Head via WebSocket. It doe
 1. **Launch Chrome:** `google-chrome --remote-debugging-port=9222 --user-data-dir=./profile`
 2. **Set Env:** `export BROWSER_CDP_ENDPOINT=http://localhost:9222`
 3. **Run CLI:** `rsrch ...` (Attaches to your open browser).
+
+---
+
+## 8. BROWSER EFFICIENCY & RESOURCE MANAGEMENT
+
+> [!IMPORTANT]
+> **Resource leaks on `halvarm` are catastrophic.** Browser tabs must be managed explicitly.
+
+### 8.1 Lease & Release Model
+- **Acquisition**: Use `browserClient.getTabPage('service_name')` to lease a pooled tab.
+- **Tracking**: `BrowserClient` tracks all leased pages.
+- **Release**: Every high-level action (CLI, Worker) MUST call `await client.release()` in a `finally` block.
+- **Pool Integrity**: Never close a pooled page manually; return it to the pool.
+
+### 8.2 UI-Based Recycling
+- ❌ **Forbidden**: Using `page.goto(HOME_URL)` or `page.reload()` to reset state.
+- ✅ **Mandatory**: Use `await client.recycle()`.
+- **Logic**: Clients must implement `recycle()` by clicking the logo or "Home" icons to preserve state/cache and avoid network overhead.
+
+### 8.3 Smart Navigation
+- Always check `page.url()` before calling `page.goto()`.
+- If the browser is already at or near the target state, **skip navigation**.
+- Example: `if (page.url().includes('gemini.google.com/app')) return;`
+
+### 8.4 TabPool Enforcement
+- Standalone utilities (`query.ts`, etc.) must use `BrowserClient` to acquire tabs.
+- Avoid creating raw `browserContext` or `page` instances outside of the managed pool.

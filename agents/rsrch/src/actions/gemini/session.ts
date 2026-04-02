@@ -20,17 +20,22 @@ export async function resetToNewChatAction(
         // Already on home, but might have state
     }
 
-    let clicked = false;
-    const newChatBtn = page.locator(selectors.gemini.chat.newChat).first();
-    if (await newChatBtn.isVisible().catch(() => false)) {
-        log('Clicking New Chat...');
-        await newChatBtn.click();
-        clicked = true;
-    }
+    if (deps.recycle) {
+        log('Using centralized recycle() for reset...');
+        await deps.recycle();
+    } else {
+        let clicked = false;
+        const newChatBtn = page.locator(selectors.gemini.chat.newChat).first();
+        if (await newChatBtn.isVisible().catch(() => false)) {
+            log('Clicking New Chat...');
+            await newChatBtn.click();
+            clicked = true;
+        }
 
-    if (!clicked) {
-        log('New Chat button not found, forcing navigation to /app', 'warn');
-        await page.goto(ctx.config.urls.gemini + '/app');
+        if (!clicked) {
+            log('New Chat button not found, forcing navigation to /app', 'warn');
+            await page.goto(ctx.config.urls.gemini + '/app');
+        }
     }
 
     try {

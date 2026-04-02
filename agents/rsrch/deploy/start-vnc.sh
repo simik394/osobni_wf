@@ -34,6 +34,10 @@ CHROMIUM_PID=$!
 # Wait for Chromium to stabilize
 sleep 3
 
+echo "Exposing CDP port 9223 via socat (proxying 127.0.0.1:9222)..."
+socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222 &
+SOCAT_PID=$!
+
 echo "Starting Main Application..."
 # Using absolute path to ensure it works even if PATH is different in container
 ENTRYPOINT="/app/agents/rsrch/dist/cli/main.js"
@@ -44,13 +48,13 @@ if [ ! -f "$ENTRYPOINT" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-    export BROWSER_CDP_ENDPOINT="http://127.0.0.1:9223"
+    export BROWSER_CDP_ENDPOINT="http://127.0.0.1:9222"
     exec node "$ENTRYPOINT" serve --port 3055
 else
     # Allow passing arguments correctly
-    export BROWSER_CDP_ENDPOINT="http://127.0.0.1:9223"
+    export BROWSER_CDP_ENDPOINT="http://127.0.0.1:9222"
     exec node "$ENTRYPOINT" "$@"
 fi
 
-# Cleanup on exit (will only reach if exec is replaced by something else)
-kill $XVFB_PID $VNC_PID $CHROMIUM_PID
+# Cleanup on exit
+kill $XVFB_PID $VNC_PID $CHROMIUM_PID $SOCAT_PID

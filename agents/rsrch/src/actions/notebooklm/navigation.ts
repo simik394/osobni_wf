@@ -27,17 +27,17 @@ export async function openNotebookAction(
         log('On different notebook, navigating to home first...');
     }
 
-    // EFFICIENT RECYCLING: Try to click "Home" logo/icon instead of page.goto if already on domain
-    if (currentUrl.includes('notebooklm.google.com')) {
-        log('Attempting UI-based navigation to home...');
+    // EFFICIENT RECYCLING: Use the centralized recycle() method if available, fallback to smart logic
+    if (deps.recycle) {
+        await deps.recycle();
+    } else if (currentUrl.includes('notebooklm.google.com')) {
+        log('Attempting UI-based navigation to home (manual action fallback)...');
         const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
         if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
             await homeBtn.click();
             try {
                 await page.waitForURL(url => url.href.includes('notebooklm.google.com') && !url.href.includes('/notebook/'), { timeout: 5000 });
-                log('Successfully navigated to home via UI.');
             } catch (e) {
-                log('UI navigation to home timed out or failed, falling back to goto().');
                 await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
             }
         } else {

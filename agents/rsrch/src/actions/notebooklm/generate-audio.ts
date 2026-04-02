@@ -21,6 +21,7 @@ export async function generateAudioOverviewAction(
         waitForGeneration: () => Promise<void>;
         renameArtifact: (oldTitle: string, newTitle: string) => Promise<boolean>;
         humanDelay: (baseMs: number, variance?: number) => Promise<void>;
+        recycle?: () => Promise<void>;
     }
 ): Promise<{ success: boolean; artifactTitle?: string }> {
     const { notebookTitle, sources, customPrompt, waitForCompletion = false, dryRun = false } = options;
@@ -34,8 +35,11 @@ export async function generateAudioOverviewAction(
         try {
             if (notebookTitle) {
                 await deps.openNotebook(notebookTitle);
+            } else if (deps.recycle) {
+                await deps.recycle();
+                await deps.humanDelay(2000);
             } else {
-                log('[DEBUG] No notebook specified, ensuring we are on home page...');
+                log('[DEBUG] No notebook specified, ensuring we are on home page (manual fallback)...');
                 const currentUrl = page.url();
                 if (!currentUrl.includes('notebooklm.google.com') || currentUrl.includes('/notebook/')) {
                     const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();

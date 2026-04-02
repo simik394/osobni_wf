@@ -142,7 +142,7 @@ export class NotebookLMClient {
     async openNotebook(title: string) {
         return openNotebookAction(
             this.getContext(),
-            { selectors, humanDelay: (ms: number) => this.humanDelay(ms) },
+            { selectors, humanDelay: (ms: number) => this.humanDelay(ms), recycle: this.recycle.bind(this) },
             title
         );
     }
@@ -245,6 +245,7 @@ export class NotebookLMClient {
                 waitForGeneration: () => this.waitForGeneration(),
                 renameArtifact: (old, newT) => this.renameArtifact(old, newT),
                 humanDelay: (baseMs: number, variance?: number) => this.humanDelay(baseMs, variance),
+                recycle: this.recycle.bind(this),
             }
         );
     }

@@ -33,6 +33,7 @@ export type GeminiActionDeps = ActionDeps & {
     injectSources?: (sources: any[]) => Promise<void>;
     injectText?: (text: string) => Promise<void>;
     resetToNewChat?: () => Promise<void>;
+    recycle?: () => Promise<void>;
     telemetry?: any;
 };
 
@@ -52,4 +53,5 @@ export type NotebookLMActionDeps = ActionDeps & {
     enqueueTask?: (name: string, task: () => Promise<any>) => Promise<any>;
     setIsBusy?: (busy: boolean) => void;
     getIsBusy?: () => boolean;
+    recycle?: () => Promise<void>;
 };

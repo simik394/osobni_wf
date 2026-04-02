@@ -127,11 +127,9 @@ Please use your Deep Research capabilities to expand on this...`;
 
         const performPublish = async (sId: string, m: 'pr' | 'branch') => {
             console.log(`[Jules Automation] Publishing session ${sId} (mode: ${m})...`);
-            const julesClient = new BrowserClient({ profileId: 'personal', headless: true });
             try {
-                await julesClient.init();
-                const notebook = await julesClient.createNotebookLMClient();
-                const page = notebook.page;
+                // Lease a tab from the shared browser client
+                const page = await browserClient.getTabPage('jules');
                 await page.goto(`https://jules.google.com/session/${sId}`, { waitUntil: 'networkidle', timeout: 60000 });
                 await page.waitForTimeout(2000);
 
@@ -156,7 +154,8 @@ Please use your Deep Research capabilities to expand on this...`;
                 console.error(`[Jules Automation] Publish failed for ${sId}:`, e.message);
                 return { success: false, error: e.message };
             } finally {
-                await julesClient.shutdown().catch(() => { });
+                // Explicitly release the page back to the TabPool
+                await browserClient.release();
             }
         };
 

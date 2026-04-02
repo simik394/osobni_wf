@@ -163,6 +163,7 @@ export class GeminiClient extends EventEmitter {
             getGraphStore: () => getGraphStore(),
             dumpState: (p) => this.dumpState(p),
             selectors,
+            recycle: this.recycle.bind(this),
             telemetry,
             verbose: this.verbose
         });
@@ -182,6 +183,7 @@ export class GeminiClient extends EventEmitter {
             getCurrentSessionId: () => this.getCurrentSessionId(),
             getGraphStore: () => getGraphStore(),
             selectors,
+            recycle: this.recycle.bind(this),
             telemetry,
             verbose: this.verbose
         });
@@ -280,10 +282,18 @@ export class GeminiClient extends EventEmitter {
         const targetUrl = sessionId
             ? `https://gemini.google.com/app/${sessionId}`
             : config.urls.gemini + '/app';
-        this.progress(`Navigating to: ${targetUrl}`, 'init');
-        await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
-
-        await this.page.waitForTimeout(1500);
+        
+        // Smart navigation: skip goto if already on target or nearby
+        const currentUrl = this.page.url();
+        if (currentUrl.includes('gemini.google.com') && !sessionId && currentUrl.endsWith('/app')) {
+            this.progress('Already on Gemini home, skipping navigation.', 'init');
+        } else if (currentUrl === targetUrl) {
+            this.progress('Already on target URL, skipping navigation.', 'init');
+        } else {
+            this.progress(`Navigating to: ${targetUrl}`, 'init');
+            await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+            await this.page.waitForTimeout(1500);
+        }
 
         // Handle Google cookie consent dialog ("Before you continue to Google")
         const acceptAllButtons = this.page.locator(selectors.gemini.auth.acceptAll);
@@ -366,7 +376,7 @@ export class GeminiClient extends EventEmitter {
     async resetToNewChat(): Promise<void> {
         return resetToNewChatAction(
             this.getContext(),
-            { selectors }
+            { selectors, recycle: this.recycle.bind(this) }
         );
     }
 
@@ -378,9 +388,48 @@ export class GeminiClient extends EventEmitter {
 
     async openSession(sessionId: string): Promise<void> {
         const url = `https://gemini.google.com/app/${sessionId}`;
+        if (this.page.url() === url) {
+            console.log(`[Gemini] Already in session: ${sessionId}`);
+            return;
+        }
         console.log(`[Gemini] Navigating to: ${url}`);
         await this.page.goto(url, { waitUntil: 'domcontentloaded' });
         await this.page.waitForTimeout(2000);
+    }
+
+    /**
+     * Efficiently resets the client state using UI navigation instead of page.goto().
+     * Mimics clicking the "New Chat" button or logo.
+     */
+    async recycle(): Promise<void> {
+        this.progress('Recycling Gemini tab...', 'recycle');
+        
+        const currentUrl = this.page.url();
+        if (!currentUrl.includes('gemini.google.com')) {
+            await this.init();
+            return;
+        }
+
+        // Try clicking "New chat" button first as it's the standard reset
+        const newChatBtn = this.page.locator(selectors.gemini.chat.newChat).first();
+        if (await newChatBtn.isVisible()) {
+            this.progress('Clicking New Chat to recycle...', 'recycle');
+            await newChatBtn.click();
+            await this.page.waitForTimeout(1000);
+            return;
+        }
+
+        // Fallback: Use the logo if available (usually top left)
+        const logo = this.page.locator('a[href="/app"], .gemini-logo').first();
+        if (await logo.isVisible()) {
+            this.progress('Clicking logo to recycle...', 'recycle');
+            await logo.click();
+            await this.page.waitForTimeout(1000);
+            return;
+        }
+
+        // Final fallback: Smart goto
+        await this.init();
     }
 
     async listSessions(limit: number = 50, offset: number = 0): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
