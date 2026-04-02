@@ -120,9 +120,10 @@ export async function sendServerRequestWithSSE(path: string, body: any = {}): Pr
 // Helper for local Notebook execution
 export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: any) => Promise<void>) {
     const { profileId, cdpEndpoint } = cliContext.get();
-    console.log(`Running in LOCAL mode (profile: ${profileId})...`);
+    const useLocalMode = cdpEndpoint ? false : true;
+    console.log(`Running NotebookLM in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
     const client = new BrowserClient({ profileId, cdpEndpoint });
-    await client.init({ local: true, profileId, cdpEndpoint });
+    await client.init({ local: useLocalMode, profileId, cdpEndpoint });
     const notebook = await client.createNotebookLMClient();
     try {
         await action(client, notebook);

@@ -36,6 +36,7 @@ export const TAB_ID_FLAG = '__WINDMILL_TAB_ID';
 export const SERVICE_URLS = {
     perplexity: 'https://www.perplexity.ai',
     gemini: 'https://gemini.google.com',
+    notebooklm: 'https://notebooklm.google.com',
     angrav: 'chrome-extension://', // Angrav is an extension, URL pattern varies
 } as const;
 
