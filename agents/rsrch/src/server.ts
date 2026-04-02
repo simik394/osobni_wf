@@ -11,6 +11,7 @@ import { createNotebookRouter, createNotebookLMRouter, createWebhookRouter } fro
 import { createResearchRouter } from './routes/research-router';
 import { createWorkflowRouter } from './routes/workflow-router';
 import { createChatRouter, createGeminiRouter } from './routes/chat-router';
+import { createSystemRouter } from './routes/system-router';
 
 // Initialize App
 const app = express();
@@ -98,6 +99,9 @@ app.use('/v1', createChatRouter({ ...dependencies }));
 
 // 5. Legacy Gemini Routes
 app.use('/gemini', createGeminiRouter(dependencies));
+
+// 6. System & Dashboard
+app.use('/system', createSystemRouter(dependencies));
 
 // ----------------------------------------------------------------------------
 // Server Startup

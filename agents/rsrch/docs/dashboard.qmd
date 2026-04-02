@@ -1,0 +1,98 @@
+---
+title: "Rsrch Agent Dashboard"
+format: 
+  dashboard:
+    nav-buttons: [github]
+    theme: cosmo
+---
+
+```{ojs}
+//| output: false
+// Fetch live status from the rsrch server
+status_data = d3.json("http://localhost:3030/system/status")
+
+// Function to trigger refresh
+refresh_system = async () => {
+    const res = await fetch("http://localhost:3030/system/refresh", { method: "POST" });
+    if (res.ok) {
+        // Trigger a re-fetch of the status data
+        // OJS will automatically update downstream cells
+        location.reload(); 
+    }
+}
+```
+
+## Row {height=20%}
+
+```{ojs}
+//| component: valuebox
+//| title: "Total Modular Actions"
+//| icon: "gear"
+//| color: "primary"
+status_data.totalActions
+```
+
+```{ojs}
+//| component: valuebox
+//| title: "Architectural Health"
+//| icon: "shield-check"
+//| color: "success"
+status_data.clientHealth + "% Modular"
+```
+
+```{ojs}
+//| component: valuebox
+//| title: "Browser Status"
+//| icon: "browser-chrome"
+//| color: "info"
+status_data.browser
+```
+
+## Row {height=50%}
+
+### Feature Matrix
+
+```{ojs}
+Inputs.table(status_data.features, {
+  columns: ["name", "status", "pattern", "actions", "spec"],
+  header: {
+    name: "Feature",
+    status: "Status",
+    pattern: "Architecture",
+    actions: "Actions",
+    spec: "Specification"
+  }
+})
+```
+
+## Row {height=30%}
+
+### System Architecture
+
+```{mermaid}
+graph TD
+    CLI[CLI / API] --> Client[Client Orchestrator]
+    Client --> Actions[Modular Actions]
+    Actions --> Browser[Persistent Browser Context]
+    
+    subgraph "Stateless Handlers"
+        Actions
+    end
+    
+    subgraph "Stateful Layer"
+        Browser
+        Graph[FalkorDB Graph Store]
+    end
+    
+    Actions -.-> Graph
+```
+
+### Operations
+
+::: {.card}
+Click below to re-scan the codebase and synchronize the dashboard state with current implementation.
+
+```{ojs}
+Inputs.button("Refresh Dashboard Data", {value: 0, click: refresh_system})
+```
+:::

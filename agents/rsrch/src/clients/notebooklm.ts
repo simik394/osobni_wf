@@ -26,13 +26,43 @@ export class NotebookLMClient {
         };
         this.deps = {
             selectors,
-            humanDelay: (ms: number) => page.waitForTimeout(ms)
-        };
+            humanDelay: (ms: number) => page.waitForTimeout(ms),
+            setIsBusy: (busy: boolean) => { (this as any)._isBusy = busy; },
+            getIsBusy: () => !!(this as any)._isBusy,
+            enqueueTask: async <T>(name: string, task: () => Promise<T>) => {
+                this.ctx.log(`[Queue] Running task: ${name}`);
+                return task();
+            }
+        } as any;
+    }
+
+    /** Returns if the client is currently performing a long-running action */
+    get isBusy(): boolean {
+        return !!(this as any)._isBusy;
     }
 
     /** Helper for waiting outside actions */
     async humanDelay(ms: number) {
         await this.page.waitForTimeout(ms);
+    }
+
+    /** Dumps the current page state (HTML/Screenshot) for debugging */
+    async dumpState(name: string) {
+        // Ensure deps has dumpState if needed, or use a local helper
+        const fs = await import('fs');
+        const path = await import('path');
+        const timestamp = Date.now();
+        const baseName = `${name}_${timestamp}`;
+        const dataDir = path.join(config.paths.resultsDir, 'debug');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+        const htmlPath = path.join(dataDir, `${baseName}.html`);
+        const pngPath = path.join(dataDir, `${baseName}.png`);
+
+        await fs.promises.writeFile(htmlPath, await this.page.content());
+        await this.page.screenshot({ path: pngPath, fullPage: true });
+
+        return { htmlPath, pngPath };
     }
 
     // --- Navigation & Lifecycle ---
@@ -177,5 +207,18 @@ export class NotebookLMClient {
         // Placeholder for now, could be its own action
         this.ctx.log(`Artifact download for "${artifactTitle}" not fully implemented in modular action yet.`);
         return false;
+    }
+
+    /** Generates an audio overview for the notebook */
+    async generateAudioOverview(notebookTitle: string, sources?: string[], prompt?: string, wet: boolean = false, dryRun: boolean = false) {
+        return actions.generateAudioOverviewAction(this.ctx, { notebookTitle, sources, customPrompt: prompt, wet, dryRun } as any, this.deps as any);
+    }
+
+    /** Renames an artifact in the studio panel */
+    async renameArtifact(oldTitle: string, newTitle: string) {
+        // This should be in studio actions, adding as bridge
+        this.ctx.log(`Renaming artifact from "${oldTitle}" to "${newTitle}" (bridge).`);
+        // For now, minimal implementation or delegation
+        return false; 
     }
 }

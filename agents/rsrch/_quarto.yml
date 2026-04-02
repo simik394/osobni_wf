@@ -1,6 +1,21 @@
 project:
-  type: default
+  type: website
   output-dir: _site
+
+website:
+  title: "Rsrch Agent"
+  navbar:
+    left:
+      - text: "Dashboard"
+        href: dashboard.qmd
+      - text: "Development"
+        href: DEVELOPMENT.md
+      - text: "CLI Docs"
+        href: CLI_REFERENCE.qmd
+      - text: "API Docs"
+        href: API_REFERENCE.qmd
+      - text: "Lessons"
+        href: LESSONS_LEARNED.md
 
 format:
   html:

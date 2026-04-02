@@ -826,7 +826,7 @@ export class GraphStore {
             // Extract URLs from assistant responses and link to Citation nodes
             if (turn.role === 'assistant') {
                 const urls = turn.content.match(urlRegex) || [];
-                const uniqueUrls = [...new Set(urls)];
+                const uniqueUrls = Array.from(new Set(urls));
 
                 // Filter and batch process citations (was O(N*2), now O(2))
                 const filteredUrls = uniqueUrls
