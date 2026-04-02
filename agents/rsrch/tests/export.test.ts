@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiClient } from '../src/gemini-client';
+import { GeminiClient } from '../src/clients/gemini';
 import { createResearchMockPage } from './fixtures/mock-page-factory';
 import { Page } from 'playwright';
 

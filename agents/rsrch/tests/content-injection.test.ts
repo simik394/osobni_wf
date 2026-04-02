@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiClient, Source } from '../src/gemini-client';
+import { GeminiClient, Source } from '../src/clients/gemini';
 import { selectors } from '../src/selectors';
 
 describe('GeminiClient Content Injection', () => {

@@ -114,3 +114,179 @@ export async function uploadLocalFileAction(
     await page.waitForSelector('mat-dialog-container', { state: 'hidden', timeout: 60000 });
     await humanDelay(2000);
 }
+
+/**
+ * Gets all sources in the current notebook.
+ */
+export async function getSourcesAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps
+): Promise<Array<{ type: string; title: string; isSelected?: boolean; id?: string; url?: string }>> {
+    const { page, log } = ctx;
+    const sources: Array<{ type: string; title: string; isSelected?: boolean; id?: string; url?: string }> = [];
+
+    try {
+        // Switch to Sources tab
+        const sourcesTab = page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+        if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+            const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+            if (!isSelected) {
+                await sourcesTab.click();
+                await deps.humanDelay(1000);
+            }
+        }
+
+        const sourceItems = page.locator('.single-source-container, source-list-item').filter({
+            has: page.locator('.source-title, .title, span')
+        });
+
+        const count = await sourceItems.count();
+        log(`Found ${count} sources`);
+
+        for (let i = 0; i < count; i++) {
+            const item = sourceItems.nth(i);
+            const titleEl = item.locator('.source-title, .title').first();
+            const title = await titleEl.innerText().catch(() => '');
+
+            const checkbox = item.locator('input[type="checkbox"]');
+            let isSelected = false;
+            if (await checkbox.count() > 0) {
+                isSelected = await checkbox.isChecked().catch(() => false);
+            } else {
+                const ariaCheckbox = item.locator('[aria-checked="true"]');
+                if (await ariaCheckbox.count() > 0) isSelected = true;
+            }
+
+            const html = await item.innerHTML().catch(() => '');
+            let type = 'unknown';
+            if (html.includes('link') || html.includes('web') || html.includes('language')) type = 'url';
+            else if (html.includes('drive_spreadsheet')) type = 'gsheet';
+            else if (html.includes('drive') || html.includes('doc')) type = 'gdoc';
+            else if (html.includes('pdf') || html.includes('picture_as_pdf') || html.includes('drive_pdf')) type = 'pdf';
+            else if (html.includes('text') || html.includes('article') || html.includes('markdown')) type = 'text';
+
+            let id = undefined;
+            const menuBtn = item.locator('button[id^="source-item-more-button-"]').first();
+            if (await menuBtn.count() > 0) {
+                const btnId = await menuBtn.getAttribute('id');
+                if (btnId) id = btnId.replace('source-item-more-button-', '');
+            }
+
+            if (title.trim()) {
+                sources.push({ type, title: title.trim(), isSelected, id });
+            }
+        }
+    } catch (e: any) {
+        log(`Error extracting sources: ${e.message}`, 'error');
+    }
+
+    return sources;
+}
+
+/**
+ * Deletes a source by title.
+ */
+export async function deleteSourceAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    title: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    log(`Deleting source: "${title}"`);
+    try {
+        const item = page.locator('.single-source-container, source-list-item').filter({
+            has: page.locator('.source-title, .title, span', { hasText: title })
+        }).first();
+
+        if (await item.count() === 0) {
+            log(`Error: Source "${title}" not found.`, 'error');
+            return false;
+        }
+
+        const moreBtn = item.locator('button').filter({
+            has: page.locator('mat-icon', { hasText: 'more_vert' })
+        }).first();
+
+        await moreBtn.click();
+        await deps.humanDelay(800);
+
+        const deleteOption = page.locator('button[role="menuitem"]').filter({
+            hasText: /Odstranit|Delete/i
+        }).first();
+
+        await deleteOption.click();
+        await deps.humanDelay(800);
+
+        const confirmBtn = page.locator('mat-dialog-container button').filter({
+            hasText: /Odstranit|Smazat|Delete/i
+        }).first();
+        
+        if (await confirmBtn.count() > 0) {
+            await confirmBtn.click();
+            await deps.humanDelay(1500);
+        }
+
+        return true;
+    } catch (e: any) {
+        log(`Error deleting source: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Renames a source.
+ */
+export async function renameSourceAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    oldTitle: string,
+    newTitle: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    log(`Renaming source: "${oldTitle}" to "${newTitle}"`);
+
+    // Ensure we are on "Sources" tab
+    const sourcesTab = page.locator('div[role="tab"]').filter({ hasText: /Zdroje|Sources/i }).first();
+    if (await sourcesTab.count() > 0 && await sourcesTab.isVisible()) {
+        const isSelected = await sourcesTab.getAttribute('aria-selected') === 'true';
+        if (!isSelected) {
+            await sourcesTab.click();
+            await deps.humanDelay(1000);
+        }
+    }
+
+    try {
+        const item = page.locator('.single-source-container, source-list-item').filter({
+            has: page.locator('.source-title, .title, span', { hasText: oldTitle })
+        }).first();
+
+        if (await item.count() === 0) {
+            log(`Error: Source "${oldTitle}" not found.`, 'error');
+            return false;
+        }
+
+        const moreBtn = item.locator('button').filter({
+            has: page.locator('mat-icon', { hasText: 'more_vert' })
+        }).first();
+
+        await moreBtn.click();
+        await deps.humanDelay(800);
+
+        const renameOption = page.locator('button[role="menuitem"]').filter({
+            hasText: /Přejmenovat|Rename/i
+        }).first();
+
+        await renameOption.click();
+        await deps.humanDelay(800);
+
+        const input = page.locator('mat-dialog-container input').first();
+        await input.fill(newTitle);
+        await page.keyboard.press('Enter');
+        await deps.humanDelay(1000);
+
+        return true;
+    } catch (e: any) {
+        log(`Error renaming source: ${e.message}`, 'error');
+        return false;
+    }
+}

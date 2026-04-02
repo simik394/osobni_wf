@@ -189,10 +189,16 @@ gemini:
   gems:
     card: '[class*="gem-card"], .bot-row, [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
     name: ".title, .bot-title, .gem-title, .gem-name"
-    create: 'button:has-text("Create"), button:has-text("New Gem"), button:has-text("Vytvořit"), a:has-text("Create"), [aria-label*="Create" i]'
-    nameInput: 'input[placeholder*="name" i], input[aria-label*="name" i]'
-    instructionInput: 'textarea[placeholder*="instruction" i], textarea[aria-label*="instruction" i], div[contenteditable="true"][placeholder*="instruction" i]'
+    create: 'button.bot-creation-button, button:has-text("Create"), button:has-text("New Gem"), button:has-text("Nový Gem"), button:has-text("Vytvořit"), a:has-text("Create"), [aria-label*="Create" i]'
+    nameInput: 'input#gem-name-input, input.name-input, input[placeholder*="name" i], input[aria-label*="name" i], input[aria-label*="Název" i]'
+    instructionInput: '.editor-container div[role="textbox"], .editor-container .ql-editor, textarea#gem-description-input'
+    editorInstructions: '.editor-container div[role="textbox"], .editor-container .ql-editor'
     save: 'button:has-text("Save"), button:has-text("Create"), button:has-text("Uložit"), button[type="submit"]'
+    updateButton: 'button.save-button, button[aria-label="Uložit aktualizace robota Gem"], button[aria-label*="Uložit aktualizace"]'
+    moreMenu: 'button[aria-label="Otevřít nabídku akcí v konverzaci."], button.mat-mdc-menu-trigger, button[aria-label*="nabídka akcí"]'
+    editOption: '.mat-mdc-menu-item:has-text("Upravit"), .mat-mdc-menu-item:has-text("Edit")'
+    deleteOption: '.mat-mdc-menu-item:has-text("Vymazat"), .mat-mdc-menu-item:has-text("Smazat"), .mat-mdc-menu-item:has-text("Delete")'
+    confirmDelete: 'mat-dialog-container button:has-text("Smazat"), mat-dialog-container button:has-text("Delete")'
   upload:
     button: 'button[mattooltip*="Přidat"], button[mattooltip*="Upload"], button[aria-label*="Přidat"], button[aria-label*="Upload"], .fonticon-plus-new, .fonticon-add-circle'
     fileInput: 'input[type="file"]'

@@ -63,7 +63,7 @@ vi.mock('../src/graph-store', () => ({
 }));
 
 vi.mock('../src/notebooklm-client');
-vi.mock('../src/gemini-client');
+vi.mock('../src/clients/gemini');
 vi.mock('../src/discord');
 vi.mock('../src/artifact-registry', () => ({
     getRegistry: vi.fn().mockReturnValue({

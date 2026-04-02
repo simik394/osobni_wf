@@ -1,12 +1,9 @@
-import { UniversalContext } from '../types';
+import { UniversalContext, NotebookLMActionDeps } from '../types';
 
 export async function addSourceUrlAction(
     ctx: UniversalContext,
-    url: string,
-    deps: {
-        selectors: any;
-        humanDelay: (baseMs: number, variance?: number) => Promise<void>;
-    }
+    deps: NotebookLMActionDeps,
+    url: string
 ): Promise<void> {
     const { page, log } = ctx;
     log(`Adding source URL: ${url}`);
@@ -61,20 +58,21 @@ export async function addSourceUrlAction(
     }
 }
 
-export async function addSourceTextAction(
+/**
+ * Adds a text source to the notebook.
+ */
+export async function addTextSourceAction(
     ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
     text: string,
-    title?: string,
-    notebookTitle?: string,
-    deps?: {
-        openNotebook: (title: string) => Promise<void>;
-        humanDelay: (baseMs: number, variance?: number) => Promise<void>;
-    }
+    options: { title?: string; notebookTitle?: string } = {}
 ): Promise<void> {
     const { page, log } = ctx;
+    const { humanDelay } = deps;
+    const { openNotebookAction } = await import('./navigation');
 
-    if (notebookTitle && deps) {
-        await deps.openNotebook(notebookTitle);
+    if (options.notebookTitle) {
+        await openNotebookAction(ctx, deps, options.notebookTitle);
     }
 
     log(`Adding pasted text source (${text.length} chars)...`);
@@ -121,13 +119,13 @@ export async function addSourceTextAction(
         await pasteBtn.click();
     }
 
-    if (deps) await deps.humanDelay(1000);
+    await humanDelay(1000);
 
-    if (title) {
+    if (options.title) {
         const titleInput = page.locator('mat-dialog-container input[type="text"], mat-dialog-container input.title-input').first();
         if (await titleInput.count() > 0 && await titleInput.isVisible()) {
-            await titleInput.fill(title);
-            log(`[DEBUG] Set source title: ${title}`);
+            await titleInput.fill(options.title);
+            log(`[DEBUG] Set source title: ${options.title}`);
         }
     }
 
@@ -154,19 +152,21 @@ export async function addSourceTextAction(
     }
 }
 
-export async function addSourceFromDriveAction(
+/**
+ * Adds sources from Google Drive.
+ */
+export async function addDriveSourceAction(
     ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
     docNames: string[],
-    notebookTitle?: string,
-    deps?: {
-        openNotebook: (title: string) => Promise<void>;
-        humanDelay: (baseMs: number, variance?: number) => Promise<void>;
-    }
+    notebookTitle?: string
 ): Promise<void> {
     const { page, log } = ctx;
+    const { humanDelay } = deps;
+    const { openNotebookAction } = await import('./navigation');
 
-    if (notebookTitle && deps) {
-        await deps.openNotebook(notebookTitle);
+    if (notebookTitle) {
+        await openNotebookAction(ctx, deps, notebookTitle);
     }
 
     log(`[DEBUG] Adding Google Drive sources: ${docNames.join(', ')}`);
@@ -200,7 +200,7 @@ export async function addSourceFromDriveAction(
         await driveBtn.click();
     }
 
-    if (deps) await deps.humanDelay(3000);
+    await humanDelay(3000);
 
     const pickerFrame = page.locator('iframe').first();
     if (await pickerFrame.count() === 0) {
@@ -214,7 +214,7 @@ export async function addSourceFromDriveAction(
         await searchInput.fill(docName);
         await page.keyboard.press('Enter');
         
-        if (deps) await deps.humanDelay(3000);
+        await humanDelay(3000);
 
         const fileRow = pickerFrame.locator('div[role="option"], div[role="row"]').filter({ hasText: docName }).first();
         if (await fileRow.count() > 0) {
@@ -224,7 +224,7 @@ export async function addSourceFromDriveAction(
             log(`[WARN] Document not found in Drive: ${docName}`);
         }
         
-        if (deps) await deps.humanDelay(1000);
+        await humanDelay(1000);
     }
 
     const selectBtn = page.locator('button').filter({ hasText: /Vybrat|Select/i }).first();

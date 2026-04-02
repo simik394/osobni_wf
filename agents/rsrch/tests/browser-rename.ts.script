@@ -14,7 +14,7 @@
  */
 
 import { PerplexityClient } from '../src/client';
-import { GeminiClient } from '../src/gemini-client';
+import { GeminiClient } from '../src/clients/gemini';
 import { NotebookLMClient } from '../src/notebooklm-client';
 
 // ============================================================

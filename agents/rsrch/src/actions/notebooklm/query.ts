@@ -61,3 +61,48 @@ export async function queryNotebookAction(
         throw e;
     }
 }
+
+/**
+ * Gets chat messages from the current notebook.
+ */
+export async function getChatMessagesAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps
+): Promise<Array<{ role: 'user' | 'ai'; contentPreview: string }>> {
+    const { page, log } = ctx;
+    const messages: Array<{ role: 'user' | 'ai'; contentPreview: string }> = [];
+
+    try {
+        log('Extracting chat messages...');
+
+        const messagePairs = page.locator('.chat-message-pair');
+        const pairCount = await messagePairs.count();
+
+        if (pairCount === 0) {
+            log('No chat message pairs found.');
+            return messages;
+        }
+
+        log(`Found ${pairCount} message pairs`);
+
+        for (let i = 0; i < pairCount; i++) {
+            const pair = messagePairs.nth(i);
+
+            const userMsg = pair.locator('.user-query-container .individual-message, .from-user-container');
+            if (await userMsg.count() > 0) {
+                const content = await userMsg.innerText().catch(() => '');
+                if (content) messages.push({ role: 'user', contentPreview: content.trim() });
+            }
+
+            const aiMsg = pair.locator('.response-container .individual-message, .to-user-container, .model-response-container');
+            if (await aiMsg.count() > 0) {
+                const content = await aiMsg.innerText().catch(() => '');
+                if (content) messages.push({ role: 'ai', contentPreview: content.trim() });
+            }
+        }
+    } catch (e: any) {
+        log(`Error extracting chat messages: ${e.message}`, 'error');
+    }
+
+    return messages;
+}

@@ -117,20 +117,46 @@ export async function sendServerRequestWithSSE(path: string, body: any = {}): Pr
     }
 }
 
-// Helper for local Notebook execution
-export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: any) => Promise<void>) {
+/**
+ * Helper for running localized browser actions (Gemini, NotebookLM, etc.)
+ */
+export async function runLocalAction<T>(
+    productName: string,
+    clientCreator: (browser: BrowserClient) => Promise<T>,
+    action: (client: BrowserClient, tool: T) => Promise<void>,
+    options: { headless?: boolean, skipAuthCheck?: boolean, sessionId?: string } = {},
+    hasLocalFlag: boolean = true
+) {
     const { profileId, cdpEndpoint } = cliContext.get();
-    const useLocalMode = cdpEndpoint ? false : true;
-    console.log(`Running NotebookLM in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
-    const client = new BrowserClient({ profileId, cdpEndpoint });
+    const useLocalMode = cdpEndpoint ? false : hasLocalFlag;
+    
+    console.log(`Running ${productName} in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
+    
+    const client = new BrowserClient({ 
+        profileId, 
+        cdpEndpoint,
+        headless: options.headless
+    });
+
     await client.init({ local: useLocalMode, profileId, cdpEndpoint });
-    const notebook = await client.createNotebookLMClient();
+    const tool = await clientCreator(client);
+
+    // Call init if the tool has it (for Gemini)
+    if (tool && typeof (tool as any).init === 'function') {
+        await (tool as any).init(options);
+    }
+
     try {
-        await action(client, notebook);
+        await action(client, tool);
     } finally {
         await client.release();
         await client.close();
     }
+}
+
+// Helper for local Notebook execution
+export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: any) => Promise<void>) {
+    return runLocalAction('NotebookLM', (c) => c.createNotebookLMClient(), action);
 }
 
 // Helper for local Gemini execution
@@ -139,25 +165,8 @@ export async function runLocalGeminiAction(
     options: string | { sessionId?: string, skipAuthCheck?: boolean, headless?: boolean } = {}, 
     hasLocalFlag: boolean = true
 ) {
-    const { profileId, cdpEndpoint } = cliContext.get();
-    // If CDP endpoint is provided, force REMOTE mode
-    const useLocalMode = cdpEndpoint ? false : hasLocalFlag;
-    console.log(`Running Gemini in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
-    const isOptionsObj = typeof options === 'object' && options !== null;
-    const clientOptions: any = { profileId, cdpEndpoint };
-    if (isOptionsObj && (options as any).headless !== undefined) {
-        clientOptions.headless = (options as any).headless;
-    }
-    const client = new BrowserClient(clientOptions);
-    await client.init({ local: useLocalMode, profileId, cdpEndpoint });
-    const gemini = await client.createGeminiClient();
-    await gemini.init(options); // Pass options to init
-    try {
-        await action(client, gemini);
-    } finally {
-        await client.release();
-        await client.close();
-    }
+    const actionOptions = typeof options === 'string' ? { sessionId: options } : options;
+    return runLocalAction('Gemini', (c) => c.createGeminiClient(), action, actionOptions, hasLocalFlag);
 }
 
 /**

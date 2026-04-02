@@ -35,6 +35,7 @@ export type GeminiActionDeps = ActionDeps & {
     resetToNewChat?: () => Promise<void>;
     recycle?: () => Promise<void>;
     telemetry?: any;
+    dumpState?: (prefix: string) => Promise<any>;
 };
 
 /**

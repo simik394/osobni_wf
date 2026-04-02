@@ -1,7 +1,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
-import { GeminiClient } from '../../src/gemini-client';
+import { GeminiClient } from '../../src/clients/gemini';
 import * as fs from 'fs';
 import * as path from 'path';
 

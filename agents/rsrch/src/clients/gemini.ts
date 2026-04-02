@@ -15,7 +15,11 @@ import {
     uploadFilesAction,
     sendMessageAction,
     submitMessageAction,
-    watchResponseAction
+    watchResponseAction,
+    extractResponseAction,
+    ensureSidebarAction,
+    listSessionsAction,
+    exportToGoogleDocsAction
 } from '../actions';
 import { UniversalContext } from '../actions/types';
 
@@ -433,121 +437,7 @@ export class GeminiClient extends EventEmitter {
     }
 
     async listSessions(limit: number = 50, offset: number = 0): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
-        const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
-        try {
-            // Ensure sidebar is visible - robust check
-            await this.ensureSidebarVisible();
-
-            // Wait for history loading spinner
-            try {
-                const spinner = this.page.locator('.loading-history-spinner-container');
-                if (await spinner.count() > 0 && await spinner.isVisible()) {
-                    await spinner.last().waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { });
-                }
-            } catch (e) { /* Ignore */ }
-
-            const targetCount = offset + limit;
-            console.log(`[Gemini] listing sessions (limit: ${limit}, offset: ${offset})...`);
-
-            let sessionItems = this.page.locator(selectors.gemini.sidebar.conversations);
-            let count = await sessionItems.count();
-
-            // Scroll to load more if needed
-            let retries = 0;
-            while (count < targetCount && retries < 5) {
-                const preCount = count;
-                const lastItem = sessionItems.last();
-                if (await lastItem.isVisible()) {
-                    await lastItem.scrollIntoViewIfNeeded();
-                    await this.page.waitForTimeout(1000); // Give time for infinite scroll
-                }
-
-                // Check if "show more" button exists (for deep history)
-                const showMore = this.page.locator(selectors.gemini.sidebar.showMore).first();
-                if (await showMore.isVisible()) {
-                    await showMore.click();
-                    await this.page.waitForTimeout(1000);
-                }
-
-                // Refresh selector count
-                sessionItems = this.page.locator(selectors.gemini.sidebar.conversations);
-                count = await sessionItems.count();
-
-                if (count === preCount) {
-                    retries++;
-                } else {
-                    retries = 0;
-                }
-            }
-
-            // Define range to extract
-            const start = Math.min(offset, count);
-            const end = Math.min(offset + limit, count);
-
-            if (start >= count) {
-                return [];
-            }
-
-            for (let i = start; i < end; i++) {
-                const item = sessionItems.nth(i);
-
-                // 1. Get Name
-                let name = await item.innerText().catch(() => '');
-                name = name.split('\n')[0].trim();
-
-                // 2. Get ID
-                let id: string | null = null;
-
-                // Method A: Check href if it's an anchor or has one
-                const href = await item.getAttribute('href').catch(() => null);
-                if (href && href.includes('/app/')) {
-                    id = href.split('/app/')[1];
-                } else {
-                    // Start looking for ID in parent/children if item isn't the link itself
-                    const link = item.locator('a[href*="/app/"]').first();
-                    if (await link.count() > 0) {
-                        const linkHref = await link.getAttribute('href');
-                        if (linkHref) id = linkHref.split('/app/')[1];
-                    }
-                }
-
-                // Method B: jslog attribute (backup)
-                if (!id) {
-                    const jslog = await item.getAttribute('jslog').catch(() => null);
-                    if (jslog) {
-                        // Format: ... ["c_ID", ...] or similar
-                        const match = jslog.match(/\["c_([a-zA-Z0-9]+)"/);
-                        if (match) {
-                            id = match[1];
-                        }
-                    }
-                }
-
-                // Method C: data-id attribute (common in SPA lists)
-                if (!id) {
-                    id = await item.getAttribute('data-id').catch(() => null);
-                }
-
-                // 3. Check Pinned Status
-                // Usually indicated by an icon or a specific section header "Pinned"
-                // Or a class like 'pinned' or aria-label
-                // We'll look for a pin icon svg within the item
-                const hasPinIcon = await item.locator('svg path[d*="M16 9V4l1"]').count() > 0; // Rough path check for pin
-                // Or check if it is under a specific list group? 
-                // Gemini usually puts Pinned at top. We can heuristic check if "Pinned" text is nearby header
-                // For now, let's assume if it has a pin icon or aria-label pinned
-                const isPinned = hasPinIcon || (await item.getAttribute('aria-label') || '').toLowerCase().includes('pinned');
-
-                if (name) {
-                    sessions.push({ name, id, pinned: isPinned });
-                }
-            }
-        } catch (e) {
-            console.warn('[Gemini] Error listing sessions:', e);
-        }
-
-        console.log(`[Gemini] Found ${sessions.length} sessions`);
-        return sessions;
+        return listSessionsAction(this.getContext(), { selectors }, { limit, offset });
     }
 
     /**
@@ -626,18 +516,7 @@ export class GeminiClient extends EventEmitter {
     }
 
     async ensureSidebarVisible(): Promise<void> {
-        // Check if sidebar container is visible
-        const sidebar = this.page.locator('nav').first();
-        const isVisible = await sidebar.isVisible().catch(() => false);
-
-        if (!isVisible) {
-            const menuButton = this.page.locator(selectors.gemini.sidebar.menu).first();
-            if (await menuButton.count() > 0 && await menuButton.isVisible()) {
-                console.log('[Gemini] Expanding sidebar...');
-                await menuButton.click();
-                await this.page.waitForTimeout(1000); // Animation wait
-            }
-        }
+        return ensureSidebarAction(this.getContext(), { selectors });
     }
 
     /**
@@ -1598,6 +1477,116 @@ export class GeminiClient extends EventEmitter {
     }
 
     /**
+     * Update an existing Gem with new configuration
+     * 
+     * @param gemId - ID of the gem to update
+     * @param config - Partial gem configuration
+     * @returns True if successful
+     */
+    async updateGem(gemId: string, config: Partial<GemConfig>): Promise<boolean> {
+        console.log(`[Gemini] Updating gem: ${gemId}`);
+        try {
+            await this.page.goto(`https://gemini.google.com/gem/${gemId}`, { waitUntil: 'domcontentloaded' });
+            await this.page.waitForTimeout(2000);
+
+            // Open more menu
+            const moreMenuBtn = this.page.locator(selectors.gemini.gems.moreMenu).first();
+            if (await moreMenuBtn.count() > 0) {
+                await moreMenuBtn.click();
+                await this.page.waitForTimeout(1000);
+
+                // Click Edit
+                const editOpt = this.page.locator(selectors.gemini.gems.editOption).first();
+                if (await editOpt.count() > 0) {
+                    await editOpt.click();
+                    await this.page.waitForTimeout(2000);
+                    
+                    // Name
+                    if (config.name) {
+                        const nameInput = this.page.locator(selectors.gemini.gems.nameInput).first();
+                        if (await nameInput.count() > 0) {
+                            await nameInput.fill(config.name);
+                            await this.page.waitForTimeout(500);
+                        }
+                    }
+
+                    // Instructions
+                    if (config.instructions) {
+                        const instructionsInput = this.page.locator(selectors.gemini.gems.editorInstructions).first();
+                        if (await instructionsInput.count() > 0) {
+                            await instructionsInput.fill(config.instructions);
+                            await this.page.waitForTimeout(500);
+                        }
+                    }
+
+                    // Files processing could go here if needed
+                    if (config.files && config.files.length > 0) {
+                        await this.uploadFiles(config.files);
+                    }
+
+                    // Save updates
+                    const saveBtn = this.page.locator(selectors.gemini.gems.updateButton).first();
+                    if (await saveBtn.count() > 0) {
+                        await saveBtn.click();
+                        await this.page.waitForTimeout(3000);
+                        console.log(`[Gemini] ✅ Updated gem: ${gemId}`);
+                        return true;
+                    }
+                }
+            }
+            console.error(`[Gemini] Missing options to update gem: ${gemId}`);
+            return false;
+        } catch (e: any) {
+            console.error(`[Gemini] Error updating gem: ${e.message}`);
+            await this.dumpState('update_gem_fail');
+            return false;
+        }
+    }
+
+    /**
+     * Delete an existing Gem
+     * 
+     * @param gemId - ID of the gem to delete
+     * @returns True if successful
+     */
+    async deleteGem(gemId: string): Promise<boolean> {
+        console.log(`[Gemini] Deleting gem: ${gemId}`);
+        try {
+            await this.page.goto(`https://gemini.google.com/gem/${gemId}`, { waitUntil: 'domcontentloaded' });
+            await this.page.waitForTimeout(2000);
+
+            // Open more menu
+            const moreMenuBtn = this.page.locator(selectors.gemini.gems.moreMenu).first();
+            if (await moreMenuBtn.count() > 0) {
+                await moreMenuBtn.click();
+                await this.page.waitForTimeout(1000);
+
+                // Click Delete
+                const deleteOpt = this.page.locator(selectors.gemini.gems.deleteOption).first();
+                if (await deleteOpt.count() > 0) {
+                    await deleteOpt.click();
+                    await this.page.waitForTimeout(1000);
+                    
+                    // Confirm Delete dialog
+                    const confirmBtn = this.page.locator(selectors.gemini.gems.confirmDelete).first();
+                    if (await confirmBtn.count() > 0) {
+                        await confirmBtn.click();
+                        await this.page.waitForTimeout(3000);
+                        console.log(`[Gemini] ✅ Deleted gem: ${gemId}`);
+                        return true;
+                    }
+                }
+            }
+            console.error(`[Gemini] Missing options to delete gem: ${gemId}`);
+            return false;
+        } catch (e: any) {
+            console.error(`[Gemini] Error deleting gem: ${e.message}`);
+            await this.dumpState('delete_gem_fail');
+            return false;
+        }
+    }
+
+    /**
      * Chat with a Gem (send message and get response)
      * 
      * @param gemNameOrId - Gem to chat with
@@ -1664,158 +1653,10 @@ export class GeminiClient extends EventEmitter {
     }
 
     async getLatestResponseData(): Promise<{ text: string, markdown: string, sources: Array<{ index: number, url: string, title: string }>, thoughts?: string } | null> {
-        try {
-            const responseElements = this.page.locator(selectors.gemini.chat.response);
-            const count = await responseElements.count();
-            if (count === 0) return null;
-
-            const lastResponse = responseElements.nth(count - 1);
-
-            // 1. Extract Thoughts if possible
-            let thoughts: string | undefined;
-            const thoughtToggleSelector = selectors.gemini.chat.thoughtToggle;
-            const thoughtContainerSelector = selectors.gemini.chat.thoughtContainer;
-
-            if (thoughtToggleSelector && thoughtContainerSelector) {
-                try {
-                    const thoughtToggle = lastResponse.locator(thoughtToggleSelector).first();
-                    if (await thoughtToggle.isVisible({ timeout: 1000 })) {
-                        // Check if already expanded or needs click
-                        const container = lastResponse.locator(thoughtContainerSelector).first();
-                        if (!(await container.isVisible())) {
-                            await thoughtToggle.click();
-                            await this.page.waitForTimeout(500);
-                        }
-                        thoughts = await container.innerText();
-                    }
-                } catch (e) {
-                    // Ignore thought extraction errors
-                }
-            }
-
-            // 2. Enhanced extraction via page.evaluate
-            const data = await lastResponse.evaluate((container, sel) => {
-                const clone = container.cloneNode(true) as HTMLElement;
-                const sourcesArray: { index: number; url: string; title: string }[] = [];
-
-                // LaTeX/Math Support (Broad Match)
-                const mathElements = clone.querySelectorAll('mjx-container, .math, .katex, [class*="math"]');
-                mathElements.forEach((el: any) => {
-                    const tex = el.getAttribute('tex') || el.getAttribute('data-tex') || el.innerText || '';
-                    if (tex) {
-                        const isDisplay = (el.tagName === 'MJX-CONTAINER' && el.getAttribute('display') === 'true') || 
-                                          el.classList.contains('display-math');
-                        el.outerHTML = isDisplay ? `\n$$\n${tex}\n$$\n` : `$${tex}$`;
-                    }
-                });
-
-                // Code Block Preservation
-                const preBlocks = clone.querySelectorAll('pre');
-                preBlocks.forEach((pre: any) => {
-                    const code = pre.querySelector('code');
-                    const lang = pre.getAttribute('data-language') || '';
-                    const content = code ? code.innerText : pre.innerText;
-                    pre.outerHTML = `\n\`\`\`${lang}\n${content.trim()}\n\`\`\`\n`;
-                });
-
-                // List Preservation (Explicitly add bullets without destroying nested sub-lists)
-                const listItems = clone.querySelectorAll('li');
-                listItems.forEach((li: any) => {
-                    const bullet = li.parentElement && li.parentElement.tagName === 'OL' ? '1. ' : '* ';
-                    const bulletNode = document.createTextNode(bullet);
-                    li.insertBefore(bulletNode, li.firstChild);
-                });
-
-                // Link & Citation Discovery
-                // We look for any links. Citations in Gemini often have google search URLs.
-                const links = clone.querySelectorAll('a');
-                links.forEach((a: any) => {
-                    const url = a.getAttribute('data-attribution-url') || a.getAttribute('href');
-                    const text = a.innerText.trim();
-                    
-                    if (url && url.startsWith('http')) {
-                        // If it looks like a citation (short text or specific attr or search result)
-                        const isSearchLink = url.includes('google.com/search');
-                        const attrUrl = a.getAttribute('data-attribution-url');
-                        const looksLikeCitation = (text.length < 6 && /^[0-9\[\]]+$/.test(text)) || isSearchLink || attrUrl;
-
-                        if (looksLikeCitation) {
-                            const finalUrl = attrUrl || url;
-                            let sourceIndex = sourcesArray.findIndex(s => s.url === finalUrl);
-                            if (sourceIndex === -1) {
-                                sourceIndex = sourcesArray.length;
-                                // Try to extract a clean title (e.g., "Nature" from "Nature [2]")
-                                const cleanTitle = text.replace(/\[\d+\]/g, '').trim() || 'Source';
-                                sourcesArray.push({ index: sourceIndex + 1, url: finalUrl, title: cleanTitle });
-                            }
-                            a.innerText = `[^${sourceIndex + 1}]`;
-                        } else if (text) {
-                            // Regular link preservation
-                            a.outerHTML = `[${text}](${url})`;
-                        }
-                    }
-                });
-
-                // Diagram Support (SVG)
-                const SVGs = clone.querySelectorAll('svg');
-                SVGs.forEach((svg: any, i: number) => {
-                    const label = svg.getAttribute('aria-label') || `Diagram ${i + 1}`;
-                    svg.outerHTML = `\n> [!NOTE]\n> [${label}] (Visual Diagram)\n`;
-                });
-
-                // Image Support (Raster)
-                const imgs = clone.querySelectorAll('img');
-                imgs.forEach((img: any) => {
-                    const alt = img.getAttribute('alt') || 'image';
-                    const src = img.getAttribute('src') || '';
-                    if (src && !src.startsWith('data:')) {
-                        img.outerHTML = `![${alt}](${src})`;
-                    }
-                });
-
-                // Table Support (HTML to GFM)
-                // We convert ANY HTML table inside the response to GFM
-                const tables = clone.querySelectorAll('table');
-                tables.forEach((table: any) => {
-                    let mdTable = '\n';
-                    const rows = Array.from(table.querySelectorAll('tr'));
-                    if (rows.length === 0) return;
-
-                    rows.forEach((row: any, i: number) => {
-                        const cells = Array.from(row.querySelectorAll('th, td'));
-                        const cellText = cells.map((c: any) => c.innerText.replace(/\n/g, ' ').trim());
-                        mdTable += `| ${cellText.join(' | ')} |\n`;
-                        if (i === 0) {
-                            mdTable += `| ${cells.map(() => '---').join(' | ')} |\n`;
-                        }
-                    });
-                    table.outerHTML = mdTable + '\n';
-                });
-
-                return {
-                    text: clone.innerText,
-                    sources: sourcesArray
-                };
-            }, selectors.gemini.chat);
-
-            let markdown = data.text;
-            if (data.sources.length > 0) {
-                markdown += '\n\n### Sources\n';
-                data.sources.forEach(s => {
-                    markdown += `[^${s.index}]: [${s.title}](${s.url})\n`;
-                });
-            }
-
-            return {
-                text: data.text,
-                markdown: markdown.trim(),
-                sources: data.sources,
-                thoughts
-            };
-        } catch (e) {
-            console.error('[Gemini] Failed to get latest response data:', e);
-            return null;
-        }
+        return extractResponseAction(this.getContext(), {
+            selectors,
+            verbose: this.verbose
+        });
     }
 
     async getLatestResponse(): Promise<string | null> {
@@ -1839,147 +1680,10 @@ export class GeminiClient extends EventEmitter {
     }
 
     private async exportToGoogleDocs(): Promise<{ docId: string | null; docUrl: string | null; docTitle: string | null }> {
-        console.log('[Gemini] Exporting to Google Docs...');
-
-        try {
-            console.log('[Gemini] Waiting for research panel to load...');
-
-            const panelSelectors = ['model-response', '.response-container', '[data-message-id]'];
-            let panelFound = false;
-            for (let i = 0; i < 15 && !panelFound; i++) {
-                for (const selector of panelSelectors) {
-                    const panel = this.page.locator(selector).first();
-                    if (await panel.count() > 0 && await panel.isVisible()) {
-                        panelFound = true;
-                        console.log(`[Gemini] Research panel found (${selector})`);
-                        break;
-                    }
-                }
-                if (!panelFound) {
-                    await this.page.waitForTimeout(1000);
-                }
-            }
-
-            await this.page.waitForTimeout(1000);
-
-            // NEW: Check for "Open" button (Deep Research specific)
-            // Sometimes the document is collapsed/previewed and needs to be opened to see the export menu.
-            const openButtonSelectors = [
-                'button:has-text("Open")',
-                'button:has-text("Otevřít")',
-                'button[aria-label="Open"]',
-                'button[aria-label="Otevřít"]'
-            ];
-
-            for (const selector of openButtonSelectors) {
-                const openBtn = this.page.locator(selector).first();
-                if (await openBtn.count() > 0 && await openBtn.isVisible()) {
-                    // Check if it's relevant (inside research panel or nearby)
-                    console.log(`[Gemini] Found 'Open' button: ${selector}. Clicking...`);
-                    await openBtn.click();
-                    await this.page.waitForTimeout(1500); // Wait for open animation
-                    break;
-                }
-            }
-
-            // Find export button
-            const exportButtonSelectors = [
-                'button[aria-label="Nabídka pro export"]',
-                'button[aria-label="Export menu"]',
-                'button[aria-label*="Nabídka pro export"]',
-                'button[aria-label*="Export menu"]'
-            ];
-
-            let exportButton = null;
-            for (const selector of exportButtonSelectors) {
-                try {
-                    const btn = this.page.locator(selector).first();
-                    if (await btn.count() > 0 && await btn.isVisible()) {
-                        exportButton = btn;
-                        console.log(`[Gemini] Found export button with selector: ${selector}`);
-                        break;
-                    }
-                } catch (e) { /* continue */ }
-            }
-
-            if (!exportButton) {
-                console.warn('[Gemini] Export button not found');
-                await this.dumpState('export_button_not_found');
-                return { docId: null, docUrl: null, docTitle: null };
-            }
-
-            console.log('[Gemini] Clicking export dropdown...');
-            await exportButton.click();
-            await this.page.waitForTimeout(1000);
-
-            // Find docs export option
-            const docsOptionSelectors = [
-                'button[role="menuitem"]:has-text("Exportovat do Dokumentů")',
-                'button[role="menuitem"]:has-text("Export to Docs")',
-                'button:has-text("Exportovat do Dokumentů")',
-                'button:has-text("Export to Docs")'
-            ];
-
-            let docsOptionClicked = false;
-            for (const selector of docsOptionSelectors) {
-                const docsOption = this.page.locator(selector).first();
-                if (await docsOption.count() > 0 && await docsOption.isVisible()) {
-                    console.log(`[Gemini] Clicking Google Docs export option: ${selector}`);
-
-                    const newPagePromise = this.page.context().waitForEvent('page', { timeout: 30000 });
-                    await docsOption.click();
-                    docsOptionClicked = true;
-
-                    console.log('[Gemini] Waiting for Google Docs tab...');
-                    const newPage = await newPagePromise;
-
-                    await newPage.waitForLoadState('domcontentloaded');
-
-                    // Poll for actual URL
-                    let docUrl = '';
-                    let docId: string | null = null;
-                    let docTitle: string | null = null;
-
-                    for (let i = 0; i < 20; i++) {
-                        docUrl = newPage.url();
-                        if (docUrl && docUrl !== 'about:blank' && docUrl.includes('docs.google.com')) {
-                            break;
-                        }
-                        await this.page.waitForTimeout(500);
-                    }
-
-                    if (docUrl.includes('docs.google.com')) {
-                        await newPage.waitForLoadState('load').catch(() => { });
-                        // Extract title
-                        docTitle = await newPage.title().then(t => t.replace(' - Google Docs', '').replace(' - Dokumenty Google', '').trim()).catch(() => null);
-                    }
-
-                    const docMatch = docUrl.match(/\/document(?:\/u\/\d+)?\/d\/([a-zA-Z0-9_-]+)/);
-                    if (docMatch) {
-                        docId = docMatch[1];
-                    }
-
-                    console.log(`[Gemini] Google Doc created: ${docId}`);
-                    console.log(`[Gemini] URL: ${docUrl}`);
-                    console.log(`[Gemini] Title: ${docTitle}`);
-
-                    await newPage.close();
-                    return { docId, docUrl, docTitle };
-                }
-            }
-
-            if (!docsOptionClicked) {
-                console.warn('[Gemini] Export to Docs option not found');
-                await this.dumpState('export_docs_option_not_found');
-            }
-
-            return { docId: null, docUrl: null, docTitle: null };
-
-        } catch (e) {
-            console.error('[Gemini] Export to Google Docs failed:', e);
-            await this.dumpState('export_to_docs_fail');
-            return { docId: null, docUrl: null, docTitle: null };
-        }
+        return exportToGoogleDocsAction(this.getContext(), { 
+            selectors, 
+            dumpState: (p) => this.dumpState(p) 
+        });
     }
 
     async research(query: string, options: { sessionId?: string, sessionName?: string, deepResearch?: boolean, resetSession?: boolean, model?: string } = {}): Promise<string> {

@@ -1105,6 +1105,54 @@ gemini.command('create-gem <name>')
         });
     });
 
+gemini.command('update-gem <gemId>')
+    .description('Update an existing Gem')
+    .option('--name <text>', 'New name')
+    .option('--instructions <text>', 'New system instructions')
+    .option('--file <paths...>', 'Files to upload')
+    .option('--config <path>', 'Config file')
+    .option('--local', 'Use local execution', true)
+    .action(async (gemId, opts) => {
+        let name = opts.name;
+        let instructions = opts.instructions;
+        let files = opts.file || [];
+
+        if (opts.config) {
+            try {
+                const { loadGemConfig } = require('../gem-config');
+                const config = loadGemConfig(opts.config);
+                if (!name) name = config.name;
+                if (!instructions) instructions = config.instructions;
+                if (config.files) files.push(...config.files);
+                console.log(`[Gemini] Loaded config from ${opts.config}`);
+            } catch (e: any) {
+                console.error(`Error loading config: ${e.message}`);
+                process.exit(1);
+            }
+        }
+
+        await runLocalGeminiAction(async (client, gemini) => {
+            const success = await gemini.updateGem(gemId, {
+                name,
+                instructions,
+                files: files.length > 0 ? files : undefined,
+            });
+            if (success) console.log(`\n✅ Updated gem: ${gemId}`);
+            else console.log(`\n⚠️ Failed to update gem: ${gemId}`);
+        });
+    });
+
+gemini.command('delete-gem <gemId>')
+    .description('Delete an existing Gem')
+    .option('--local', 'Use local execution', true)
+    .action(async (gemId, opts) => {
+        await runLocalGeminiAction(async (client, gemini) => {
+            const success = await gemini.deleteGem(gemId);
+            if (success) console.log(`\n✅ Deleted gem: ${gemId}`);
+            else console.log(`\n⚠️ Failed to delete gem: ${gemId}`);
+        });
+    });
+
 gemini.command('chat-gem <gemNameOrId> <message>')
     .description('Chat with a Gem')
     .option('--local', 'Use local execution', true)

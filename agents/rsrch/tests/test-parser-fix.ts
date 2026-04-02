@@ -4,7 +4,7 @@
  */
 
 import { chromium } from 'playwright';
-import { GeminiClient } from '../src/gemini-client';
+import { GeminiClient } from '../src/clients/gemini';
 import * as fs from 'fs';
 
 const CDP_URL = 'http://localhost:9223';

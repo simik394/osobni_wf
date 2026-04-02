@@ -1,5 +1,5 @@
 
-import { GeminiClient } from '../src/gemini-client';
+import { GeminiClient } from '../src/clients/gemini';
 import { Page } from 'playwright';
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 import * as WindmillClientModule from '../src/windmill-client';
