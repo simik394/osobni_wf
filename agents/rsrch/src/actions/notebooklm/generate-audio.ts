@@ -15,10 +15,10 @@ export async function generateAudioOverviewAction(
         getIsBusy: () => boolean;
         openNotebook: (title: string) => Promise<void>;
         getAudioArtifactTitles: () => Promise<string[]>;
-        selectSources: (sources: string[]) => Promise<void>;
+        selectSources: (sourcesOrRange: string | string[]) => Promise<void>;
         maximizeStudio: () => Promise<void>;
         triggerAudioGeneration: (customPrompt?: string, dryRun?: boolean, notebookTitle?: string) => Promise<boolean>;
-        waitForGeneration: (notebookTitle?: string) => Promise<void>;
+        waitForGeneration: () => Promise<void>;
         renameArtifact: (oldTitle: string, newTitle: string) => Promise<boolean>;
         humanDelay: (baseMs: number, variance?: number) => Promise<void>;
     }
@@ -60,7 +60,7 @@ export async function generateAudioOverviewAction(
             if (dryRun) return { success: true };
 
             if (waitForCompletion) {
-                await deps.waitForGeneration(notebookTitle);
+                await deps.waitForGeneration();
                 
                 const postGenTitles = await deps.getAudioArtifactTitles();
                 const newArtifacts = postGenTitles.filter(t => !existingAudioTitles.includes(t));
