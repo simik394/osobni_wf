@@ -1,5 +1,5 @@
 import { UniversalContext, NotebookLMActionDeps } from '../types';
-import { getSourcesAction } from './manage-sources';
+import { getSourcesAction } from './sources';
 import { getStudioArtifactsAction } from './studio';
 import { getChatMessagesAction } from './query';
 import { downloadAudioAction } from './download';

@@ -1082,7 +1082,7 @@ gemini.command('create-gem <name>')
 
         if (opts.config) {
             try {
-                const { loadGemConfig } = require('../gem-config');
+                const { loadGemConfig } = require('../core/gem-loader');
                 const config = loadGemConfig(opts.config);
                 if (!gemName || gemName === 'default') gemName = config.name;
                 if (!instructions) instructions = config.instructions;
@@ -1119,7 +1119,7 @@ gemini.command('update-gem <gemId>')
 
         if (opts.config) {
             try {
-                const { loadGemConfig } = require('../gem-config');
+                const { loadGemConfig } = require('../core/gem-loader');
                 const config = loadGemConfig(opts.config);
                 if (!name) name = config.name;
                 if (!instructions) instructions = config.instructions;

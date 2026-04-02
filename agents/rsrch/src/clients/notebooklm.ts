@@ -128,7 +128,7 @@ export class NotebookLMClient {
 
     /** Adds sources from Google Drive */
     async addSourceFromDrive(docNames: string[], notebookTitle?: string) {
-        return actions.addDriveSourceAction(this.ctx, this.deps, docNames, notebookTitle);
+        return actions.addDriveSourceAction(this.ctx, this.deps, docNames);
     }
 
     // --- Query & Chat ---

@@ -52,8 +52,8 @@ export function createWorkflowRouter(deps: WorkflowRouterDeps) {
                         await activeGeminiClient.init();
                     }
 
-                    const geminiSessionId = activeGeminiClient.getCurrentSessionId() || 'unknown';
-                    const sessionId = registry.registerSession(geminiSessionId, query);
+                    const geminiSessionId = await activeGeminiClient.getCurrentSessionId();
+                    const sessionId = registry.registerSession(geminiSessionId || 'unknown', query);
 
                     const combinedQuery = `
 Please perform a generic Deep Research on the topic: "${query}".

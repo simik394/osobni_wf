@@ -52,25 +52,28 @@ export class DashboardService {
             spec: 'notebooklm_scraper_spec.md'
         });
 
-        // 3. Audit Perplexity (Monolithic for now)
+        // 3. Audit Perplexity
+        const perplexityActions = this.countActions('perplexity');
         features.push({
             name: 'Perplexity Search',
             status: 'Production',
-            pattern: 'Monolithic',
-            actions: 0,
+            pattern: perplexityActions > 0 ? 'Modular' : 'Monolithic',
+            actions: perplexityActions,
             spec: 'conversation_scraper_spec.md'
         });
-
+ 
         // 4. Audit Graph Store
+        const graphActions = this.countActions('graph'); // or check src/core/graph-store.ts exists
         features.push({
             name: 'Graph Store (FalkorDB)',
             status: 'Beta',
             pattern: 'Modular',
-            actions: 0,
+            actions: graphActions || 1, // Assume 1 for the main store
             spec: 'graph_store_spec.md'
         });
+ 
+        const totalActions = geminiActions + notebookActions + perplexityActions + (graphActions || 1);
 
-        const totalActions = geminiActions + notebookActions;
         const totalPotentialModular = 4; // Gemini, NotebookLM, Perplexity, Graph
         const modularCount = features.filter(f => f.pattern === 'Modular').length;
         

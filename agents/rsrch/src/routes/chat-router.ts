@@ -139,7 +139,7 @@ export function createChatRouter(deps: {
                 responseText = result?.answer || 'No response';
             } else {
                 const gemini = await getGeminiClient();
-                responseText = await gemini.research(prompt, { sessionId: request.session || request.session_id, resetSession: !request.session && !request.session_id });
+                responseText = (await gemini.research(prompt, { sessionId: request.session || request.session_id, resetSession: !request.session && !request.session_id })) || '';
             }
 
             completeChatCompletionTrace(traceCtx, responseText);

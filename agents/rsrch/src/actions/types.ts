@@ -35,6 +35,10 @@ export type GeminiActionDeps = ActionDeps & {
     resetToNewChat?: () => Promise<void>;
     recycle?: () => Promise<void>;
     telemetry?: any;
+    verbose?: boolean;
+    getGraphStore?: () => any;
+    getLatestResponseData?: () => Promise<any>;
+    getCurrentSessionId?: () => Promise<string | null>;
     dumpState?: (prefix: string) => Promise<any>;
 };
 
@@ -56,3 +60,12 @@ export type NotebookLMActionDeps = ActionDeps & {
     getIsBusy?: () => boolean;
     recycle?: () => Promise<void>;
 };
+
+/**
+ * Perplexity-specific action dependencies.
+ */
+export type PerplexityActionDeps = ActionDeps & {
+    humanDelay?: (ms: number) => Promise<void>;
+    dumpState?: (prefix: string) => Promise<any>;
+};
+
