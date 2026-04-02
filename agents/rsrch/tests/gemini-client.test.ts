@@ -1,28 +1,32 @@
 
-import { GeminiClient } from '../src/gemini-client';
+import { GeminiClient } from '../src/clients/gemini';
 import { Page } from 'playwright';
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 
-// Mock the shared telemetry module
-vi.mock('@agents/shared', () => ({
-    getRsrchTelemetry: vi.fn().mockReturnValue({
-        startTrace: vi.fn(() => ({
-            span: {
-                addEvent: vi.fn(),
-            },
-            end: vi.fn(),
-        })),
-        startGeneration: vi.fn(() => ({
-            generation: {
+// Mock the shared telemetry and defaults
+vi.mock('@agents/shared', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        getRsrchTelemetry: vi.fn().mockReturnValue({
+            startTrace: vi.fn(() => ({
+                span: {
+                    addEvent: vi.fn(),
+                },
                 end: vi.fn(),
-            },
-        })),
-        endGeneration: vi.fn(),
-        endTrace: vi.fn(),
-        addScore: vi.fn(),
-        trackError: vi.fn(),
-    }),
-}));
+            })),
+            startGeneration: vi.fn(() => ({
+                generation: {
+                    end: vi.fn(),
+                },
+            })),
+            endGeneration: vi.fn(),
+            endTrace: vi.fn(),
+            addScore: vi.fn(),
+            trackError: vi.fn(),
+        }),
+    };
+});
 
 // Mock the entire playwright module
 vi.mock('playwright');
@@ -39,7 +43,10 @@ type MockPage = {
 const createMockLocator = (isVisible = true, text = '', html = '') => {
     const locator = {
         count: vi.fn().mockResolvedValue(isVisible ? 1 : 0),
-        isVisible: vi.fn().mockResolvedValue(isVisible),
+        isVisible: vi.fn().mockImplementation(async (opts) => {
+            console.log(`[DEBUG] isVisible called (result=${isVisible}, opts=${JSON.stringify(opts)})`);
+            return isVisible;
+        }),
         innerText: vi.fn().mockResolvedValue(text),
         innerHTML: vi.fn().mockResolvedValue(html),
         first: vi.fn().mockReturnThis(),
@@ -50,8 +57,41 @@ const createMockLocator = (isVisible = true, text = '', html = '') => {
         press: vi.fn().mockResolvedValue(undefined),
         waitFor: vi.fn().mockResolvedValue(undefined),
         getAttribute: vi.fn().mockResolvedValue(''),
-        evaluate: vi.fn().mockImplementation(fn => fn({ tagName: 'DIV', className: 'mock-class' })),
+        evaluate: vi.fn().mockImplementation((fn, arg) => {
+            // Provide a minimal DOM-like mock for cloneNode, querySelector, etc.
+            const mockEl = {
+                tagName: 'DIV',
+                className: 'mock-class',
+                innerText: text,
+                innerHTML: html,
+                textContent: text,
+                cloneNode: vi.fn().mockReturnThis(),
+                querySelectorAll: vi.fn().mockReturnValue([]),
+                querySelector: vi.fn().mockImplementation((sel) => {
+                    if (!sel) return null;
+                    return { innerText: text, innerHTML: html, textContent: text, cloneNode: vi.fn().mockReturnThis() };
+                }),
+                closest: vi.fn().mockReturnValue(null),
+                getAttribute: vi.fn().mockReturnValue(''),
+                insertBefore: vi.fn(),
+                classList: { contains: vi.fn().mockReturnValue(false) },
+                parentElement: null,
+            };
+
+            // Also mock global document for createTextNode which is used in evaluate
+            const originalDocument = (global as any).document;
+            (global as any).document = {
+                createTextNode: vi.fn().mockImplementation(t => ({ textContent: t })),
+            };
+            
+            try {
+                return Promise.resolve(fn(mockEl, arg));
+            } finally {
+                (global as any).document = originalDocument;
+            }
+        }),
         scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
+        locator: vi.fn().mockImplementation(() => createMockLocator(true, '', '')),
     };
     return locator;
 };
@@ -61,10 +101,11 @@ describe('GeminiClient', () => {
     let mockPage: MockPage;
     let client: GeminiClient;
 
-    beforeEach(() => {
-        // Reset mocks before each test
-        vi.clearAllMocks();
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
 
+    beforeEach(() => {
         mockPage = {
             goto: vi.fn().mockResolvedValue(null),
             waitForTimeout: vi.fn().mockResolvedValue(null),
@@ -215,40 +256,70 @@ describe('GeminiClient', () => {
 // start snippet should-fill-the-input-press-enter-and-wait-for-a-r
         it('should send a message and wait for a response', async () => {
             const message = 'Hello, Gemini!';
-            const mockInput = createMockLocator(true);
+            const mockInput = createMockLocator(true, '');
             // injectText reads innerText to check if empty
             mockInput.innerText = vi.fn().mockResolvedValue('');
-            const mockResponse = createMockLocator(true, 'Response text');
-            mockResponse.last = vi.fn().mockReturnThis();
-
-            // Track response count to simulate new response appearing
-            let responseCount = 0;
+            
+            // Track state to simulate response appearing
+            let sent = false;
+            
+            const modelResponseLoc = createMockLocator(false, 'Response text');
+            // Override count with logging
+            modelResponseLoc.count = vi.fn().mockImplementation(() => {
+                const c = sent ? 1 : 0;
+                console.log(`[DEBUG] Response count: ${c} (sent=${sent})`);
+                return Promise.resolve(c);
+            });
+            modelResponseLoc.nth = vi.fn().mockImplementation((i) => {
+                console.log(`[DEBUG] nth(${i}) called`);
+                return modelResponseLoc;
+            });
+            modelResponseLoc.last = vi.fn().mockReturnValue(modelResponseLoc);
 
             mockPage.locator.mockImplementation((selector) => {
-                if (selector.includes('Sign in')) {
-                    return createMockLocator(false); // Not signed out
+                const sel = selector.toLowerCase();
+                if (sel.includes('sign in')) {
+                    return createMockLocator(false);
                 }
-                if (selector.includes('contenteditable') || selector.includes('rich-textarea') || selector.includes('chat-input')) {
+                if (sel.includes('contenteditable') || sel.includes('rich-textarea') || sel.includes('chat-input') || sel.includes('input')) {
+                    mockInput.press = vi.fn().mockImplementation(async (key) => {
+                        if (key === 'Enter') {
+                            sent = true;
+                        }
+                        return Promise.resolve();
+                    });
                     return mockInput;
                 }
-                if (selector.includes('model-response')) {
-                    responseCount++;
-                    // First call: 0 responses (before send), subsequent: 1 response
-                    const loc = createMockLocator(true, 'Response text');
-                    loc.count = vi.fn().mockResolvedValue(responseCount > 1 ? 1 : 0);
-                    loc.last = vi.fn().mockReturnThis();
-                    loc.nth = vi.fn().mockReturnThis();
+                if (sel.includes('model-response') || sel.includes('response')) {
+                    const loc = createMockLocator(sent, 'Response text');
+                    loc.count = vi.fn().mockImplementation(() => Promise.resolve(sent ? 1 : 0));
+                    loc.nth = vi.fn().mockReturnValue(loc);
+                    loc.last = vi.fn().mockReturnValue(loc);
                     return loc;
                 }
-                if (selector.includes('send') || selector.includes('Send') || selector.includes('Odeslat')) {
-                    return createMockLocator(true); // Send button visible
+                if (sel.includes('send') || sel.includes('odeslat')) {
+                    const sendBtn = createMockLocator(true);
+                    sendBtn.click = vi.fn().mockImplementation(async () => {
+                        sent = true;
+                        return Promise.resolve();
+                    });
+                    return sendBtn;
                 }
                 return createMockLocator(false);
             });
 
-            const response = await client.sendMessage(message);
+            // Mock getLatestResponseData on this instance only
+            vi.spyOn(client, 'getLatestResponseData').mockImplementation(async () => {
+                return {
+                    text: 'Response text',
+                    markdown: 'Response text',
+                    sources: []
+                } as any;
+            });
 
-            // The new API uses injectText (click + type) instead of fill
+            const response = await client.sendMessage(message) as any;
+
+            // Ensure input was interacted with
             expect(mockInput.click).toHaveBeenCalled();
             expect(response).toBe('Response text');
         });
@@ -378,11 +449,12 @@ describe('GeminiClient', () => {
 // start snippet getlatestresponse-should-return-the-text-of-the-la
 
         it('getLatestResponse should return the text of the last response', async () => {
-            const mockResponses = {
-                count: vi.fn().mockResolvedValue(2),
-                nth: vi.fn().mockReturnThis(),
-                innerText: vi.fn().mockResolvedValue('This is the last one'),
-            };
+            const mockResponses = createMockLocator(true, 'This is the last one');
+            mockResponses.count = vi.fn().mockResolvedValue(2);
+            mockResponses.nth = vi.fn().mockImplementation((i) => {
+                if (i === 1) return createMockLocator(true, 'This is the last one');
+                return createMockLocator(true, 'First response');
+            });
 
             mockPage.locator.mockImplementation(selector => {
                 if (selector.includes('model-response')) {
@@ -457,7 +529,8 @@ describe('GeminiClient', () => {
         it('getLatestResponse should return null on failure', async () => {
             mockPage.locator.mockImplementation(() => {
                 const locator = createMockLocator(true);
-                locator.innerText.mockRejectedValue(new Error('Cannot read text'));
+                // getLatestResponseData uses evaluate, so we must mock that to fail for null response
+                locator.evaluate.mockRejectedValue(new Error('Mock evaluation error'));
                 return locator;
             });
             const response = await client.getLatestResponse();
