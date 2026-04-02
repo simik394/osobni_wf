@@ -76,3 +76,5 @@ integrations/academic/moodle/_dumps/
 # Track the consolidated archived dumps (Optional - commenting out to reduce "bordel" if they are truly cluttering)
 # !integrations/academic/insis/_dumps/**
 # !integrations/academic/moodle/_dumps/**
+data/
+*.tsbuildinfo
