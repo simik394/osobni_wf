@@ -16,6 +16,12 @@ Most agents should use the `rsrch` CLI directly.
 For long-running or remote integrations, use the Express API.
 - See [API_REFERENCE.qmd](./API_REFERENCE.qmd) for endpoint details.
 
+### 3. Modular Actions
+For low-level UI behavior customization or reuse in other projects, see `src/actions/`.
+- **Gemini**: `src/actions/gemini/`
+- **NotebookLM**: `src/actions/notebooklm/`
+- **Shared**: `src/actions/common/`
+
 ## 🤝 Jules Integration
 1. **`jules-cli`**: List, get, status, retry.
 2. **`jules-mcp`**: Create, approve, send_message.
@@ -27,4 +33,4 @@ For long-running or remote integrations, use the Express API.
 Agents interfacing with `rsrch` MUST respect the **Submit & Return** pattern. Do not block on results; use webhooks or polling of the `FalkorDB` / `jobs.json` state.
 
 ---
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-02
