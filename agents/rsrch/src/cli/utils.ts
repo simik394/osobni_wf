@@ -128,6 +128,7 @@ export async function runLocalNotebookAction(action: (client: BrowserClient, not
     try {
         await action(client, notebook);
     } finally {
+        await client.release();
         await client.close();
     }
 }
@@ -154,6 +155,7 @@ export async function runLocalGeminiAction(
     try {
         await action(client, gemini);
     } finally {
+        await client.release();
         await client.close();
     }
 }

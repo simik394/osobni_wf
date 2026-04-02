@@ -3,7 +3,7 @@ import { Page } from 'playwright';
 import * as path from 'path';
 import * as fs from 'fs';
 import { config } from '../config';
-import { injectSharedObserver } from '../../shared/dom-observer';
+import { injectSharedObserver } from '../../../shared/src/dom-observer';
 import { selectors } from '../selectors';
 import { 
     createNotebookAction,
@@ -53,7 +53,40 @@ export class NotebookLMClient {
     }
 
     async init() {
-        await this.page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+        const currentUrl = this.page.url();
+        if (currentUrl.includes('notebooklm.google.com') && !currentUrl.includes('/notebook/')) {
+            this.log('Already on home page, skipping init navigation');
+            return;
+        }
+        
+        if (currentUrl.includes('notebooklm.google.com')) {
+            this.log('On different page, recycling to home...');
+            await this.recycle();
+        } else {
+            await this.page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+        }
+    }
+
+    /**
+     * Recycle the current tab back to the home page (notebook list) using UI navigation.
+     * Essential for absolute efficiency as mandated.
+     */
+    async recycle() {
+        this.log('Recycling NotebookLM tab via UI...');
+        const homeBtn = this.page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
+        if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
+            await homeBtn.click();
+            try {
+                await this.page.waitForURL(url => url.href.includes('notebooklm.google.com') && !url.href.includes('/notebook/'), { timeout: 5000 });
+                this.log('Recycled successfully via UI.');
+            } catch (e) {
+                this.log('UI recycle timed out, falling back to goto().');
+                await this.page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+            }
+        } else {
+            this.log('Home button not found, falling back to goto().');
+            await this.page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+        }
     }
 
     async createNotebook(title: string) {

@@ -5,6 +5,7 @@ import { selectors } from './selectors';
 import * as fs from 'fs';
 import * as path from 'path';
 import logger from './services/logger';
+import { BrowserClient } from './clients/base';
 
 // Add stealth plugin
 chromium.use(StealthPlugin());
@@ -12,30 +13,21 @@ chromium.use(StealthPlugin());
 export async function runQuery(queryText: string) {
     logger.info(`Running query: "${queryText}"`);
 
-    if (!fs.existsSync(config.auth.authFile)) {
-        logger.error(`Auth file not found at ${config.auth.authFile}. Please run "npm run auth" first to log in.`);
-        return;
-    }
-
-    let browser;
-    if (config.browserWsEndpoint) {
-        logger.info(`Connecting to browser service at ${config.browserWsEndpoint}...`);
-        browser = await chromium.connect(config.browserWsEndpoint);
-    } else {
-        // logger.info('Launching local browser (System Chrome)...');
-        // browser = await chromium.launch({ headless: false, channel: 'chrome' });
-        throw new Error('STRICT POLICY: Local browser launch PROHIBITED. Please check browser service connection.');
-    }
-
-    logger.info('Creating context with saved auth state...');
-    const context = await browser.newContext({
-        storageState: config.auth.authFile
-    });
-
-    const page = await context.newPage();
-
+    const client = new BrowserClient({ verbose: true });
+    
     try {
-        await page.goto(config.urls.perplexity);
+        await client.init({ 
+            profileId: 'default', 
+            cdpEndpoint: config.browserWsEndpoint || process.env.BROWSER_CDP_ENDPOINT 
+        });
+
+        const page = await client.getTabPage('perplexity');
+
+        // Navigace na Perplexity
+        const currentUrl = page.url();
+        if (!currentUrl.includes('perplexity.ai')) {
+            await page.goto(config.urls.perplexity, { waitUntil: 'domcontentloaded' });
+        }
         // await page.waitForLoadState('networkidle'); // Too slow
 
         // Wait for input - faster check
@@ -140,7 +132,7 @@ export async function runQuery(queryText: string) {
     } catch (error) {
         logger.error('Query execution failed:', error);
     } finally {
-        await context.close();
-        await browser.close();
+        await client.release();
+        await client.close();
     }
 }

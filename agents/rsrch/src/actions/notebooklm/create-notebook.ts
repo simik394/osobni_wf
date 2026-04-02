@@ -12,7 +12,22 @@ export async function createNotebookAction(
 
     log(`Creating notebook: ${title}`);
     try {
-        await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+        // EFFICIENT RECYCLING
+        const currentUrl = page.url();
+        if (!currentUrl.includes('notebooklm.google.com') || currentUrl.includes('/notebook/')) {
+            log('Navigating to home via UI/goto fallback...');
+            const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
+            if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
+                await homeBtn.click();
+                try {
+                    await page.waitForURL(url => url.href.includes('notebooklm.google.com') && !url.href.includes('/notebook/'), { timeout: 5000 });
+                } catch (e) {
+                    await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+                }
+            } else {
+                await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+            }
+        }
 
         const createBtnSelector = deps.selectors.home.createNewButton;
         await page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });

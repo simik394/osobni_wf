@@ -88,6 +88,7 @@ export abstract class BaseClient {
 export class BrowserClient extends BaseClient {
     private sessions: Session[] = [];
     private keepAlive = false;
+    private leasedPages: Page[] = [];
 
     constructor(options: ClientOptions = {}) {
         super(options);
@@ -124,8 +125,12 @@ export class BrowserClient extends BaseClient {
             } catch (e: any) {
                 console.log(`connectOverCDP failed: ${e.message}, attempting manual WS fetch...`);
                 try {
+                    // Fix protocol for fetch
+                    const fetchTarget = target.replace(/^ws/, 'http');
+                    console.log(`Fetching version from: ${fetchTarget}/json/version`);
+                    
                     // @ts-ignore
-                    const response = await fetch(`${target}/json/version`);
+                    const response = await fetch(`${fetchTarget}/json/version`);
                     if (!response.ok) throw new Error(`Failed to fetch version info: ${response.statusText}`);
                     const data = await response.json();
                     let wsEndpoint = data.webSocketDebuggerUrl;
@@ -262,18 +267,33 @@ export class BrowserClient extends BaseClient {
     async createGeminiClient(): Promise<GeminiClient> {
         if (!this.context) throw new Error('Browser not initialized');
         const page = await getTab(this.context as any, 'gemini');
+        this.leasedPages.push(page);
         return new GeminiClient(page);
     }
 
     async createNotebookLMClient(): Promise<NotebookLMClient> {
         if (!this.context) throw new Error('Browser not initialized');
         const page = await getTab(this.context as any, 'notebooklm' as any);
+        this.leasedPages.push(page);
         return new NotebookLMClient(page);
+    }
+
+    /**
+     * Get a pooled tab for a specific service.
+     * Use this for standalone utilities to ensure TabPool compliance.
+     */
+    async getTabPage(serviceName: string): Promise<Page> {
+        if (!this.context) throw new Error('Browser not initialized');
+        const page = await getTab(this.context as any, serviceName as any);
+        this.leasedPages.push(page);
+        return page;
     }
 
     async openPage(url: string): Promise<Page> {
         if (!this.context) throw new Error('Browser not initialized');
+        console.warn('⚠️ [BrowserClient] openPage() is INEFFICIENT. Use createNotebookLMClient() or getTab() to reuse existing tabs.');
         const page = await this.context.newPage();
+        this.leasedPages.push(page);
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         return page;
     }
@@ -281,9 +301,29 @@ export class BrowserClient extends BaseClient {
     async close() {
         if (this.keepAlive) {
             console.log('Browser kept alive (use shutdown() to force close)');
+            // Even if kept alive, we MUST release leased pages to the pool
+            await this.release();
             return;
         }
         await this.shutdown();
+    }
+
+    /**
+     * Explicitly release all leased pages back to the TabPool.
+     * Essential for efficiency on shared browsers (halvarm).
+     */
+    async release() {
+        if (this.leasedPages.length === 0) return;
+        
+        console.log(`♻️ [BrowserClient] Releasing ${this.leasedPages.length} leased pages to pool...`);
+        for (const page of this.leasedPages) {
+            try {
+                await markTabFree(page);
+            } catch (e) {
+                // Page might be closed, ignore
+            }
+        }
+        this.leasedPages = [];
     }
 
     async shutdown() {

@@ -35,8 +35,21 @@ export async function generateAudioOverviewAction(
             if (notebookTitle) {
                 await deps.openNotebook(notebookTitle);
             } else {
-                log('[DEBUG] No notebook specified, navigating to NotebookLM homepage...');
-                await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+                log('[DEBUG] No notebook specified, ensuring we are on home page...');
+                const currentUrl = page.url();
+                if (!currentUrl.includes('notebooklm.google.com') || currentUrl.includes('/notebook/')) {
+                    const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
+                    if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
+                        await homeBtn.click();
+                        try {
+                            await page.waitForURL(url => url.href.includes('notebooklm.google.com') && !url.href.includes('/notebook/'), { timeout: 5000 });
+                        } catch (e) {
+                            await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+                        }
+                    } else {
+                        await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+                    }
+                }
                 await deps.humanDelay(2000);
             }
 

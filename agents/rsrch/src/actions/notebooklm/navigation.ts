@@ -27,7 +27,25 @@ export async function openNotebookAction(
         log('On different notebook, navigating to home first...');
     }
 
-    await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+    // EFFICIENT RECYCLING: Try to click "Home" logo/icon instead of page.goto if already on domain
+    if (currentUrl.includes('notebooklm.google.com')) {
+        log('Attempting UI-based navigation to home...');
+        const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
+        if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
+            await homeBtn.click();
+            try {
+                await page.waitForURL(url => url.href.includes('notebooklm.google.com') && !url.href.includes('/notebook/'), { timeout: 5000 });
+                log('Successfully navigated to home via UI.');
+            } catch (e) {
+                log('UI navigation to home timed out or failed, falling back to goto().');
+                await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+            }
+        } else {
+            await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+        }
+    } else {
+        await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+    }
 
     try {
         await page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: ctx.config.timeouts.navigation });
