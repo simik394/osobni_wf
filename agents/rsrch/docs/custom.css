@@ -1,0 +1,196 @@
+/* Premium Dark Mode Glassmorphism Dashboard */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg-primary: #0a0b10;
+  --bg-secondary: rgba(15, 17, 26, 0.85);
+  --text-main: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent-cyan: #06b6d4;
+  --accent-purple: #8b5cf6;
+  --accent-green: #10b981;
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  --gradient-primary: linear-gradient(135deg, #06b6d4, #8b5cf6);
+}
+
+body {
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text-main);
+  font-family: 'Outfit', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+h1.title {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Glassmorphism Cards (Value Boxes) */
+.html-fill-item.card {
+  background: var(--bg-secondary) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--glass-shadow) !important;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+  overflow: hidden;
+}
+
+.html-fill-item.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(139, 92, 246, 0.2) !important;
+  border-color: rgba(139, 92, 246, 0.3) !important;
+}
+
+/* Value Box Internals */
+.valuebox-value, .valuebox-value-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  background: linear-gradient(to right, #fff, #cbd5e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.valuebox-title {
+  color: #ffffff !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.valuebox-icon {
+  opacity: 0.8;
+  color: var(--accent-cyan);
+}
+
+.observablehq table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 6px !important;
+  background: transparent !important;
+}
+
+.observablehq thead th {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  padding: 14px 16px !important;
+  border-bottom: 2px solid var(--accent-cyan) !important;
+}
+
+.observablehq tbody tr {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.observablehq tbody td {
+  padding: 16px !important;
+  color: #ffffff !important; 
+  font-weight: 400 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Row hover effect for visibility */
+.observablehq tbody tr:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Selection / Link color in table */
+.observablehq a {
+  color: var(--accent-cyan) !important;
+  text-decoration: underline !important;
+}
+
+/* Button */
+button {
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(139, 92, 246, 0.5);
+  filter: brightness(1.1);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+/* Navbar */
+.navbar {
+  background: rgba(15, 17, 26, 0.8) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.navbar-brand {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Mermaid SVG Light Background for absolute contrast clarity */
+.mermaid {
+  background: #ffffff !important;
+  padding: 30px;
+  border-radius: 12px;
+  min-height: 400px;
+  border: 1px solid var(--glass-border);
+}
+
+.mermaid svg {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Overall Dashboard Sizing Overrides */
+.quarto-dashboard {
+  overflow-y: auto !important;
+}
+
+.quarto-dashboard-content {
+  padding: 20px !important;
+  gap: 20px !important;
+}
+
+/* Form inputs for OJS */
+.observablehq form {
+  background: transparent !important;
+  color: var(--text-main) !important;
+}
+
+.observablehq input {
+  background: rgba(0,0,0,0.2) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: white !important;
+  border-radius: 4px;
+}

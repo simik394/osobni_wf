@@ -19,8 +19,13 @@ website:
 
 format:
   html:
-    theme: cosmo
+    theme: darkly
     toc: true
+  dashboard:
+    theme: darkly
 
 filters:
   - include-code-files
+
+mermaid:
+  theme: dark

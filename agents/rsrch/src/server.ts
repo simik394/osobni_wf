@@ -1,4 +1,5 @@
 import express from 'express';
+import * as path from 'path';
 import cors from 'cors';
 import { BrowserClient } from './clients/base';
 import { GeminiClient } from './clients/gemini';
@@ -19,6 +20,9 @@ const port = Number(config.port || process.env.PORT || 3000);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Serve static dashboard files
+app.use(express.static(path.join(__dirname, '../_site')));
 
 // Initial State / Singletons
 const client = new BrowserClient({ 

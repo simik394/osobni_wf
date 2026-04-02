@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { config } from '../config';
 
 export interface FeatureStatus {
@@ -16,6 +17,9 @@ export interface DashboardMetrics {
     authStatus: string;
     lastUpdated: string;
     features: FeatureStatus[];
+    halvarmStatus: string;
+    gitStatus: string;
+    falkorStatus: string;
 }
 
 export class DashboardService {
@@ -70,12 +74,57 @@ export class DashboardService {
         const totalPotentialModular = 4; // Gemini, NotebookLM, Perplexity, Graph
         const modularCount = features.filter(f => f.pattern === 'Modular').length;
         
+        // --- System & Control Metrics ---
+        let halvarmStatus = "Unknown";
+        let falkorStatus = "Unknown";
+        let gitStatus = "Clean";
+
+        // Halvarm Check
+        try {
+            const sshResult = execSync('ssh -o BatchMode=yes -o ConnectTimeout=2 halvarm "curl -s http://localhost:3030/health || echo offline"', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+            if (sshResult.includes('"status":"ok"')) {
+                halvarmStatus = "Online (API OK)";
+                falkorStatus = "Online"; // Assuming health check includes Falkor
+            } else if (sshResult.includes('offline')) {
+                halvarmStatus = "Online (API Down)";
+            } else {
+                halvarmStatus = sshResult.trim().substring(0, 20);
+            }
+        } catch(e) {
+            halvarmStatus = "Unreachable";
+            falkorStatus = "Unreachable";
+        }
+
+        // Falkor Local check
+        try {
+            if (falkorStatus === "Unknown") {
+                const redisRes = execSync('redis-cli -p 6379 ping 2>/dev/null', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+                if (redisRes.includes('PONG')) falkorStatus = "Online (Local)";
+            }
+        } catch (e) {
+            if (falkorStatus === "Unknown") falkorStatus = "Offline";
+        }
+
+        // Git Check
+        try {
+            const gitRes = execSync('git status --porcelain', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+            const lineCount = gitRes.trim().split('\\n').filter(l => l.length > 0).length;
+            if (lineCount > 0) {
+                gitStatus = `${lineCount} unstaged/uncommitted files`;
+            }
+        } catch(e) {
+            gitStatus = "Error parsing git";
+        }
+
         return {
             totalActions,
             clientHealth: Math.round((modularCount / totalPotentialModular) * 100),
             authStatus: 'Active (VNC Locked)',
             lastUpdated: new Date().toISOString(),
-            features
+            features,
+            halvarmStatus,
+            gitStatus,
+            falkorStatus
         };
     }
 

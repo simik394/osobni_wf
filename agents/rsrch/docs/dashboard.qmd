@@ -1,35 +1,38 @@
 ---
-title: "Rsrch Agent Dashboard"
+title: "Rsrch Agent Mission Control"
 format: 
   dashboard:
     nav-buttons: [github]
-    theme: cosmo
+    theme: darkly
+    css: custom.css
+mermaid:
+  theme: dark
 ---
 
 ```{ojs}
 //| output: false
 // Fetch live status from the rsrch server
-status_data = d3.json("http://localhost:3030/system/status")
+status_data = d3.json("/system/status")
 
 // Function to trigger refresh
-refresh_system = async () => {
-    const res = await fetch("http://localhost:3030/system/refresh", { method: "POST" });
+refresh_sys = async () => {
+    const res = await fetch("/system/refresh", { method: "POST" });
     if (res.ok) {
-        // Trigger a re-fetch of the status data
-        // OJS will automatically update downstream cells
         location.reload(); 
     }
 }
 ```
 
-## Row {height=20%}
+# Overview
+
+## Row {height=120px}
 
 ```{ojs}
 //| component: valuebox
 //| title: "Total Modular Actions"
 //| icon: "gear"
 //| color: "primary"
-status_data.totalActions
+html`<span class="valuebox-value-text">${status_data.totalActions}</span>`
 ```
 
 ```{ojs}
@@ -37,62 +40,118 @@ status_data.totalActions
 //| title: "Architectural Health"
 //| icon: "shield-check"
 //| color: "success"
-status_data.clientHealth + "% Modular"
+html`<span class="valuebox-value-text">${status_data.clientHealth}% Modular</span>`
+```
+
+```{ojs}
+//| component: valuebox
+//| title: "Remote (Halvarm)"
+//| icon: "server"
+//| color: "danger"
+html`<span class="valuebox-value-text">${status_data.halvarmStatus}</span>`
+```
+
+## Row {height=120px}
+
+```{ojs}
+//| component: valuebox
+//| title: "Git Status"
+//| icon: "git"
+//| color: "warning"
+html`<span class="valuebox-value-text">${status_data.gitStatus}</span>`
+```
+
+```{ojs}
+//| component: valuebox
+//| title: "Database (FalkorDB)"
+//| icon: "database"
+//| color: "info"
+html`<span class="valuebox-value-text">${status_data.falkorStatus}</span>`
 ```
 
 ```{ojs}
 //| component: valuebox
 //| title: "Browser Status"
 //| icon: "browser-chrome"
-//| color: "info"
-status_data.browser
+//| color: "secondary"
+html`<span class="valuebox-value-text">${status_data.browser}</span>`
 ```
 
-## Row {height=50%}
+## Row {height=80px}
 
-### Feature Matrix
+### Quick Operations
+
+```{ojs}
+html`
+<div style="display: flex; gap: 15px; align-items: center; justify-content: center; width: 100%; height: 100%;">
+  ${Inputs.button("↻ Refresh Git Status", {click: refresh_sys})}
+  ${Inputs.button("↻ Refresh FalkorDB Ping", {click: refresh_sys})}
+  ${Inputs.button("↻ Sync Halvarm Server", {click: refresh_sys})}
+</div>
+`
+```
+
+
+## Row {height=450px}
+
+### Feature Performance & Status Matrix
 
 ```{ojs}
 Inputs.table(status_data.features, {
   columns: ["name", "status", "pattern", "actions", "spec"],
   header: {
-    name: "Feature",
-    status: "Status",
-    pattern: "Architecture",
-    actions: "Actions",
-    spec: "Specification"
+    name: "Feature Component",
+    status: "Lifecycle Status",
+    pattern: "Design Pattern",
+    actions: "Action Modules",
+    spec: "Engineering Spec"
   }
 })
 ```
 
-## Row {height=30%}
+# Architecture Deep Dive
 
-### System Architecture
+## Row {.tabset height=700px}
+
+### Request Lifecycle
 
 ```{mermaid}
-graph TD
-    CLI[CLI / API] --> Client[Client Orchestrator]
-    Client --> Actions[Modular Actions]
-    Actions --> Browser[Persistent Browser Context]
+sequenceDiagram
+    participant CLI as User CLI
+    participant Router as Express Router
+    participant Service as Dashboard Service
+    participant Client as Modular Client
+    participant Actions as Stateless Actions
+    participant Browser as Browser
+    participant Graph as FalkorDB
     
-    subgraph "Stateless Handlers"
-        Actions
-    end
-    
-    subgraph "Stateful Layer"
-        Browser
-        Graph[FalkorDB Graph Store]
-    end
-    
-    Actions -.-> Graph
+    CLI->>Router: HTTP Request
+    Router->>Service: Route Call
+    Service->>Client: Invoke Component
+    Client->>Actions: Execute Action
+    Actions->>Browser: Automate
+    Actions-->>Graph: Persist Data
 ```
 
-### Operations
+### Knowledge Graph
 
-::: {.card}
-Click below to re-scan the codebase and synchronize the dashboard state with current implementation.
-
-```{ojs}
-Inputs.button("Refresh Dashboard Data", {value: 0, click: refresh_system})
+```{mermaid}
+graph LR
+    RT[Research Tasks] --> A[Artifacts]
+    A[Artifacts] --> C[Citations]
+    RT[Research Tasks] --> O[Observations]
 ```
-:::
+
+### Remote Sync (Halvarm)
+
+```{mermaid}
+sequenceDiagram
+    participant Local as Local Dev
+    participant Remote as Halvarm Server
+    
+    Local->>Local: Commit & Sync
+    Local->>Remote: Build & Deploy
+    Remote->>Remote: Job Status: Running
+    Local->>Remote: V2 Health Check
+    Remote-->>Local: HTTP 200 OK
+```

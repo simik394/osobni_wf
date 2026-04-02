@@ -241,3 +241,21 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **Implementation: Submit & Return Architecture**: We've transitioned to a decoupled **Submit** (heavy worker) and **Watch** (lightweight worker) pattern. This immediately releases the primary Windmill worker after prompt delivery, delegating monitoring to a secondary "Watcher" agent that connects to the existing CDP tab.
 - **Async State Hygiene**: Implementing a `PENDING` state in FalkorDB *before* the watcher completes ensures that sessions are trackable even if a generation fails or the watcher job is interrupted. This provides a clear audit trail for long-running research tasks.
 - **Remote CDP Reliability**: Remote browsers (on `halvarm:9223`) can be transient. Automation scripts MUST handle `Target closed` errors gracefully and provide detailed `dumpState` diagnostics for headless debugging.
+
+---
+
+### [[8. Hybrid Interactive Dashboard & TS Regressions (2026-04-02)]]
+
+- **Hybrid Quarto + OJS Coordination**: Building an interactive dashboard with Quarto + Observable JS (OJS) requires a live backend API. Since OJS runs client-side in the browser, the backend server MUST have `cors()` enabled and the OJS `fetch/d3.json` calls must target the correct local port (e.g., `localhost:3030`).
+- **Codebase Synthesis for Dashboards**: Implementing a `DashboardService` that scans filesystem patterns (e.g., `src/actions/` vs `src/clients/`) is an effective way to provide real-time "Architectural Health" metrics without manual status updates.
+- **TS Downlevel Iteration (Set Spread)**: The spread operator `[...new Set(urls)]` can fail with `TS2802` in environments targeting ES5/ES6 without the `--downlevelIteration` flag. **Standardize on `Array.from(new Set(urls))`** for maximum compatibility when converting Sets to Arrays in core library code.
+- **Bridge Method Preservation**: When refactoring monolithic clients into modular actions, keep "bridge methods" (simple wrappers) in the main client during the transition. This prevents regressions in existing routers and background workflows that still rely on the old client interface.
+
+---
+
+### [[9. Dashboard UX & OJS/Mermaid Gotchas (2026-04-02)]]
+
+- **OJS String Highlighting**: Observable JS (OJS) in Quarto dashboards automatically "inspects" and syntax-highlights raw string values (adding quotes and color). To prevent this and enforce custom CSS, wrap OJS values in an HTML template: `html`<span class="my-class">${value}</span>``.
+- **Mermaid Contrast in Dark Themes**: CSS `fill` overrides for Mermaid SVG text are fragile and often ignored by the Mermaid renderer's internal styles. A robust solution is to use a light-background container (`background: #ffffff !important`) for the Mermaid div, effectively creating a high-contrast "card" within a dark dashboard.
+- **Valuebox Responsiveness**: Avoid hardcoding `font-size` in `valuebox-value` CSS. Quarto's dashboard engine handles font scaling based on row height; forcing font sizes causes text overflow and layout breakage on smaller viewports.
+
