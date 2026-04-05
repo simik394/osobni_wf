@@ -268,3 +268,20 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **Platform Type Extensibility Pattern**: When adding a new platform to `GraphStore.syncConversation`, the change is minimal — just widen the TypeScript union type (`'gemini' | 'perplexity' | 'aimode'`). The underlying Cypher queries use string interpolation and don't need changes. This confirms the graph schema is sufficiently generic.
 - **Tab Pool Service Registration**: Adding a new browser-based service requires updating `SERVICE_URLS` in `agents/shared/src/tab-pool.ts` AND rebuilding the shared package (`cd agents/shared && npm run build`). Forgetting the shared rebuild is a common source of "type not assignable" errors at compile time.
 - **Selector Type Registration**: The `NotebookLMSelectors` interface in `selectors.ts` is the TypeScript-level catalog of all selector groups. Adding a YAML section without a matching TS interface entry causes `Property 'X' does not exist` errors in all action modules that reference the new selectors.
+
+---
+
+### [[11. Robust Selector Design for Google/SPA Pages (2026-04-05)]]
+
+- **NEVER use minified CSS class names** (e.g., `.Zkbeff`, `.rBl3me`, `.H23r4e`, `.NDNGvf`) as selectors for scraping. Google regenerates these with every frontend deployment. They will break within days/weeks.
+- **Selector priority hierarchy** (most stable → least):
+  1. **`data-*` semantic attributes**: `data-xid="aim-mars-turn-root"`, `data-streaming-container`. These are application-level identifiers, not styling artifacts.
+  2. **`aria-label`** / **`role`** attributes: `div[role="dialog"]`, `button[aria-label*="Copy"]`. Stable because they're accessibility requirements.
+  3. **Semantic HTML tags**: `pre`, `code`, `textarea`, `section`. These never change.
+  4. **`jsname`** attributes: `div[jsname="coFSxe"]`. More stable than classes in Google's Lit/Angular framework, but can shift between major refactors.
+  5. **`href` patterns**: `a[href*="udm=50"][href*="mstk="]`. URL structure changes rarely.
+  6. **`placeholder` / `name` attributes**: `textarea[placeholder*="Ask"]`. Localized but predictable.
+  7. **`id` attributes**: `#center_col`. Stable if present, but Google rarely uses them.
+- **Always implement cascading fallback chains**: Primary selector → secondary fallback → tertiary → body text extraction. Log which level was used for debuggability.
+- **i18n resilience**: Google localizes aria-labels. Always include at least EN + CS (user locale) fallbacks: `button[aria-label*="Copy" i], button[aria-label*="Kopír" i]`.
+- **Audit before writing**: Run a DOM audit script that collects all `aria-label`, `role`, `jsname`, `data-*` attributes from the target page. This takes 5 minutes and prevents weeks of debugging broken classes.
