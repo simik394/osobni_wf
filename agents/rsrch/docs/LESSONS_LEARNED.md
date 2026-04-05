@@ -259,3 +259,12 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **Mermaid Contrast in Dark Themes**: CSS `fill` overrides for Mermaid SVG text are fragile and often ignored by the Mermaid renderer's internal styles. A robust solution is to use a light-background container (`background: #ffffff !important`) for the Mermaid div, effectively creating a high-contrast "card" within a dark dashboard.
 - **Valuebox Responsiveness**: Avoid hardcoding `font-size` in `valuebox-value` CSS. Quarto's dashboard engine handles font scaling based on row height; forcing font sizes causes text overflow and layout breakage on smaller viewports.
 
+---
+
+### [[10. AI Mode Integration & Google Service Disambiguation (2026-04-05)]]
+
+- **Google Service Disambiguation**: Google AI Mode (Search SGE, `udm=50`) is fundamentally different from AI Studio (developer API). AI Mode is a conversational search interface integrated into Google Search, while AI Studio is a developer-facing API/IDE. Always treat them as separate platforms with separate selectors, actions, and storage types.
+- **My Activity as Canonical History Source**: The sidebar in AI Mode (`button[aria-label*='AI Mode history']`) only shows recent activity. For comprehensive history sync, target `myactivity.google.com/myactivity?product=83` which provides all AI Mode queries with full URLs (including `mstk` session tokens).
+- **Platform Type Extensibility Pattern**: When adding a new platform to `GraphStore.syncConversation`, the change is minimal — just widen the TypeScript union type (`'gemini' | 'perplexity' | 'aimode'`). The underlying Cypher queries use string interpolation and don't need changes. This confirms the graph schema is sufficiently generic.
+- **Tab Pool Service Registration**: Adding a new browser-based service requires updating `SERVICE_URLS` in `agents/shared/src/tab-pool.ts` AND rebuilding the shared package (`cd agents/shared && npm run build`). Forgetting the shared rebuild is a common source of "type not assignable" errors at compile time.
+- **Selector Type Registration**: The `NotebookLMSelectors` interface in `selectors.ts` is the TypeScript-level catalog of all selector groups. Adding a YAML section without a matching TS interface entry causes `Property 'X' does not exist` errors in all action modules that reference the new selectors.
