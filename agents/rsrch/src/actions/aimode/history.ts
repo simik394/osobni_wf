@@ -140,10 +140,16 @@ export async function listAIModeMyActivityAction(
     } catch (e) { /* ignore */ }
 
     const entries: AIModeHistoryEntry[] = [];
-    const activityItems = page.locator(selectors.aiMode.myActivity.activityItem);
+    // Primary: href-based selector (stable); Fallback: broader href pattern
+    let activityItems = page.locator(selectors.aiMode.myActivity.activityItem);
+    let count = await activityItems.count();
+    if (count === 0) {
+        log('Primary activity selector found 0 items, trying fallback...');
+        activityItems = page.locator(selectors.aiMode.myActivity.activityItemFallback);
+        count = await activityItems.count();
+    }
 
     // Scroll to load more items if needed
-    let count = await activityItems.count();
     let retries = 0;
     while (count < limit && retries < 5) {
         const lastItem = activityItems.last();
@@ -193,7 +199,12 @@ export async function listAIModeMyActivityAction(
 
 /**
  * Extracts the content of a specific AI Mode conversation by navigating to its URL.
- * Uses verified selectors: div.Zkbeff for main container, pre for code, button.rBl3me for citations.
+ *
+ * Selector strategy (cascading fallbacks):
+ *   1. data-xid="aim-mars-turn-root" — semantic data attribute, most stable
+ *   2. data-streaming-container — streaming wrapper, stable
+ *   3. div[role="main"]#center_col — Google standard, broadest
+ *   4. body innerText — last resort
  */
 export async function extractAIModeConversationAction(
     ctx: UniversalContext,
@@ -221,14 +232,32 @@ export async function extractAIModeConversationAction(
         // Extract user query (first turn)
         turns.push({ role: 'user', content: entry.query });
 
-        // Extract AI response from the verified container (div.Zkbeff)
-        const responseContainer = page.locator(conv.aiResponse).first();
+        // Cascading container resolution: try primary → fallback → main content
+        let containerSel = conv.aiResponse; // data-xid="aim-mars-turn-root"
+        let responseContainer = page.locator(containerSel).first();
+        let containerFound = await responseContainer.isVisible({ timeout: 3000 }).catch(() => false);
+
+        if (!containerFound) {
+            log('Primary selector (data-xid) not found, trying streaming fallback...');
+            containerSel = conv.aiResponseFallback; // data-streaming-container
+            responseContainer = page.locator(containerSel).first();
+            containerFound = await responseContainer.isVisible({ timeout: 2000 }).catch(() => false);
+        }
+        if (!containerFound) {
+            log('Streaming fallback not found, trying mainContent...');
+            containerSel = conv.mainContent; // div[role="main"]#center_col
+            responseContainer = page.locator(containerSel).first();
+            containerFound = await responseContainer.isVisible({ timeout: 2000 }).catch(() => false);
+        }
+
         let responseText = '';
 
-        if (await responseContainer.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (containerFound) {
+            log(`Using container: ${containerSel}`);
             // Rich extraction: use page.evaluate to convert DOM → Markdown
-            responseText = await page.evaluate((containerSel: string) => {
-                const container = document.querySelector(containerSel);
+            // Note: We pass the resolved containerSel (not class-based) to evaluate
+            responseText = await page.evaluate((sel: string) => {
+                const container = document.querySelector(sel);
                 if (!container) return '';
 
                 // Clone to avoid affecting the live DOM
@@ -271,7 +300,7 @@ export async function extractAIModeConversationAction(
                 });
 
                 return clone.innerText || '';
-            }, conv.aiResponse);
+            }, containerSel);
         }
 
         if (!responseText || responseText.length < 50) {
@@ -311,9 +340,14 @@ export async function extractAIModeConversationAction(
             }
         }
 
-        // Also capture text links within the AI response
-        const textLinks = page.locator(`${conv.aiResponse} ${conv.textLink}`);
-        const textLinkCount = await textLinks.count().catch(() => 0);
+        // Also capture text links within the AI response container
+        // Use textLink (scoped to container) with fallback
+        let textLinks = page.locator(conv.textLink);
+        let textLinkCount = await textLinks.count().catch(() => 0);
+        if (textLinkCount === 0) {
+            textLinks = page.locator(conv.textLinkFallback);
+            textLinkCount = await textLinks.count().catch(() => 0);
+        }
         for (let i = 0; i < Math.min(textLinkCount, 20); i++) {
             const href = await textLinks.nth(i).getAttribute('href').catch(() => null);
             const title = await textLinks.nth(i).innerText().catch(() => '');

@@ -217,50 +217,93 @@ aiMode:
   entryUrl: "https://www.google.com/search?udm=50"
   myActivityUrl: "https://myactivity.google.com/myactivity?product=83"
 
-  # Sidebar history (in-app)
+  # ---------------------------------------------------------------------------
+  # Sidebar history (in-app dialog)
+  # ---------------------------------------------------------------------------
   sidebar:
-    trigger: 'button[aria-label*="AI Mode history" i], button[aria-label*="Historie režimu AI" i], button[aria-label*="historie" i]'
-    historyItem: "button.qqMZif"
-    showMore: 'button:has-text("Show more"), button:has-text("Zobrazit více")'
-    moreOptions: 'button[aria-label*="More" i], button[aria-label*="Další" i]'
-    mySearchHistory: 'a:has-text("My Google Search History"), a:has-text("moje historie")'
+    # The sidebar is a role="dialog" with a stable aria-label
+    dialog: 'div[role="dialog"][aria-label*="AI Mode" i], div[role="dialog"][aria-label*="Režim AI" i], div[role="dialog"][aria-label*="history" i]'
+    # Trigger button uses aria-label (multi-lang fallback)
+    trigger: 'button[aria-label*="AI Mode history" i], button[aria-label*="Historie" i], button[aria-label*="history" i]'
+    # History items are identifiable by structure: buttons inside the dialog
+    historyItem: 'div[role="dialog"] button'
+    showMore: 'button:has-text("Show more"), button:has-text("Zobrazit více"), button:has-text("Mehr anzeigen")'
+    mySearchHistory: 'a[href*="myactivity.google.com"]'
 
-  # My Activity page (product=83)
+  # ---------------------------------------------------------------------------
+  # My Activity page (product=83) — robust aria + href selectors
+  # ---------------------------------------------------------------------------
   myActivity:
-    activityItem: "a.l8sGWb"
-    activityText: "a.l8sGWb span"
-    detailsButton: 'button:has-text("Podrobnosti"), button:has-text("Details")'
-    deleteButton: 'button[aria-label*="Delete" i], button[aria-label*="Smazat" i]'
+    # Activity items: links to AI Mode results (contain udm=50 && mstk in href)
+    # Each has aria-label like "{query text} (opens in new tab)"
+    activityItem: 'a[href*="udm=50"][href*="mstk="]'
+    # Fallback: any link matching AI Mode URL pattern
+    activityItemFallback: 'a[href*="udm=50"]'
+    # Details button uses aria-label pattern
+    detailsButton: 'a[role="button"][aria-label*="podrobnosti" i], a[role="button"][aria-label*="Details" i], a[role="button"][aria-label*="detail" i]'
+    # Delete uses aria-label with activity item reference
+    deleteButton: 'button[aria-label*="Smazat položku" i], button[aria-label*="Delete activity" i], button[aria-label*="Delete item" i]'
+    # Day section delete
+    deleteDayButton: 'button[aria-label*="Smazat veškerou aktivitu" i], button[aria-label*="Delete all" i]'
 
-  # Conversation view (udm=50 results page) — verified 2026-04-05
+  # ---------------------------------------------------------------------------
+  # Conversation view (udm=50 results page)
+  # All selectors use stable data-*, jsname, role, aria, or semantic HTML.
+  # Zero minified CSS class names.
+  # Verified 2026-04-05 on halvarm, Chrome 145.
+  # ---------------------------------------------------------------------------
   conversation:
-    # Main AI response container (deepest div holding all generated content)
-    aiResponse: "div.Zkbeff"
-    # User query text (rendered in the search bar area)
-    userQuery: "textarea.gLFyf, input[name='q'], .a4bIc"
-    # Code blocks (pre elements with syntax-highlighted content)
-    codeBlock: "pre"
-    # Inline code (backtick-style spans in text)
-    inlineCode: "code"
-    # Source/citation chips (buttons with site name + count)
-    citationChip: "button.rBl3me"
-    # Links embedded in AI text
-    textLink: "a.H23r4e"
-    # Source cards in right sidebar
-    sourceCard: "a.NDNGvf"
-    # Source panel header (e.g. "11 sites")
-    sourcePanel: "button.iqGHOe.MUZtye"
-    # Follow-up textarea
-    followUpInput: "textarea.ITIRGe, textarea[placeholder='Ask anything']"
-    # Action buttons
-    copyButton: "button.bKxaof"
-    shareButton: "button.eGAasd"
-    feedbackGood: "button.ya9Iof[aria-label*='Good']"
-    feedbackBad: "button.ya9Iof[aria-label*='Bad']"
+    # -- AI Response container --
+    # data-xid="aim-mars-turn-root" is a semantic, stable attribute from Google's
+    # Angular/Lit framework, unlikely to change with CSS refactors.
+    aiResponse: 'div[data-xid="aim-mars-turn-root"]'
+    # Fallback: streaming wrapper (innermost content container)
+    aiResponseFallback: 'div[data-streaming-container]'
+    # Outer turn wrapper with jsname stable identifiers
+    turnContainer: 'div[jsname="coFSxe"]'
+    turnRoot: 'div[jsname="H7tCnf"]'
+    # Main content area (Google standard — id is stable, role may not coexist)
+    mainContent: '#center_col, div[role="main"]'
 
-  # Auth/consent (shared with gemini but may differ)
+    # -- User query --
+    # The query bar may be a search box or a rendered text span
+    userQuery: "input[name='q'], textarea[name='q'], textarea[aria-label*='Search' i], textarea[aria-label*='Hledat' i]"
+
+    # -- Code blocks --
+    # Semantic HTML — the most stable selector possible
+    codeBlock: "pre"
+    inlineCode: "code"
+
+    # -- Sources & citations --
+    # Citation chip buttons have aria-label with source name pattern
+    # e.g. aria-label="Stack Overflow +2" or similar
+    citationChip: 'button[aria-label*="+"]'
+    # Text links inside the response use standard <a> with external href
+    textLink: 'div[data-xid="aim-mars-turn-root"] a[href^="http"]:not([href*="google.com"])'
+    textLinkFallback: 'div[data-streaming-container] a[href^="http"]:not([href*="google.com"])'
+    # Source cards: links opening to external sites in the sidebar panel
+    # Identified by being external links inside the source panel area
+    sourceCard: 'a[href^="http"]:not([href*="google.com"]):not([role]):not([aria-label])'
+    # Source panel: contains "N sites" counter text
+    sourcePanel: 'div[role="complementary"], aside'
+
+    # -- Follow-up input --
+    # placeholder="Ask anything" is the most stable attribute here
+    followUpInput: "textarea[placeholder*='Ask' i], textarea[placeholder*='Zeptejte' i], textarea[placeholder*='Frag' i]"
+
+    # -- Action buttons (aria-labels are stable, text varies by locale) --
+    copyButton: 'button[aria-label*="Copy" i], button[aria-label*="Kopír" i], button[aria-label*="Kopie" i]'
+    shareButton: 'button[aria-label*="Share" i], button[aria-label*="Sdíl" i]'
+    feedbackGood: 'button[aria-label*="Good" i], button[aria-label*="Dobr" i]'
+    feedbackBad: 'button[aria-label*="Bad" i], button[aria-label*="Špatn" i]'
+    # "AI responses may include mistakes" disclaimer link
+    disclaimer: 'a[href*="support.google.com/websearch"]'
+
+  # ---------------------------------------------------------------------------
+  # Auth/consent
+  # ---------------------------------------------------------------------------
   auth:
-    acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím")'
+    acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button:has-text("Alle akzeptieren")'
 
 # ============================================================
 # PERPLEXITY SELECTORS

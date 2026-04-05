@@ -163,25 +163,31 @@ export interface AIModeSelectors {
     entryUrl: string;
     myActivityUrl: string;
     sidebar: {
+        dialog: string;
         trigger: string;
         historyItem: string;
         showMore: string;
-        moreOptions: string;
         mySearchHistory: string;
     };
     myActivity: {
         activityItem: string;
-        activityText: string;
+        activityItemFallback: string;
         detailsButton: string;
         deleteButton: string;
+        deleteDayButton: string;
     };
     conversation: {
         aiResponse: string;
+        aiResponseFallback: string;
+        turnContainer: string;
+        turnRoot: string;
+        mainContent: string;
         userQuery: string;
         codeBlock: string;
         inlineCode: string;
         citationChip: string;
         textLink: string;
+        textLinkFallback: string;
         sourceCard: string;
         sourcePanel: string;
         followUpInput: string;
@@ -189,6 +195,7 @@ export interface AIModeSelectors {
         shareButton: string;
         feedbackGood: string;
         feedbackBad: string;
+        disclaimer: string;
     };
     auth: {
         acceptAll: string;
