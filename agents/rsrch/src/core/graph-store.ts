@@ -670,7 +670,7 @@ export class GraphStore {
      * Smart merge: compares turn count and updates if different
      */
     async syncConversation(data: {
-        platform: 'gemini' | 'perplexity';
+        platform: 'gemini' | 'perplexity' | 'aimode';
         platformId: string;
         title: string;
         type: 'regular' | 'deep-research';
@@ -754,7 +754,7 @@ export class GraphStore {
     /**
      * Get the current state (turn count) of a conversation to avoid redundant work.
      */
-    async getConversationState(platformId: string, platform: 'gemini' | 'perplexity'): Promise<{ exists: boolean; turnCount: number; capturedAt: number }> {
+    async getConversationState(platformId: string, platform: 'gemini' | 'perplexity' | 'aimode'): Promise<{ exists: boolean; turnCount: number; capturedAt: number }> {
         if (!this.graph) throw new Error('Not connected');
 
         const result = await this.graph.query<any[]>(`

@@ -210,6 +210,44 @@ gemini:
     importCode: 'text="Importovat kód"|text="Import code"'
     notebooklm: 'text="NotebookLM"'
 # ============================================================
+# AI MODE (Google Search AI) SELECTORS
+# ============================================================
+aiMode:
+  # Entry point
+  entryUrl: "https://www.google.com/search?udm=50"
+  myActivityUrl: "https://myactivity.google.com/myactivity?product=83"
+
+  # Sidebar history (in-app)
+  sidebar:
+    trigger: 'button[aria-label*="AI Mode history" i], button[aria-label*="Historie režimu AI" i], button[aria-label*="historie" i]'
+    historyItem: "button.qqMZif"
+    showMore: 'button:has-text("Show more"), button:has-text("Zobrazit více")'
+    moreOptions: 'button[aria-label*="More" i], button[aria-label*="Další" i]'
+    mySearchHistory: 'a:has-text("My Google Search History"), a:has-text("moje historie")'
+
+  # My Activity page (product=83)
+  myActivity:
+    activityItem: "a.l8sGWb"
+    activityText: "a.l8sGWb span"
+    detailsButton: 'button:has-text("Podrobnosti"), button:has-text("Details")'
+    deleteButton: 'button[aria-label*="Delete" i], button[aria-label*="Smazat" i]'
+
+  # Conversation view (udm=50 results page)
+  conversation:
+    # User query text
+    userQuery: ".OhN0Le, .s8saS, .BNeawe"
+    # AI response container
+    aiResponse: ".V696v, .g, .kp-blk, .IZ6rdc"
+    # Sources/citations
+    sourceChip: 'a[data-ved], .source-card, .citation-link'
+    # Follow-up suggestions
+    followUp: ".related-question-pair, .s75CSd"
+
+  # Auth/consent (shared with gemini but may differ)
+  auth:
+    acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím")'
+
+# ============================================================
 # PERPLEXITY SELECTORS
 # ============================================================
 perplexity:

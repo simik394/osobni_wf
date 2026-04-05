@@ -8,6 +8,7 @@ import { notebookCommand } from '../commands/notebooklm';
 import { queryCommand, batchCommand, authCommand, loginCommand } from '../commands/perplexity';
 import { graphCommand } from '../commands/graph';
 import { registryCommand } from '../commands/registry';
+import { aimodeCommand } from '../commands/aimode';
 import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from '../commands/misc';
 
 const program = new Command();
@@ -49,5 +50,6 @@ program.addCommand(notebookCommand);
 program.addCommand(geminiCommand);
 program.addCommand(graphCommand);
 program.addCommand(registryCommand);
+program.addCommand(aimodeCommand);
 
 program.parseAsync(process.argv);

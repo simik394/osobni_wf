@@ -69,3 +69,13 @@ export type PerplexityActionDeps = ActionDeps & {
     dumpState?: (prefix: string) => Promise<any>;
 };
 
+/**
+ * AI Mode (Google Search AI) action dependencies.
+ */
+export type AIModeActionDeps = ActionDeps & {
+    humanDelay?: (ms: number, variance?: number) => Promise<void>;
+    dumpState?: (prefix: string) => Promise<any>;
+    getGraphStore?: () => any;
+};
+
+

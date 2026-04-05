@@ -37,6 +37,7 @@ export const SERVICE_URLS = {
     perplexity: 'https://www.perplexity.ai',
     gemini: 'https://gemini.google.com',
     notebooklm: 'https://notebooklm.google.com',
+    aimode: 'https://www.google.com',
     angrav: 'chrome-extension://', // Angrav is an extension, URL pattern varies
 } as const;
 

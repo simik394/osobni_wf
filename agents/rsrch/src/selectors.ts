@@ -159,6 +159,33 @@ export interface PerplexitySelectors {
     answerContainer: string;
 }
 
+export interface AIModeSelectors {
+    entryUrl: string;
+    myActivityUrl: string;
+    sidebar: {
+        trigger: string;
+        historyItem: string;
+        showMore: string;
+        moreOptions: string;
+        mySearchHistory: string;
+    };
+    myActivity: {
+        activityItem: string;
+        activityText: string;
+        detailsButton: string;
+        deleteButton: string;
+    };
+    conversation: {
+        userQuery: string;
+        aiResponse: string;
+        sourceChip: string;
+        followUp: string;
+    };
+    auth: {
+        acceptAll: string;
+    };
+}
+
 export interface NotebookLMSelectors {
     home: HomeSelectors;
     notebook: NotebookSelectors;
@@ -169,6 +196,7 @@ export interface NotebookLMSelectors {
     chat: ChatSelectors;
     gemini: GeminiSelectors;
     perplexity: PerplexitySelectors;
+    aiMode: AIModeSelectors;
 }
 
 // ============================================================
