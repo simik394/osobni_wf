@@ -176,10 +176,19 @@ export interface AIModeSelectors {
         deleteButton: string;
     };
     conversation: {
-        userQuery: string;
         aiResponse: string;
-        sourceChip: string;
-        followUp: string;
+        userQuery: string;
+        codeBlock: string;
+        inlineCode: string;
+        citationChip: string;
+        textLink: string;
+        sourceCard: string;
+        sourcePanel: string;
+        followUpInput: string;
+        copyButton: string;
+        shareButton: string;
+        feedbackGood: string;
+        feedbackBad: string;
     };
     auth: {
         acceptAll: string;

@@ -193,6 +193,7 @@ export async function listAIModeMyActivityAction(
 
 /**
  * Extracts the content of a specific AI Mode conversation by navigating to its URL.
+ * Uses verified selectors: div.Zkbeff for main container, pre for code, button.rBl3me for citations.
  */
 export async function extractAIModeConversationAction(
     ctx: UniversalContext,
@@ -201,6 +202,7 @@ export async function extractAIModeConversationAction(
 ): Promise<AIModeConversation | null> {
     const { page, log } = ctx;
     const { selectors } = deps;
+    const conv = selectors.aiMode.conversation;
 
     if (!entry.url) {
         log(`No URL for entry: "${entry.query}", skipping extraction`, 'warn');
@@ -211,7 +213,7 @@ export async function extractAIModeConversationAction(
 
     try {
         await page.goto(entry.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(4000); // Wait for AI response to render
 
         const turns: AIModeConversation['turns'] = [];
         const sources: AIModeConversation['sources'] = [];
@@ -219,38 +221,88 @@ export async function extractAIModeConversationAction(
         // Extract user query (first turn)
         turns.push({ role: 'user', content: entry.query });
 
-        // Extract AI response
-        const responseSelectors = (selectors.aiMode.conversation?.aiResponse || '.V696v, .g, .kp-blk, .IZ6rdc').split(',').map((s: string) => s.trim());
+        // Extract AI response from the verified container (div.Zkbeff)
+        const responseContainer = page.locator(conv.aiResponse).first();
         let responseText = '';
 
-        for (const sel of responseSelectors) {
-            const responseEl = page.locator(sel).first();
-            if (await responseEl.isVisible({ timeout: 2000 }).catch(() => false)) {
-                // Use innerHTML -> markdown conversion for richer content
-                const html = await responseEl.innerHTML().catch(() => '');
-                responseText = htmlToMarkdown(html);
-                if (responseText.length > 50) break; // Good enough
-            }
+        if (await responseContainer.isVisible({ timeout: 3000 }).catch(() => false)) {
+            // Rich extraction: use page.evaluate to convert DOM → Markdown
+            responseText = await page.evaluate((containerSel: string) => {
+                const container = document.querySelector(containerSel);
+                if (!container) return '';
+
+                // Clone to avoid affecting the live DOM
+                const clone = container.cloneNode(true) as HTMLElement;
+
+                // Convert code blocks to markdown fences
+                clone.querySelectorAll('pre').forEach(pre => {
+                    const code = pre.querySelector('code');
+                    const lang = pre.querySelector('div, span')?.textContent?.trim().toLowerCase() || '';
+                    const codeText = (code || pre).textContent || '';
+                    const langTag = lang && !lang.includes(' ') ? lang : '';
+                    const replacement = document.createElement('div');
+                    replacement.textContent = `\n\`\`\`${langTag}\n${codeText}\n\`\`\`\n`;
+                    pre.replaceWith(replacement);
+                });
+
+                // Convert inline code
+                clone.querySelectorAll('code').forEach(c => {
+                    const text = c.textContent || '';
+                    c.textContent = `\`${text}\``;
+                });
+
+                // Convert links to markdown
+                clone.querySelectorAll('a[href]').forEach(a => {
+                    const href = a.getAttribute('href') || '';
+                    const text = a.textContent || '';
+                    if (href.startsWith('http') && text) {
+                        a.textContent = `[${text}](${href})`;
+                    }
+                });
+
+                // Convert bold
+                clone.querySelectorAll('b, strong').forEach(b => {
+                    b.textContent = `**${b.textContent}**`;
+                });
+
+                // Convert list items
+                clone.querySelectorAll('li').forEach(li => {
+                    li.textContent = `- ${li.textContent}\n`;
+                });
+
+                return clone.innerText || '';
+            }, conv.aiResponse);
         }
 
-        if (!responseText) {
-            // Fallback: grab all visible text from the main content area
-            responseText = await page.locator('main, #main, #center_col, .hlcw0c').first()
-                .innerText()
-                .catch(() => '');
+        if (!responseText || responseText.length < 50) {
+            // Fallback: grab body text between query bar and "Ask anything"
+            log('Primary container not found, using fallback extraction...', 'warn');
+            responseText = await page.evaluate(() => {
+                const body = document.body.innerText || '';
+                // Strip nav/header text (before the actual response)
+                const lines = body.split('\n');
+                const startIdx = lines.findIndex(l => l.length > 100);
+                return lines.slice(startIdx >= 0 ? startIdx : 0).join('\n');
+            });
         }
 
         if (responseText) {
             turns.push({ role: 'assistant', content: responseText.trim() });
         }
 
-        // Extract source links
-        const sourceLinks = page.locator(selectors.aiMode.conversation?.sourceChip || 'a[data-ved]');
-        const sourceCount = await sourceLinks.count();
+        // Extract code blocks separately for structured data
+        const codeBlocks = await page.locator(conv.codeBlock).allInnerTexts().catch(() => []);
+
+        // Extract citation chips
+        const citationTexts = await page.locator(conv.citationChip).allInnerTexts().catch(() => []);
+
+        // Extract source cards from sidebar
+        const sourceCards = page.locator(conv.sourceCard);
+        const sourceCount = await sourceCards.count().catch(() => 0);
         const seen = new Set<string>();
         for (let i = 0; i < Math.min(sourceCount, 30); i++) {
-            const href = await sourceLinks.nth(i).getAttribute('href').catch(() => null);
-            const title = await sourceLinks.nth(i).innerText().catch(() => '');
+            const href = await sourceCards.nth(i).getAttribute('href').catch(() => null);
+            const title = await sourceCards.nth(i).innerText().catch(() => '');
             if (href && !seen.has(href) && !href.includes('google.com/search')) {
                 seen.add(href);
                 let domain = '';
@@ -258,6 +310,24 @@ export async function extractAIModeConversationAction(
                 sources.push({ url: href, title: title.trim(), domain });
             }
         }
+
+        // Also capture text links within the AI response
+        const textLinks = page.locator(`${conv.aiResponse} ${conv.textLink}`);
+        const textLinkCount = await textLinks.count().catch(() => 0);
+        for (let i = 0; i < Math.min(textLinkCount, 20); i++) {
+            const href = await textLinks.nth(i).getAttribute('href').catch(() => null);
+            const title = await textLinks.nth(i).innerText().catch(() => '');
+            if (href && !seen.has(href) && 
+                !href.includes('google.com') && 
+                href.startsWith('http')) {
+                seen.add(href);
+                let domain = '';
+                try { domain = new URL(href).hostname; } catch { }
+                sources.push({ url: href, title: title.trim(), domain });
+            }
+        }
+
+        log(`  → Turns: ${turns.length}, Sources: ${sources.length}, Code blocks: ${codeBlocks.length}, Citations: ${citationTexts.length}`);
 
         return {
             query: entry.query,

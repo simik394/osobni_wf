@@ -232,16 +232,31 @@ aiMode:
     detailsButton: 'button:has-text("Podrobnosti"), button:has-text("Details")'
     deleteButton: 'button[aria-label*="Delete" i], button[aria-label*="Smazat" i]'
 
-  # Conversation view (udm=50 results page)
+  # Conversation view (udm=50 results page) — verified 2026-04-05
   conversation:
-    # User query text
-    userQuery: ".OhN0Le, .s8saS, .BNeawe"
-    # AI response container
-    aiResponse: ".V696v, .g, .kp-blk, .IZ6rdc"
-    # Sources/citations
-    sourceChip: 'a[data-ved], .source-card, .citation-link'
-    # Follow-up suggestions
-    followUp: ".related-question-pair, .s75CSd"
+    # Main AI response container (deepest div holding all generated content)
+    aiResponse: "div.Zkbeff"
+    # User query text (rendered in the search bar area)
+    userQuery: "textarea.gLFyf, input[name='q'], .a4bIc"
+    # Code blocks (pre elements with syntax-highlighted content)
+    codeBlock: "pre"
+    # Inline code (backtick-style spans in text)
+    inlineCode: "code"
+    # Source/citation chips (buttons with site name + count)
+    citationChip: "button.rBl3me"
+    # Links embedded in AI text
+    textLink: "a.H23r4e"
+    # Source cards in right sidebar
+    sourceCard: "a.NDNGvf"
+    # Source panel header (e.g. "11 sites")
+    sourcePanel: "button.iqGHOe.MUZtye"
+    # Follow-up textarea
+    followUpInput: "textarea.ITIRGe, textarea[placeholder='Ask anything']"
+    # Action buttons
+    copyButton: "button.bKxaof"
+    shareButton: "button.eGAasd"
+    feedbackGood: "button.ya9Iof[aria-label*='Good']"
+    feedbackBad: "button.ya9Iof[aria-label*='Bad']"
 
   # Auth/consent (shared with gemini but may differ)
   auth:
