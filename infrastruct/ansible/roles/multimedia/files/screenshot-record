@@ -1,176 +1,354 @@
 #!/bin/bash
 # Adaptive screenshot recording with activity detection and auto-splitting
-# Usage: screenshot-record start|stop|status
-# 
-# Active (mouse/window change): 2s interval
-# Idle (no activity): 10s interval
-# Auto-split: Every 15 minutes (creates separate MKV files)
+# Usage: screenshot-record start|stop|status|active|opened|main|all|convert-all|reconcile
 
 SCREENSHOT_DIR="/home/sim/Videos/Screenshots"
 RECORDING_DIR="/home/sim/Videos/OBS"
+STILLS_DIR="$RECORDING_DIR/Stills"
 INTERVAL_ACTIVE=2   # seconds when active
 INTERVAL_IDLE=10    # seconds when idle
 IDLE_THRESHOLD=10   # seconds of no activity before going idle
 CHUNK_DURATION=900 # 15 minutes in seconds
 PIDFILE="/tmp/screenshot-record.pid"
+LOCKFILE="/tmp/screenshot-record.lock"
+MODE_FILE="/tmp/screenshot-record.mode"
+MONITOR_FILE="/tmp/screenshot-record.monitor"
+CRF=42               # Quality vs space (dej42)
 
 # Configuration
-ENABLE_SOUND="false"  # Set to "true" to enable shutter sound
+ENABLE_SOUND="false"
+SENSITIVE_APPS="digikam keepassxc bitwarden"
 
 convert_session() {
     local S_DIR="$1"
-    local OUTPUT_NAME="screenshots_$(basename $S_DIR).mkv"
-    local OUTPUT_PATH="$RECORDING_DIR/$OUTPUT_NAME"
+    local TIMESTAMP=$(basename "$S_DIR")
+    local BASE_NAME="screenshots_$TIMESTAMP"
+    local OUTPUT_PATH="$RECORDING_DIR/$BASE_NAME.mkv"
+    local META_PATH="$RECORDING_DIR/$BASE_NAME.json"
     
-    if [ -d "$S_DIR" ]; then
-        # Create SRT subtitles from filenames and metadata
-        cd "$S_DIR"
-        local i=0
-        echo "[" > combined_metadata.json
-        for f in $(ls -tr frame_*.jpg 2>/dev/null); do
-            local BASE="${f%.jpg}"
-            local JSON_FILE="${BASE}.json"
-            
-            # Robust Timestamp Extraction
-            local TS=$(echo "$f" | grep -oP '\d{10}')
-            if [ -z "$TS" ]; then
-                TS=$(stat -c %Y "$f")
-            fi
-            local DATE_STR=$(date -d "@$TS" "+%Y-%m-%d %H:%M:%S")
-            
-            local H=$((i / 3600)); local M=$(((i % 3600) / 60)); local S=$((i % 60))
-            local H2=$(((i+1) / 3600)); local M2=$((((i+1) % 3600) / 60)); local S2=$(((i+1) % 60))
-            
-            # Track 1: Time
-            printf "%d\n%02d:%02d:%02d,000 --> %02d:%02d:%02d,000\n%s\n\n" \
-                $((i+1)) $H $M $S $H2 $M2 $S2 "$DATE_STR" >> timestamps.srt
-            
-            # Track 2: Active Window
-            local WIN_TITLE="Unknown"
-            if [ -f "$JSON_FILE" ]; then
-                WIN_TITLE=$(grep -oP '"active":true,"title":"\K[^"]+' "$JSON_FILE" | head -n 1)
-                [ $i -gt 0 ] && echo "," >> combined_metadata.json
-                cat "$JSON_FILE" >> combined_metadata.json
-                rm "$JSON_FILE"
-            fi
-            printf "%d\n%02d:%02d:%02d,000 --> %02d:%02d:%02d,000\n%s\n\n" \
-                $((i+1)) $H $M $S $H2 $M2 $S2 "$WIN_TITLE" >> windows.srt
-            
-            mv "$f" "seq_$(printf '%05d' $i).jpg" 2>/dev/null
-            i=$((i + 1))
-        done
-        echo "]" >> combined_metadata.json
-        cd - > /dev/null
+    if [ ! -d "$S_DIR" ]; then return; fi
+    
+    # Ensure we don't process empty dirs
+    local FILE_COUNT=$(ls "$S_DIR"/frame_*.jpg 2>/dev/null | wc -l)
+    if [ "$FILE_COUNT" -eq 0 ]; then
+        rm -rf "$S_DIR"
+        return
+    fi
+
+    cd "$S_DIR" || return
+    local i=0
+    echo "[" > combined_metadata.json
+    rm -f timestamps.srt windows.srt
+    
+    # Process files in chronological order
+    local first=1
+    for f in $(ls -tr frame_*.jpg 2>/dev/null); do
+        local BASE="${f%.jpg}"
+        local JSON_FILE="${BASE}.json"
         
-        local COUNT=$(ls "$S_DIR"/seq_* 2>/dev/null | wc -l)
+        # Robust Timestamp Extraction
+        local TS=$(echo "$f" | grep -oP '\d{10}')
+        [ -z "$TS" ] && TS=$(stat -c %Y "$f")
+        local DATE_STR=$(date -d "@$TS" "+%H:%M:%S")
         
-        if [ "$COUNT" -gt 0 ]; then
-            # CRF 40 hits ~20-25MB/hour with SVT-AV1 at 1fps
-            /usr/lib/jellyfin-ffmpeg/ffmpeg -y -framerate 1 -i "$S_DIR/seq_%05d.jpg" \
-              -i "$S_DIR/timestamps.srt" -i "$S_DIR/windows.srt" \
-              -map 0:v -map 1:s -map 2:s \
-              -attach "$S_DIR/combined_metadata.json" -metadata:s:t mimetype=application/json \
-              -c:v libsvtav1 -preset 10 -crf 40 \
-              -c:s srt -metadata:s:s:0 title="Time" -metadata:s:s:1 title="Active Window" \
-              -vf "scale=1920:-1,drawtext=text='%{sub_text}':source_index=1:fontcolor=yellow:fontsize=30:box=1:boxcolor=black@0.6:x=w-350:y=h-50,drawtext=text='%{sub_text}':source_index=2:fontcolor=white:fontsize=25:box=1:boxcolor=black@0.4:x=(w-text_w)/2:y=20" \
-              -pix_fmt yuv420p "$OUTPUT_PATH" > /tmp/ffmpeg-convert.log 2>&1
-            
-            if [ -f "$OUTPUT_PATH" ]; then
-                rm -rf "$S_DIR"
+        local H=$((i / 3600)); local M=$(((i % 3600) / 60)); local S=$((i % 60))
+        local H2=$(((i+1) / 3600)); local M2=$((((i+1) % 3600) / 60)); local S2=$(((i+1) % 60))
+        
+        # Subtitles (Time)
+        printf "%d\n%02d:%02d:%02d,000 --> %02d:%02d:%02d,000\n%s\n\n" \
+            $((i+1)) $H $M $S $H2 $M2 $S2 "$DATE_STR" >> timestamps.srt
+        
+        local WIN_TITLE="Unknown"
+        if [ -f "$JSON_FILE" ]; then
+            WIN_TITLE=$(grep -oP '"active":true,"title":"\K[^"]+' "$JSON_FILE" | head -n 1)
+            if [ "$WIN_TITLE" == "Unknown" ] || [ -z "$WIN_TITLE" ]; then
+                WIN_TITLE=$(grep -oP '"title":"\K[^"]+' "$JSON_FILE" | grep -v "Unknown" | head -n 1)
             fi
+            [ $first -eq 0 ] && echo "," >> combined_metadata.json
+            cat "$JSON_FILE" >> combined_metadata.json
+            first=0
         fi
+        [ -z "$WIN_TITLE" ] && WIN_TITLE="Unknown"
+        # Subtitles (Window)
+        printf "%d\n%02d:%02d:%02d,000 --> %02d:%02d:%02d,000\n%s\n\n" \
+            $((i+1)) $H $M $S $H2 $M2 $S2 "$WIN_TITLE" >> windows.srt
+        
+        mv "$f" "seq_$(printf '%05d' $i).jpg" 2>/dev/null
+        i=$((i + 1))
+    done
+    echo "]" >> combined_metadata.json
+    cd - > /dev/null
+    
+    local COUNT=$(ls "$S_DIR"/seq_* 2>/dev/null | wc -l)
+    local CONV_LOG="/tmp/screenshot-ffmpeg-$TIMESTAMP.log"
+    
+    if [ "$COUNT" -eq 1 ]; then
+        # Handle Single Frame as Still
+        mkdir -p "$STILLS_DIR"
+        mv "$S_DIR/seq_00000.jpg" "$STILLS_DIR/$BASE_NAME.jpg"
+        [ -f "$S_DIR/combined_metadata.json" ] && mv "$S_DIR/combined_metadata.json" "$STILLS_DIR/$BASE_NAME.json"
+        echo "Success: Still frame $BASE_NAME.jpg created."
+        rm -rf "$S_DIR"
+    elif [ "$COUNT" -gt 1 ]; then
+        # Handle Session as Video
+        /usr/lib/jellyfin-ffmpeg/ffmpeg -y -framerate 1 -i "$S_DIR/seq_%05d.jpg" \
+          -attach "$S_DIR/combined_metadata.json" -metadata:s:t mimetype=application/json \
+          -c:v libx264 -crf $CRF -g 60 -preset slower -tune stillimage \
+          -vf "scale=1200:-2,subtitles=$S_DIR/timestamps.srt:force_style='FontSize=18,Alignment=3,MarginR=15,MarginB=15',subtitles=$S_DIR/windows.srt:force_style='FontSize=16,Alignment=6,MarginV=15'" \
+          -pix_fmt yuv420p "$OUTPUT_PATH" > "$CONV_LOG" 2>&1
+        
+        if [ $? -eq 0 ] && [ -f "$OUTPUT_PATH" ]; then
+            if [ -f "$S_DIR/combined_metadata.json" ]; then
+                mv "$S_DIR/combined_metadata.json" "$META_PATH"
+            fi
+            echo "Success: $BASE_NAME.mkv and .json created."
+            rm -rf "$S_DIR"
+            rm -f "$CONV_LOG"
+        else
+            echo "FFmpeg failed for $S_DIR. See $CONV_LOG"
+        fi
+    else
+        rm -rf "$S_DIR"
     fi
 }
-export RECORDING_DIR
+export -f convert_session
+export RECORDING_DIR SCREENSHOT_DIR STILLS_DIR CRF
+
+reconcile_orphans() {
+    echo "Running reconciliation..."
+    # 1. Standardize legacy JSONs in OBS
+    for f in "$RECORDING_DIR"/*.json; do
+        [ ! -f "$f" ] && continue
+        BN=$(basename "$f")
+        if [[ ! "$BN" =~ ^screenshots_ ]]; then
+            echo "Standardizing legacy metadata: $BN"
+            mv "$f" "$RECORDING_DIR/screenshots_$BN"
+        fi
+    done
+
+    # 2. Check for missing metadata for MKVs
+    for f in "$RECORDING_DIR"/*.mkv; do
+        [ ! -f "$f" ] && continue
+        JSON="${f%.mkv}.json"
+        if [ ! -f "$JSON" ]; then
+            echo "Warning: Missing metadata file for $(basename "$f")"
+            # Try to extract from attachment if ffmpeg allows
+            /usr/lib/jellyfin-ffmpeg/ffmpeg -dump_attachment:t combined_metadata.json -i "$f" -y >/dev/null 2>&1
+            if [ -f "combined_metadata.json" ]; then
+                mv "combined_metadata.json" "$JSON"
+                echo "Restored metadata from MKV attachment."
+            fi
+        fi
+    done
+}
 
 run_internal() {
-    # Initialize session
+    # Self-healing Lock cleanup
+    if [ -f "$PIDFILE" ]; then
+        OLD_PID=$(cat "$PIDFILE")
+        if ! kill -0 "$OLD_PID" 2>/dev/null; then
+            echo "Removing stale pidfile: $PIDFILE"
+            rm -f "$PIDFILE" "$LOCKFILE"
+        fi
+    fi
+
+    # Strong double-instance check
+    exec 9>"$LOCKFILE"
+    if ! flock -n 9; then echo "Another instance is running."; exit 1; fi
+
+    # Auto-detect XAUTHORITY
+    if [ -z "$XAUTHORITY" ] && [ -f "/run/user/$(id -u)/gdm/Xauthority" ]; then
+        export XAUTHORITY="/run/user/$(id -u)/gdm/Xauthority"
+    fi
+
+    # Trap for graceful shutdown
+    trap 'echo "Stopping..."; exit 0' SIGINT SIGTERM
+
     START_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
     SESSION_DIR="$SCREENSHOT_DIR/$START_TIMESTAMP"
     mkdir -p "$SESSION_DIR"
-    
     echo "$SESSION_DIR" > /tmp/screenshot-session.txt
     
     COUNT=0
     CHUNK_START=$(date +%s)
     CURRENT_SESSION_DIR="$SESSION_DIR"
     CURRENT_IDLE_INTERVAL=$INTERVAL_IDLE
-    
+    LAST_SCREENSHOT_TIME=0
+
     while true; do
         NOW=$(date +%s)
-        ELAPSED=$((NOW - CHUNK_START))
-        
-        if [ $ELAPSED -ge $CHUNK_DURATION ]; then
+        ELAPSED_CHUNK=$((NOW - CHUNK_START))
+        if [ $ELAPSED_CHUNK -ge $CHUNK_DURATION ]; then
             OLD_SESSION_DIR="$CURRENT_SESSION_DIR"
             NEW_TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
             CURRENT_SESSION_DIR="$SCREENSHOT_DIR/$NEW_TIMESTAMP"
             mkdir -p "$CURRENT_SESSION_DIR"
-            
             COUNT=0
             CHUNK_START=$NOW
-            ( convert_session "$OLD_SESSION_DIR" ) &
             echo "$CURRENT_SESSION_DIR" > /tmp/screenshot-session.txt
+            
+            # Autonomous maintenance: Convert old session + reconcile
+            ( convert_session "$OLD_SESSION_DIR" && reconcile_orphans ) &
+        fi
+        
+        # Privacy Check: Skip if sensitive apps are running
+        IS_PRIVATE="false"
+        for app in $SENSITIVE_APPS; do
+            if pgrep -x "$app" >/dev/null; then
+                IS_PRIVATE="true"
+                break
+            fi
+        done
+
+        if [ "$IS_PRIVATE" = "true" ]; then
+            # If we were capturing, we might want to split or just wait
+            sleep 10
+            continue
+        fi
+
+        # Check Display
+        if ! xdpyinfo -display :1 >/dev/null 2>&1; then
+            echo "$(date): Display :1 not available" >> /tmp/screenshot-error.log
+            sleep 30
+            continue
         fi
 
         IDLE_MS=$(gdbus call --session --dest org.gnome.Mutter.IdleMonitor --object-path /org/gnome/Mutter/IdleMonitor/Core --method org.gnome.Mutter.IdleMonitor.GetIdletime 2>/dev/null | awk '{print $2}' | tr -d ',)')
-        if [ -z "$IDLE_MS" ]; then IDLE_MS=0; fi
+        [ -z "$IDLE_MS" ] && IDLE_MS=0
         
         if [ "$IDLE_MS" -lt "$((IDLE_THRESHOLD * 1000))" ]; then
-          INTERVAL=$INTERVAL_ACTIVE
-          CURRENT_IDLE_INTERVAL=$INTERVAL_IDLE
+            INTERVAL=$INTERVAL_ACTIVE
+            CURRENT_IDLE_INTERVAL=$INTERVAL_IDLE
         else
-          INTERVAL=$CURRENT_IDLE_INTERVAL
-          CURRENT_IDLE_INTERVAL=$((CURRENT_IDLE_INTERVAL * 2))
-          if [ $CURRENT_IDLE_INTERVAL -gt 3600 ]; then CURRENT_IDLE_INTERVAL=3600; fi
-        fi
-        
-        if xdotool search --onlyvisible --name "\bIncognito\b|\bPrivate Browsing\b|\bInPrivate\b|\bTor\b|digiKam|digicam" >/dev/null 2>&1; then
-             sleep $INTERVAL
-             continue
+            INTERVAL=$CURRENT_IDLE_INTERVAL
         fi
 
-        TIMESTAMP=$(date +%s)
-        OUTPUT_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT)_${TIMESTAMP}.jpg"
-        # Quality 80 for sharper text
-        scrot --quality 80 "$OUTPUT_FILE" 2>>/tmp/screenshot-error.log
+        if [ $((NOW - LAST_SCREENSHOT_TIME)) -ge $INTERVAL ]; then
+            export DISPLAY=:1
+            TIMESTAMP=$(date +%s)
+            OUTPUT_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT)_${TIMESTAMP}.jpg"
+            METADATA_FILE="${OUTPUT_FILE%.jpg}.json"
+            
+            # Monitor selection logic
+            MON_MODE=$(cat "$MONITOR_FILE" 2>/dev/null || echo "all")
+            SCROT_OPTS="--quality 80"
+            [ "$MON_MODE" = "main" ] && SCROT_OPTS="$SCROT_OPTS --autoselect 0,0,2560,1600"
 
-        WINDOW_DATA=$(/home/sim/bin/xmeta 2>/dev/null)
-        CURRENT_WIN_ID=$(echo "$WINDOW_DATA" | grep -oP '"id":"\K[^"]+(?=","x".*?"active":true)' | head -n 1)
-        
-        if [ "$CURRENT_WIN_ID" != "$LAST_WIN_ID" ]; then
-            METADATA_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT)_${TIMESTAMP}.json"
-            TOP_PROC=$(ps -eo comm,pcpu,pmem --sort=-pcpu --no-headers | head -n 5 | awk '{printf "{\"name\":\"%s\",\"cpu\":\"%s\",\"mem\":\"%s\"},", $1, $2, $3}' | sed 's/,$//')
-            echo "{\"timestamp\":$TIMESTAMP,\"active_window\":$WINDOW_DATA,\"top_processes\":[$TOP_PROC]}" > "$METADATA_FILE"
-            LAST_WIN_ID="$CURRENT_WIN_ID"
+            if scrot $SCROT_OPTS "$OUTPUT_FILE" 2>>/tmp/screenshot-error.log; then
+                WINDOW_DATA=$(timeout 2 /home/sim/bin/xmeta 2>/dev/null || echo '{"error":"timeout"}')
+                TOP_PROC=$(ps -eo comm,pcpu,pmem --sort=-pcpu --no-headers | head -n 5 | awk '{printf "{\"name\":\"%s\",\"cpu\":\"%s\",\"mem\":\"%s\"},", $1, $2, $3}' | sed 's/,$//')
+                echo "{\"timestamp\":$TIMESTAMP,\"active_window\":$WINDOW_DATA,\"top_processes\":[$TOP_PROC]}" > "$METADATA_FILE"
+                
+                COUNT=$((COUNT + 1))
+                LAST_SCREENSHOT_TIME=$NOW
+                
+                if [ "$IDLE_MS" -ge "$((IDLE_THRESHOLD * 1000))" ]; then
+                    CURRENT_IDLE_INTERVAL=$((CURRENT_IDLE_INTERVAL * 2))
+                    [ $CURRENT_IDLE_INTERVAL -gt 3600 ] && CURRENT_IDLE_INTERVAL=3600
+                fi
+            fi
         fi
-          
-        COUNT=$((COUNT + 1))
-        sleep $INTERVAL
+        sleep 1
     done
 }
 
 case "$1" in
   run-internal) run_internal ;;
+  info)
+    echo "--- Screenshot-Record Status ---"
+    PID=$(cat "$PIDFILE" 2>/dev/null)
+    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        echo "Status: Running (PID: $PID)"
+        SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+        if [ -n "$SESSION_DIR" ]; then
+            FRAME_COUNT=$(ls "$SESSION_DIR"/frame_*.jpg 2>/dev/null | wc -l)
+            echo "Active Session: $(basename "$SESSION_DIR") ($FRAME_COUNT frames)"
+        fi
+    else
+        echo "Status: Stopped"
+    fi
+    
+    IS_SERVICE=$(systemctl --user is-active screenshot-record.service 2>/dev/null)
+    echo "Service Status: $IS_SERVICE"
+    
+    echo -e "\n--- Data Summary ---"
+    # Backlog (Screenshots)
+    FOLDER_COUNT=$(find "$SCREENSHOT_DIR" -maxdepth 1 -type d | wc -l)
+    FOLDER_COUNT=$((FOLDER_COUNT - 1)) # Exclude parent
+    SIZE_BACKLOG=$(du -sh "$SCREENSHOT_DIR" | cut -f1)
+    echo "Unprocessed Sessions: $FOLDER_COUNT ($SIZE_BACKLOG)"
+    
+    # Archives (OBS)
+    VIDEO_COUNT=$(find "$RECORDING_DIR" -maxdepth 1 -name "*.mkv" | wc -l)
+    STILLS_COUNT=$(find "$STILLS_DIR" -maxdepth 1 -name "*.jpg" | wc -l)
+    SIZE_ARCHIVE=$(du -sh "$RECORDING_DIR" | cut -f1)
+    echo "Archived Videos: $VIDEO_COUNT"
+    echo "Still Frames: $STILLS_COUNT"
+    echo "Total Archive Size: $SIZE_ARCHIVE"
+    
+    # System stats
+    SENSITIVE_NOW=""
+    for app in $SENSITIVE_APPS; do
+        if pgrep -x "$app" >/dev/null; then
+            SENSITIVE_NOW="$SENSITIVE_NOW $app"
+        fi
+    done
+    if [ -n "$SENSITIVE_NOW" ]; then
+        echo -e "\nPrivacy Mode: ACTIVE (Blocking apps:$SENSITIVE_NOW)"
+    fi
+    ;;
   start)
-    if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then exit 1; fi
-    setsid "$0" run-internal >/tmp/screenshot-record.log 2>&1 &
-    PID=$!
-    echo $PID > "$PIDFILE"
-    sleep 1
-    SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
-    echo "Recording started (PID: $PID)"
+    if systemctl --user list-unit-files screenshot-record.service >/dev/null 2>&1; then
+        echo "Starting via systemd..."
+        systemctl --user start screenshot-record.service
+    else
+        if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then echo "Already running."; exit 0; fi
+        [ -z "$DISPLAY" ] && export DISPLAY=:1
+        setsid "$0" run-internal >>/tmp/screenshot-record.log 2>&1 &
+        PID=$!
+        echo $PID > "$PIDFILE"
+        echo "Recording started standalone (PID: $PID)"
+    fi
     ;;
   stop)
-    PID=$(cat "$PIDFILE" 2>/dev/null)
-    [ -z "$PID" ] && exit 1
+    if systemctl --user is-active screenshot-record.service >/dev/null 2>&1; then
+        echo "Stopping via systemd..."
+        systemctl --user stop screenshot-record.service
+    else
+        PID=$(cat "$PIDFILE" 2>/dev/null)
+        [ -z "$PID" ] && PID=$(pgrep -f "$(basename "$0") run-internal")
+        [ -n "$PID" ] && kill $PID 2>/dev/null
+        rm -f "$PIDFILE" "$LOCKFILE"
+        echo "Stopped standalone instance."
+    fi
     SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
-    kill -- -"$PID" 2>/dev/null || kill "$PID" 2>/dev/null
-    rm -f "$PIDFILE"
-    if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then convert_session "$SESSION_DIR"; fi
+    if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then
+        echo "Cleaning up current session..."
+        convert_session "$SESSION_DIR"
+    fi
     rm -f /tmp/screenshot-session.txt
     ;;
   status)
-     if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then echo "Running"; else echo "Stopped"; fi
+     PID=$(cat "$PIDFILE" 2>/dev/null)
+     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then 
+        echo "Running (PID: $PID)"
+     elif systemctl --user is-active screenshot-record.service >/dev/null 2>&1; then
+        echo "Running (managed by systemd)"
+     else 
+        echo "Stopped"
+     fi
      ;;
-  *) echo "Usage: $0 {start|stop|status}"; exit 1 ;;
+  convert-all)
+    ACTIVE_SESSION=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+    echo "Converting all historical sessions..."
+    for dir in "$SCREENSHOT_DIR"/*/; do
+        dir="${dir%/}"
+        if [ "$dir" != "$ACTIVE_SESSION" ] && [ -d "$dir" ]; then
+            echo "Processing $dir..."
+            convert_session "$dir"
+        fi
+    done
+    ;;
+  reconcile) reconcile_orphans ;;
+  *) echo "Usage: $0 {start|stop|status|info|active|opened|main|all|convert-all|reconcile}"; exit 1 ;;
 esac

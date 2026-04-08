@@ -7,24 +7,46 @@ This is a living record of technical challenges, architectural discoveries, and 
 ## 🏗️ Quick Reference (Summarized)
 
 ### 🔐 Authentication & Profiles
-- **Auth Strategy:** Use VNC to log in directly to the target production browser container. Persistent context maintains the session without fragile file transfers.
-- **Local CDP:** Set `USE_WINDMILL=false` and `BROWSER_CDP_ENDPOINT=http://localhost:9225` for rapid local iteration.
+- **Auth Strategy**: Use VNC to log in directly to the production browser container. Persistent context maintains the session without fragile file transfers.
+- **Local CDP**: Set `USE_WINDMILL=false` and `BROWSER_CDP_ENDPOINT=http://localhost:9222` (or 9225) for rapid local iteration.
 
 ### 🏗️ Architecture & Execution
-- **Code != Architecture:** Always check `STRATEGIC_PLAN.md` before refactoring. Existing code often represents technical debt, not the intended future direction.
-- **The Singleton Image:** API, VNC, and Chromium should share the same PID namespace and filesystem to eliminate network dependency issues.
-- **Self-Healing Startup:** Entrypoint scripts MUST explicitly `rm -f` `SingletonLock` and `LOCK` files before starting the browser.
-- **Docker CDP:** Use `--remote-allow-origins=*` and internal Docker DNS for container talk. Rewrite `webSocketDebuggerUrl` if necessary.
+- **Singleton Mandate**: API, VNC, and Chromium MUST share the same container to eliminate networking overhead and container desync. 
+- **TabPool Compliance**: Use `BrowserClient.getTabPage()` to lease shared tabs. Never use `page.goto()` for top-level navigation in shared contexts; use `client.recycle()` instead.
+- **Modular Actions**: Logic MUST be stateless functions in `src/actions/`. Clients are thin wrappers for orchestration.
+- **UniversalContext**: Always use `ctx.log` and `ctx.config` instead of `console.log` or direct imports.
+- **Surgical Cleanup**: Frequent `npm run build` is mandatory to catch broken imports after deep refactoring.
+
+---
+
+## 🎯 Core Architectural Patterns
+
+### [[7. Modular Action Pattern (2026-04-02)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/DEVELOPMENT.md#2-browser-action-pattern-stateless-handlers)
+- **Problem**: Monolithic clients became "God Objects" that were fragile and hard to test.
+- **Solution**: Decouple UI logic into stateless `Action` modules in `src/actions/`. Clients become thin orchestrators.
+- **Benefit**: Achieved high reusability (e.g., `listSessionsAction` used independently). 21/21 Gemini tests pass.
+
+### [[15. Browser Efficiency & Resource Management]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/DEVELOPMENT.md#10-browser-efficiency--resource-management)
+- **Lease & Release**: Use `BrowserClient.getTabPage()` and call `release()` in a `finally` block to prevent leaks.
+- **UI-Based Recycling**: Prefer clicking home icons/logos over `page.goto()` to preserve cache and session stability. This is the primary way to clear state between runs in a singleton container.
+- **CDP Handshake**: Swapping `ws://` to `http://` is mandatory for `/json/version` discovery when connecting over CDP.
+- **Singleton Observability**: Use `ctx.log` for all action logging. Prefixing and verbosity are controlled by the client wrapper, ensuring logs work across CLI and Windmill.
+
+### [[17. Systematic Refactoring & Type Safety]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/lessons_learned.md)
+- **Monolith Decomposition**: Breaking large orchestrators into specialized routers/actions improves testability.
+- **Externalized Selectors**: Moving selectors to `selectors.yaml` decoupled logic from UI changes.
+- **TSC as Truth**: Frequent `npm run build` catches broken imports and type mismatches across deep directory structures.
 
 ---
 
 ## 📜 Historical Detailed Logs (Verbatim)
 
-### [[7. Modular Action Pattern (2026-04-02)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/DEVELOPMENT.md#2-browser-action-pattern-stateless-handlers)
+### [[16. Remote Audio Downloads (NotebookLM)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/lessons_learned_audio_download.md)
 
-- **Issue**: Monolithic browser clients (e.g. `GeminiClient`, `NotebookLMClient`) became "God Objects" that were difficult to maintain and test. Small UI changes in one area would break unrelated methods due to shared state or complex class-level side effects.
-- **Fix**: Decoupled UI logic into stateless `Action` modules in `src/actions/`. The `Client` classes were refactored into thin orchestrators that manage lifecycle (Page, Auth) and delegate specific UI tasks to these granular functions.
-- **Result**: Successfully refactored `GeminiClient` and `NotebookLMClient`. 21/21 Gemini integration tests passed. Achieved high reusability (e.g., `listSessionsAction` and `exportToGoogleDocsAction` can now be used independently of a full client instance).
+- **Remote CDP Boundary**: Standard `download.saveAs()` fails in remote sessions because it tries to copy from the server's `/tmp` to the client's filesystem. 
+- **The "Golden Path"**: Use `context.request.get(url)` to fetch the audio binary. This bypasses CORS (using browser cookies) and brings the payload directly into the local script's memory.
+- **Raw JS Interactors**: In SPAs with complex CDK overlays (like NotebookLM), use `page.evaluate()` with raw JS strings to trigger clicks on menu items, as it bypasses Playwright's "visibility" checks that often get stuck on backdrops.
+- **Impersonation Fallback**: If standard methods fail, use `curl` with extracted cookies (`context.cookies()`) immediately after capturing the download URL.
 
 ---
 
@@ -355,3 +377,29 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - Never rely on `[ -d drive_c ]` to check if a Wine prefix is ready. A failed/interrupted init leaves `drive_c` but no system DLLs. Use a "sentinel file" (e.g., `.initialized`) created only after successful setup.
 
 - **Success Result**: Atomic, stable installation of reMarkable in ~2 minutes with zero IPC bridge crashes.
+
+---
+
+### [[18. Hardening Autonomous Screen Recording Services (2026-04-08)]]
+
+> **Context**: Transforming a manual screenshot script into a robust systemd service (`screenshot-record.service`) with autonomous archival (CRF 42), privacy protection, and metadata reconciliation.
+
+#### LESSONS LEARNED:
+
+1. **Systemd "Zombie" Restart Prevention**:
+   - **Problem**: When a script is managed by systemd with `Restart=always`, a manual `kill` or `stop` command in the script triggers an automatic restart by systemd 10 seconds later.
+   - **Solution**: Make the CLI "service-aware". The `stop` command should check `systemctl --user is-active` and call `systemctl --user stop` instead of killing the PID. This ensures a persistent and clean shutdown.
+
+2. **PipeWire/PulseAudio Audio Ducking Confusion**:
+   - **Problem**: The user noticed the recording "beeps" were muted while recording an audio message.
+   - **Lesson**: Audio "ducking" is a global system behavior. Sounds from background services (like a camera shutter sound) will be lowered in volume or muted by the OS when an input (microphone) is active. This can be misinterpreted as a process failure.
+   - **Best Practice**: For discrete background services, **disable audio triggers by default** (`ENABLE_SOUND="false"`) to avoid system interference and "stealth" concerns.
+
+3. **Autonomous Batch Processing**:
+   - **Background Workers**: Converting thousands of legacy folders (~1100) into videos should be done via `nohup` or a detached subshell to avoid blocking the main recording loop. 
+   - **Reconciliation Logic**: Decoupling metadata extraction from video conversion is essential for reliability. Adding a `reconcile` command that extracts JSON attachments from MKV files allows for 100% recovery of orphaned metadata.
+
+4. **CLI Observability**:
+   - **The `info` Command**: For "black-box" autonomous tools, providing a summary of data managed (unprocessed vs. archived, disk usage, active blocking apps) is critical for user trust and transparent status monitoring.
+
+- **Outcome**: Successfully cleared a backlog of 1000+ folders into 2.3GB of highly compressed archived video with full metadata parity and robust privacy blocking.
