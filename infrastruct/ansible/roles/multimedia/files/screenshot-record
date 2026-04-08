@@ -255,53 +255,143 @@ run_internal() {
 case "$1" in
   run-internal) run_internal ;;
   info)
-    echo "--- Screenshot-Record Status ---"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║     Screenshot-Record Service Status     ║"
+    echo "╠══════════════════════════════════════════╣"
+    
+    # Service & Process status
+    SVC_STATE=$(systemctl --user is-active screenshot-record.service 2>/dev/null || echo "not-installed")
     PID=$(cat "$PIDFILE" 2>/dev/null)
-    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-        echo "Status: Running (PID: $PID)"
-        SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
-        if [ -n "$SESSION_DIR" ]; then
-            FRAME_COUNT=$(ls "$SESSION_DIR"/frame_*.jpg 2>/dev/null | wc -l)
-            echo "Active Session: $(basename "$SESSION_DIR") ($FRAME_COUNT frames)"
+    
+    if [ "$SVC_STATE" = "active" ]; then
+        # Get uptime from systemd
+        SINCE=$(systemctl --user show screenshot-record.service --property=ActiveEnterTimestamp 2>/dev/null | cut -d= -f2)
+        if [ -n "$SINCE" ]; then
+            SINCE_EPOCH=$(date -d "$SINCE" +%s 2>/dev/null)
+            NOW_EPOCH=$(date +%s)
+            UPTIME_SECS=$((NOW_EPOCH - SINCE_EPOCH))
+            UPTIME_H=$((UPTIME_SECS / 3600))
+            UPTIME_M=$(((UPTIME_SECS % 3600) / 60))
+            echo "║ Status:  🟢 RUNNING (uptime: ${UPTIME_H}h ${UPTIME_M}m)"
+        else
+            echo "║ Status:  🟢 RUNNING"
         fi
+    elif [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        echo "║ Status:  🟡 STANDALONE (PID: $PID)"
     else
-        echo "Status: Stopped"
+        echo "║ Status:  🔴 STOPPED"
     fi
     
-    IS_SERVICE=$(systemctl --user is-active screenshot-record.service 2>/dev/null)
-    echo "Service Status: $IS_SERVICE"
+    # Active session info
+    SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
+    if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then
+        FRAME_COUNT=$(find "$SESSION_DIR" -name "frame_*.jpg" 2>/dev/null | wc -l)
+        SESSION_NAME=$(basename "$SESSION_DIR")
+        echo "║ Session: $SESSION_NAME ($FRAME_COUNT frames)"
+        
+        # Calculate capture rate
+        if [ "$FRAME_COUNT" -gt 1 ]; then
+            FIRST_FRAME=$(ls -t "$SESSION_DIR"/frame_*.jpg 2>/dev/null | tail -1)
+            LAST_FRAME=$(ls -t "$SESSION_DIR"/frame_*.jpg 2>/dev/null | head -1)
+            if [ -n "$FIRST_FRAME" ] && [ -n "$LAST_FRAME" ]; then
+                T1=$(stat -c %Y "$FIRST_FRAME")
+                T2=$(stat -c %Y "$LAST_FRAME")
+                SPAN=$((T2 - T1))
+                if [ "$SPAN" -gt 0 ]; then
+                    RATE=$(echo "scale=1; $FRAME_COUNT * 60 / $SPAN" | bc 2>/dev/null)
+                    echo "║ Rate:    ~${RATE} frames/min"
+                fi
+            fi
+        fi
+    fi
     
-    echo -e "\n--- Data Summary ---"
-    # Backlog (Screenshots)
-    FOLDER_COUNT=$(find "$SCREENSHOT_DIR" -maxdepth 1 -type d | wc -l)
-    FOLDER_COUNT=$((FOLDER_COUNT - 1)) # Exclude parent
-    SIZE_BACKLOG=$(du -sh "$SCREENSHOT_DIR" | cut -f1)
-    echo "Unprocessed Sessions: $FOLDER_COUNT ($SIZE_BACKLOG)"
-    
-    # Archives (OBS)
-    VIDEO_COUNT=$(find "$RECORDING_DIR" -maxdepth 1 -name "*.mkv" | wc -l)
-    STILLS_COUNT=$(find "$STILLS_DIR" -maxdepth 1 -name "*.jpg" | wc -l)
-    SIZE_ARCHIVE=$(du -sh "$RECORDING_DIR" | cut -f1)
-    echo "Archived Videos: $VIDEO_COUNT"
-    echo "Still Frames: $STILLS_COUNT"
-    echo "Total Archive Size: $SIZE_ARCHIVE"
-    
-    # System stats
-    SENSITIVE_NOW=""
+    # Privacy check
+    BLOCKED=""
     for app in $SENSITIVE_APPS; do
-        if pgrep -x "$app" >/dev/null; then
-            SENSITIVE_NOW="$SENSITIVE_NOW $app"
+        if pgrep -x "$app" >/dev/null 2>&1; then
+            BLOCKED="$BLOCKED $app"
         fi
     done
-    if [ -n "$SENSITIVE_NOW" ]; then
-        echo -e "\nPrivacy Mode: ACTIVE (Blocking apps:$SENSITIVE_NOW)"
+    if [ -n "$BLOCKED" ]; then
+        echo "║ Privacy: 🔒 PAUSED (${BLOCKED# })"
     fi
+    
+    echo "╠══════════════════════════════════════════╣"
+    echo "║              Data Summary                ║"
+    echo "╠══════════════════════════════════════════╣"
+    
+    # Backlog
+    BACKLOG_COUNT=$(find "$SCREENSHOT_DIR" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)
+    BACKLOG_SIZE=$(du -sh "$SCREENSHOT_DIR" 2>/dev/null | cut -f1)
+    echo "║ Backlog: $BACKLOG_COUNT sessions ($BACKLOG_SIZE)"
+    
+    # Archives
+    VIDEO_COUNT=$(find "$RECORDING_DIR" -maxdepth 1 -name "*.mkv" 2>/dev/null | wc -l)
+    JSON_COUNT=$(find "$RECORDING_DIR" -maxdepth 1 -name "*.json" 2>/dev/null | wc -l)
+    STILL_COUNT=$(find "$STILLS_DIR" -maxdepth 1 -name "*.jpg" 2>/dev/null | wc -l)
+    ARCHIVE_SIZE=$(du -sh "$RECORDING_DIR" 2>/dev/null | cut -f1)
+    
+    echo "║ Videos:  $VIDEO_COUNT archived ($ARCHIVE_SIZE)"
+    echo "║ JSONs:   $JSON_COUNT metadata files"
+    echo "║ Stills:  $STILL_COUNT single-frame captures"
+    
+    # Metadata parity check
+    ORPHAN_VIDEOS=0
+    for f in "$RECORDING_DIR"/*.mkv; do
+        [ ! -f "$f" ] && continue
+        [ ! -f "${f%.mkv}.json" ] && ORPHAN_VIDEOS=$((ORPHAN_VIDEOS + 1))
+    done
+    if [ "$ORPHAN_VIDEOS" -gt 0 ]; then
+        echo "║ ⚠️  $ORPHAN_VIDEOS videos missing JSON metadata"
+    else
+        echo "║ ✅ All videos have paired metadata"
+    fi
+    
+    echo "╠══════════════════════════════════════════╣"
+    echo "║            Historical Stats              ║"
+    echo "╠══════════════════════════════════════════╣"
+    
+    # Time coverage: oldest and newest recording (only screenshots_* files)
+    OLDEST=$(ls "$RECORDING_DIR"/screenshots_*.mkv 2>/dev/null | head -1)
+    NEWEST=$(ls "$RECORDING_DIR"/screenshots_*.mkv 2>/dev/null | tail -1)
+    if [ -n "$OLDEST" ] && [ -n "$NEWEST" ]; then
+        OLDEST_NAME=$(basename "$OLDEST" | sed 's/screenshots_//;s/\.mkv//')
+        NEWEST_NAME=$(basename "$NEWEST" | sed 's/screenshots_//;s/\.mkv//')
+        echo "║ First:   $OLDEST_NAME"
+        echo "║ Latest:  $NEWEST_NAME"
+        
+        # Calculate total days covered
+        OLDEST_DATE=$(echo "$OLDEST_NAME" | cut -d_ -f1)
+        NEWEST_DATE=$(echo "$NEWEST_NAME" | cut -d_ -f1)
+        if [ -n "$OLDEST_DATE" ] && [ -n "$NEWEST_DATE" ]; then
+            D1=$(date -d "$OLDEST_DATE" +%s 2>/dev/null)
+            D2=$(date -d "$NEWEST_DATE" +%s 2>/dev/null)
+            if [ -n "$D1" ] && [ -n "$D2" ]; then
+                DAYS=$(( (D2 - D1) / 86400 ))
+                echo "║ Span:    $DAYS days of coverage"
+                if [ "$DAYS" -gt 0 ] && [ "$VIDEO_COUNT" -gt 0 ]; then
+                    AVG=$(echo "scale=1; $VIDEO_COUNT / $DAYS" | bc 2>/dev/null)
+                    echo "║ Avg:     ~$AVG videos/day"
+                fi
+            fi
+        fi
+    fi
+    
+    # Today's activity
+    TODAY=$(date +%Y-%m-%d)
+    TODAY_COUNT=$(find "$RECORDING_DIR" -maxdepth 1 -name "screenshots_${TODAY}*.mkv" 2>/dev/null | wc -l)
+    echo "║ Today:   $TODAY_COUNT videos recorded"
+    
+    echo "╚══════════════════════════════════════════╝"
     ;;
   start)
-    if systemctl --user list-unit-files screenshot-record.service >/dev/null 2>&1; then
-        echo "Starting via systemd..."
+    # CLI entry point: always delegates to systemd if available
+    if systemctl --user cat screenshot-record.service >/dev/null 2>&1; then
         systemctl --user start screenshot-record.service
+        sleep 1
+        systemctl --user status screenshot-record.service --no-pager
     else
+        # Fallback for systems without the unit file
         if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then echo "Already running."; exit 0; fi
         [ -z "$DISPLAY" ] && export DISPLAY=:1
         setsid "$0" run-internal >>/tmp/screenshot-record.log 2>&1 &
@@ -312,43 +402,51 @@ case "$1" in
     ;;
   stop)
     if systemctl --user is-active screenshot-record.service >/dev/null 2>&1; then
-        echo "Stopping via systemd..."
         systemctl --user stop screenshot-record.service
+        echo "Service stopped."
     else
         PID=$(cat "$PIDFILE" 2>/dev/null)
         [ -z "$PID" ] && PID=$(pgrep -f "$(basename "$0") run-internal")
-        [ -n "$PID" ] && kill $PID 2>/dev/null
-        rm -f "$PIDFILE" "$LOCKFILE"
-        echo "Stopped standalone instance."
+        if [ -n "$PID" ]; then
+            kill "$PID" 2>/dev/null
+            rm -f "$PIDFILE" "$LOCKFILE"
+            echo "Standalone instance stopped."
+        else
+            echo "Not running."
+        fi
     fi
+    ;;
+  convert-current)
+    # Called by ExecStopPost to finalize the current session
     SESSION_DIR=$(cat /tmp/screenshot-session.txt 2>/dev/null)
     if [ -n "$SESSION_DIR" ] && [ -d "$SESSION_DIR" ]; then
-        echo "Cleaning up current session..."
         convert_session "$SESSION_DIR"
     fi
-    rm -f /tmp/screenshot-session.txt
+    rm -f /tmp/screenshot-session.txt "$PIDFILE" "$LOCKFILE"
     ;;
   status)
-     PID=$(cat "$PIDFILE" 2>/dev/null)
-     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then 
-        echo "Running (PID: $PID)"
-     elif systemctl --user is-active screenshot-record.service >/dev/null 2>&1; then
-        echo "Running (managed by systemd)"
-     else 
+    SVC_STATE=$(systemctl --user is-active screenshot-record.service 2>/dev/null || echo "unknown")
+    PID=$(cat "$PIDFILE" 2>/dev/null)
+    if [ "$SVC_STATE" = "active" ]; then
+        echo "Running (systemd, PID: $(systemctl --user show screenshot-record.service -p MainPID --value 2>/dev/null))"
+    elif [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        echo "Running standalone (PID: $PID)"
+    else
         echo "Stopped"
-     fi
-     ;;
+    fi
+    ;;
   convert-all)
     ACTIVE_SESSION=$(cat /tmp/screenshot-session.txt 2>/dev/null)
     echo "Converting all historical sessions..."
     for dir in "$SCREENSHOT_DIR"/*/; do
         dir="${dir%/}"
         if [ "$dir" != "$ACTIVE_SESSION" ] && [ -d "$dir" ]; then
-            echo "Processing $dir..."
+            echo "Processing $(basename "$dir")..."
             convert_session "$dir"
         fi
     done
+    echo "Done."
     ;;
   reconcile) reconcile_orphans ;;
-  *) echo "Usage: $0 {start|stop|status|info|active|opened|main|all|convert-all|reconcile}"; exit 1 ;;
+  *) echo "Usage: $0 {start|stop|status|info|convert-all|convert-current|reconcile}"; exit 1 ;;
 esac

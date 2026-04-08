@@ -1,0 +1,15 @@
+[Unit]
+Description=Autonomous Screenshot Recording Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/sim/bin/screenshot-record run-internal
+ExecStopPost=/home/sim/bin/screenshot-record convert-current
+Restart=on-failure
+RestartSec=15
+Environment=DISPLAY=:1
+Nice=19
+
+[Install]
+WantedBy=default.target
