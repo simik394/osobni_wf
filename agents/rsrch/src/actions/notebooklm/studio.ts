@@ -111,3 +111,75 @@ export async function getStudioArtifactsAction(
 
     return artifacts;
 }
+
+/**
+ * Ensures the Studio panel is maximized/visible.
+ */
+export async function maximizeStudioAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps
+): Promise<void> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio/i }).first();
+    if (await studioBtn.count() > 0 && await studioBtn.isVisible()) {
+        log('Maximizing Studio panel...');
+        await studioBtn.click();
+        await deps.humanDelay(2000);
+    }
+}
+
+/**
+ * Renames an artifact in the studio panel.
+ */
+export async function renameStudioArtifactAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    oldTitle: string,
+    newTitle: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    
+    log(`Renaming artifact from "${oldTitle}" to "${newTitle}"...`);
+    
+    await maximizeStudioAction(ctx, deps);
+    
+    const artifacts = await getStudioArtifactsAction(ctx, deps);
+    const index = artifacts.findIndex(a => a.title === oldTitle);
+    
+    if (index === -1) {
+        log(`Artifact "${oldTitle}" not found for renaming.`, 'error');
+        return false;
+    }
+
+    const studioPanel = page.locator('section.studio-panel, .studio-panel, div.right-panel').first();
+    const item = studioPanel.locator('.artifact-stretched-button').nth(index);
+    const moreBtn = item.locator('xpath=..').locator('.artifact-more-button, [aria-label*="Možnosti"], [aria-label*="More"]').first();
+    
+    if (await moreBtn.count() === 0) {
+        log('More menu button not found for artifact.', 'error');
+        return false;
+    }
+
+    await moreBtn.click();
+    await deps.humanDelay(1000);
+
+    const renameBtn = page.locator('button[role="menuitem"]').filter({ hasText: /Přejmenovat|Rename/i }).first();
+    if (await renameBtn.count() === 0) {
+        log('Rename button not found in menu.', 'error');
+        await page.keyboard.press('Escape');
+        return false;
+    }
+
+    await renameBtn.click();
+    await deps.humanDelay(500);
+
+    const input = page.locator('input[type="text"], mat-dialog-container input').first();
+    await input.fill(newTitle);
+    await page.keyboard.press('Enter');
+    await deps.humanDelay(1000);
+
+    log(`Successfully renamed artifact to: ${newTitle}`);
+    return true;
+}

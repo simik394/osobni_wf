@@ -154,19 +154,22 @@ export async function runLocalAction<T>(
     }
 }
 
+import { NotebookLMClient } from '../clients/notebooklm';
+import { GeminiClient } from '../clients/gemini';
+
 // Helper for local Notebook execution
-export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: any) => Promise<void>) {
-    return runLocalAction('NotebookLM', (c) => c.createNotebookLMClient(), action);
+export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: NotebookLMClient) => Promise<void>) {
+    return runLocalAction('NotebookLM', (c) => c.createNotebookLMClient() as Promise<NotebookLMClient>, action);
 }
 
 // Helper for local Gemini execution
 export async function runLocalGeminiAction(
-    action: (client: BrowserClient, gemini: any) => Promise<void>, 
+    action: (client: BrowserClient, gemini: GeminiClient) => Promise<void>, 
     options: string | { sessionId?: string, skipAuthCheck?: boolean, headless?: boolean } = {}, 
     hasLocalFlag: boolean = true
 ) {
     const actionOptions = typeof options === 'string' ? { sessionId: options } : options;
-    return runLocalAction('Gemini', (c) => c.createGeminiClient(), action, actionOptions, hasLocalFlag);
+    return runLocalAction('Gemini', (c) => c.createGeminiClient() as Promise<GeminiClient>, action, actionOptions, hasLocalFlag);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { UniversalContext } from '../types';
+import { UniversalContext, NotebookLMActionDeps } from '../types';
 
 export async function generateAudioOverviewAction(
     ctx: UniversalContext,
@@ -9,35 +9,36 @@ export async function generateAudioOverviewAction(
         waitForCompletion?: boolean;
         dryRun?: boolean;
     },
-    deps: {
-        enqueueTask: <T>(name: string, task: () => Promise<T>) => Promise<T>;
-        setIsBusy: (busy: boolean) => void;
-        getIsBusy: () => boolean;
-        openNotebook: (title: string) => Promise<void>;
-        getAudioArtifactTitles: () => Promise<string[]>;
-        selectSources: (sourcesOrRange: string | string[]) => Promise<void>;
-        maximizeStudio: () => Promise<void>;
-        triggerAudioGeneration: (customPrompt?: string, dryRun?: boolean, notebookTitle?: string) => Promise<boolean>;
-        waitForGeneration: () => Promise<void>;
-        renameArtifact: (oldTitle: string, newTitle: string) => Promise<boolean>;
-        humanDelay: (baseMs: number, variance?: number) => Promise<void>;
-        recycle?: () => Promise<void>;
-    }
+    deps: NotebookLMActionDeps
 ): Promise<{ success: boolean; artifactTitle?: string }> {
     const { notebookTitle, sources, customPrompt, waitForCompletion = false, dryRun = false } = options;
     const { page, log } = ctx;
 
-    return deps.enqueueTask(`Generate Audio: ${notebookTitle}`, async () => {
-        if (deps.getIsBusy()) {
+    // Orchestrator actions require these dependencies to be present
+    const enqueueTask = deps.enqueueTask!;
+    const getIsBusy = deps.getIsBusy!;
+    const setIsBusy = deps.setIsBusy!;
+    const openNotebook = deps.openNotebook!;
+    const recycle = deps.recycle;
+    const humanDelay = deps.humanDelay!;
+    const getAudioArtifactTitles = deps.getAudioArtifactTitles!;
+    const selectSources = deps.selectSources!;
+    const maximizeStudio = deps.maximizeStudio!;
+    const triggerAudioGeneration = deps.triggerAudioGeneration!;
+    const waitForGeneration = deps.waitForGeneration!;
+    const renameArtifact = deps.renameArtifact!;
+
+    return enqueueTask(`Generate Audio: ${notebookTitle}`, async () => {
+        if (getIsBusy()) {
             console.warn('[NotebookLM] Client marked as busy inside queue. Nested call?');
         }
-        deps.setIsBusy(true);
+        setIsBusy(true);
         try {
             if (notebookTitle) {
-                await deps.openNotebook(notebookTitle);
-            } else if (deps.recycle) {
-                await deps.recycle();
-                await deps.humanDelay(2000);
+                await openNotebook(notebookTitle);
+            } else if (recycle) {
+                await recycle();
+                await humanDelay(2000);
             } else {
                 log('[DEBUG] No notebook specified, ensuring we are on home page (manual fallback)...');
                 const currentUrl = page.url();
@@ -54,21 +55,21 @@ export async function generateAudioOverviewAction(
                         await page.goto(ctx.config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
                     }
                 }
-                await deps.humanDelay(2000);
+                await humanDelay(2000);
             }
 
-            const existingAudioTitles = await deps.getAudioArtifactTitles();
+            const existingAudioTitles = await getAudioArtifactTitles();
             log(`[DEBUG] Existing audio artifacts: [${existingAudioTitles.join(', ')}]`);
 
             if (sources && sources.length > 0) {
                 log(`[DEBUG] Selecting sources: ${sources.join(', ')}`);
-                await deps.selectSources(sources);
+                await selectSources(sources);
             }
 
-            await deps.maximizeStudio();
-            await deps.humanDelay(500);
+            await maximizeStudio();
+            await humanDelay(500);
 
-            const triggered = await deps.triggerAudioGeneration(customPrompt, dryRun, notebookTitle);
+            const triggered = await triggerAudioGeneration(customPrompt, dryRun);
 
             if (!triggered) {
                 return { success: false, artifactTitle: undefined };
@@ -77,9 +78,9 @@ export async function generateAudioOverviewAction(
             if (dryRun) return { success: true };
 
             if (waitForCompletion) {
-                await deps.waitForGeneration();
+                await waitForGeneration();
                 
-                const postGenTitles = await deps.getAudioArtifactTitles();
+                const postGenTitles = await getAudioArtifactTitles();
                 const newArtifacts = postGenTitles.filter(t => !existingAudioTitles.includes(t));
 
                 if (newArtifacts.length === 1) {
@@ -87,7 +88,7 @@ export async function generateAudioOverviewAction(
                     console.log(`[DEBUG] Identified new audio artifact: "${newTitle}"`);
 
                     const uniqueName = `Audio ${new Date().toISOString().slice(0, 19).replace('T', ' ')}` + (customPrompt ? ' - Custom' : '');
-                    await deps.renameArtifact(newTitle, uniqueName);
+                    await renameArtifact(newTitle, uniqueName);
 
                     return { success: true, artifactTitle: uniqueName };
                 } else if (newArtifacts.length > 1) {
@@ -104,7 +105,90 @@ export async function generateAudioOverviewAction(
             console.error('[NotebookLM] Error generating audio overview:', e.message);
             throw e;
         } finally {
-            deps.setIsBusy(false);
+            setIsBusy(false);
         }
     });
+}
+
+/**
+ * Triggers the actual audio generation UI interaction.
+ */
+export async function triggerAudioGenerationAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    customPrompt?: string,
+    dryRun: boolean = false
+): Promise<boolean> {
+    const { page, log } = ctx;
+    
+    const generateBtn = page.locator('button').filter({ hasText: /Generovat|Generate/i }).first();
+    if (await generateBtn.count() === 0 || !(await generateBtn.isVisible())) {
+        log('Generate button not found or not visible.', 'error');
+        return false;
+    }
+
+    if (customPrompt) {
+        log(`Applying custom prompt: "${customPrompt}"`);
+        const customizeBtn = page.locator('button').filter({ hasText: /Přizpůsobit|Customize/i }).first();
+        if (await customizeBtn.count() > 0) {
+            await customizeBtn.click();
+            await deps.humanDelay(1000);
+            const textarea = page.locator('textarea, [contenteditable="true"]').first();
+            await textarea.fill(customPrompt);
+            await deps.humanDelay(500);
+            
+            if (dryRun) {
+                log('Dry run: skipping final click.');
+                return true;
+            }
+            
+            const submitBtn = page.locator('button').filter({ hasText: /Generovat|Generate/i }).last();
+            await submitBtn.click();
+        } else {
+            log('Customize button not found, falling back to basic generation.', 'warn');
+            if (dryRun) return true;
+            await generateBtn.click();
+        }
+    } else {
+        if (dryRun) {
+            log('Dry run: skipping click.');
+            return true;
+        }
+        await generateBtn.click();
+    }
+
+    log('Audio generation triggered.');
+    return true;
+}
+
+/**
+ * Waits for audio generation to complete.
+ */
+export async function waitForAudioGenerationAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps
+): Promise<void> {
+    const { page, log } = ctx;
+    log('Waiting for audio generation to complete (polling)...');
+
+    let attempts = 0;
+    const maxAttempts = 120; // 10 minutes approx
+
+    while (attempts < maxAttempts) {
+        attempts++;
+        const isGenerating = await page.evaluate(() => {
+            return document.body.innerText.match(/Generování|Generating|Vytváření|Creating/i) !== null ||
+                   document.querySelector('mat-progress-bar, mat-spinner, .loading-indicator') !== null;
+        });
+
+        if (!isGenerating) {
+            log('Generation seems complete.');
+            return;
+        }
+
+        if (attempts % 6 === 0) log(`Still generating... (${attempts * 5}s)`);
+        await deps.humanDelay(5000);
+    }
+
+    log('Timed out waiting for generation.', 'warn');
 }

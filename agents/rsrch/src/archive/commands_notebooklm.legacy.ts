@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import { runLocalNotebookAction, sendServerRequest } from '../cli/utils';
-import { resolveLocalFiles, resolveTextContent, resolveNotebookTitles } from '../cli/notebook-utils';
+import { cliContext } from '../cli/context';
 import * as path from 'path';
+import * as fs from 'fs';
 import { config } from '../config';
 import { getGraphStore } from '../core/graph-store';
 import { getWindmillClient } from '../clients/windmill';
-import { cliContext } from '../cli/context';
 
 const notebook = new Command('notebook').description('NotebookLM commands');
 
@@ -14,9 +14,11 @@ notebook.command('add-web-source <url>')
     .option('--notebook <title>', 'Notebook title')
     .option('--local', 'Use local execution', false)
     .action(async (url, opts) => {
-        await runLocalNotebookAction(async (client, nb) => {
-            if (opts.notebook) await nb.openNotebook(opts.notebook);
-            await nb.addSourceUrl(url);
+        await runLocalNotebookAction(async (client, notebook) => {
+            if (opts.notebook) {
+                await notebook.openNotebook(opts.notebook);
+            }
+            await notebook.addSourceUrl(url);
         });
     });
 
@@ -26,7 +28,25 @@ notebook.command('add-local-source <paths...>')
     .option('--notebook <title>', 'Notebook title')
     .option('--local', 'Use local execution', false)
     .action(async (filePaths, opts) => {
-        const filesToUpload = resolveLocalFiles(filePaths);
+        let filesToUpload: string[] = [];
+        
+        for (const filePath of filePaths) {
+            const resolvedPath = path.resolve(process.cwd(), filePath);
+            if (!fs.existsSync(resolvedPath)) {
+                console.warn(`Warning: File or directory not found at ${resolvedPath}`);
+                continue;
+            }
+            
+            const stat = fs.statSync(resolvedPath);
+            if (stat.isDirectory()) {
+                const files = fs.readdirSync(resolvedPath)
+                    .filter(f => f.toLowerCase().endsWith('.pdf') || f.toLowerCase().endsWith('.txt') || f.toLowerCase().endsWith('.md'))
+                    .map(f => path.join(resolvedPath, f));
+                filesToUpload.push(...files);
+            } else {
+                filesToUpload.push(resolvedPath);
+            }
+        }
         
         if (filesToUpload.length === 0) {
             console.error('Error: No valid files found to upload.');
@@ -35,10 +55,14 @@ notebook.command('add-local-source <paths...>')
 
         console.log(`Found ${filesToUpload.length} files to upload.`);
 
-        await runLocalNotebookAction(async (client, nb) => {
-            if (opts.notebook) await nb.openNotebook(opts.notebook);
-            console.log(`Uploading ${filesToUpload.length} files in a single batch...`);
-            await nb.uploadLocalFile(filesToUpload);
+        await runLocalNotebookAction(async (client, notebook) => {
+            if (opts.notebook) {
+                await notebook.openNotebook(opts.notebook);
+            }
+            if (filesToUpload.length > 0) {
+                console.log(`Uploading ${filesToUpload.length} files in a single batch...`);
+                await notebook.uploadLocalFile(filesToUpload);
+            }
             console.log(`✅ Successfully uploaded ${filesToUpload.length} files to NotebookLM.`);
         });
     });
@@ -54,8 +78,8 @@ notebook.command('add-drive-source <docNames>')
             process.exit(1);
         }
 
-        await runLocalNotebookAction(async (client, nb) => {
-            await nb.addSourceFromDrive(docNames, opts.notebook);
+        await runLocalNotebookAction(async (client, notebook) => {
+            await notebook.addSourceFromDrive(docNames, opts.notebook);
         });
     });
 
@@ -122,13 +146,13 @@ notebook.command('download-audio [outputPath]')
     .action(async (outputPath, opts) => {
         const finalOutputPath = outputPath || 'audio_overview.mp3';
 
-        await runLocalNotebookAction(async (client, nb) => {
+        await runLocalNotebookAction(async (client, notebook) => {
             const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
             console.log(`[CLI] Downloading audio... Output: ${resolvedOutputPath}`);
             if (opts.latest) console.log(`[CLI] Mode: Latest audio only.`);
             if (opts.pattern) console.log(`[CLI] Mode: Filtering by pattern "${opts.pattern}".`);
 
-            await nb.downloadAudio(opts.notebook, resolvedOutputPath, {
+            await notebook.downloadAudio(opts.notebook, resolvedOutputPath, {
                 latestOnly: opts.latest,
                 audioTitlePattern: opts.pattern
             });
@@ -143,11 +167,11 @@ notebook.command('download-all-audio [outputDir]')
     .action(async (outputDir, opts) => {
         const finalOutputDir = outputDir || './audio_downloads';
 
-        await runLocalNotebookAction(async (client, nb) => {
+        await runLocalNotebookAction(async (client, notebook) => {
             const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
             console.log(`[CLI] Downloading ${opts.limit ? 'top ' + opts.limit : 'ALL'} audio... Output: ${resolvedOutputDir}`);
 
-            await nb.downloadAllAudio(opts.notebook, resolvedOutputDir, { limit: opts.limit });
+            await notebook.downloadAllAudio(opts.notebook, resolvedOutputDir, { limit: opts.limit });
         });
     });
 
@@ -170,40 +194,51 @@ notebook.command('sync')
     .option('--local', 'Use local execution', false)
     .action(async (opts) => {
         const store = getGraphStore();
-        await store.connect(config.falkor.host, config.falkor.port);
+        const graphHost = config.falkor.host;
+        await store.connect(graphHost, config.falkor.port);
 
         try {
-            await runLocalNotebookAction(async (client, nb) => {
+            await runLocalNotebookAction(async (client, notebook) => {
                 if (opts.title) {
                     console.log(`\n[Sync] Scraping notebook: "${opts.title}"...`);
-                    const data = await nb.scrapeNotebook(opts.title, opts.audio);
+                    if (opts.audio) console.log('[Sync] Audio download enabled (-a)');
+
+                    const data = await notebook.scrapeNotebook(opts.title, opts.audio);
                     const result = await store.syncNotebook(data);
                     console.log(`\n[Sync] Result: ${result.isNew ? 'New' : 'Updated'} notebook ${result.id}\n`);
                 } else {
                     console.log('\n[Sync] Listing all notebooks...');
-                    let notebooks = await nb.listNotebooks();
+                    let notebooks = await notebook.listNotebooks();
 
                     if (opts.pattern) {
-                        const regex = new RegExp(opts.pattern, 'i');
-                        notebooks = notebooks.filter((n: { title: string }) => regex.test(n.title));
-                        console.log(`[Sync] Filtered by pattern "${opts.pattern}": ${notebooks.length} notebooks found.`);
+                        try {
+                            const regex = new RegExp(opts.pattern, 'i');
+                            notebooks = notebooks.filter((nb: { title: string }) => regex.test(nb.title));
+                            console.log(`[Sync] Filtered by pattern "${opts.pattern}": ${notebooks.length} notebooks found.`);
+                        } catch (e: any) {
+                            console.error(`[Sync] Invalid regex pattern: ${e.message}`);
+                            process.exit(1);
+                        }
                     }
 
-                    console.log(`\n[Sync] Processing ${notebooks.length} notebooks...`);
+                    console.log(`\n[Sync] Processing ${notebooks.length} notebooks. Syncing metadata...`);
 
-                    for (const nbItem of notebooks) {
+                    for (const nb of notebooks) {
                         if (opts.pattern) {
-                            console.log(`  - Scraping content for "${nbItem.title}"...`);
-                            const data = await nb.scrapeNotebook(nbItem.title, opts.audio);
+                            console.log(`  - Scraping content for "${nb.title}"...`);
+                            const data = await notebook.scrapeNotebook(nb.title, opts.audio);
                             await store.syncNotebook(data);
                             console.log(`    ✓ Synced content.`);
                         } else {
                             const result = await store.syncNotebook({
-                                platformId: nbItem.platformId,
-                                title: nbItem.title
+                                platformId: nb.platformId,
+                                title: nb.title
                             });
-                            console.log(`  - ${nbItem.title} (${result.id}) [Metadata Only]`);
+                            console.log(`  - ${nb.title} (${result.id}) [Metadata Only]`);
                         }
+                    }
+                    if (!opts.pattern) {
+                        console.log('\n[Sync] Metadata sync complete. To scrape contents, use: rsrch notebook sync --title "Name" (or --pattern)\n');
                     }
                 }
             });
@@ -218,8 +253,8 @@ notebook.command('list')
     .option('--local', 'Use local execution', false)
     .action(async (opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                const notebooks = await nb.listNotebooks();
+            await runLocalNotebookAction(async (client, notebook) => {
+                const notebooks = await notebook.listNotebooks();
                 console.log(JSON.stringify(notebooks, null, 2));
             });
         } else {
@@ -232,8 +267,8 @@ notebook.command('stats <title>')
     .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                const stats = await nb.getNotebookStats(title);
+            await runLocalNotebookAction(async (client, notebook) => {
+                const stats = await notebook.getNotebookStats(title);
                 console.log(JSON.stringify(stats, null, 2));
             });
         } else {
@@ -246,9 +281,9 @@ notebook.command('sources <title>')
     .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.openNotebook(title);
-                const sources = await nb.getSources();
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(title);
+                const sources = await notebook.getSources();
                 console.log(JSON.stringify(sources, null, 2));
             });
         } else {
@@ -262,9 +297,9 @@ notebook.command('rename-source <notebookTitle> <oldTitle> <newTitle>')
     .option('--local', 'Use local execution', true)
     .action(async (notebookTitle, oldTitle, newTitle, opts) => {
         if (opts.local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.openNotebook(notebookTitle);
-                await nb.renameSource(oldTitle, newTitle);
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(notebookTitle);
+                await notebook.renameSource(oldTitle, newTitle);
                 console.log(`✅ Successfully renamed source "${oldTitle}" to "${newTitle}" in notebook "${notebookTitle}".`);
             });
         } else {
@@ -281,9 +316,9 @@ notebook.command('select-sources <notebookTitle> <sourcesOrRange>')
     .option('--local', 'Use local execution', true)
     .action(async (notebookTitle, sourcesOrRange, opts) => {
         if (opts.local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.openNotebook(notebookTitle);
-                await nb.selectSources(sourcesOrRange);
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(notebookTitle);
+                await notebook.selectSources(sourcesOrRange);
                 console.log(`✅ Successfully selected sources for notebook "${notebookTitle}".`);
             });
         } else {
@@ -300,12 +335,13 @@ notebook.command('delete-source <notebookTitle> <sourceTitle>')
     .option('--local', 'Use local execution', false)
     .action(async (notebookTitle, sourceTitle, opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.openNotebook(notebookTitle);
-                await nb.deleteSource(sourceTitle);
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(notebookTitle);
+                await notebook.deleteSource(sourceTitle);
                 console.log(`✅ Successfully deleted source "${sourceTitle}" from notebook "${notebookTitle}".`);
             });
         } else {
+            // Server side not implemented yet
             console.error('Error: Server-side source deletion not implemented. Use --local.');
             process.exit(1);
         }
@@ -316,9 +352,9 @@ notebook.command('messages <title>')
     .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.openNotebook(title);
-                const messages = await nb.getChatMessages();
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(title);
+                const messages = await notebook.getChatMessages();
                 console.log(JSON.stringify(messages, null, 2));
             });
         } else {
@@ -331,13 +367,34 @@ notebook.command('add-text <notebookTitle> <content>')
     .option('--source-title <title>', 'Custom source title')
     .option('--local', 'Use local execution', false)
     .action(async (notebookTitle, content, opts) => {
-        const textContent = await resolveTextContent(content);
+        let textContent = content;
+
+        if (textContent.startsWith('@')) {
+            const filePath = textContent.slice(1);
+            if (!fs.existsSync(filePath)) {
+                console.error(`File not found: ${filePath}`);
+                process.exit(1);
+            }
+            textContent = fs.readFileSync(filePath, 'utf-8');
+            console.log(`[CLI] Loaded ${textContent.length} chars from ${filePath}`);
+        } else if (textContent === '-') {
+            const readline = await import('readline');
+            const rl = readline.createInterface({ input: process.stdin });
+            const lines: string[] = [];
+            for await (const line of rl) {
+                lines.push(line);
+            }
+            textContent = lines.join('\n');
+            console.log(`[CLI] Read ${textContent.length} chars from stdin`);
+        }
 
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.addSourceText(textContent, opts.sourceTitle, notebookTitle);
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.addSourceText(textContent, opts.sourceTitle, notebookTitle);
                 console.log(`\n✓ Added text source to notebook "${notebookTitle}"`);
-                if (opts.sourceTitle) console.log(`  Source title: ${opts.sourceTitle}`);
+                if (opts.sourceTitle) {
+                    console.log(`  Source title: ${opts.sourceTitle}`);
+                }
                 console.log(`  Content length: ${textContent.length} chars\n`);
             });
         } else {
@@ -355,18 +412,29 @@ notebook.command('download-batch-audio')
     .requiredOption('--output <dir>', 'Output directory')
     .option('--local', 'Use local execution', false)
     .action(async (opts) => {
-        await runLocalNotebookAction(async (client, nb) => {
-            const notebooksToProcess = await resolveNotebookTitles(opts.titles, () => nb.listNotebooks());
+        await runLocalNotebookAction(async (client, notebook) => {
+            let notebooksToProcess: string[] = [];
+            const titlesArg = opts.titles;
+
+            if (titlesArg === 'all' || titlesArg === '*') {
+                console.log('[Batch] Fetching all notebooks...');
+                const allNotebooks = await notebook.listNotebooks();
+                notebooksToProcess = allNotebooks.map((n: { title: string }) => n.title);
+                console.log(`[Batch] Found ${notebooksToProcess.length} notebooks.`);
+            } else {
+                notebooksToProcess = titlesArg.split(',').map((t: string) => t.trim());
+            }
 
             for (const title of notebooksToProcess) {
                 console.log(`[Batch] Processing "${title}"...`);
                 try {
-                    const result = await nb.scrapeNotebook(title, true, {
+                    const result = await notebook.scrapeNotebook(title, true, {
                         outputDir: opts.output,
                         filename: `${title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}_${Date.now()}.mp3`
                     });
 
-                    if (result.audioOverviews.length > 0) {
+                    const audioCount = result.audioOverviews.length;
+                    if (audioCount > 0) {
                         console.log(`[Batch] ✅ Downloaded audio for "${title}"`);
                     } else {
                         console.log(`[Batch] ⚠️ No audio found for "${title}"`);
@@ -387,11 +455,11 @@ notebook.command('download-artifact <notebookTitle> <artifactTitle> [outputPathO
         const finalOutputPath = outputPathOrDir || './downloads';
 
         if (opts.local) {
-            await runLocalNotebookAction(async (client, nb) => {
+            await runLocalNotebookAction(async (client, notebook) => {
                 const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
                 console.log(`[CLI] Downloading artifact "${artifactTitle}"... Output: ${resolvedOutputPath}`);
 
-                const success = await nb.downloadArtifact(notebookTitle, artifactTitle, resolvedOutputPath, {
+                const success = await notebook.downloadArtifact(notebookTitle, artifactTitle, resolvedOutputPath, {
                     isPattern: opts.pattern,
                     latestOnly: opts.latest
                 });
@@ -424,30 +492,63 @@ notebook.command('download-all-artifacts [outputDir]')
         const notebookTitle = opts.notebook;
 
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
+            await runLocalNotebookAction(async (client, notebook) => {
+                const fs = require('fs');
+                const path = require('path');
                 const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
+
+                if (!fs.existsSync(resolvedOutputDir)) {
+                    fs.mkdirSync(resolvedOutputDir, { recursive: true });
+                }
 
                 console.log(`[CLI] Downloading all non-audio artifacts from "${notebookTitle}" to: ${resolvedOutputDir}`);
                 
-                await nb.openNotebook(notebookTitle);
-                const artifacts = await nb.getStudioArtifacts();
+                // Ensure page is ready
+                await notebook.page.goto('https://notebooklm.google.com/').catch(() => {});
+                await notebook.humanDelay(3000); // Wait for auth/load to settle in headed mode
+                await notebook.openNotebook(notebookTitle);
+                await notebook.humanDelay(2000);
+
+                const artifacts = await notebook.getStudioArtifacts();
                 // Skip the first 9 fixed generator tiles (Audio, Presentation, etc.) as they are not artifacts themselves
                 const textArtifacts = artifacts.slice(9).filter((a: any) => a.type !== 'audio');
 
                 console.log(`[CLI] Found ${textArtifacts.length} text artifacts to download.`);
 
                 let successCount = 0;
+                let skippedCount = 0;
                 for (const artifact of textArtifacts) {
+                    // Check if file already exists (text or image) to skip download
+                    const typePrefix = artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1);
+                    const safeTitle = artifact.title.replace(/[^a-zA-Z0-9-_]/g, '_').substring(0, 50);
+                    const predictedTxtPath = path.join(resolvedOutputDir, `${typePrefix}_${safeTitle}.txt`);
+                    const predictedPngPath = path.join(resolvedOutputDir, `${typePrefix}_${safeTitle}.png`);
+
+                    if (fs.existsSync(predictedTxtPath) || fs.existsSync(predictedPngPath)) {
+                        console.log(`[CLI] Skip: Artifact already downloaded -> ${predictedTxtPath.replace('.txt', '.[txt|png]')}`);
+                        skippedCount++;
+                        continue;
+                    }
+
                     console.log(`\n[CLI] Processing artifact: "${artifact.title}" (${artifact.type})`);
-                    const success = await nb.downloadArtifact(notebookTitle, artifact.title, resolvedOutputDir);
-                    if (success) successCount++;
+                    // Call downloadArtifact with the exact title
+                    const success = await notebook.downloadArtifact(notebookTitle, artifact.title, resolvedOutputDir);
+                    if (success) {
+                        successCount++;
+                    } else {
+                        console.log(`[CLI] Warning: Artifact extraction failed. Resetting UI state...`);
+                        await notebook.page.reload({ waitUntil: 'domcontentloaded' });
+                        await notebook.openNotebook(notebookTitle);
+                        await notebook.humanDelay(2000);
+                    }
                 }
 
-                console.log(`\n✅ Successfully downloaded ${successCount} artifacts.`);
+                console.log(`\n✅ Successfully downloaded ${successCount} artifacts (Skipped ${skippedCount}).`);
             });
         } else {
             console.log('📤 Queueing all artifacts download via Windmill...');
-            console.log('⚠️ Windmill fallback to local...');
+            console.log('⚠️ Windmill does not currently have a dedicated `downloadAllArtifacts` script, falling back to local...');
+            console.log('   Please run with --local flag.');
             process.exit(1);
         }
     });
@@ -457,9 +558,9 @@ notebook.command('artifacts <title>')
     .option('--local', 'Use local execution', false)
     .action(async (title, opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                await nb.openNotebook(title);
-                const artifacts = await nb.getStudioArtifacts();
+            await runLocalNotebookAction(async (client, notebook) => {
+                await notebook.openNotebook(title);
+                const artifacts = await notebook.getStudioArtifacts();
                 console.log(JSON.stringify(artifacts, null, 2));
             });
         } else {
@@ -473,8 +574,8 @@ notebook.command('audio-status')
     .option('--local', 'Use local execution', false)
     .action(async (opts) => {
         if (opts.local || cliContext.get().local) {
-            await runLocalNotebookAction(async (client, nb) => {
-                const status = await nb.checkAudioStatus(opts.notebook);
+            await runLocalNotebookAction(async (client, notebook) => {
+                const status = await notebook.checkAudioStatus(opts.notebook);
                 console.log(JSON.stringify(status, null, 2));
             });
         } else {
@@ -487,19 +588,22 @@ notebook.command('sources-without-audio')
     .requiredOption('--notebook <title>', 'Notebook title')
     .action(async (opts) => {
         const store = getGraphStore();
+        const graphHost = config.falkor.host;
+
         try {
-            await store.connect(config.falkor.host, config.falkor.port);
+            await store.connect(graphHost, config.falkor.port);
 
             const notebooks = await store.getNotebooks(100);
-            const nb = notebooks.find(n => n.title.includes(opts.notebook) || opts.notebook.includes(n.title));
+            const notebook = notebooks.find(n => n.title.includes(opts.notebook) || opts.notebook.includes(n.title));
 
-            if (!nb) {
+            if (!notebook) {
                 console.error(`❌ Notebook "${opts.notebook}" not found in FalkorDB`);
+                console.error('   Make sure to sync the notebook first: rsrch notebook sync --title "..." --local');
                 process.exit(1);
             }
 
-            const platformId = nb.id.replace('nb_', '');
-            console.log(`📓 Notebook: ${nb.title} (${platformId})`);
+            const platformId = notebook.id.replace('nb_', '');
+            console.log(`📓 Notebook: ${notebook.title} (${platformId})`);
 
             const sources = await store.getSourcesWithoutAudio(platformId);
 

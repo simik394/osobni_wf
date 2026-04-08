@@ -3,6 +3,7 @@ import { recycleAction } from './navigation';
 
 export interface NotebookInfo {
     title: string;
+    platformId: string;
     sourceCount: number;
     url?: string;
 }
@@ -25,7 +26,7 @@ export async function listNotebooksAction(
             timeout: ctx.config.timeouts.navigation 
         });
 
-        const cards = page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`);
+        const cards = page.locator(selectors.home.projectButton);
         const count = await cards.count();
         log(`Found ${count} notebook cards.`);
 
@@ -37,7 +38,14 @@ export async function listNotebooksAction(
             const match = text.match(/(\d+)\s*(zdroj|source)/i);
             const sourceCount = match ? parseInt(match[1]) : 0;
             
-            notebooks.push({ title, sourceCount });
+            // Extract platformId from data attribute or title hash
+            let platformId = await card.getAttribute('data-project-id') || '';
+            if (!platformId) {
+                // Fallback to title hash as per legacy logic
+                platformId = title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16);
+            }
+
+            notebooks.push({ title, platformId, sourceCount });
         }
 
         return notebooks;
