@@ -284,4 +284,74 @@ curl -X POST http://localhost:3001/v1/chat/completions \
   7. **`id` attributes**: `#center_col`. Stable if present, but Google rarely uses them.
 - **Always implement cascading fallback chains**: Primary selector → secondary fallback → tertiary → body text extraction. Log which level was used for debuggability.
 - **i18n resilience**: Google localizes aria-labels. Always include at least EN + CS (user locale) fallbacks: `button[aria-label*="Copy" i], button[aria-label*="Kopír" i]`.
-- **Audit before writing**: Run a DOM audit script that collects all `aria-label`, `role`, `jsname`, `data-*` attributes from the target page. This takes 5 minutes and prevents weeks of debugging broken classes.
+---
+
+### [[12. Ansible community.docker & requests library incompatibility (2026-04-08)]]
+
+- **Issue**: Running the `remarkable-wine` Docker build via Ansible's `community.docker.docker_image` module failed with the error: `Not supported URL scheme http+docker`. This was caused by an incompatibility between the recently updated `requests` library (2.32.0+) and the older transport handlers in the Docker SDK / Ansible collection.
+- **Fix**: 
+    1.  **Dependency Upgrade**: Upgraded `docker` Python SDK to `7.1.0` and `requests` to `2.33.1`.
+    2.  **Collection Upgrade**: Upgraded `community.docker` collection to `5.1.0`.
+    3.  **Resilient Strategy**: Switched the Ansible build task from the `docker_image` module to `ansible.builtin.shell` calling the `docker` CLI directly.
+- **Lesson**: Library-level transport abstractions (like those in `community.docker`) are prone to breaking during minor updates of underlying dependencies (like `requests`). For basic operations like building an image from a local context, using the native CLI via `shell` is often more robust and less sensitive to fragmentation in the Python environment, especially in mature codebases with older Ansible versions.
+
+---
+
+### [[13. Docker Image Building — MANDATORY Rules (2026-04-08)]]
+
+> **Context**: Editing an early `apt-get install` layer in a Dockerfile to add 3 small packages (`libvulkan1`, `dbus-x11`, `libasound2:i386`) caused a full cache invalidation of ALL downstream layers, triggering a 30+ minute rebuild that re-downloaded ~1GB of WineHQ packages over a slow connection. This was entirely avoidable.
+
+#### RULES (Non-Negotiable):
+
+1. **NEVER edit an existing `RUN` instruction if downstream layers are expensive.** Instead, add a NEW `RUN` layer below it for the new packages. Docker caches layer-by-layer; changing any instruction invalidates it AND everything after it.
+
+2. **Order layers by volatility:** Put the most stable, slowest-to-build layers FIRST (base OS, large framework installs like Wine). Put frequently-changing layers LAST (app code, config files, small dependency patches).
+
+3. **Separate "base dependencies" from "extra dependencies":** Structure Dockerfiles so that the core heavy install (e.g., WineHQ ~1GB) is in its own early, rarely-touched layer. Additional/optional packages go in a separate, later `RUN` block:
+   ```dockerfile
+   # LAYER 1: Heavy base (NEVER TOUCH after initial build)
+   RUN apt-get install -y wine-stable ...
+   
+   # LAYER 2: Extra/optional deps (safe to modify)
+   RUN apt-get update && apt-get install -y libvulkan1 dbus-x11 ...
+   ```
+
+4. **Before ANY Dockerfile edit, check:** "Will this invalidate a layer that takes >60s to rebuild?" If yes, find an alternative (new layer, multi-stage, build arg).
+
+5. **Use `--cache-from` or named builder caches** for images that are rebuilt frequently, especially on slow networks.
+
+6. **COPY/ADD instructions go as late as possible.** Files that change often (entrypoint scripts, configs) should be copied AFTER all package installs.
+
+7. **For UID/GID changes:** If the user needs a different UID, use `--build-arg` so it doesn't invalidate the layer:
+   ```dockerfile
+   ARG HOST_UID=1000
+   RUN useradd -m -u ${HOST_UID} -s /bin/bash appuser
+   ```
+
+8. **Test Dockerfile changes with `--dry-run` first** (or just `docker build` with `--no-cache` awareness) to understand which layers will be rebuilt before committing to a long build.
+
+- **Cost of violation**: 30+ minutes of wasted rebuild time on a slow network, user frustration, and zero functional progress. This is unacceptable for a 3-package addition that should have taken <30 seconds as a new layer.
+
+### [[14. reMarkable Desktop (Qt Installer Framework) & Wine/Xvfb Stability (2026-04-08)]]
+
+> **Context**: Attempting to install the reMarkable desktop app via Wine in a headless Docker container failed multiple times due to incorrect assumptions about the installer and virtual display management.
+
+#### LESSONS LEARNED:
+
+1. **Qt Installer Framework (IFW) vs NSIS**: 
+   - Most Windows installers use NSIS (flags like `/S` work). 
+   - reMarkable uses **Qt Installer Framework**. It completely ignores `/S` and launches a GUI wizard that crashes headless containers.
+   - Correct silent command: `install --accept-licenses --default-answer --confirm-command --root "C:\Path\To\Install"`.
+
+2. **Wine/Xvfb IPC Stability**:
+   - Wrapping every command in `xvfb-run -a` creates a *race condition*. `xvfb-run` kills the X server before `wineserver` is finished with IPC, leading to `fatal IO error 2` and corrupted Wine prefixes (missing `kernel32.dll`).
+   - **BETTER PATTERN**: Start one persistent background `Xvfb` process for the entire installation phase, then shut it down cleanly only after `wineserver -w`.
+
+3. **Disabling Mono/Gecko for Headless Init**:
+   - `wineboot --init` often hangs or times out (5-minute hard-coded Wine timeout) downloading Mono/Gecko over slow networks.
+   - For apps like reMarkable (C++ based), disable these during init with `export WINEDLLOVERRIDES="mscoree,mshtml="` to ensure a fast and predictable prefix creation.
+
+4. **Atomic Init Check**:
+   - Never rely on `[ -d drive_c ]` to check if a Wine prefix is ready. A failed/interrupted init leaves `drive_c` but no system DLLs. Use a "sentinel file" (e.g., `.initialized`) created only after successful setup.
+
+- **Success Result**: Atomic, stable installation of reMarkable in ~2 minutes with zero IPC bridge crashes.

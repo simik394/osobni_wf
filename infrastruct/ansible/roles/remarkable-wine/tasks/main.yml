@@ -1,0 +1,96 @@
+---
+- name: Ensure target state is valid
+  ansible.builtin.assert:
+    that: remarkable_state in ['present', 'absent']
+    fail_msg: "remarkable_state must be 'present' or 'absent'"
+
+# ==============================================================================
+# INSTALLATION / PRESENT
+# ==============================================================================
+- name: Install reMarkable Wine (Docker)
+  when: remarkable_state == 'present'
+  block:
+    - name: Create temporary build directory
+      ansible.builtin.file:
+        path: "/tmp/remarkable-wine-build"
+        state: directory
+        mode: '0755'
+
+    - name: Copy Dockerfile and entrypoint
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/tmp/remarkable-wine-build/{{ item }}"
+        mode: '0755'
+      loop:
+        - Dockerfile
+        - entrypoint.sh
+
+    - name: Build Docker image
+      ansible.builtin.shell:
+        cmd: "docker build -t remarkable-wine:latest ."
+        chdir: "/tmp/remarkable-wine-build"
+      register: docker_build_result
+      changed_when: "'Successfully built' in docker_build_result.stdout"
+
+    - name: Ensure persistent data directory exists
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/.local/share/remarkable-wine-data"
+        state: directory
+        mode: '0755'
+
+    - name: Ensure bin directory exists
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/bin"
+        state: directory
+        mode: '0755'
+
+    - name: Create wrapper script
+      ansible.builtin.template:
+        src: wrapper.sh.j2
+        dest: "{{ ansible_user_dir }}/bin/remarkable-wine"
+        mode: '0755'
+
+    - name: Create desktop entry
+      ansible.builtin.template:
+        src: remarkable-wine.desktop.j2
+        dest: "{{ ansible_user_dir }}/.local/share/applications/remarkable-wine.desktop"
+        mode: '0644'
+
+# ==============================================================================
+# UNINSTALLATION / ABSENT
+# ==============================================================================
+- name: Remove reMarkable Wine (Docker)
+  when: remarkable_state == 'absent'
+  block:
+    - name: Remove desktop entry
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/.local/share/applications/remarkable-wine.desktop"
+        state: absent
+
+    - name: Remove wrapper script
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/bin/remarkable-wine"
+        state: absent
+
+    - name: Stop and remove Docker container if running
+      community.docker.docker_container:
+        name: remarkable-wine-app
+        state: absent
+
+    - name: Remove Docker image
+      community.docker.docker_image:
+        name: remarkable-wine
+        tag: latest
+        state: absent
+        force: true
+
+    - name: Remove temporary build directory
+      ansible.builtin.file:
+        path: "/tmp/remarkable-wine-build"
+        state: absent
+
+    - name: Purge persistent data (Optional)
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/.local/share/remarkable-wine-data"
+        state: absent
+      when: remarkable_purge_data | bool
