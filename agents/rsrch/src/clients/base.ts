@@ -4,6 +4,7 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 chromium.use(StealthPlugin());
 import { NotebookLMClient } from './notebooklm';
 import { GeminiClient } from './gemini';
+import { PerplexityClient } from './perplexity';
 import { BrowserContext, Page, Browser } from 'playwright';
 import { config } from '../config';
 import { selectors } from '../selectors';
@@ -276,6 +277,13 @@ export class BrowserClient extends BaseClient {
         const page = await getTab(this.context as any, 'notebooklm' as any);
         this.leasedPages.push(page);
         return new NotebookLMClient(page);
+    }
+
+    async createPerplexityClient(): Promise<PerplexityClient> {
+        if (!this.context) throw new Error('Browser not initialized');
+        const page = await getTab(this.context as any, 'perplexity' as any);
+        this.leasedPages.push(page);
+        return new PerplexityClient(page);
     }
 
     /**

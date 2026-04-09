@@ -25,9 +25,9 @@ export async function submitMessageAction(
     }
 ): Promise<{ sessionId: string | null; success: boolean }> {
     const { resetSession, files = [], sources = [], model } = options;
-    const { page } = ctx;
+    const { page, log } = ctx;
 
-    if (deps.verbose) console.log(`[Gemini] Submitting message: "${message.substring(0, 50)}..."`);
+    if (deps.verbose) log(`Submitting message: "${message.substring(0, 50)}..."`);
 
     // 1. Prerequisites
     await deps.checkAuth();
@@ -54,7 +54,7 @@ export async function submitMessageAction(
     }
 
     if (!sendClicked) {
-        if (deps.verbose) console.log('[Gemini] Trigerring send via Enter key...');
+        if (deps.verbose) log('Trigerring send via Enter key...');
         await input.press('Enter');
     }
 

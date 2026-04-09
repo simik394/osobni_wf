@@ -43,7 +43,7 @@ export async function sendMessageAction(
     const { waitForResponse = true, resetSession, onProgress, files = [], sources = [], model } = options;
     const { page, log } = ctx;
 
-    console.log(`[Gemini] Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
+    log(`Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
 
     // Ensure we are logged in
     await deps.checkAuth();
@@ -98,7 +98,7 @@ export async function sendMessageAction(
         }
 
         if (!sendClicked) {
-            console.log('[Gemini] No Send button found, trying Enter key...');
+            log('No Send button found, trying Enter key...', 'warn');
             await input.press('Enter');
         }
 
@@ -108,7 +108,7 @@ export async function sendMessageAction(
             return null;
         }
 
-        console.log('[Gemini] Waiting for response...');
+        log('Waiting for response...');
         const maxWait = 90000;
         const pollInterval = 1000;
         let elapsed = 0;
@@ -127,7 +127,7 @@ export async function sendMessageAction(
                         if (await toggle.isVisible({ timeout: 100 }).catch(() => false)) {
                             const expanded = await toggle.getAttribute('aria-expanded') === 'true';
                             if (!expanded) {
-                                if (deps.verbose) console.log('[Gemini] Expanding thought/reasoning block...');
+                                if (deps.verbose) log('Expanding thought/reasoning block...');
                                 await toggle.click({ timeout: 500 }).catch(() => { });
                                 await page.waitForTimeout(200);
                             }
@@ -146,7 +146,7 @@ export async function sendMessageAction(
                 if (currentText.length > 0 && currentText.length === lastResponseLength) {
                     stableCount++;
                     if (stableCount >= 2) {
-                        console.log('[Gemini] Response stabilized');
+                        log('Response stabilized');
                         break;
                     }
                 } else {
@@ -161,7 +161,7 @@ export async function sendMessageAction(
         const richData = deps.getLatestResponseData ? await deps.getLatestResponseData() : null;
         const response = richData ? richData.markdown : await deps.getLatestResponse();
         
-        console.log(`[Gemini] Response received (${response?.length || 0} chars)`);
+        log(`Response received (${response?.length || 0} chars)`);
 
         // Track in GraphStore
         const sessionId = deps.getCurrentSessionId();
@@ -200,8 +200,8 @@ export async function sendMessageAction(
 
         return response;
 
-    } catch (e) {
-        console.error('[Gemini] Failed to send message:', e);
+    } catch (e: any) {
+        log(`Failed to send message: ${e.message}`, 'error');
         await deps.dumpState('send_message_fail');
 
         deps.telemetry.trackError(trace, e as Error);

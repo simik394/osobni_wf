@@ -30,7 +30,7 @@ export async function generateAudioOverviewAction(
 
     return enqueueTask(`Generate Audio: ${notebookTitle}`, async () => {
         if (getIsBusy()) {
-            console.warn('[NotebookLM] Client marked as busy inside queue. Nested call?');
+            log('[NotebookLM] Client marked as busy inside queue. Nested call?', 'warn');
         }
         setIsBusy(true);
         try {
@@ -85,24 +85,24 @@ export async function generateAudioOverviewAction(
 
                 if (newArtifacts.length === 1) {
                     const newTitle = newArtifacts[0];
-                    console.log(`[DEBUG] Identified new audio artifact: "${newTitle}"`);
+                    log(`Identified new audio artifact: "${newTitle}"`);
 
                     const uniqueName = `Audio ${new Date().toISOString().slice(0, 19).replace('T', ' ')}` + (customPrompt ? ' - Custom' : '');
                     await renameArtifact(newTitle, uniqueName);
 
                     return { success: true, artifactTitle: uniqueName };
                 } else if (newArtifacts.length > 1) {
-                    console.warn(`[DEBUG] Multiple new artifacts found: ${newArtifacts.join(', ')}. Renaming first one.`);
+                    log(`Multiple new artifacts found: ${newArtifacts.join(', ')}. Renaming first one.`, 'warn');
                     return { success: true, artifactTitle: newArtifacts[0] };
                 } else {
-                    console.warn('[DEBUG] No new artifact title found after generation.');
+                    log('No new artifact title found after generation.', 'warn');
                 }
             }
 
             return { success: true };
 
         } catch (e: any) {
-            console.error('[NotebookLM] Error generating audio overview:', e.message);
+            log(`[NotebookLM] Error generating audio overview: ${e.message}`, 'error');
             throw e;
         } finally {
             setIsBusy(false);

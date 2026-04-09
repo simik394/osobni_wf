@@ -2,7 +2,7 @@
 
 The `rsrch` agent is a powerful CLI for automated research using Perplexity, Gemini, and NotebookLM.
 
-**🚀 [Full Command Reference (docs/CLI.md)](./docs/CLI.md)**
+**🚀 [Full Command Reference (docs/CLI_REFERENCE.qmd)](./docs/CLI_REFERENCE.qmd)**
 
 ## Setup
 

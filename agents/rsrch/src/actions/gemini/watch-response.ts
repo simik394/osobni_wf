@@ -22,9 +22,9 @@ export async function watchResponseAction(
     }
 ): Promise<{ success: boolean, markdown?: string }> {
     const { maxWaitMs = 120000, pollIntervalMs = 2000, sessionId } = options;
-    const { page } = ctx;
+    const { page, log } = ctx;
 
-    if (deps.verbose) console.log(`[Gemini] Watcher started for session: ${sessionId || 'current'}`);
+    if (deps.verbose) log(`Watcher started for session: ${sessionId || 'current'}`);
 
     let elapsed = 0;
     let lastResponseLength = 0;
@@ -53,7 +53,7 @@ export async function watchResponseAction(
             if (currentText.length > 0 && currentText.length === lastResponseLength) {
                 stableCount++;
                 if (stableCount >= 2) {
-                    if (deps.verbose) console.log('[Gemini] Watcher: Response stabilized');
+                    if (deps.verbose) log('Watcher: Response stabilized');
                     break;
                 }
             } else {
@@ -67,7 +67,7 @@ export async function watchResponseAction(
     }
 
     // 2. High-Fidelity Extraction
-    if (deps.verbose) console.log('[Gemini] Watcher: Triggering extraction...');
+    if (deps.verbose) log('Watcher: Triggering extraction...');
     const richData = await deps.getLatestResponseData();
     if (!richData) {
         return { success: false };

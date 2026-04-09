@@ -15,12 +15,16 @@ export const queryCommand = new Command('query')
     .action(async (query, opts) => {
         const { profileId, cdpEndpoint } = cliContext.get();
         if (query) {
-            const client = new BrowserClient({ profileId, cdpEndpoint });
-            await client.init({ keepAlive: opts.keepAlive, profileId, cdpEndpoint });
+            const browser = new BrowserClient({ profileId, cdpEndpoint });
+            await browser.init({ keepAlive: opts.keepAlive, profileId, cdpEndpoint });
             try {
-                await client.query(query, opts);
+                const client = await browser.createPerplexityClient();
+                const result = await client.query(query);
+                console.log('\n--- Answer ---');
+                console.log(result.answer || 'No answer found.');
+                console.log('\nSource URL:', result.url);
             } finally {
-                await client.close();
+                await browser.close();
             }
         } else {
             // Legacy mode (queries.json)
@@ -66,19 +70,22 @@ export const batchCommand = new Command('batch')
 
         console.log(`Found ${queries.length} queries in batch file.`);
 
-        const client = new BrowserClient({ profileId, cdpEndpoint });
-        await client.init({ profileId, cdpEndpoint });
+        const browser = new BrowserClient({ profileId, cdpEndpoint });
+        await browser.init({ profileId, cdpEndpoint });
 
         try {
+            const client = await browser.createPerplexityClient();
             for (let i = 0; i < queries.length; i++) {
                 const q = queries[i];
                 console.log(`\n[Batch ${i + 1}/${queries.length}] Processing: "${q}"`);
-                await client.query(q, { sessionName: 'new-cli-session' });
+                const result = await client.query(q);
+                console.log(`Answer length: ${result.answer?.length || 0}`);
             }
         } catch (error) {
             console.error('Batch processing failed:', error);
         } finally {
-            console.log('\nBatch complete. Press Ctrl+C to exit and close browser.');
+            await browser.close();
+            console.log('\nBatch complete. Browser closed.');
         }
     });
 

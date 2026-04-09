@@ -403,3 +403,4 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - **The `info` Command**: For "black-box" autonomous tools, providing a summary of data managed (unprocessed vs. archived, disk usage, active blocking apps) is critical for user trust and transparent status monitoring.
 
 - **Outcome**: Successfully cleared a backlog of 1000+ folders into 2.3GB of highly compressed archived video with full metadata parity and robust privacy blocking.
+- [2026-03-28] Lesson Learned: When working with remote cloud instances (like halvarm), if the local Docker daemon has HTTP/HTTPS mismatch with the remote registry, streaming the image via SSH is slow (2GB/link). Instead, use tools like rsync to sync source files to the remote server and run the heavy `docker build` natively on the cloud instance. Avoid pushing rapid unverified WIP iterations through `git push` to keep commit history clean, but once verified, immediately formally commit and push.
