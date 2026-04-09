@@ -13,6 +13,8 @@ on:
 jobs:
   test-jules-go:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,10 +28,11 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
 
-      - name: Start Redis
-        uses: supercharge/redis-github-action@1.8.0
-        with:
-          redis-version: 7
+      - name: Start FalkorDB
+        run: |
+          docker run -d --name falkordb -p 6379:6379 falkordb/falkordb:latest
+          # Wait for it to be ready
+          sleep 3
 
       - name: Run Go tests
         run: |
@@ -45,6 +48,8 @@ jobs:
 
   build-images:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     needs: test-jules-go
     strategy:
       matrix:
@@ -95,6 +100,8 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     needs: build-images
     if: github.ref == 'refs/heads/main'
     steps:
