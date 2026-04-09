@@ -27,7 +27,7 @@ echo "GCP Metadata Ping: $(curl -s -f -H "Metadata-Flavor: Google" --connect-tim
 echo "" >> $REPORT
 
 echo "## Ingress Port Testing (Reverse shell feasibility)" >> $REPORT
-echo "Can we bind port 80 as root? $(sudo python3 -m http.server 80 & pid=$!; sleep 1; kill -0 $pid 2>/dev/null && echo 'YES successfully bound port 80' || echo 'FAILED'; kill $pid 2>/dev/null)" >> $REPORT
+echo "Can we bind port 80 as root? $(sudo timeout 1 python3 -m http.server 80 >/dev/null 2>&1; if [ $? -eq 124 ]; then echo 'YES successfully bound port 80'; else echo 'FAILED'; fi)" >> $REPORT
 echo "" >> $REPORT
 
 cat $REPORT
