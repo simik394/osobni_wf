@@ -17,6 +17,7 @@
 !package-lock.json
 !agents/shared/**
 !agents/rsrch/**
+!agents/angrav/**
 
 # Even within included agents, ignore some things
 agents/shared/node_modules/
@@ -25,3 +26,5 @@ agents/rsrch/node_modules/
 agents/rsrch/dist/
 agents/rsrch/data/
 agents/rsrch/playwright/
+agents/angrav/node_modules/
+agents/angrav/dist/
