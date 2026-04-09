@@ -256,7 +256,7 @@ export class ArtifactRegistry {
     }
 }
 
-// Singleton instance for shared use
+// Sidecar/Principal instance for shared use
 let registryInstance: ArtifactRegistry | null = null;
 
 export function getRegistry(): ArtifactRegistry {

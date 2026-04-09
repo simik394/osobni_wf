@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  chromium:
+  rsrch-browser:
     build: ./browser
     ports:
       - "5902:5900" # VNC (changed from 5900 to avoid conflict with local x11vnc)
@@ -14,15 +14,15 @@ services:
       - USER_DATA_DIR=/app/user-data
     restart: unless-stopped
 
-  rsrch:
+  rsrch-server:
     build:
       context: ../../
       dockerfile: rsrch/deploy/Dockerfile
     image: rsrch:latest
-    container_name: rsrch
+    container_name: rsrch-server
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
-      # - "5905:5900" # VNC disabled to avoid confusion. Use chromium container on 5902 for browser view.
+      # - "5905:5900" # VNC disabled to avoid confusion. Use rsrch-browser container on 5902 for browser view.
     volumes:
       - ../data:/app/data
       - ../src:/app/src
@@ -32,15 +32,15 @@ services:
     environment:
       - PORT=${PORT:-3000}
       - WINDMILL_TOKEN=${WINDMILL_TOKEN}
-      # - BROWSER_CDP_ENDPOINT=http://chromium:9223 # Disabled for Local Mode
-      - BROWSER_CDP_ENDPOINT=http://chromium:9223
+      # - BROWSER_CDP_ENDPOINT=http://rsrch-browser:9223 # Disabled for Local Mode
+      - BROWSER_CDP_ENDPOINT=http://rsrch-browser:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
       - PROFILES_DIR=/app/profiles
       - FALKORDB_HOST=falkordb
       # - DISPLAY=:99
     depends_on:
-      - chromium
+      - rsrch-browser
       - falkordb
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -77,7 +77,7 @@ const mergedConfig = {
   vncPort: process.env.RSRCH_VNC_PORT ? parseInt(process.env.RSRCH_VNC_PORT) : localConfig.vncPort,
   chromiumPort: process.env.RSRCH_CHROMIUM_PORT ? parseInt(process.env.RSRCH_CHROMIUM_PORT) : localConfig.chromiumPort,
   browserWsEndpoint: process.env.BROWSER_WS_ENDPOINT || localConfig.browserWsEndpoint,
-  browserCdpEndpoint: process.env.BROWSER_CDP_ENDPOINT || localConfig.browserCdpEndpoint,
+  browserCdpEndpoint: process.env.BROWSER_CDP_ENDPOINT || localConfig.browserCdpEndpoint || 'http://rsrch-browser:9223',
   remoteDebuggingPort: process.env.REMOTE_DEBUGGING_PORT || localConfig.remoteDebuggingPort,
   auth: {
     userDataDir: process.env.PERPLEXITY_USER_DATA_DIR || localConfig.auth?.userDataDir,

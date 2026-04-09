@@ -18,7 +18,7 @@
 └────────────────────────────────────────────────────────────────┘
                          ↓
 ┌────────────────────────────────────────────────────────────────┐
-│  BROWSER SINGLETON (Parallel Capture)                          │
+│  BROWSER Sidecar/Principal (Parallel Capture)                          │
 │  MAX_TABS = 5                                                  │
 │                                                                │
 │  Tab1: [MutationObserver waiting for LLM response...]          │
@@ -264,7 +264,7 @@ cdpEndpoint = `http://${result.address}:${url.port}`;
 ### 6. Concurrency & Scaling Architecture (Hybrid Model)
 
 > [!IMPORTANT]
-> **Understanding the "Why":** We rely on a singleton browser container to maintain persistent authentication state (avoiding bot detection), but we must scale to handle 20+ concurrent sessions.
+> **Understanding the "Why":** We rely on a Sidecar/Principal browser container to maintain persistent authentication state (avoiding bot detection), but we must scale to handle 20+ concurrent sessions.
 
 **The Solution: Hybrid Concurrency**
 
@@ -274,7 +274,7 @@ cdpEndpoint = `http://${result.address}:${url.port}`;
     -   **Behavior:** "Submit & Watch" pattern.
     -   **Scale:** Unlimited (constrained only by cluster resources).
 
-2.  **Vertical Scaling (Browser Singleton):**
+2.  **Vertical Scaling (Browser Sidecar/Principal):**
     -   **Role:** Stateful execution (rendering, clicking).
     -   **Mechanism:** **TAB POOLING** within the single browser instance.
     -   **Scale:** Limited by RAM (`MAX_TABS = 5` by default).

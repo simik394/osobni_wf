@@ -116,13 +116,13 @@ Commit `58dacf4` - Search tag: `[AUTH-WORKING-2026-01-18]`
 2.  **Private Property Access**: When refactoring classes with `private` members (like `page` in `GeminiClient`), ensure public API methods (like `goto`, `wait`) are exposed for consumers (CLI/Scripts) to avoid breaking external code that previously relied on loose access.
 3.  **Template Literal Syntax**: Be extremely careful with template literals in TypeScript. A single astray backtick in a file can cause cascading syntax errors that are difficult to pinpoint, often manifesting as "Unexpected token" errors far from the source.
 
-## 2026-01-24: Browser Singleton Recovery & Loop Optimization
+## 2026-01-24: Browser Sidecar/Principal Recovery & Loop Optimization
 
 1.  **Playwright Version Parity**: Compiled code caches binary paths (e.g., `/ms-playwright/chromium-1208` for `v1.58.0`). If the Docker base image version doesn't EXACTLY match the library version in `package.json`, browser launch will silently hang or fail.
 2.  **Self-Healing Startup**: Always purge `SingletonLock` and `LOCK` files in entrypoint scripts for containerized Chromium with persistent profiles. Stale locks from previous container crashes are a primary cause of "Initialization Hangs".
 3.  **Turbo Dev Loop (Build Local, Deploy Dist)**: For monorepos, building TypeScript locally and syncing `dist/` folders to a "Lean" Docker image is 10x faster and more reliable than remote container builds.
-4.  **Singleton Architecture**: Combining API and Browser into a single image (exposed via Port 3055 and CDP 9223) is significantly more stable than sidecar network delegation for orchestration.
+4.  **Sidecar/Principal Architecture**: Combining API and Browser into a single image (exposed via Port 3055 and CDP 9223) is significantly more stable than sidecar network delegation for orchestration.
 
-**References**: See [Browser Singleton Autopsy (2026-01-24)](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/2026-01-24_singleton_recovery_autopsy.md) for full details.
+**References**: See [Browser Sidecar/Principal Autopsy (2026-01-24)](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/2026-01-24_sidecar_principal_recovery_autopsy.md) for full details.
 
 

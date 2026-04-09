@@ -1,7 +1,7 @@
-# Technical Autopsy: Browser Singleton Recovery (2026-01-24)
+# Technical Autopsy: Browser Sidecar/Principal Recovery (2026-01-24)
 
 ## Executive Summary
-The Browser Singleton (API + VNC + Chromium in one container) was broken and crash-looping. The recovery process revealed several layers of architectural fragility, culminating in a stable, optimized "Turbo" deployment strategy and a unified execution environment.
+The Browser Sidecar/Principal (API + VNC + Chromium in one container) was broken and crash-looping. The recovery process revealed several layers of architectural fragility, culminating in a stable, optimized "Turbo" deployment strategy and a unified execution environment.
 
 ## 1. The "Silent Hang" Mystery
 ### **Experience**
@@ -43,10 +43,10 @@ Remote builds were slow (> 5 minutes), prone to RAM exhaustion on `halvarm`, and
 3.  **Lean Dockerfile**: The unified image now just copies binaries and package metadata. No compilation occurs in the container.
 4.  **Result**: **~45 second total deployment time.**
 
-## 5. Architectural Shift: The Singleton
+## 5. Architectural Shift: The Sidecar/Principal
 Moving away from sidecars:
 - **OLD**: API Container + Chromium Sidecar (network dependency issues).
-- **NEW**: **The Singleton Image.** API, VNC, and Chromium share the same PID namespace and filesystem. This eliminates "Host unreachable" errors and simplified Windmill orchestration (Port 9223 is ALWAYS there if the API is there).
+- **NEW**: **The Sidecar/Principal Image.** API, VNC, and Chromium share the same PID namespace and filesystem. This eliminates "Host unreachable" errors and simplified Windmill orchestration (Port 9223 is ALWAYS there if the API is there).
 
 ---
 **Status**: 🟢 RESTORED & STABLE

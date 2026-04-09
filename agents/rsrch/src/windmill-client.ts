@@ -1,3 +1,4 @@
+import { DEFAULTS } from '@agents/shared';
 /**
  * Windmill Client - Trigger Windmill jobs from rsrch server
  *
@@ -404,7 +405,7 @@ export class WindmillClient {
     }
 }
 
-// Singleton instance
+// Sidecar/Principal instance
 let windmillClientInstance: WindmillClient | null = null;
 
 export function getWindmillClient(): WindmillClient {
