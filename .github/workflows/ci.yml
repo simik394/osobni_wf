@@ -79,8 +79,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: agents
-          file: agents/${{ matrix.agent }}/Dockerfile
+          context: .
+          file: agents/${{ matrix.agent }}/${{ matrix.agent == 'rsrch' && 'deploy/Dockerfile' || 'Dockerfile' }}
           platforms: linux/amd64,linux/arm64
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
