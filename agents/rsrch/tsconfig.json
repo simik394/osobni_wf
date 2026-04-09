@@ -1,15 +1,16 @@
 {
     "compilerOptions": {
-        "target": "es2018",
+        "target": "es2022",
         "module": "commonjs",
         "lib": [
-            "es2018",
+            "es2022",
             "dom"
         ],
         "outDir": "./dist",
         "rootDir": "./src",
         "strict": true,
         "strictNullChecks": true,
+        "noEmitOnError": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
