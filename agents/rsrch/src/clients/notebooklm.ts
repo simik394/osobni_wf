@@ -13,6 +13,7 @@ export class NotebookLMClient {
     public page: Page;
     private ctx: UniversalContext;
     private deps: NotebookLMActionDeps & { humanDelay: (ms: number) => Promise<void> };
+    private _isBusy: boolean = false;
 
     constructor(page: Page) {
         this.page = page;
@@ -27,8 +28,8 @@ export class NotebookLMClient {
         this.deps = {
             selectors,
             humanDelay: (ms: number) => page.waitForTimeout(ms),
-            setIsBusy: (busy: boolean) => { (this as any)._isBusy = busy; },
-            getIsBusy: () => !!(this as any)._isBusy,
+            setIsBusy: (busy: boolean) => { this._isBusy = busy; },
+            getIsBusy: () => this._isBusy,
             enqueueTask: async <T>(name: string, task: () => Promise<T>) => {
                 this.ctx.log(`[Queue] Running task: ${name}`);
                 return task();
@@ -59,7 +60,7 @@ export class NotebookLMClient {
 
     /** Returns if the client is currently performing a long-running action */
     get isBusy(): boolean {
-        return !!(this as any)._isBusy;
+        return this._isBusy;
     }
 
     /** Helper for waiting outside actions */

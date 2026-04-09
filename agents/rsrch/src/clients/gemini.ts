@@ -4,8 +4,8 @@ import { config } from '../config';
 import { selectors } from '../selectors';
 import { getRsrchTelemetry } from '@agents/shared';
 import { getGraphStore } from '../core/graph-store';
-import { UniversalContext, GeminiActionDeps } from '../actions/types';
-import * as actions from '../actions';
+import { GeminiActionDeps, UniversalContext } from '../actions/types';
+import * as actions from '../actions/gemini';
 
 const telemetry = getRsrchTelemetry();
 
@@ -35,23 +35,23 @@ export class GeminiClient extends EventEmitter {
             verbose: this.verbose,
             getGraphStore: () => getGraphStore(),
             checkAuth: async () => { try { await this.ensureSidebar(); return true; } catch(e) { return false; } },
-            getCurrentSessionId: () => Promise.resolve(this.getCurrentSessionIdSync()),
-            getLatestResponseData: async () => this.extractResponse(),
+            getCurrentSessionId: () => this.getCurrentSessionIdSync(),
+            getLatestResponseData: async () => await this.extractResponse(),
             getLatestResponse: async () => (await this.extractResponse())?.text || null,
             injectText: async (text: string) => { await this.page.fill(selectors.gemini.chat.input, text); },
             injectSources: async (sources: any[]) => { this.log('injectSources not implemented in bridge (legacy)', 'warn'); },
-            // @ts-ignore
-            setModel: async (model: string) => { await actions.setModelAction(this.ctx, this.deps, model); return true; },
-            resetToNewChat: async () => { await actions.resetToNewChatAction(this.ctx, this.deps); },
-            // @ts-ignore
-            uploadFiles: async (files: string[]) => { await actions.uploadFilesAction(this.ctx, this.deps, files); return true; },
+            
+            setModel: async (model: string) => { await actions.setModelAction(this.ctx, this.deps as GeminiActionDeps, model); return true; },
+            resetToNewChat: async () => { await actions.resetToNewChatAction(this.ctx, this.deps as GeminiActionDeps); },
+            
+            uploadFiles: async (files: string[]) => { await actions.uploadFilesAction(this.ctx, this.deps as GeminiActionDeps, files); return true; },
             recycle: async () => {
                 const { BrowserClient } = await import('./base');
                 const b = new BrowserClient();
                 await b.init({ profileId: 'default' });
-                // @ts-ignore
-                if (b.recycleTabPage) await b.recycleTabPage('gemini');
-                await b.release();
+                
+                if ((b as any).recycleTabPage) await (b as any).recycleTabPage('gemini');
+                if (b.release) await b.release();
             },
             dumpState: async (name: string) => {
                 const fs = await import('fs');
@@ -80,41 +80,41 @@ export class GeminiClient extends EventEmitter {
     // --- Core Interaction Bridge ---
 
     async sendMessage(message: string, options: any = {}) {
-        // @ts-ignore
-        return actions.sendMessageAction(this.ctx, message, options, this.deps);
+        
+        return actions.sendMessageAction(this.ctx, message, options, this.deps as GeminiActionDeps);
     }
 
     async submitMessage(message: string, options: any = {}) {
-        // @ts-ignore
-        return actions.submitMessageAction(this.ctx, message, options, this.deps);
+        
+        return actions.submitMessageAction(this.ctx, message, options, this.deps as GeminiActionDeps);
     }
 
     async watchResponse(options: any = {}) {
-        // @ts-ignore
-        return actions.watchResponseAction(this.ctx, options, this.deps);
+        
+        return actions.watchResponseAction(this.ctx, options, this.deps as GeminiActionDeps);
     }
 
     async extractResponse(messageSelector?: string) {
-        // @ts-ignore
-        return actions.extractResponseAction(this.ctx, this.deps, messageSelector);
+        
+        return actions.extractResponseAction(this.ctx, this.deps as GeminiActionDeps, messageSelector);
     }
 
     // --- Session & State ---
 
     async resetToNewChat() {
-        return actions.resetToNewChatAction(this.ctx, this.deps);
+        return actions.resetToNewChatAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
     async listSessions(options: { limit?: number, offset?: number } = {}) {
-        return actions.listSessionsAction(this.ctx, this.deps, options);
+        return actions.listSessionsAction(this.ctx, this.deps as GeminiActionDeps, options);
     }
 
-    async setModel(modelName: string) {
-        return actions.setModelAction(this.ctx, this.deps, modelName);
+    async setModel(model: string) {
+        return actions.setModelAction(this.ctx, this.deps as GeminiActionDeps, model);
     }
 
     async ensureSidebar() {
-        return actions.ensureSidebarAction(this.ctx, this.deps);
+        return actions.ensureSidebarAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
     async init(sessionId?: string) {
@@ -180,14 +180,14 @@ export class GeminiClient extends EventEmitter {
 
     // --- File & Export ---
 
-    async uploadFiles(filePaths: string[]) {
-        // @ts-ignore
-        return actions.uploadFilesAction(this.ctx, this.deps, filePaths);
+    async uploadFiles(files: string[]) {
+        
+        return actions.uploadFilesAction(this.ctx, this.deps as GeminiActionDeps, files);
     }
 
     async exportToGoogleDocs() {
-        // @ts-ignore
-        return actions.exportToGoogleDocsAction(this.ctx, this.deps);
+        
+        return actions.exportToGoogleDocsAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
     async exportCurrentToGoogleDocs() {

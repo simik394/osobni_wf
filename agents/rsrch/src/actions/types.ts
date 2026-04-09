@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { Page } from 'playwright';
 import { GeminiClient } from '../clients/gemini';
 import { config } from '../config';
@@ -27,19 +27,20 @@ export interface ActionDeps {
  * Gemini-specific action dependencies.
  */
 export type GeminiActionDeps = ActionDeps & {
-    checkAuth?: () => Promise<boolean>;
-    setModel?: (model: string) => Promise<void>;
-    uploadFiles?: (files: string[]) => Promise<string[]>;
-    injectSources?: (sources: any[]) => Promise<void>;
-    injectText?: (text: string) => Promise<void>;
-    resetToNewChat?: () => Promise<void>;
-    recycle?: () => Promise<void>;
-    telemetry?: any;
-    verbose?: boolean;
-    getGraphStore?: () => any;
-    getLatestResponseData?: () => Promise<any>;
-    getCurrentSessionId?: () => Promise<string | null>;
-    dumpState?: (prefix: string) => Promise<any>;
+    checkAuth: () => Promise<boolean>;
+    setModel: (model: string) => Promise<boolean>;
+    uploadFiles: (files: string[]) => Promise<boolean>;
+    injectSources: (sources: any[]) => Promise<void>;
+    injectText: (text: string) => Promise<void>;
+    resetToNewChat: () => Promise<void>;
+    recycle: () => Promise<void>;
+    telemetry: any;
+    verbose: boolean;
+    getGraphStore: () => any;
+    getLatestResponse: () => Promise<string | null>;
+    getLatestResponseData: () => Promise<{ text: string, markdown: string, sources: any[], thoughts?: string } | null>;
+    getCurrentSessionId: () => string | null;
+    dumpState: (prefix: string) => Promise<any>;
 };
 
 /**

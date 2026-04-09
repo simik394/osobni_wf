@@ -24,7 +24,7 @@ export async function sendMessageAction(
     message: string,
     options: SendMessageOptions = {},
     deps: {
-        checkAuth: () => Promise<void>;
+        checkAuth: () => Promise<boolean>;
         setModel: (model: string) => Promise<boolean>;
         uploadFiles: (files: string[]) => Promise<boolean>;
         injectSources: (sources: Source[]) => Promise<void>;

@@ -14,8 +14,7 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "moduleResolution": "node",
-        "noEmitOnError": false
+        "moduleResolution": "node"
     },
     "include": [
         "src/**/*.ts"
