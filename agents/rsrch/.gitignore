@@ -49,3 +49,4 @@ report.html
 deb-pkg/
 *.deb
 nohup.out
+server.log
