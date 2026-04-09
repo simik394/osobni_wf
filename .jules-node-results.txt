@@ -1,0 +1,3 @@
+TCP server: YES, port 36399
+Outbound HTTPS: 200
+Self-connect: YES - pong
