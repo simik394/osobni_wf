@@ -8,7 +8,9 @@ import { getGraphStore } from './core/graph-store';
 import { discordService } from './services/notification';
 
 // Import Modular Routers
-import { createNotebookRouter, createNotebookLMRouter, createWebhookRouter } from './routes/notebook-router';
+import { createNotebookRouter } from './routes/notebook-router';
+import { createNotebookLMRouter } from './routes/notebooklm-router';
+import { createWebhookRouter } from './routes/webhook-router';
 import { createResearchRouter } from './routes/research-router';
 import { createWorkflowRouter } from './routes/workflow-router';
 import { createChatRouter, createGeminiRouter } from './routes/chat-router';
@@ -24,7 +26,7 @@ app.use(express.json({ limit: '10mb' }));
 // Serve static dashboard files
 app.use(express.static(path.join(__dirname, '../_site')));
 
-// Initial State / Singletons
+// Initial State / Sidecar & Principal Instances
 const client = new BrowserClient({ 
     verbose: true,
     profileId: config.auth.profileId

@@ -1693,7 +1693,7 @@ MERGE(d) - [: HAS_AUDIO] -> (au)
     }
 }
 
-// Singleton instance
+// Principal instance
 let graphStoreInstance: GraphStore | null = null;
 
 export function getGraphStore(): GraphStore {

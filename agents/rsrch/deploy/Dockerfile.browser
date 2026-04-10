@@ -1,0 +1,39 @@
+# rsrch browser sidecar
+FROM mcr.microsoft.com/playwright:v1.58.0-jammy
+
+# Install VNC and Window Manager
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    x11vnc \
+    fluxbox \
+    xterm \
+    socat \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy package metadata
+COPY package.json .
+COPY agents/shared/package.json agents/shared/
+COPY agents/rsrch/package.json agents/rsrch/
+
+# Install only production dependencies
+RUN npm install --omit=dev
+
+# Copy build artifacts needed for launch-browser & related scripts
+COPY agents/shared/dist agents/shared/dist
+COPY agents/rsrch/dist agents/rsrch/dist
+COPY agents/rsrch/deploy agents/rsrch/deploy
+
+# Setup entrypoint
+RUN chmod +x /app/agents/rsrch/deploy/start-vnc.sh
+
+WORKDIR /app/agents/rsrch
+EXPOSE 5900 9223
+
+# We will use start-vnc.sh but we'll modify it slightly to not start the server
+# OR we pass a flag to it
+CMD ["/app/agents/rsrch/deploy/start-vnc.sh", "--browser-only"]

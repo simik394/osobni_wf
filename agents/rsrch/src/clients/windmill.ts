@@ -450,7 +450,7 @@ export class WindmillClient {
     }
 }
 
-// Singleton instance
+// Principal instance
 let windmillClientInstance: WindmillClient | null = null;
 
 export function getWindmillClient(): WindmillClient {

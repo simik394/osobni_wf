@@ -11,7 +11,7 @@ This is a living record of technical challenges, architectural discoveries, and 
 - **Local CDP**: Set `USE_WINDMILL=false` and `BROWSER_CDP_ENDPOINT=http://localhost:9222` (or 9225) for rapid local iteration.
 
 ### 🏗️ Architecture & Execution
-- **Singleton Mandate**: API, VNC, and Chromium MUST share the same container to eliminate networking overhead and container desync. 
+- **Sidecar/Principal Mandate**: The Principal (server) and Sidecar (browser) work together but remain decoupled to avoid container desync. 
 - **TabPool Compliance**: Use `BrowserClient.getTabPage()` to lease shared tabs. Never use `page.goto()` for top-level navigation in shared contexts; use `client.recycle()` instead.
 - **Modular Actions**: Logic MUST be stateless functions in `src/actions/`. Clients are thin wrappers for orchestration.
 - **UniversalContext**: Always use `ctx.log` and `ctx.config` instead of `console.log` or direct imports.
@@ -28,9 +28,9 @@ This is a living record of technical challenges, architectural discoveries, and 
 
 ### [[15. Browser Efficiency & Resource Management]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/DEVELOPMENT.md#10-browser-efficiency--resource-management)
 - **Lease & Release**: Use `BrowserClient.getTabPage()` and call `release()` in a `finally` block to prevent leaks.
-- **UI-Based Recycling**: Prefer clicking home icons/logos over `page.goto()` to preserve cache and session stability. This is the primary way to clear state between runs in a singleton container.
+- **UI-Based Recycling**: Prefer clicking home icons/logos over `page.goto()` to preserve cache and session stability. This is the primary way to clear state between runs in a sidecar architecture.
 - **CDP Handshake**: Swapping `ws://` to `http://` is mandatory for `/json/version` discovery when connecting over CDP.
-- **Singleton Observability**: Use `ctx.log` for all action logging. Prefixing and verbosity are controlled by the client wrapper, ensuring logs work across CLI and Windmill.
+- **Sidecar/Principal Observability**: Use `ctx.log` for all action logging. Prefixing and verbosity are controlled by the client wrapper, ensuring logs work across CLI and Windmill.
 
 ### [[17. Systematic Refactoring & Type Safety]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/lessons_learned.md)
 - **Monolith Decomposition**: Breaking large orchestrators into specialized routers/actions improves testability.
@@ -96,12 +96,12 @@ I spent significant time debugging and "fixing" local CDP/VNC connections for th
 
 ---
 
-### [[3. Browser Singleton Recovery Autopsy (2026-01-24)]](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/docs/.archive/2026-01-24_singleton_recovery_autopsy.md)
+### [[3. Browser Sidecar/Principal Recovery Autopsy (2026-01-24)]]
 
-# Technical Autopsy: Browser Singleton Recovery (2026-01-24)
+# Technical Autopsy: Browser Sidecar/Principal Recovery (2026-01-24)
 
 ## Executive Summary
-The Browser Singleton (API + VNC + Chromium in one container) was broken and crash-looping. The recovery process revealed several layers of architectural fragility, culminating in a stable, optimized "Turbo" deployment strategy and a unified execution environment.
+The Browser Sidecar/Principal setup (Server + Chromium decoupled) was stabilized. The recovery process revealed several layers of architectural fragility, culminating in a stable, optimized "Turbo" deployment strategy and a unified execution environment.
 
 ## 1. The "Silent Hang" Mystery
 ### **Experience**
@@ -143,10 +143,10 @@ Remote builds were slow (> 5 minutes), prone to RAM exhaustion on `halvarm`, and
 3.  **Lean Dockerfile**: The unified image now just copies binaries and package metadata. No compilation occurs in the container.
 4.  **Result**: **~45 second total deployment time.**
 
-## 5. Architectural Shift: The Singleton
-Moving away from sidecars:
+## 5. Architectural Shift: The Sidecar/Principal
+Moving away from monoliths:
 - **OLD**: API Container + Chromium Sidecar (network dependency issues).
-- **NEW**: **The Singleton Image.** API, VNC, and Chromium share the same PID namespace and filesystem. This eliminates "Host unreachable" errors and simplified Windmill orchestration (Port 9223 is ALWAYS there if the API is there).
+- **NEW**: **The Sidecar/Principal Pattern.** API and Chromium work in tandem via the CDP protocol. This eliminates "Host unreachable" errors and simplifies Windmill orchestration (Port 9223 is ALWAYS there if the API is there).
 
 ---
 **Status**: 🟢 RESTORED & STABLE
@@ -404,3 +404,21 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 
 - **Outcome**: Successfully cleared a backlog of 1000+ folders into 2.3GB of highly compressed archived video with full metadata parity and robust privacy blocking.
 - [2026-03-28] Lesson Learned: When working with remote cloud instances (like halvarm), if the local Docker daemon has HTTP/HTTPS mismatch with the remote registry, streaming the image via SSH is slow (2GB/link). Instead, use tools like rsync to sync source files to the remote server and run the heavy `docker build` natively on the cloud instance. Avoid pushing rapid unverified WIP iterations through `git push` to keep commit history clean, but once verified, immediately formally commit and push.
+
+### [[Jules Behavior: Idempotence & Git Synchronization (2026-04-09)]]
+**Observation**: When an external actor (e.g., a human or local agent) completes a task assigned to a Jules session directly on the target branch while the session is still active evaluating the plan.
+**Result**: Jules fetches the updated git tree before applying changes. If it detects that the codebase already satisfies its operational goals (e.g., files are already deleted, dependencies already removed), the agent evaluates the diff as `0` and simply transitions the session to `COMPLETED` cleanly without creating a redundant Pull Request.
+**Lesson Learned**: Jules possesses an inherently idempotent reconciliation loop. It does strictly evaluate its goals against the *current remote state* immediately prior to execution, preventing duplicate PRs or conflict errors if state was amended concurrently outside of its purview. We can safely mutate branches while Jules is working on them without breaking the agent, as it behaves gracefully like a re-evaluating state machine.
+
+---
+
+### [[19. The "Jules Rescue" (2026-04-10)]]
+
+**Problem**: Automated agents (like Jules) can sometimes over-refactor, flattening modular directory structures into "God Files" or monoliths in an attempt to simplify infrastructure.
+**Symptom**: `src/routes/` logic merged into `server.ts`, and directory structures flattened, breaking project maintainability and modularity principles.
+**Solution: The Principal/Sidecar Split.** 
+- **Decouple Logic from Browser**: By splitting `rsrch-server` (Principal) and `rsrch-browser` (Sidecar), we force a clean boundary. The server runs on a lean `node:20-slim` image, ensuring it *cannot* run browser logic directly and must use the CDP protocol.
+- **Enforced Modularity**: Restored the modular directory structure (`actions/`, `routes/`, `clients/`) and split large route files back into specialized handlers (e.g., `notebook-router` vs `notebooklm-router`).
+- **Terminology Purge**: Strictly enforce **Principal/Sidecar** terminology. The "Singleton" term is discarded as it misleadingly suggests a monolithic approach that led to the destructive refactoring.
+
+**Key Rule for Future Agents**: RSRCH MUST remain modular. Never flatten routes or actions. The infrastructure is a distributed web of services (Principal/Sidecar), not a single monolithic container.

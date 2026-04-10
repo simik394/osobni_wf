@@ -22,7 +22,7 @@
 └────────────────────────────────────────────────────────────────┘
                          ↓
 ┌────────────────────────────────────────────────────────────────┐
-│  BROWSER SINGLETON (Parallel Capture)                          │
+│  BROWSER SIDECAR (Parallel Capture)                            │
 │  MAX_TABS = 5                                                  │
 │                                                                │
 │  Tab1: [MutationObserver waiting for LLM response...]          │

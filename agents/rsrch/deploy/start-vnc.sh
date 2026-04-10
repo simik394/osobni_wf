@@ -38,6 +38,21 @@ echo "Exposing CDP port 9223 via socat (proxying 127.0.0.1:9222)..."
 socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222 &
 SOCAT_PID=$!
 
+echo "Starting Sidecar/Principal Setup..."
+
+if [ "$1" == "--browser-only" ]; then
+    echo "Running in BROWSER-ONLY (Sidecar) mode."
+    echo "Wait for browser to stabilize..."
+    sleep 5
+    echo "Sidecar is READY. Holding process alive..."
+    # Keep the script running so the container doesn't exit
+    tail -f /dev/null
+    exit 0
+fi
+
+# ----------------------------------------------------------------------------
+# STANDALONE MODE (Legacy/Unified)
+# ----------------------------------------------------------------------------
 echo "Starting Main Application..."
 # Using absolute path to ensure it works even if PATH is different in container
 ENTRYPOINT="/app/agents/rsrch/dist/cli/main.js"

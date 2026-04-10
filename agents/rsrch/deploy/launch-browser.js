@@ -5,7 +5,7 @@ chromium.use(StealthPlugin());
 (async () => {
     console.log("Launching headed Playwright browser for VNC...");
     const browser = await chromium.launchPersistentContext(
-        '/app/user-data',
+        process.env.USER_DATA_DIR || '/app/user-data',
         {
             headless: false,
             args: [

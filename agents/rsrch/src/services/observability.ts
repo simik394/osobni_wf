@@ -30,7 +30,7 @@ function getConfig(): ObservabilityConfig {
 }
 
 // ============================================================================
-// Singleton Langfuse Client
+// Principal Langfuse Instance
 // ============================================================================
 
 let langfuseClient: Langfuse | null = null;

@@ -1,0 +1,32 @@
+# lean rsrch server (Principal)
+FROM node:20-slim
+
+WORKDIR /app
+
+# 1. Copy package metadata
+COPY package.json .
+COPY agents/shared/package.json agents/shared/
+COPY agents/rsrch/package.json agents/rsrch/
+
+# 2. Install production dependencies (omitting dev)
+RUN npm install --omit=dev && npm install pino-pretty
+
+# 3. Copy built code and configuration
+COPY agents/shared/dist agents/shared/dist
+COPY agents/rsrch/dist agents/rsrch/dist
+COPY agents/rsrch/selectors.yaml agents/rsrch/selectors.yaml
+
+# 4. Global Linkage for @agents/shared
+RUN mkdir -p /app/node_modules/@agents && \
+    ln -s /app/agents/shared /app/node_modules/@agents/shared
+
+# 5. Fix relative paths for repository layout
+RUN mkdir -p /app/agents/rsrch/dist/rsrch && \
+    cp /app/agents/rsrch/package.json /app/agents/rsrch/dist/rsrch/package.json || \
+    echo '{"version":"1.0.35"}' > /app/agents/rsrch/dist/rsrch/package.json
+
+WORKDIR /app/agents/rsrch
+EXPOSE 3000
+
+# Default command to serve the API
+CMD ["node", "dist/cli/main.js", "serve"]

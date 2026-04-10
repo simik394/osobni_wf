@@ -1,34 +1,43 @@
 version: "3.8"
 
 services:
-  rsrch:
+  # Principal Logic Node (Express App)
+  rsrch-server:
     build:
       context: ../../
-      dockerfile: rsrch/deploy/Dockerfile
-    image: rsrch:latest
-    container_name: rsrch
+      dockerfile: agents/rsrch/deploy/Dockerfile.server
+    image: rsrch-server:latest
+    container_name: rsrch-server
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
-      - "5902:5900" # VNC (Singleton mode)
-      - "9225:9223" # CDP port (Singleton mode)
-    volumes:
-      - ../data:/app/data
-      - ../src:/app/src
-      # - ./dist:/app/dist
-      - ${HOME}/.config/rsrch:/app/config
-      - ${HOME}/.rsrch/profiles:/app/profiles
+      - "${PORT:-3000}:3000"
     environment:
-      - PORT=${PORT:-3000}
+      - PORT=3000
       - WINDMILL_TOKEN=${WINDMILL_TOKEN}
-      - BROWSER_CDP_ENDPOINT=http://localhost:9223
+      - BROWSER_CDP_ENDPOINT=http://rsrch-browser:9223
       - PERPLEXITY_USER_DATA_DIR=/app/config/user-data
       - AUTH_FILE=/app/config/auth.json
       - PROFILES_DIR=/app/profiles
       - FALKORDB_HOST=falkordb
     depends_on:
       - falkordb
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - rsrch-browser
+    volumes:
+      - ../data:/app/data
+      - ${HOME}/.config/rsrch:/app/config
+    restart: unless-stopped
+
+  # Sidecar Browser Instance (VNC + Playwright)
+  rsrch-browser:
+    build:
+      context: ../../
+      dockerfile: agents/rsrch/deploy/Dockerfile.browser
+    image: rsrch-browser:latest
+    container_name: rsrch-browser
+    ports:
+      - "5902:5900" # VNC
+      - "9225:9223" # CDP port
+    volumes:
+      - ${HOME}/.rsrch/profiles:/app/profiles
     ipc: host
     restart: unless-stopped
 
