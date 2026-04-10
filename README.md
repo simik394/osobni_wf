@@ -1,5 +1,8 @@
 
 # intro
+> [!IMPORTANT]
+> **Agentic Orchestration Protocol**: All agents interacting with this repository via Jules or other sandboxes MUST follow the [Orchestration Standards](file:///home/sim/Prods/01-pwf/agents/rsrch/docs/automation_standards.md). Failure to follow these protocol axioms results in orchestration loops and context poisoning.
+
 this is project for work related to my personal workflows. that means whatever process during my life i want to improve this is the place for tracking the plans about it.
 
 > [!tip]

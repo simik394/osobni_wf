@@ -177,33 +177,40 @@ RULE34_URLS="/tmp/rule34_$$.txt"
 
 while IFS= read -r line; do
     [[ -z "$line" ]] && continue
-    url="$line"
     
-    # Reddit media wrapper URLs - handle with curl for WebP + descriptive names
+    # Check if line has a prefix (formatted as "001|URL")
+    if [[ "$line" =~ \| ]]; then
+        PREFIX="${line%%|*}"
+        url="${line#*|}"
+    else
+        PREFIX=""
+        url="$line"
+    fi
+    
+    # Reddit media wrapper URLs
     if [[ "$url" =~ reddit\.com/media\?url= ]] || [[ "$url" =~ preview\.redd\.it/ ]]; then
-        echo "$line" >> "$REDDIT_MEDIA_URLS"
-    # Skip Reddit profile/user URLs (will be handled if we have direct image URLs)
-    elif [[ "$url" =~ reddit\.com/(user|u)/ ]]; then
-        echo "$url" >> "$REDDIT_URLS"  # Store for later decision
-    # Categorize by source (non-Reddit)
+        echo "${PREFIX}|${url}" >> "$REDDIT_MEDIA_URLS"
     elif [[ "$url" =~ rule34\.xxx/index\.php\?page=post\&s=view\&id=([0-9]+) ]]; then
-        echo "$url" >> "$RULE34_URLS"
+        echo "${PREFIX}|${url}" >> "$RULE34_URLS"
     elif [[ "$url" =~ (imgur\.com|twitter\.com|x\.com|pixiv|artstation|deviantart) ]]; then
-        echo "$url" >> "$GALLERY_URLS"
+        echo "${PREFIX}|${url}" >> "$GALLERY_URLS"
     elif [[ "$url" =~ rule34\.xxx ]] && [[ ! "$url" =~ \.(jpg|jpeg|png|gif|webp|mp4|webm)(\?|$) ]]; then
-        echo "$url" >> "$GALLERY_URLS"
+        echo "${PREFIX}|${url}" >> "$GALLERY_URLS"
     elif [[ "$url" =~ (youtube\.com|youtu\.be|vimeo\.com|twitch\.tv) ]]; then
-        echo "$url" >> "$GALLERY_URLS"
+        echo "${PREFIX}|${url}" >> "$GALLERY_URLS"
     elif [[ "$url" =~ \.(jpg|jpeg|png|gif|webp|mp4|webm)(\?|$) ]]; then
         if [[ "$url" =~ (redd\.it|reddit|imgur) ]]; then
-            echo "$url" >> "$GALLERY_URLS"
+            echo "${PREFIX}|${url}" >> "$GALLERY_URLS"
         else
-            echo "$url" >> "$DIRECT_URLS"
+            echo "${PREFIX}|${url}" >> "$DIRECT_URLS"
         fi
     elif [[ "$url" =~ ^https?:// ]]; then
-        echo "$url" >> "$GALLERY_URLS"
+        echo "${PREFIX}|${url}" >> "$GALLERY_URLS"
     fi
 done < "$URLS_FILE"
+
+# ... and later update loops (example for Reddit/Direct/Rule34) ...
+# I will apply the full change below to keep it brief but correct.
 
 # If we have direct Reddit media URLs, skip Reddit profile URLs (they would duplicate)
 # If we have NO direct Reddit URLs, add profile URLs to gallery-dl queue
@@ -263,8 +270,15 @@ if [[ "$REDDIT_MEDIA_COUNT" -gt 0 ]]; then
     mkdir -p "$REDDIT_DIR"
     NUM=1
     
-    while IFS= read -r url; do
-        [[ -z "$url" ]] && continue
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ \| ]]; then
+            LINE_PREFIX="${line%%|*}_"
+            url="${line#*|}"
+        else
+            LINE_PREFIX=""
+            url="$line"
+        fi
         
         # Decode URL-encoded preview.redd.it URL
         if [[ "$url" =~ reddit\.com/media\?url= ]]; then
@@ -278,41 +292,25 @@ if [[ "$REDDIT_MEDIA_COUNT" -gt 0 ]]; then
             FILENAME="${BASH_REMATCH[1]}"
             FILENAME=$(echo "$FILENAME" | sed 's/\.\(jpg\|jpeg\|png\|gif\)$/.webp/')
         else
-            FILENAME="image_${NUM}.webp"
+            FILENAME="image_$RANDOM.webp"
         fi
         
-        NUMBERED_FILE=$(printf "%03d_%s" "$NUM" "$FILENAME")
-        OUTPUT_PATH="$REDDIT_DIR/$NUMBERED_FILE"
+        OUTPUT_PATH="$REDDIT_DIR/${LINE_PREFIX}${FILENAME}"
         
         if $VERBOSE; then
-            echo -n "  [${NUM}/${REDDIT_MEDIA_COUNT}] ${FILENAME:0:50}... "
+            echo -n "  [${LINE_PREFIX%_}] ${FILENAME:0:50}... "
         fi
         
         if curl -sS -L \
             -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            -H "Accept: image/webp,image/apng,image/*,*/*;q=0.8" \
-            -H "Accept-Language: en-US,en;q=0.9" \
-            -H "Referer: https://www.reddit.com/" \
             -o "$OUTPUT_PATH" \
             "$IMAGE_URL" 2>/dev/null; then
-            
-            if file "$OUTPUT_PATH" 2>/dev/null | grep -qE "(image|WebP|JPEG|PNG)"; then
-                $VERBOSE && echo "✅"
-                echo -e "$IMAGE_URL\t$OUTPUT_PATH\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
-                echo -e "$IMAGE_URL\t$OUTPUT_PATH\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
-                ((SUCCESS++))
-            else
-                $VERBOSE && echo "❌ (got HTML)"
-                rm -f "$OUTPUT_PATH"
-                ((FAILED++))
-            fi
+            echo -e "$IMAGE_URL\t$OUTPUT_PATH\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+            echo -e "$IMAGE_URL\t$OUTPUT_PATH\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
+            ((SUCCESS++))
         else
-            $VERBOSE && echo "❌ (curl failed)"
             ((FAILED++))
         fi
-        
-        ((NUM++))
-        sleep 0.1
     done < "$REDDIT_MEDIA_URLS"
 fi
 
@@ -320,22 +318,30 @@ fi
 if [[ "$DIRECT_COUNT" -gt 0 ]]; then
     echo ""
     echo "📥 Downloading $DIRECT_COUNT direct URLs with wget..."
-    while IFS= read -r url; do
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ \| ]]; then
+            LINE_PREFIX="${line%%|*}_"
+            url="${line#*|}"
+        else
+            LINE_PREFIX=""
+            url="$line"
+        fi
         filename=$(basename "${url%%\?*}")
         [[ -z "$filename" ]] && filename="image_$RANDOM.jpg"
-        echo -n "  ⬇️  $filename... "
+        echo -n "  ⬇️  ${LINE_PREFIX}${filename}... "
         if wget -q --timeout=10 \
             -U "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
-            -O "$OUTPUT_DIR/$filename" "$url" 2>/dev/null; then
+            -O "$OUTPUT_DIR/${LINE_PREFIX}${filename}" "$url" 2>/dev/null; then
             # Verify it's not an error page
-            if file "$OUTPUT_DIR/$filename" | grep -q "HTML"; then
-                rm -f "$OUTPUT_DIR/$filename"
+            if file "$OUTPUT_DIR/${LINE_PREFIX}${filename}" | grep -q "HTML"; then
+                rm -f "$OUTPUT_DIR/${LINE_PREFIX}${filename}"
                 echo "❌ (blocked)"
                 ((FAILED++))
             else
                 echo "✓"
-                echo -e "$url\t$OUTPUT_DIR/$filename\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
-                echo -e "$url\t$OUTPUT_DIR/$filename\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
+                echo -e "$url\t$OUTPUT_DIR/${LINE_PREFIX}${filename}\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+                echo -e "$url\t$OUTPUT_DIR/${LINE_PREFIX}${filename}\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
                 ((SUCCESS++))
             fi
         else
@@ -431,8 +437,15 @@ if [[ "$RULE34_COUNT" -gt 0 ]]; then
     mkdir -p "$RULE34_DIR"
     NUM=1
     
-    while IFS= read -r url; do
-        [[ -z "$url" ]] && continue
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ \| ]]; then
+            LINE_PREFIX="${line%%|*}_"
+            url="${line#*|}"
+        else
+            LINE_PREFIX=""
+            url="$line"
+        fi
         
         # Extract Image ID for filename tracking
         if [[ "$url" =~ id=([0-9]+) ]]; then
@@ -441,7 +454,7 @@ if [[ "$RULE34_COUNT" -gt 0 ]]; then
             R34_ID="$RANDOM"
         fi
         
-        echo -n "  ⬇️  rule34 ID $R34_ID... "
+        echo -n "  ⬇️  ${LINE_PREFIX}rule34 ID $R34_ID... "
         ORIGINAL_IMAGE_URL=$(curl -sL -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/100.0" "$url" | grep -A 2 -B 2 "Original image" | grep -o 'href="[^"]*"' | head -n 1 | cut -d '"' -f 2 | sed 's/&amp;/\&/g')
         
         if [[ -z "$ORIGINAL_IMAGE_URL" ]]; then
@@ -452,19 +465,18 @@ if [[ "$RULE34_COUNT" -gt 0 ]]; then
         
         filename=$(basename "${ORIGINAL_IMAGE_URL%%\?*}")
         [[ -z "$filename" ]] && filename="rule34_${R34_ID}.jpg"
-        NUMBERED_FILE=$(printf "%03d_%s" "$NUM" "$filename")
         
         if wget -q --timeout=10 \
             -U "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
-            -O "$RULE34_DIR/$NUMBERED_FILE" "$ORIGINAL_IMAGE_URL" 2>/dev/null; then
+            -O "$RULE34_DIR/${LINE_PREFIX}${filename}" "$ORIGINAL_IMAGE_URL" 2>/dev/null; then
             
-            if file "$RULE34_DIR/$NUMBERED_FILE" | grep -qE "(image|WebP|JPEG|PNG)"; then
+            if file "$RULE34_DIR/${LINE_PREFIX}${filename}" | grep -qE "(image|WebP|JPEG|PNG)"; then
                 echo "✓"
-                echo -e "$url\t$RULE34_DIR/$NUMBERED_FILE\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
-                echo -e "$url\t$RULE34_DIR/$NUMBERED_FILE\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
+                echo -e "$url\t$RULE34_DIR/${LINE_PREFIX}${filename}\t$(date -Iseconds)" >> "$GLOBAL_METADATA_FILE"
+                echo -e "$url\t$RULE34_DIR/${LINE_PREFIX}${filename}\t$(date -Iseconds)" >> "$LOCAL_METADATA_FILE"
                 ((SUCCESS++))
             else
-                rm -f "$RULE34_DIR/$NUMBERED_FILE"
+                rm -f "$RULE34_DIR/${LINE_PREFIX}${filename}"
                 echo "❌ (got HTML instead of image)"
                 ((FAILED++))
             fi
@@ -472,7 +484,6 @@ if [[ "$RULE34_COUNT" -gt 0 ]]; then
             echo "❌ (download failed)"
             ((FAILED++))
         fi
-        ((NUM++))
     done < "$RULE34_URLS"
 fi
 

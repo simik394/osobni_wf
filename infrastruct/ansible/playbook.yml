@@ -34,8 +34,8 @@
       tags: [nvim]
     - role: wezterm
       tags: [wezterm]
-    - role: ghostty
-      tags: [ghostty]
+    # - role: ghostty
+    #   tags: [ghostty]
     - role: quarto
       tags: [quarto]
     - role: obsidian
@@ -52,30 +52,32 @@
       tags: [input-leap]
     - role: jabref
       tags: [jabref]
-    - role: logseq
-      tags: [logseq]
+    # - role: logseq
+    #   tags: [logseq]
     - role: zotero
       tags: [zotero]
     - role: julia
       tags: [julia, extra]
     - role: swiprolog
       tags: [swiprolog, extra]
-    - role: obs-studio
-      tags: [obs, extra]
+    # - role: obs-studio
+    #   tags: [obs, extra]
     - role: lmstudio
       tags: [lmstudio, extra]
     - role: x11vnc
       tags: [vnc, extra]
+    - role: remarkable-wine
+      tags: [remarkable, wine, extra]
 
 # --- SECTION 4: Local Services (Containers) ---
 - name: Local Services (Docker)
   hosts: local
   become: true
   roles:
-    - role: local_memgraph
-      tags: [memgraph]
-    - role: postgres
-      tags: [postgres]
+    # - role: local_memgraph
+    #   tags: [memgraph]
+    # - role: postgres
+    #   tags: [postgres]
 
 # --- SECTION 5: Infrastructure Optimization (Minimal Startup) ---
 - name: Local Infrastructure Optimization
@@ -90,7 +92,7 @@
       loop:
         - vault
         - nomad
-        - memgraph
+        # - memgraph
       when: minimal_startup | default(false) | bool
       ignore_errors: true
       tags: [minimal_cleanup]
@@ -98,9 +100,9 @@
     - name: Stop Docker containers (Minimal Startup)
       ansible.builtin.shell: "docker stop {{ item }}"
       loop:
-        - postgres-local
+        # - postgres-local
         - falkordb
-        - memgraph-lab
+        # - memgraph-lab
       when: minimal_startup | default(false) | bool
       ignore_errors: true
       changed_when: false

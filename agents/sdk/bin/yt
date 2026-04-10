@@ -1,0 +1,87 @@
+#!/usr/bin/env node
+
+const { Command } = require('commander');
+const { McpBridge } = require('../src/mcp-bridge');
+const picocolors = require('picocolors');
+
+const program = new Command();
+const bridge = new McpBridge();
+
+program
+  .name('yt')
+  .description('Agentic SDK YouTrack CLI')
+  .version('1.0.0');
+
+// Helper to handle async actions
+const wrap = (fn) => async (...args) => {
+    try {
+        await fn(...args);
+    } catch (err) {
+        console.error(picocolors.red(`Error: ${err.message}`));
+        process.exit(1);
+    }
+};
+
+program
+  .command('list')
+  .description('List unresolved issues in YouTrack')
+  .option('-p, --project <project>', 'Project key')
+  .action(wrap(async (options) => {
+      let query = '#Unresolved';
+      if (options.project) {
+          query = `project: ${options.project} and #Unresolved`;
+      }
+      
+      console.log(picocolors.cyan(`Searching issues: ${query}...`));
+      const issues = await bridge.callTool('napovedayt', 'search_issues', { query });
+      
+      if (!issues || issues.length === 0) {
+          console.log(picocolors.yellow('No issues found.'));
+          return;
+      }
+
+      console.log(picocolors.green(`\nFound ${issues.length} issues:`));
+      issues.forEach(issue => {
+          console.log(`${picocolors.bold(issue.id)}: ${issue.summary} [${issue.customFields?.State || 'N/A'}]`);
+      });
+  }));
+
+program
+  .command('get <issueId>')
+  .description('Get detailed information for a specific issue')
+  .action(wrap(async (issueId) => {
+      console.log(picocolors.cyan(`Fetching ${issueId}...`));
+      const issue = await bridge.callTool('napovedayt', 'get_issue', { issueId });
+      
+      console.log(picocolors.green(`\n--- ${issue.id}: ${issue.summary} ---`));
+      console.log(picocolors.white(issue.description || 'No description provided.'));
+      console.log(picocolors.blue(`\nState: ${issue.customFields?.State || 'N/A'}`));
+      console.log(picocolors.blue(`Assignee: ${issue.customFields?.Assignee || 'Unassigned'}`));
+  }));
+
+program
+  .command('comment <issueId> <text>')
+  .description('Add a comment to an issue')
+  .action(wrap(async (issueId, text) => {
+      console.log(picocolors.cyan(`Adding comment to ${issueId}...`));
+      await bridge.callTool('napovedayt', 'add_issue_comment', { issueId, text });
+      console.log(picocolors.green('Comment added successfully.'));
+  }));
+
+program
+  .command('create')
+  .description('Create a new issue')
+  .requiredOption('-s, --summary <summary>', 'Issue summary')
+  .requiredOption('-d, --description <description>', 'Issue description')
+  .requiredOption('-p, --project <project>', 'Project key')
+  .action(wrap(async (options) => {
+      console.log(picocolors.cyan(`Creating issue in ${options.project}...`));
+      const issue = await bridge.callTool('napovedayt', 'create_issue', {
+          project: options.project,
+          summary: options.summary,
+          description: options.description
+      });
+      console.log(picocolors.green(`Issue created: ${issue.id}`));
+  }));
+
+program.parse(process.argv);

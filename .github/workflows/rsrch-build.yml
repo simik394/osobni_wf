@@ -12,6 +12,8 @@ on:
 jobs:
     build:
         runs-on: ubuntu-latest
+        env:
+            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 1
         steps:
             - uses: actions/checkout@v4
 
@@ -37,7 +39,7 @@ jobs:
               uses: docker/build-push-action@v5
               with:
                   context: .
-                  file: agents/rsrch/Dockerfile
+                  file: agents/rsrch/deploy/Dockerfile.server
                   push: false # We need to push to a registry later, but for now just build
                   tags: rsrch-server:latest
                   cache-from: type=gha
