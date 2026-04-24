@@ -29,7 +29,25 @@ int main() {
             XGetWindowAttributes(display, children[i], &attr);
             if (attr.map_state == IsViewable && attr.width > 1 && attr.height > 1) {
                 char *name = NULL;
-                XFetchName(display, children[i], &name);
+                int is_utf8 = 0;
+                
+                // Try _NET_WM_NAME first (UTF-8)
+                Atom net_wm_name = XInternAtom(display, "_NET_WM_NAME", False);
+                Atom utf8_string = XInternAtom(display, "UTF8_STRING", False);
+                Atom actual_type;
+                int actual_format;
+                unsigned long nitems, bytes_after;
+                unsigned char *prop;
+                
+                if (XGetWindowProperty(display, children[i], net_wm_name, 0, 1024, False, utf8_string,
+                                       &actual_type, &actual_format, &nitems, &bytes_after, &prop) == Success && prop) {
+                    name = strdup((char *)prop);
+                    is_utf8 = 1;
+                    XFree(prop);
+                } else {
+                    XFetchName(display, children[i], &name);
+                    is_utf8 = 0;
+                }
                 
                 if (printed > 0) printf(",");
                 printf("{\"id\":\"0x%lx\",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d,\"active\":%s,\"title\":\"",
@@ -39,10 +57,14 @@ int main() {
                 // Escape title for JSON
                 if (name) {
                     for (char *c = name; *c; c++) {
-                        if (*c == '"' || *c == '\\') printf("\\");
-                        if (*c >= 32) printf("%c", *c);
+                        if (*c == '"' || *c == '\\') printf("\\\\");
+                        else if (*c == '\n') printf("\\n");
+                        else if (*c == '\r') printf("\\r");
+                        else if (*c == '\t') printf("\\t");
+                        else if ((unsigned char)*c >= 32) printf("%c", *c);
                     }
-                    XFree(name);
+                    if (is_utf8) free(name);
+                    else XFree(name);
                 } else {
                     printf("Unknown");
                 }

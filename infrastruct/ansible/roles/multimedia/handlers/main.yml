@@ -1,0 +1,7 @@
+---
+- name: restart screenshot-record
+  systemd:
+    name: screenshot-record.service
+    scope: user
+    state: restarted
+    daemon_reload: yes

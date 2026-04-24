@@ -63,7 +63,11 @@ done
 shift $((OPTIND-1))
 
 FOLDER_NAME="${1:-downloads_$(date +%Y%m%d_%H%M%S)}"
-OUTPUT_DIR="$HOME/Downloads/$FOLDER_NAME"
+if [[ "$FOLDER_NAME" == /* ]]; then
+    OUTPUT_DIR="$FOLDER_NAME"
+else
+    OUTPUT_DIR="$HOME/Downloads/$FOLDER_NAME"
+fi
 URLS_FILE="/tmp/clipboard_urls_$$.txt"
 
 # Docker images
@@ -233,11 +237,26 @@ log "🔗 Found $TOTAL URLs (reddit: $REDDIT_MEDIA_COUNT, direct: $DIRECT_COUNT,
 
 # Deduplication against historical metadata
 log "🔍 Checking for previously downloaded URLs..."
-DEDUP_TMP="/tmp/dedup_$$.txt"
-> "$DEDUP_TMP"
+ALREADY_DOWNLOADED=$(awk -F '\t' '{print $1}' "$GLOBAL_METADATA_FILE" "$LOCAL_METADATA_FILE" 2>/dev/null | sort -u)
+
 for URL_FILE in "$REDDIT_MEDIA_URLS" "$DIRECT_URLS" "$GALLERY_URLS" "$RULE34_URLS"; do
     if [[ -s "$URL_FILE" ]]; then
-        grep -vxf <(awk -F '\t' '{print $1}' "$GLOBAL_METADATA_FILE" "$LOCAL_METADATA_FILE" 2>/dev/null) "$URL_FILE" > "${URL_FILE}.new" || true
+        # Create a filtered version of the URL file
+        > "${URL_FILE}.new"
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            # Extract URL part if prefixed
+            if [[ "$line" =~ \| ]]; then
+                check_url="${line#*|}"
+            else
+                check_url="$line"
+            fi
+            
+            # Check if this URL is in our downloaded list
+            if ! echo "$ALREADY_DOWNLOADED" | grep -Fqx "$check_url" >/dev/null; then
+                echo "$line" >> "${URL_FILE}.new"
+            fi
+        done < "$URL_FILE"
         mv "${URL_FILE}.new" "$URL_FILE"
     fi
 done

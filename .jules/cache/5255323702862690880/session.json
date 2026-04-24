@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/5255323702862690880",
+    "title": "## Task: Deep Sandboxing Probe V2 (Retry)\n\n**Context**: You are on branch `experiment/jules-sandbox-probe-v2` in the `simik394/osobni_wf` repository.\n\n**Instructions**:\n1. Open terminal and navigate to `agents/rsrch/`\n2. Execute the bash script `./probe-v2.sh` using bash.\n3. The script will generate a file named `.jules-sandbox-results-v2.md`.\n4. Commit ONLY that file and push your changes to your branch. Do not commit anything else.\n5. Provide a summary of the most interesting findings from the VM outputs. Ignore all other code outside of `agents/rsrch/`.\n\nDo not attempt to fix or build the code. Just run the script and push the resulting `.jules-sandbox-results-v2.md` file.",
+    "createTime": "2026-04-09T04:25:40.738527842Z",
+    "updateTime": "2026-04-09T05:02:13.985638Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "## Task: Deep Sandboxing Probe V2 (Retry)\n\n**Context**: You are on branch `experiment/jules-sandbox-probe-v2` in the `simik394/osobni_wf` repository.\n\n**Instructions**:\n1. Open terminal and navigate to `agents/rsrch/`\n2. Execute the bash script `./probe-v2.sh` using bash.\n3. The script will generate a file named `.jules-sandbox-results-v2.md`.\n4. Commit ONLY that file and push your changes to your branch. Do not commit anything else.\n5. Provide a summary of the most interesting findings from the VM outputs. Ignore all other code outside of `agents/rsrch/`.\n\nDo not attempt to fix or build the code. Just run the script and push the resulting `.jules-sandbox-results-v2.md` file.",
+    "url": "https://jules.google.com/session/5255323702862690880",
+    "id": "5255323702862690880",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "5255323702862690880",
+      "title": "## Task: Deep Sandboxing Probe V2 (Retry)\n\n**Context**: You are on branch `experiment/jules-sandbox-probe-v2` in the `simik394/osobni_wf` repository.\n\n**Instructions**:\n1. Open terminal and navigate to `agents/rsrch/`\n2. Execute the bash script `./probe-v2.sh` using bash.\n3. The script will generate a file named `.jules-sandbox-results-v2.md`.\n4. Commit ONLY that file and push your changes to your branch. Do not commit anything else.\n5. Provide a summary of the most interesting findings from the VM outputs. Ignore all other code outside of `agents/rsrch/`.\n\nDo not attempt to fix or build the code. Just run the script and push the resulting `.jules-sandbox-results-v2.md` file.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573108
+}

@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/5748256029783708084",
+    "title": "Vítej v novém prostředí! Právě testujeme nativní podporu větví a tvou schopnost vnímat nové Agentic Axiomy. Prosím, proveď tyto kroky: 1. Ujisti se, že jsi na správné větvi (git branch). 2. Spusť 'source agents/sdk/bootstrap.sh'. 3. Potvrď mi, že vidíš odkaz na Orchestration Protocols v docs/ a v README.md. 4. Zkus spustit 'yt list -p TOOLS' a vypiš vytvořený request soubor. Tím potvrdíme, že vše funguje nativně a unmissably.",
+    "createTime": "2026-04-10T07:51:06.431256225Z",
+    "updateTime": "2026-04-10T08:13:18.038481Z",
+    "state": "awaitingUserFeedback",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Vítej v novém prostředí! Právě testujeme nativní podporu větví a tvou schopnost vnímat nové Agentic Axiomy. Prosím, proveď tyto kroky: 1. Ujisti se, že jsi na správné větvi (git branch). 2. Spusť 'source agents/sdk/bootstrap.sh'. 3. Potvrď mi, že vidíš odkaz na Orchestration Protocols v docs/ a v README.md. 4. Zkus spustit 'yt list -p TOOLS' a vypiš vytvořený request soubor. Tím potvrdíme, že vše funguje nativně a unmissably.",
+    "url": "https://jules.google.com/session/5748256029783708084",
+    "id": "5748256029783708084",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "5748256029783708084",
+      "title": "Vítej v novém prostředí! Právě testujeme nativní podporu větví a tvou schopnost vnímat nové Agentic Axiomy. Prosím, proveď tyto kroky: 1. Ujisti se, že jsi na správné větvi (git branch). 2. Spusť 'source agents/sdk/bootstrap.sh'. 3. Potvrď mi, že vidíš odkaz na Orchestration Protocols v docs/ a v README.md. 4. Zkus spustit 'yt list -p TOOLS' a vypiš vytvořený request soubor. Tím potvrdíme, že vše funguje nativně a unmissably.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573103
+}

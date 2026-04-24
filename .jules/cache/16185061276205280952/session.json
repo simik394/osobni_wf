@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/16185061276205280952",
+    "title": "Merge branch 'jules-TOOLS-49-replace-any-types-10563277800006190391' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+    "createTime": "2026-03-13T02:48:56.418683081Z",
+    "updateTime": "2026-03-13T03:23:26.405991Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Merge branch 'jules-TOOLS-49-replace-any-types-10563277800006190391' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+    "url": "https://jules.google.com/session/16185061276205280952",
+    "id": "16185061276205280952",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "16185061276205280952",
+      "title": "Merge branch 'jules-TOOLS-49-replace-any-types-10563277800006190391' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573112
+}

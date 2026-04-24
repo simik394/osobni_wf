@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/10278035056591600963",
+    "title": "## Deep Sandboxing Probe V2 (Interactive)\n\n**Instructions**:\n1. Check out the branch `experiment/jules-sandbox-probe-v2` in the repo (using git fetch and git checkout origin/experiment/jules-sandbox-probe-v2).\n2. Inside the root directory, navigate to `agents/rsrch/`.\n3. Run `bash ./probe-v2.sh`.\n4. Read the generated file: `.jules-sandbox-results-v2.md`\n5. Reply to this chat with the ENTIRE contents of `.jules-sandbox-results-v2.md` in your message. DO NOT create a PR, DO NOT push. Just read the file and paste it here so I can see it.",
+    "createTime": "2026-04-09T04:42:16.572323866Z",
+    "updateTime": "2026-04-09T05:08:30.603898Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "## Deep Sandboxing Probe V2 (Interactive)\n\n**Instructions**:\n1. Check out the branch `experiment/jules-sandbox-probe-v2` in the repo (using git fetch and git checkout origin/experiment/jules-sandbox-probe-v2).\n2. Inside the root directory, navigate to `agents/rsrch/`.\n3. Run `bash ./probe-v2.sh`.\n4. Read the generated file: `.jules-sandbox-results-v2.md`\n5. Reply to this chat with the ENTIRE contents of `.jules-sandbox-results-v2.md` in your message. DO NOT create a PR, DO NOT push. Just read the file and paste it here so I can see it.",
+    "url": "https://jules.google.com/session/10278035056591600963",
+    "id": "10278035056591600963",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "10278035056591600963",
+      "title": "## Deep Sandboxing Probe V2 (Interactive)\n\n**Instructions**:\n1. Check out the branch `experiment/jules-sandbox-probe-v2` in the repo (using git fetch and git checkout origin/experiment/jules-sandbox-probe-v2).\n2. Inside the root directory, navigate to `agents/rsrch/`.\n3. Run `bash ./probe-v2.sh`.\n4. Read the generated file: `.jules-sandbox-results-v2.md`\n5. Reply to this chat with the ENTIRE contents of `.jules-sandbox-results-v2.md` in your message. DO NOT create a PR, DO NOT push. Just read the file and paste it here so I can see it.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573104
+}

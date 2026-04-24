@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/16878729929242914069",
+    "title": "Merge branch 'tools-79-go-webhook-handler-11284023566977903438' into 'consolidation-v1' and resolve conflicts. Then create a PR or push directly. Do not wait for manual plan approval.",
+    "createTime": "2026-03-13T02:50:30.895374187Z",
+    "updateTime": "2026-03-13T03:20:40.473526Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Merge branch 'tools-79-go-webhook-handler-11284023566977903438' into 'consolidation-v1' and resolve conflicts. Then create a PR or push directly. Do not wait for manual plan approval.",
+    "url": "https://jules.google.com/session/16878729929242914069",
+    "id": "16878729929242914069",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "16878729929242914069",
+      "title": "Merge branch 'tools-79-go-webhook-handler-11284023566977903438' into 'consolidation-v1' and resolve conflicts. Then create a PR or push directly. Do not wait for manual plan approval.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573112
+}

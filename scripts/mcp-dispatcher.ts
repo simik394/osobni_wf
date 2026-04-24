@@ -2,21 +2,26 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { McpRequestSchema, McpResponseSchema, McpRequest, McpResponse } from '../agents/sdk/src/types';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const BRIDGE_DIR = path.resolve(process.cwd(), '.jules/mcp');
 const REQUESTS_DIR = path.join(BRIDGE_DIR, 'requests');
 const RESPONSES_DIR = path.join(BRIDGE_DIR, 'responses');
 
 async function main() {
-    console.log('Starting MCP Dispatcher...');
+    console.log('Starting MCP Dispatcher (SSE Mode)...');
     
-    // Command to launch the target MCP server (e.g. YouTrack)
-    // In a real prod env, this would be configured via env or config
-    const transport = new StdioClientTransport({
-        command: process.env.MCP_SERVER_COMMAND || 'npx',
-        args: process.env.MCP_SERVER_ARGS?.split(' ') || ['-y', 'napovedayt']
-    });
+    const transport = new StreamableHTTPClientTransport(
+        new URL('https://napoveda.youtrack.cloud/mcp'),
+        {
+            requestInit: {
+                headers: {
+                    'Authorization': 'Bearer perm-cm9vdA==.NDctNQ==.F2hpDGTxhHNG8idMuoFGhz16WgP0mM',
+                    'Content-Type': 'application/json'
+                }
+            }
+        }
+    );
 
     const client = new Client({
         name: 'Jules-Bridge-Dispatcher',
@@ -54,9 +59,20 @@ async function main() {
                         arguments: request.params
                     });
 
+                    let toolResult = result.content?.[0]?.text || result;
+                    
+                    // Try to parse JSON if it's a string
+                    if (typeof toolResult === 'string') {
+                        try {
+                            toolResult = JSON.parse(toolResult);
+                        } catch (e) {
+                            // Leave as string if not valid JSON
+                        }
+                    }
+
                     const response: McpResponse = {
                         id,
-                        result: result.content?.[0]?.text || result,
+                        result: toolResult,
                         timestamp: Date.now()
                     };
 

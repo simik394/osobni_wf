@@ -192,16 +192,9 @@ run_internal() {
         fi
         
         # Privacy Check: Skip if sensitive apps are running
-        IS_PRIVATE="false"
-        for app in $SENSITIVE_APPS; do
-            if pgrep -x "$app" >/dev/null; then
-                IS_PRIVATE="true"
-                break
-            fi
-        done
-
-        if [ "$IS_PRIVATE" = "true" ]; then
-            # If we were capturing, we might want to split or just wait
+        # Efficient combined pgrep check
+        SENSITIVE_PATTERN=$(echo $SENSITIVE_APPS | sed 's/ /|/g')
+        if pgrep -x "$SENSITIVE_PATTERN" >/dev/null; then
             sleep 10
             continue
         fi
@@ -226,6 +219,16 @@ run_internal() {
         if [ $((NOW - LAST_SCREENSHOT_TIME)) -ge $INTERVAL ]; then
             export DISPLAY=:1
             TIMESTAMP=$(date +%s)
+            
+            # Efficient Window Metadata Capture (Pre-Capture for Privacy)
+            WINDOW_DATA=$(timeout 2 /home/sim/bin/xmeta 2>/dev/null || echo '{"error":"timeout"}')
+            
+            # Incognito / Private Window Detection
+            if echo "$WINDOW_DATA" | grep -iqE "incognito|inprivate|private browsing|soukromé|anonymní"; then
+                LAST_SCREENSHOT_TIME=$NOW
+                continue
+            fi
+
             OUTPUT_FILE="$CURRENT_SESSION_DIR/frame_$(printf '%05d' $COUNT)_${TIMESTAMP}.jpg"
             METADATA_FILE="${OUTPUT_FILE%.jpg}.json"
             
@@ -235,7 +238,6 @@ run_internal() {
             [ "$MON_MODE" = "main" ] && SCROT_OPTS="$SCROT_OPTS --autoselect 0,0,2560,1600"
 
             if scrot $SCROT_OPTS "$OUTPUT_FILE" 2>>/tmp/screenshot-error.log; then
-                WINDOW_DATA=$(timeout 2 /home/sim/bin/xmeta 2>/dev/null || echo '{"error":"timeout"}')
                 TOP_PROC=$(ps -eo comm,pcpu,pmem --sort=-pcpu --no-headers | head -n 5 | awk '{printf "{\"name\":\"%s\",\"cpu\":\"%s\",\"mem\":\"%s\"},", $1, $2, $3}' | sed 's/,$//')
                 echo "{\"timestamp\":$TIMESTAMP,\"active_window\":$WINDOW_DATA,\"top_processes\":[$TOP_PROC]}" > "$METADATA_FILE"
                 

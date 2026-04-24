@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/7490173916813956123",
+    "title": "Merge branch 'feat-jules-go-client-tests-2322383910156967488' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+    "createTime": "2026-03-13T02:48:44.310424781Z",
+    "updateTime": "2026-03-13T03:06:50.442879Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Merge branch 'feat-jules-go-client-tests-2322383910156967488' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+    "url": "https://jules.google.com/session/7490173916813956123",
+    "id": "7490173916813956123",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "7490173916813956123",
+      "title": "Merge branch 'feat-jules-go-client-tests-2322383910156967488' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573130
+}

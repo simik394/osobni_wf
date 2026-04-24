@@ -1,0 +1,25 @@
+{
+  "resource": {
+    "name": "sessions/4933678802288536761",
+    "title": "Merge Task for Tools-Features:",
+    "createTime": "2026-01-22T02:49:32.413231773Z",
+    "updateTime": "2026-01-22T16:42:03.562452Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Merge Task for Tools-Features:\nThe following branches need to be reviewed and merged into main if they are ready:\nTOOLS-63-add-gemini-session-tracking\nfeat-TOOLS-83-add-graph-command-tests\nfeat-TOOLS-87-add-openapi-spec\nfeature-TOOLS-103-webhook-handlers\nfeature-TOOLS-76-session-manager\nfeature-bundle-quest5-tools122-tools132\nfeature-tools-58-content-injection\nfix-TOOLS-101-queue-test-segfault\njules-TOOLS-49-replace-any-types\njules-TOOLS-84-github-pr-monitor\njules-log-TOOLS-51\ntools-132-async-arch\ntools-139-session-state-dashboard\ntools-142-dashboard\ntools-142-pr-status-cli\ntools-34-sse-support\ntools-43-refactor-rsrch-cli\ntools-45-selectors-tests\ntools-46-rsrch-shared-lib\ntools-47-dynamic-container-id\ntools-54-falkordb-sync\ntools-56-windmill-integration\ntools-57-gemini-gems\ntools-79-go-webhook-handler\ntools-80-health-check\ntools-cleanup-and-features\n\nInstructions:\n1. Fetch and checkout each branch.\n2. Review the changes (diff with main).\n3. If the changes look correct and safe:\n   - Merge into main.\n   - If there are conflicts, resolve them if simple, or skip and report.\n4. If the branch seems obsolete or fully contained in main, delete it.\n5. Push changes to main.",
+    "url": "https://jules.google.com/session/4933678802288536761",
+    "id": "4933678802288536761",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "4933678802288536761",
+      "title": "Merge Task for Tools-Features:",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573130
+}

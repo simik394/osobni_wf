@@ -59,8 +59,6 @@
 
 - name: Compile xmeta tool
   shell: gcc {{ ansible_env.HOME }}/bin/xmeta.c -lX11 -o {{ ansible_env.HOME }}/bin/xmeta
-  args:
-    creates: "{{ ansible_env.HOME }}/bin/xmeta"
 
 - name: CLEANUP - Remove failed static FFmpeg build
   file:
@@ -77,6 +75,7 @@
     src: screenshot-record
     dest: "{{ ansible_env.HOME }}/bin/screenshot-record"
     mode: '0755'
+  notify: restart screenshot-record
 
 - name: Ensure user systemd directory exists
   file:
@@ -95,23 +94,25 @@
       PartOf=graphical-session.target
 
       [Service]
-      Type=forking
-      ExecStart={{ ansible_env.HOME }}/bin/screenshot-record start
-      ExecStop={{ ansible_env.HOME }}/bin/screenshot-record stop
-      PIDFile=/tmp/screenshot-record.pid
+      Type=simple
+      ExecStart={{ ansible_env.HOME }}/bin/screenshot-record run-internal
+      ExecStopPost={{ ansible_env.HOME }}/bin/screenshot-record convert-current
       Restart=on-failure
-      RestartSec=5
+      RestartSec=15
       TimeoutStopSec=300
       Environment=PATH=/usr/lib/jellyfin-ffmpeg:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{{ ansible_env.HOME }}/bin
       Environment=DISPLAY=:1
       Environment=XAUTHORITY=/run/user/{{ ansible_user_uid }}/gdm/Xauthority
+      Nice=19
 
       [Install]
       WantedBy=graphical-session.target
+  notify: restart screenshot-record
 
 - name: Enable screenshot-record service
   systemd:
     name: screenshot-record.service
     scope: user
+    state: started
     enabled: yes
     daemon_reload: yes

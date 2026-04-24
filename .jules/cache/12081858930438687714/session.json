@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/12081858930438687714",
+    "title": "Implement User Access Management according to infrastruct/configs/youtrack.conf/JULES_TASK.md",
+    "createTime": "2026-03-22T19:33:22.665403421Z",
+    "updateTime": "2026-03-22T20:51:01.382943Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Implement User Access Management according to infrastruct/configs/youtrack.conf/JULES_TASK.md",
+    "url": "https://jules.google.com/session/12081858930438687714",
+    "id": "12081858930438687714",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "12081858930438687714",
+      "title": "Implement User Access Management according to infrastruct/configs/youtrack.conf/JULES_TASK.md",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573112
+}

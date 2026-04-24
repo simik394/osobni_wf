@@ -9,11 +9,12 @@ if (args.length < 1) {
 }
 
 const jsonPath = path.resolve(args[0]);
+const jsonDir = path.dirname(jsonPath);
 let jsonBasename = path.basename(jsonPath, '.json').replace(/[^a-zA-Z0-9_-]/g, '_');
 if (jsonBasename.length > 100) {
     jsonBasename = jsonBasename.substring(0, 100);
 }
-const targetDirName = `TSM_Export_${jsonBasename}`;
+const targetDir = path.join(jsonDir, `TSM_Export_${jsonBasename}`);
 
 let data;
 try {
@@ -53,7 +54,7 @@ if (tabs.length === 0) {
     process.exit(0);
 }
 
-console.log(`\nQueueing ${tabs.length} items for directory: ${targetDirName}`);
+console.log(`\nQueueing ${tabs.length} items for directory: ${targetDir}`);
 
 // We format each line as "001|URL"
 const queueLines = tabs.map((tab, i) => {
@@ -65,12 +66,12 @@ const tmpFile = `/tmp/tsm_queue_${Date.now()}.txt`;
 fs.writeFileSync(tmpFile, queueLines.join('\n') + '\n');
 
 try {
-    console.log(`Executing smart_download.sh for ${targetDirName}...`);
+    console.log(`Executing smart_download.sh for ${targetDir}...`);
     // Added -f (flat) and -p (preserve order/prefix mode)
     // Note: I will update smart_download.sh to support this prefix format
-    execSync(`bash "${DOWNLOADER_SCRIPT}" -f -i "${tmpFile}" "${targetDirName}"`, { stdio: 'inherit' });
+    execSync(`bash "${DOWNLOADER_SCRIPT}" -f -i "${tmpFile}" "${targetDir}"`, { stdio: 'inherit' });
 } catch (e) {
-    console.error(`Error downloading for ${targetDirName}: ${e.message}`);
+    console.error(`Error downloading for ${targetDir}: ${e.message}`);
 } finally {
     if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
 }

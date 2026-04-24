@@ -33,7 +33,9 @@ program
       }
       
       console.log(picocolors.cyan(`Searching issues: ${query}...`));
-      const issues = await bridge.callTool('napovedayt', 'search_issues', { query });
+      const response = await bridge.callTool('napovedayt', 'search_issues', { query });
+      
+      const issues = response.issuesPage || [];
       
       if (!issues || issues.length === 0) {
           console.log(picocolors.yellow('No issues found.'));

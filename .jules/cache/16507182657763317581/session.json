@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/16507182657763317581",
+    "title": "Merge branch 'feat-jules-go-cli-subcommands-15810764562972397101' into 'consolidation-v1' and resolve conflicts. Then push to 'consolidation-v1' or open a PR.",
+    "createTime": "2026-03-13T02:47:36.604564402Z",
+    "updateTime": "2026-03-13T03:12:49.941896Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Merge branch 'feat-jules-go-cli-subcommands-15810764562972397101' into 'consolidation-v1' and resolve conflicts. Then push to 'consolidation-v1' or open a PR.",
+    "url": "https://jules.google.com/session/16507182657763317581",
+    "id": "16507182657763317581",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "16507182657763317581",
+      "title": "Merge branch 'feat-jules-go-cli-subcommands-15810764562972397101' into 'consolidation-v1' and resolve conflicts. Then push to 'consolidation-v1' or open a PR.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573112
+}

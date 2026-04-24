@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/11900360692033011385",
+    "title": "Prostuduj si .jules/capabilities.md, nabootstrapuj Agentic SDK pomocí 'source agents/sdk/bootstrap.sh' a vypiš nevyřešené úkoly v projektu TOOLS pomocí příkazu 'yt list -p TOOLS'. Pak mi napiš, co jsi zjistil.",
+    "createTime": "2026-04-10T07:15:20.580276063Z",
+    "updateTime": "2026-04-10T07:59:34.718460Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Prostuduj si .jules/capabilities.md, nabootstrapuj Agentic SDK pomocí 'source agents/sdk/bootstrap.sh' a vypiš nevyřešené úkoly v projektu TOOLS pomocí příkazu 'yt list -p TOOLS'. Pak mi napiš, co jsi zjistil.",
+    "url": "https://jules.google.com/session/11900360692033011385",
+    "id": "11900360692033011385",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "11900360692033011385",
+      "title": "Prostuduj si .jules/capabilities.md, nabootstrapuj Agentic SDK pomocí 'source agents/sdk/bootstrap.sh' a vypiš nevyřešené úkoly v projektu TOOLS pomocí příkazu 'yt list -p TOOLS'. Pak mi napiš, co jsi zjistil.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573104
+}

@@ -1,0 +1,28 @@
+{
+  "resource": {
+    "name": "sessions/14870925559406969015",
+    "title": "Merge branch 'quest-8-advanced-solver-hints-6101704434197225555' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+    "createTime": "2026-03-13T02:47:55.378990618Z",
+    "updateTime": "2026-03-13T03:15:05.028422Z",
+    "state": "completed",
+    "sourceContext": {
+      "source": "sources/github/simik394/osobni_wf",
+      "githubRepoContext": {
+        "startingBranch": "main"
+      },
+      "environmentVariablesEnabled": true
+    },
+    "prompt": "Merge branch 'quest-8-advanced-solver-hints-6101704434197225555' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+    "url": "https://jules.google.com/session/14870925559406969015",
+    "id": "14870925559406969015",
+    "archived": false,
+    "outputs": [],
+    "outcome": {
+      "sessionId": "14870925559406969015",
+      "title": "Merge branch 'quest-8-advanced-solver-hints-6101704434197225555' into 'consolidation-v1' and resolve conflicts. Focus strictly on resolving the conflicts and preserving features from both branches. You do not need to wait for my approval; create a PR or push directly.",
+      "state": "completed",
+      "outputs": []
+    }
+  },
+  "_lastSyncedAt": 1775810573112
+}
