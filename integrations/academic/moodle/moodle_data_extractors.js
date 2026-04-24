@@ -1,4 +1,27 @@
 const jsdom = require('jsdom');
+const TurndownService = require('turndown');
+const { gfm } = require('turndown-plugin-gfm');
+
+// Shared turndown instance, configured once
+const turndown = new TurndownService({
+    headingStyle: 'atx',
+    hr: '---',
+    bulletListMarker: '-',
+    codeBlockStyle: 'fenced',
+    emDelimiter: '*',
+});
+turndown.use(gfm);
+
+// Keep images with alt text
+turndown.addRule('moodleImages', {
+    filter: 'img',
+    replacement: (content, node) => {
+        const alt = node.getAttribute('alt') || '';
+        const src = node.getAttribute('src') || '';
+        if (!src) return '';
+        return `![${alt}](${src})`;
+    }
+});
 
 class MoodleDataExtractor {
     static extractModules(htmlContent) {
@@ -78,6 +101,51 @@ class MoodleDataExtractor {
         const { document } = dom.window;
         const mainRegion = document.querySelector('[role="main"]') || document.querySelector('#region-main') || document.body;
         return `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>${title}</title>\n<style>body{font-family:sans-serif;line-height:1.6;padding:2rem;max-width:900px;margin:auto;} img{max-width:100%;height:auto;}</style>\n</head>\n<body>\n<h1>${title}</h1>\n<hr>\n${mainRegion.innerHTML}\n</body>\n</html>`;
+    }
+
+    /**
+     * Extract the main content as Markdown.
+     * Strips Moodle UI chrome, converts to clean MD with turndown.
+     * @param {string} htmlContent - full page HTML
+     * @param {string} title - module title
+     * @param {string} [sourceUrl] - original Moodle URL
+     * @returns {string} Markdown string
+     */
+    static extractMainContentAsMarkdown(htmlContent, title, sourceUrl) {
+        const dom = new jsdom.JSDOM(htmlContent);
+        const { document } = dom.window;
+        const mainRegion = document.querySelector('[role="main"]') || document.querySelector('#region-main') || document.body;
+
+        // Remove Moodle chrome that pollutes the content
+        const removeSelectors = [
+            'nav', 'script', 'style', 'noscript',
+            '.block', '.breadcrumb', '.activity-navigation',
+            '.completion-info', '.modified', '.lastmodified',
+            '#page-footer', '.footer', '.navbar',
+            'form[data-region="grading-actions"]',
+            '.submissionstatustable',
+            '.action-menu', '.dropdown',
+            'button', 'input[type="submit"]',
+            '.singlebutton',
+            '.activity-header .badge',
+            '[data-region="activity-dates"]',
+        ];
+        for (const sel of removeSelectors) {
+            mainRegion.querySelectorAll(sel).forEach(el => el.remove());
+        }
+
+        const innerHtml = mainRegion.innerHTML;
+        let md = turndown.turndown(innerHtml);
+
+        // Clean up excessive blank lines
+        md = md.replace(/\n{3,}/g, '\n\n').trim();
+
+        // Build frontmatter-style header
+        let header = `# ${title}\n\n`;
+        if (sourceUrl) header += `> Zdroj: ${sourceUrl}\n\n`;
+        header += `---\n\n`;
+
+        return header + md + '\n';
     }
 
     static extractAttachments(htmlContent) {

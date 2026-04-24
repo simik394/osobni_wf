@@ -7,7 +7,9 @@ const { assertAuthenticated } = require('../../lib/auth');
 const Extractor = require('./moodle_data_extractors');
 
 const BASE_DIR = path.join(__dirname, 'moodle_downloads');
-const TARGET_COURSES = ['414', '415']; 
+const TARGET_COURSES = ['414', '415'];
+const FORMAT_INDEX = process.argv.indexOf('--format');
+const OUTPUT_FORMAT = (FORMAT_INDEX > -1 && process.argv[FORMAT_INDEX + 1] === 'html') ? 'html' : 'md';
 
 async function extractZip(zipPath, targetDir) {
     try {
@@ -105,7 +107,7 @@ async function extractZip(zipPath, targetDir) {
                             const files = fs.existsSync(modDir) ? fs.readdirSync(modDir) : [];
                             exists = files.some(f => f.startsWith(cleanModName));
                         } else {
-                            exists = fs.existsSync(path.join(modDir, `${cleanModName}.html`));
+                            exists = fs.existsSync(path.join(modDir, `${cleanModName}.md`)) || fs.existsSync(path.join(modDir, `${cleanModName}.html`));
                         }
 
                         if (exists) {
@@ -201,20 +203,29 @@ async function extractZip(zipPath, targetDir) {
                     } else if (mod.type === 'book') {
                         const printUrl = Extractor.extractBookPrintLink(modHtml);
                         try {
+                            let contentHtml = modHtml;
                             if (printUrl) {
                                 await smartGoto(workPage, printUrl, 1000);
-                                const printHtml = await workPage.content();
-                                const pageHtml = Extractor.extractMainContent(printHtml, mod.name);
-                                fs.writeFileSync(path.join(modDir, cleanModName + '.html'), pageHtml, 'utf8');
+                                contentHtml = await workPage.content();
+                            }
+                            if (OUTPUT_FORMAT === 'md') {
+                                const md = Extractor.extractMainContentAsMarkdown(contentHtml, mod.name, mod.url);
+                                fs.writeFileSync(path.join(modDir, cleanModName + '.md'), md, 'utf8');
                             } else {
-                                const pageHtml = Extractor.extractMainContent(modHtml, mod.name);
+                                const pageHtml = Extractor.extractMainContent(contentHtml, mod.name);
                                 fs.writeFileSync(path.join(modDir, cleanModName + '.html'), pageHtml, 'utf8');
                             }
                         } catch (e) {}
                     } else {
                         // Fallback (page, assign, etc.)
-                        const pageHtml = Extractor.extractMainContent(modHtml, mod.name);
-                        fs.writeFileSync(path.join(modDir, cleanModName + '.html'), pageHtml, 'utf8');
+                        const ext = OUTPUT_FORMAT === 'md' ? '.md' : '.html';
+                        if (OUTPUT_FORMAT === 'md') {
+                            const md = Extractor.extractMainContentAsMarkdown(modHtml, mod.name, mod.url);
+                            fs.writeFileSync(path.join(modDir, cleanModName + ext), md, 'utf8');
+                        } else {
+                            const pageHtml = Extractor.extractMainContent(modHtml, mod.name);
+                            fs.writeFileSync(path.join(modDir, cleanModName + ext), pageHtml, 'utf8');
+                        }
 
                         const attachments = Extractor.extractAttachments(modHtml);
                         for (const att of attachments) {
@@ -259,7 +270,7 @@ async function extractZip(zipPath, targetDir) {
                     }
                     const cleanSecName = sanitizePath(mod.section);
                     const cleanModName = sanitizePath(mod.name);
-                    let localPath = path.join(cleanSecName, cleanModName + (['resource', 'folder'].includes(mod.type) ? '.pdf' : '.html')); 
+                    let localPath = path.join(cleanSecName, cleanModName + (['resource', 'folder'].includes(mod.type) ? '.pdf' : (OUTPUT_FORMAT === 'md' ? '.md' : '.html'))); 
                     if (mod.type === 'folder') localPath = path.join(cleanSecName, cleanModName);
                     indexHtml += `<li>${mod.type === 'folder' ? '📁' : '📄'} <a href="${localPath}" target="_blank">${mod.name}</a></li>\n`;
                 }
