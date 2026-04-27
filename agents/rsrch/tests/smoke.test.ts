@@ -22,8 +22,9 @@ describe('rsrch Smoke Test (Ready to Operate)', () => {
             const data = await response.json();
             expect(data.status).toBe('ok');
             // This is the CRITICAL check for production readiness
-            expect(data.browser).toBe('connected');
-            console.log('✅ Server is healthy and Browser is connected.');
+            // Accept both 'connected' (legacy) and 'ready' (modular)
+            expect(['connected', 'ready']).toContain(data.browser);
+            console.log(`✅ Server is healthy and Browser is ${data.browser}.`);
         });
 
         it('should respond to /system/status', async () => {

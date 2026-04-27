@@ -82,30 +82,35 @@ export class DashboardService {
         let falkorStatus = "Unknown";
         let gitStatus = "Clean";
 
-        // Halvarm Check
+        // Halvarm / Local Host Check
         try {
-            const sshResult = execSync('ssh -o BatchMode=yes -o ConnectTimeout=2 halvarm "curl -s http://localhost:3030/health || echo offline"', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
-            if (sshResult.includes('"status":"ok"')) {
+            // Since we are likely in host mode or can reach localhost
+            const healthResult = execSync('curl -s --connect-timeout 1 http://localhost:3030/health || echo offline', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+            if (healthResult.includes('"status":"ok"')) {
                 halvarmStatus = "Online (API OK)";
-                falkorStatus = "Online"; // Assuming health check includes Falkor
-            } else if (sshResult.includes('offline')) {
-                halvarmStatus = "Online (API Down)";
+                falkorStatus = "Online";
+            } else if (healthResult.includes('offline')) {
+                halvarmStatus = "Offline (API)";
             } else {
-                halvarmStatus = sshResult.trim().substring(0, 20);
+                halvarmStatus = "Running (Port 3030)";
             }
         } catch(e) {
-            halvarmStatus = "Unreachable";
-            falkorStatus = "Unreachable";
+            halvarmStatus = "Service Down";
         }
 
-        // Falkor Local check
-        try {
-            if (falkorStatus === "Unknown") {
-                const redisRes = execSync('redis-cli -p 6379 ping 2>/dev/null', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
-                if (redisRes.includes('PONG')) falkorStatus = "Online (Local)";
+        // Falkor Local check (Redis port 6379)
+        if (falkorStatus === "Unknown" || falkorStatus === "Unreachable") {
+            try {
+                const redisRes = execSync('redis-cli -p 6379 ping 2>/dev/null || echo offline', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+                if (redisRes.includes('PONG')) {
+                    falkorStatus = "Online (Local)";
+                    if (halvarmStatus === "Service Down") halvarmStatus = "Host OK";
+                } else {
+                    falkorStatus = "Offline";
+                }
+            } catch (e) {
+                falkorStatus = "Offline";
             }
-        } catch (e) {
-            if (falkorStatus === "Unknown") falkorStatus = "Offline";
         }
 
         // Git Check

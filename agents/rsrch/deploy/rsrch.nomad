@@ -1,4 +1,4 @@
-job "rsrch-browser" {
+job "rsrch" {
   datacenters = ["oci-eu"]
   type        = "service"
 
@@ -9,9 +9,6 @@ job "rsrch-browser" {
       mode = "host"
       port "http" {
         static = 3055
-      }
-      port "vnc" {
-        static = 5955
       }
     }
 
@@ -48,6 +45,9 @@ job "rsrch-browser" {
 
       env {
         FORCE_LOCAL_BROWSER = "true"
+        BROWSER_CDP_ENDPOINT = "http://localhost:9222"
+        PREINTI_BROWSER = "true"
+        REDEPLOY_NONCE = "3"
         PORT = "${NOMAD_PORT_http}"
         DISPLAY = ":99"
         RSRCH_PROFILE_ID = "fresh"
