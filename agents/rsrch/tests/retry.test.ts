@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WindmillClient } from '../src/windmill-client';
-import { GraphStore, getGraphStore } from '../src/graph-store';
-import { ApiError, NetworkError, AuthError } from '../src/errors';
+import { WindmillClient } from '../src/clients/windmill';
+import { GraphStore, getGraphStore } from '../src/core/graph-store';
+import { ApiError, NetworkError, AuthError } from '../src/clients/errors';
 import { FalkorDB } from 'falkordb';
 
 // Mock fetch

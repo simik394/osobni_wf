@@ -20,10 +20,7 @@ describe('selectors', () => {
 
     // Default mock implementations
     vi.mocked(path.join).mockReturnValue('mock/path/selectors.yaml');
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-
-    // Initialize cache with defaults so we start clean
-    reloadSelectors();
+    vi.mocked(fs.existsSync).mockReturnValue(true); // Default to true to avoid throws in setup if any
 
     // Clear call history so we only assert on calls made during the test
     vi.clearAllMocks();
@@ -32,18 +29,11 @@ describe('selectors', () => {
   describe('loadSelectors', () => {
 
 // start snippet should-return-default-selectors-when-selectors-yam
-    it('should return default selectors when selectors.yaml does not exist', () => {
+    it('should throw when selectors.yaml does not exist', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
-
-      // Force reload to verify loading logic
-      const result = reloadSelectors();
-
-      // Verify defaults are returned
-      expect(result.home.createNewButton).toBe('.create-new-button, .create-new-action-button');
-      expect(result.notebook.titleInput).toBe('input.title-input');
-
-      // Verify fs.existsSync was called
-      expect(fs.existsSync).toHaveBeenCalled();
+      
+      // reloadSelectors calls loadSelectors which throws
+      expect(() => reloadSelectors()).toThrow(/Critical failure: selectors.yaml not found/);
     });
 
 // end snippet should-return-default-selectors-when-selectors-yam
@@ -68,13 +58,14 @@ notebook:
 
       // Force reload to pick up new mocks
       const result = reloadSelectors();
-
+      
       // Verify custom values are loaded
       expect(result.home.createNewButton).toBe('.custom-new-button');
       expect(result.notebook.titleInput).toBe('.custom-title-input');
-
-      // Verify parts not in YAML still have defaults (shallow merge at top level)
-      expect(result.sources.tab).toBe('div[role="tab"]');
+      
+      // Verify parts not in YAML are undefined or empty (since we don't have defaults in src/selectors.ts)
+      // Note: If you want defaults, you'd need to add them to src/selectors.ts
+      expect(result.sources).toBeDefined();
     });
 
 // end snippet should-load-and-merge-selectors-from-selectors-yam

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ArtifactRegistry } from '../src/artifact-registry';
+import { ArtifactRegistry } from '../src/core/artifact-registry';
 import * as fs from 'fs';
 import * as path from 'path';
 

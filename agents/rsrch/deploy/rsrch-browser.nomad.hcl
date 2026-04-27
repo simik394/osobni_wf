@@ -19,7 +19,7 @@ job "rsrch-browser" {
         static = 9227
       }
       port "cdp" {
-        static = 9223
+        static = 9222
       }
     }
 
@@ -28,6 +28,8 @@ job "rsrch-browser" {
 
       config {
         image        = "localhost:5001/rsrch:latest"
+        command      = "node"
+        args         = ["deploy/launch-browser.js"]
         force_pull   = false
         network_mode = "host"
         shm_size     = 1073741824

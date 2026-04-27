@@ -27,7 +27,7 @@ function getRandomPort(): Promise<number> {
 }
 
 // Mock dependencies BEFORE importing server
-vi.mock('../src/client', () => ({
+vi.mock('../src/clients/perplexity', () => ({
     PerplexityClient: vi.fn().mockImplementation(() => ({
         init: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
@@ -51,7 +51,7 @@ vi.mock('../src/client', () => ({
     }))
 }));
 
-vi.mock('../src/graph-store', () => ({
+vi.mock('../src/core/graph-store', () => ({
     getGraphStore: vi.fn().mockReturnValue({
         connect: vi.fn().mockResolvedValue(undefined),
         getIsConnected: vi.fn().mockReturnValue(true),
@@ -62,10 +62,10 @@ vi.mock('../src/graph-store', () => ({
     GraphJob: vi.fn()
 }));
 
-vi.mock('../src/notebooklm-client');
+vi.mock('../src/clients/notebooklm');
 vi.mock('../src/clients/gemini');
 vi.mock('../src/discord');
-vi.mock('../src/artifact-registry', () => ({
+vi.mock('../src/core/artifact-registry', () => ({
     getRegistry: vi.fn().mockReturnValue({
         registerSession: vi.fn(),
         registerDocument: vi.fn(),
@@ -75,7 +75,7 @@ vi.mock('../src/artifact-registry', () => ({
     })
 }));
 
-vi.mock('../src/observability', () => ({
+vi.mock('../src/services/observability', () => ({
     startChatCompletionTrace: vi.fn().mockReturnValue({}),
     completeChatCompletionTrace: vi.fn(),
     failChatCompletionTrace: vi.fn(),
@@ -89,7 +89,7 @@ vi.mock('../src/observability', () => ({
 }));
 
 // Mock windmill-client which is dynamically imported in server.ts
-vi.mock('../src/windmill-client', () => ({
+vi.mock('../src/clients/windmill', () => ({
     getWindmillClient: vi.fn().mockReturnValue({
         isConfigured: vi.fn().mockReturnValue(false),
         queueAudioGenerations: vi.fn().mockResolvedValue({ queued: [], failed: [] }),

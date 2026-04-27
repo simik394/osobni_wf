@@ -9,12 +9,21 @@ COPY agents/shared/package.json agents/shared/
 COPY agents/rsrch/package.json agents/rsrch/
 
 # 2. Install production dependencies (omitting dev)
-RUN npm install --omit=dev && npm install pino-pretty
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    fluxbox \
+    x11vnc \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --omit=dev && npm install pino-pretty && \
+    npx playwright install --with-deps chromium
 
 # 3. Copy built code and configuration
 COPY agents/shared/dist agents/shared/dist
 COPY agents/rsrch/dist agents/rsrch/dist
 COPY agents/rsrch/selectors.yaml agents/rsrch/selectors.yaml
+COPY agents/rsrch/deploy agents/rsrch/deploy
 
 # 4. Global Linkage for @agents/shared
 RUN mkdir -p /app/node_modules/@agents && \
@@ -27,6 +36,10 @@ RUN mkdir -p /app/agents/rsrch/dist/rsrch && \
 
 WORKDIR /app/agents/rsrch
 EXPOSE 3000
+
+COPY agents/rsrch/deploy/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Default command to serve the API
 CMD ["node", "dist/cli/main.js", "serve"]

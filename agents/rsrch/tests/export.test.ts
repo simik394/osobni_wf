@@ -5,7 +5,7 @@ import { createResearchMockPage } from './fixtures/mock-page-factory';
 import { Page } from 'playwright';
 
 // Mock getRegistry to avoid side effects
-vi.mock('../src/artifact-registry', () => ({
+vi.mock('../src/core/artifact-registry', () => ({
     getRegistry: vi.fn().mockReturnValue({
         registerSession: vi.fn().mockReturnValue('TEST-SESSION'),
         registerDocument: vi.fn().mockReturnValue('TEST-DOC'),
@@ -15,7 +15,7 @@ vi.mock('../src/artifact-registry', () => ({
 }));
 
 // Mock telemetry
-vi.mock('../../shared/src', () => ({
+vi.mock('@agents/shared', () => ({
     getRsrchTelemetry: vi.fn().mockReturnValue({
         startTrace: vi.fn(),
         startGeneration: vi.fn(),

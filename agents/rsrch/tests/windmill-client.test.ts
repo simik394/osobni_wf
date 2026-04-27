@@ -25,7 +25,7 @@ describe('WindmillClient', () => {
         process.env.WINDMILL_TOKEN = 'test-token';
         process.env.WINDMILL_URL = WINDMILL_URL;
         process.env.WINDMILL_WORKSPACE = WORKSPACE;
-        const mod = await import('../src/windmill-client');
+        const mod = await import('../src/clients/windmill');
         WindmillClient = mod.WindmillClient;
     });
 
@@ -44,7 +44,7 @@ describe('WindmillClient', () => {
         it('should return false when WINDMILL_TOKEN is empty', async () => {
             process.env.WINDMILL_TOKEN = '';
             vi.resetModules();
-            const mod = await import('../src/windmill-client');
+            const mod = await import('../src/clients/windmill');
             const client = new mod.WindmillClient();
             expect(client.isConfigured()).toBe(false);
         });

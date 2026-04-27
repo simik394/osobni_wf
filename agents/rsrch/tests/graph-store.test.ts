@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { GraphStore } from '../src/graph-store';
+import { GraphStore } from '../src/core/graph-store';
 
 describe('GraphStore', () => {
     let store: GraphStore;

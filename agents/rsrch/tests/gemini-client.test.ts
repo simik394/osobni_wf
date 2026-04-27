@@ -139,7 +139,8 @@ describe('GeminiClient', () => {
             })),
             evaluate: vi.fn().mockResolvedValue('<html><body>Mocked Body</body></html>'),
             title: vi.fn().mockResolvedValue('Gemini'),
-            screenshot: vi.fn().mockResolvedValue(undefined),
+            content: vi.fn().mockResolvedValue('<html><body>Mocked Body</body></html>'),
+            screenshot: vi.fn().mockResolvedValue(Buffer.from('')),
         } as unknown as MockPage;
 
         client = new GeminiClient(mockPage as unknown as Page, { verbose: false });

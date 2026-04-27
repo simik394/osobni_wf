@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WorkflowEngine } from '../src/workflows/engine';
-import { PerplexityClient } from '../src/client';
-import { getGraphStore } from '../src/graph-store';
+import { PerplexityClient } from '../src/clients/perplexity';
+import { getGraphStore } from '../src/core/graph-store';
 
 // Mock dependencies
-vi.mock('../src/client');
-vi.mock('../src/graph-store');
+vi.mock('../src/clients/perplexity');
+vi.mock('../src/core/graph-store');
 
 describe('WorkflowEngine', () => {
     let engine: WorkflowEngine;
