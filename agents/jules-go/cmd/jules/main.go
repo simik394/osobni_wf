@@ -63,6 +63,8 @@ func main() {
 	syncCmd := flag.NewFlagSet("sync-youtrack", flag.ExitOnError)
 	dryRun := syncCmd.Bool("dry-run", false, "Preview changes without applying them")
 
+	approvePlanCmd := flag.NewFlagSet("approve-plan", flag.ExitOnError)
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -489,6 +491,28 @@ func main() {
 			}
 		}
 
+	case "approve-plan":
+		approvePlanCmd.Parse(os.Args[2:])
+		if approvePlanCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli approve-plan <session-id>")
+			os.Exit(1)
+		}
+		sessionID := approvePlanCmd.Arg(0)
+		
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create client", "err", err)
+			os.Exit(1)
+		}
+		
+		// The API accepts a Plan, currently empty in the Go struct
+		plan := jules.Plan{}
+		if err := client.ApprovePlan(ctx, sessionID, plan); err != nil {
+			slog.Error("failed to approve plan", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Successfully approved plan for session %s\n", sessionID)
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -515,6 +539,7 @@ Commands:
   publish         Publish a session <session-id> [--pr=true|false]
   publish-all     Publish all completed sessions [--async]
   sync-youtrack   Sync completed sessions to YouTrack [--dry-run]
+  approve-plan    Approve an execution plan for a session <session-id>
   status          Show system status
   status-sessions Show session status dashboard [--json]
   pr-status       Show PR status for sessions [--repo owner/repo]
