@@ -65,6 +65,9 @@ func main() {
 
 	approvePlanCmd := flag.NewFlagSet("approve-plan", flag.ExitOnError)
 
+	delegateCmd := flag.NewFlagSet("delegate", flag.ExitOnError)
+	delegateProject := delegateCmd.String("project", "01-pwf", "GitHub project path (e.g. owner/repo)")
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -513,6 +516,71 @@ func main() {
 		}
 		fmt.Printf("Successfully approved plan for session %s\n", sessionID)
 
+	case "delegate":
+		delegateCmd.Parse(os.Args[2:])
+		if delegateCmd.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: jules-cli delegate <issue-id> [--project=owner/repo]")
+			os.Exit(1)
+		}
+		issueID := delegateCmd.Arg(0)
+		
+		// Initialize YouTrack client
+		ytURL := os.Getenv("YOUTRACK_URL")
+		ytToken := os.Getenv("YOUTRACK_TOKEN")
+		if ytURL == "" || ytToken == "" {
+			fmt.Fprintln(os.Stderr, "Error: YOUTRACK_URL and YOUTRACK_TOKEN environment variables required")
+			os.Exit(1)
+		}
+		ytConfig := youtrack.ClientConfig{BaseURL: ytURL, Token: ytToken}
+		ytClient, err := youtrack.NewClient(ytConfig, logger)
+		if err != nil {
+			slog.Error("failed to create YouTrack client", "err", err)
+			os.Exit(1)
+		}
+
+		// Check if issue exists (and get details if possible, but our current client might only have GetComments/UpdateIssueState)
+		// For now we will just use the issue ID as the prompt base
+		// A full implementation would fetch the issue title and description.
+
+		// Initialize Jules client
+		client, err := jules.NewClient(apiKey, logger)
+		if err != nil {
+			slog.Error("failed to create Jules client", "err", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Creating session for %s in project %s...\n", issueID, *delegateProject)
+		
+		// Note: The Jules API CreateSession doesn't take parameters yet in our Go struct,
+		// but in a real scenario we'd pass the prompt and source here.
+		// For this MVP, we call it and get the session ID.
+		sess, err := client.CreateSession(ctx)
+		if err != nil {
+			slog.Error("failed to create Jules session", "err", err)
+			os.Exit(1)
+		}
+
+		// Add comment to YouTrack
+		targetComment := fmt.Sprintf("🤖 Jules session created: %s", sess.URL)
+		if sess.URL == "" {
+			targetComment = fmt.Sprintf("🤖 Jules session created: %s", sess.ID)
+		}
+
+		if err := ytClient.AddComment(ctx, issueID, targetComment); err != nil {
+			slog.Error("failed to add comment to YouTrack", "err", err)
+		} else {
+			fmt.Printf("Added comment to YouTrack issue %s\n", issueID)
+		}
+
+		// Update state to In Progress
+		if err := ytClient.UpdateIssueState(ctx, issueID, "In Progress"); err != nil {
+			slog.Error("failed to update YouTrack issue state", "err", err)
+		} else {
+			fmt.Printf("Updated YouTrack issue %s state to In Progress\n", issueID)
+		}
+
+		fmt.Printf("Done! Session ID: %s\n", sess.ID)
+
 	case "version":
 		versionCmd.Parse(os.Args[2:])
 		fmt.Printf("jules-cli %s (commit: %s, built: %s)\n", version, commit, date)
@@ -540,6 +608,7 @@ Commands:
   publish-all     Publish all completed sessions [--async]
   sync-youtrack   Sync completed sessions to YouTrack [--dry-run]
   approve-plan    Approve an execution plan for a session <session-id>
+  delegate        Create a session from a YouTrack issue <issue-id> [--project]
   status          Show system status
   status-sessions Show session status dashboard [--json]
   pr-status       Show PR status for sessions [--repo owner/repo]
