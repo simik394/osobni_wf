@@ -13,6 +13,7 @@ export interface SendMessageOptions {
     files?: string[];
     sources?: Source[];
     model?: string;
+    gem?: string;
 }
 
 /**
@@ -38,9 +39,10 @@ export async function sendMessageAction(
         getCurrentSessionId: () => string | null;
         getGraphStore: () => any;
         dumpState: (prefix: string) => Promise<any>;
+        selectGem?: (name: string) => Promise<boolean>;
     }
 ): Promise<string | null> {
-    const { waitForResponse = true, resetSession, onProgress, files = [], sources = [], model } = options;
+    const { waitForResponse = true, resetSession, onProgress, files = [], sources = [], model, gem } = options;
     const { page, log } = ctx;
 
     log(`Sending message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}" (Reset: ${resetSession})`);
@@ -51,6 +53,15 @@ export async function sendMessageAction(
     // Set model if requested
     if (model) {
         await deps.setModel(model);
+    }
+
+    // Select Gem if requested
+    if (gem) {
+        if (deps.selectGem) {
+            await deps.selectGem(gem);
+        } else {
+            log('selectGem not available in deps', 'warn');
+        }
     }
 
     // Upload files if any

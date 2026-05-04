@@ -59,7 +59,9 @@ export class GeminiClient extends EventEmitter {
                 if ((b as any).recycleTabPage) await (b as any).recycleTabPage('gemini');
                 if (b.release) await b.release();
             },
-            dumpState: async (name: string) => await this.dumpState(name)
+            dumpState: async (name: string) => await this.dumpState(name),
+            listGems: async () => actions.listGemsAction(this.ctx, this.deps as GeminiActionDeps),
+            selectGem: async (name: string) => actions.selectGemAction(this.ctx, this.deps as GeminiActionDeps, name)
         };
     }
 
@@ -119,6 +121,14 @@ export class GeminiClient extends EventEmitter {
 
     async setModel(model: string) {
         return actions.setModelAction(this.ctx, this.deps as GeminiActionDeps, model);
+    }
+
+    async listGems() {
+        return actions.listGemsAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async selectGem(name: string) {
+        return actions.selectGemAction(this.ctx, this.deps as GeminiActionDeps, name);
     }
 
     async ensureSidebar() {

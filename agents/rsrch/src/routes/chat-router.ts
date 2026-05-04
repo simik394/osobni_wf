@@ -192,5 +192,16 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.get('/gems', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const gems = await gemini.listGems();
+            res.json({ success: true, data: gems });
+        } catch (e: any) {
+            console.error('[GeminiRouter] listGems failed:', e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     return router;
 }

@@ -41,6 +41,8 @@ export type GeminiActionDeps = ActionDeps & {
     getLatestResponseData: () => Promise<{ text: string, markdown: string, sources: any[], thoughts?: string } | null>;
     getCurrentSessionId: () => string | null;
     dumpState: (prefix: string) => Promise<any>;
+    listGems: () => Promise<{ name: string; url: string | null }[]>;
+    selectGem: (name: string) => Promise<boolean>;
 };
 
 /**
