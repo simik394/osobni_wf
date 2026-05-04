@@ -242,9 +242,6 @@ export class NotebookLMClient {
 
     /** Renames an artifact in the studio panel */
     async renameArtifact(oldTitle: string, newTitle: string) {
-        // This should be in studio actions, adding as bridge
-        this.ctx.log(`Renaming artifact from "${oldTitle}" to "${newTitle}" (bridge).`);
-        // For now, minimal implementation or delegation
-        return false; 
+        return actions.renameStudioArtifactAction(this.ctx, this.deps, oldTitle, newTitle);
     }
 }

@@ -180,5 +180,45 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         }
     });
 
+    router.post('/rename-artifact', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, oldTitle, newTitle } = req.body;
+            if (!oldTitle || !newTitle) {
+                return res.status(400).json({ success: false, error: 'oldTitle and newTitle are required' });
+            }
+
+            const client = await getNotebookClient();
+            if (notebookTitle) {
+                await client!.openNotebook(notebookTitle);
+            }
+
+            const success = await client!.renameArtifact(oldTitle, newTitle);
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Rename artifact failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/download-artifact', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, artifactTitle, outputPath, isPattern, latestOnly } = req.body;
+            if (!notebookTitle || !artifactTitle || !outputPath) {
+                return res.status(400).json({ success: false, error: 'notebookTitle, artifactTitle, and outputPath are required' });
+            }
+
+            const client = await getNotebookClient();
+            const success = await client!.downloadArtifact(notebookTitle, artifactTitle, outputPath, {
+                isPattern: isPattern === true || isPattern === 'true',
+                latestOnly: latestOnly === true || latestOnly === 'true'
+            });
+
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Download artifact failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     return router;
 }
