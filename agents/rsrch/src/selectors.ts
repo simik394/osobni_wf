@@ -219,31 +219,219 @@ export interface NotebookLMSelectors {
 // CONFIG LOADER
 // ============================================================
 
+const DEFAULTS: NotebookLMSelectors = {
+    home: {
+        createNewButton: '.create-new-button, .create-new-action-button',
+        projectButton: 'div[role="button"]',
+        projectButtonTitle: '.project-title',
+        projectCard: '.project-card',
+        primaryActionButton: '.primary-action'
+    },
+    notebook: {
+        titleInput: 'input.title-input',
+        urlPattern: '**/notebook/**'
+    },
+    sources: {
+        tab: 'div[role="tab"]',
+        tabTextPattern: 'Sources',
+        addSourcesButton: 'button:has-text("Add")',
+        dropZoneButton: '.drop-zone',
+        webSourcePattern: 'Web',
+        pasteTextPattern: 'Paste',
+        drivePattern: 'Drive',
+        urlInputTextarea: 'textarea',
+        submitButton: 'button[type="submit"]',
+        dialogContainer: '.dialog',
+        selectAllInputEn: 'Select all',
+        selectAllInputCs: 'Vybrat vše',
+        drivePickerFrame: 'iframe',
+        driveSearchInput: 'input[type="search"]',
+        driveFileRow: '.file-row',
+        driveSelectButton: 'button:has-text("Select")'
+    },
+    studio: {
+        maximizeButton: 'button[aria-label="Maximize"]',
+        artifactButton: '.artifact-button',
+        artifactLibraryItem: '.library-item',
+        artifactTitle: '.artifact-title',
+        audioIcon: '.audio-icon',
+        audioIconPattern: 'Audio',
+        moreMenuButton: '.more-menu',
+        moreMenuIcon: '.more-icon',
+        menuItem: 'div[role="menuitem"]',
+        renameOption: 'Rename',
+        downloadOption: 'Download',
+        renameInput: 'input.rename-input'
+    },
+    audio: {
+        customizeButtonEn: 'Customize',
+        customizeButtonCs: 'Upravit',
+        customizeTextareaCs: 'Zadejte pokyny',
+        customizeTextareaPlaceholder: 'How should the audio sound?',
+        generateButtonCs: 'Generovat',
+        generateButtonEn: 'Generate',
+        audioOverviewButtonCs: 'Přehled audia',
+        audioOverviewButtonEn: 'Audio Overview',
+        audioOverviewButtonText: 'Audio Overview',
+        generatingIndicatorCs: 'Generování',
+        generatingIndicatorEn: 'Generating'
+    },
+    download: {
+        moreButton: 'button.more-button',
+        downloadMenuItemCs: 'Stáhnout',
+        downloadMenuItemEn: 'Download',
+        menuVisible: '.menu-visible'
+    },
+    chat: {
+        input: 'div[contenteditable="true"]',
+        submitButton: 'button[aria-label="Send"]',
+        messageContainer: '.message-container',
+        lastMessage: '.message:last-child',
+        thinkingIndicator: '.thinking'
+    },
+    gemini: {
+        auth: {
+            acceptAll: 'Accept all',
+            dismiss: 'Dismiss',
+            signIn: 'Sign in',
+            welcome: 'Welcome'
+        },
+        model: {
+            trigger: '.model-trigger',
+            menu: '.model-menu',
+            item: '.model-item',
+            advanced: 'Advanced',
+            flash: 'Flash',
+            thinking: 'Thinking',
+            pro: 'Pro'
+        },
+        chat: {
+            app: '.gemini-app',
+            input: 'div[contenteditable="true"]',
+            send: 'button[aria-label="Send"]',
+            response: '.model-response',
+            history: '.chat-history',
+            newChat: 'New chat'
+        },
+        sidebar: {
+            menu: '.sidebar-menu',
+            conversations: '.conversation-list',
+            showMore: 'Show more',
+            myStuff: 'My stuff',
+            gems: 'Gems'
+        },
+        deepResearch: {
+            panel: '.research-panel',
+            documentCard: '.doc-card',
+            documentTitle: '.doc-title',
+            toolbarTitle: '.toolbar-title',
+            immersiveTitle: '.immersive-title'
+        },
+        gems: {
+            card: '.gem-card',
+            name: '.gem-name',
+            create: 'Create Gem',
+            nameInput: 'input[name="gem-name"]',
+            instructionInput: 'textarea[name="instructions"]',
+            save: 'Save'
+        },
+        upload: {
+            button: 'button[aria-label="Upload"]',
+            fileInput: 'input[type="file"]',
+            uploadFile: 'Upload file',
+            drive: 'Google Drive',
+            photos: 'Google Photos',
+            importCode: 'Import code',
+            notebooklm: 'NotebookLM'
+        }
+    },
+    perplexity: {
+        queryInput: 'textarea[placeholder*="Ask"]',
+        followUpInput: 'textarea[placeholder*="follow-up"]',
+        answerContainer: '.answer-container'
+    },
+    aiMode: {
+        entryUrl: 'https://myactivity.google.com/',
+        myActivityUrl: 'https://myactivity.google.com/product/ai',
+        sidebar: {
+            dialog: 'div[role="dialog"]',
+            trigger: 'button[aria-label*="menu"]',
+            historyItem: '.history-item',
+            showMore: 'Show more',
+            mySearchHistory: 'My search history'
+        },
+        myActivity: {
+            activityItem: '.activity-item',
+            activityItemFallback: 'div[role="listitem"]',
+            detailsButton: 'Details',
+            deleteButton: 'Delete',
+            deleteDayButton: 'Delete day'
+        },
+        conversation: {
+            aiResponse: '.ai-response',
+            aiResponseFallback: '.response',
+            turnContainer: '.turn-container',
+            turnRoot: '.turn-root',
+            mainContent: '.main-content',
+            userQuery: '.user-query',
+            codeBlock: 'pre',
+            inlineCode: 'code',
+            citationChip: '.citation',
+            textLink: 'a',
+            textLinkFallback: 'a',
+            sourceCard: '.source-card',
+            sourcePanel: '.source-panel',
+            followUpInput: 'textarea',
+            copyButton: 'Copy',
+            shareButton: 'Share',
+            feedbackGood: 'Good',
+            feedbackBad: 'Bad',
+            disclaimer: '.disclaimer'
+        },
+        auth: {
+            acceptAll: 'Accept all'
+        }
+    }
+};
+
 let cachedSelectors: NotebookLMSelectors | null = null;
 
 /**
  * Load selectors from YAML configuration file.
- * The YAML MUST exist as it is the primary source of truth.
+ * The YAML is merged with hardcoded defaults.
  */
 export function loadSelectors(): NotebookLMSelectors {
     if (cachedSelectors) {
         return cachedSelectors;
     }
 
+    const result = JSON.parse(JSON.stringify(DEFAULTS)) as NotebookLMSelectors;
+
     try {
         const yamlPath = path.join(__dirname, 'selectors.yaml');
         if (fs.existsSync(yamlPath)) {
             const content = fs.readFileSync(yamlPath, 'utf-8');
-            cachedSelectors = yaml.parse(content) as NotebookLMSelectors;
-            console.log('[Selectors] Loaded from selectors.yaml');
+            const yamlSelectors = yaml.parse(content) as any;
+            
+            for (const category in yamlSelectors) {
+                if (result[category as keyof NotebookLMSelectors]) {
+                    if (typeof yamlSelectors[category] === 'object') {
+                        Object.assign(result[category as keyof NotebookLMSelectors], yamlSelectors[category]);
+                    } else {
+                        (result as any)[category] = yamlSelectors[category];
+                    }
+                }
+            }
+            console.log('[Selectors] Loaded and merged from selectors.yaml');
         } else {
             throw new Error(`[Selectors] Critical failure: selectors.yaml not found at ${yamlPath}`);
         }
     } catch (error) {
         console.error('[Selectors] Fatal Error:', error);
-        throw error; // We want to crash early if configuration is missing
+        throw error;
     }
 
+    cachedSelectors = result;
     return cachedSelectors;
 }
 

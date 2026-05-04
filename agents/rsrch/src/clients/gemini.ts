@@ -38,7 +38,13 @@ export class GeminiClient extends EventEmitter {
             getCurrentSessionId: () => this.getCurrentSessionIdSync(),
             getLatestResponseData: async () => await this.extractResponse(),
             getLatestResponse: async () => (await this.extractResponse())?.text || null,
-            injectText: async (text: string) => { await this.page.fill(selectors.gemini.chat.input, text); },
+            injectText: async (text: string) => { 
+                const input = this.page.locator(selectors.gemini.chat.input).first();
+                if (await input.isVisible()) {
+                    await input.click();
+                }
+                await this.page.fill(selectors.gemini.chat.input, text); 
+            },
             injectSources: async (sources: any[]) => { this.log('injectSources not implemented in bridge (legacy)', 'warn'); },
             
             setModel: async (model: string) => { await actions.setModelAction(this.ctx, this.deps as GeminiActionDeps, model); return true; },
@@ -53,21 +59,23 @@ export class GeminiClient extends EventEmitter {
                 if ((b as any).recycleTabPage) await (b as any).recycleTabPage('gemini');
                 if (b.release) await b.release();
             },
-            dumpState: async (name: string) => {
-                const fs = await import('fs');
-                const path = await import('path');
-                const timestamp = Date.now();
-                const baseName = `${name}_${timestamp}`;
-                const dataDir = path.join(config.paths.resultsDir, 'debug');
-                if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-
-                const htmlPath = path.join(dataDir, `${baseName}.html`);
-                const pngPath = path.join(dataDir, `${baseName}.png`);
-                await fs.promises.writeFile(htmlPath, await this.page.content());
-                await this.page.screenshot({ path: pngPath, fullPage: true });
-                return { htmlPath, pngPath };
-            }
+            dumpState: async (name: string) => await this.dumpState(name)
         };
+    }
+
+    async dumpState(name: string) {
+        const fs = await import('fs');
+        const path = await import('path');
+        const timestamp = Date.now();
+        const baseName = `${name}_${timestamp}`;
+        const dataDir = path.join(config.paths.resultsDir, 'debug');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+        const htmlPath = path.join(dataDir, `${baseName}.html`);
+        const pngPath = path.join(dataDir, `${baseName}.png`);
+        await fs.promises.writeFile(htmlPath, await this.page.content());
+        await this.page.screenshot({ path: pngPath, fullPage: true });
+        return { htmlPath, pngPath };
     }
 
     private log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
@@ -217,4 +225,24 @@ export class GeminiClient extends EventEmitter {
 
     async getLatestResponse() { return (await this.extractResponse())?.text || null; }
     async getLatestResponseData() { return this.extractResponse(); }
+
+    // --- Legacy Compatibility ---
+
+    /**
+     * Legacy method to get all response texts.
+     * In the modular version, we just return the latest one in an array for compatibility.
+     */
+    async getResponses(): Promise<string[]> {
+        const data = await this.extractResponse();
+        return data ? [data.text] : [];
+    }
+
+    /**
+     * Legacy method to get a response by index.
+     */
+    async getResponse(index: number): Promise<string | null> {
+        const responses = await this.getResponses();
+        if (index < 0) index = responses.length + index;
+        return responses[index] || null;
+    }
 }
