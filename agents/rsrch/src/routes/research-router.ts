@@ -40,7 +40,7 @@ export function createResearchRouter(deps: ResearchRouterDeps) {
                     const result = await jobClient.startDeepResearch(query, gem);
                     await graphStore.updateJobStatus(job.id, 'completed', { result });
 
-                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.googleDocUrl || undefined, result.googleDocUrl || undefined);
+                    await discordService.notifyJobCompletion(job.id, 'Deep Research', query, true, result.docUrl || undefined, result.docUrl || undefined);
                 } catch (e: any) {
                     console.error(`[ResearchRouter] Job ${job.id} failed:`, e);
                     await graphStore.updateJobStatus(job.id, 'failed', { error: e.message });

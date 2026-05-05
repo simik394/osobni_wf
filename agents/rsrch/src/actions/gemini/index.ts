@@ -6,3 +6,6 @@ export * from './watch-response';
 export * from './extract-response';
 export * from './export';
 export * from './auth';
+export * from './gems';
+export * from './scrape';
+export * from './research';

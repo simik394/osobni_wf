@@ -157,6 +157,10 @@ export class GraphStore {
         return this.conversation.getConversationsByPlatform(platform, limit);
     }
 
+    async getConversationState(platformId: string, platform: string): Promise<{ exists: boolean; id?: string; updatedAt?: number }> {
+        return this.conversation.getConversationState(platformId, platform);
+    }
+
     async getChangedConversations(since: number): Promise<any[]> {
         return this.conversation.getChangedConversations(since);
     }

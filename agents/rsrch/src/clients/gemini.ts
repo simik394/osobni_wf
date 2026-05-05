@@ -223,7 +223,7 @@ export class GeminiClient extends EventEmitter {
         return {
             success: true,
             markdown: responseMarkdown,
-            googleDocUrl: exportRes.docUrl,
+            docUrl: exportRes.docUrl,
             docId: exportRes.docId,
             docTitle: exportRes.docTitle
         };
@@ -257,6 +257,64 @@ export class GeminiClient extends EventEmitter {
     async renameGoogleDoc(docId: string, newTitle: string) {
         this.log(`renameGoogleDoc(Legacy) called for ${docId} -> ${newTitle}. Not implemented.`, 'warn');
         return true;
+    }
+
+    // --- Gems CRUD ---
+
+    async createGem(options: { name: string, instructions: string, files?: string[] }) {
+        return actions.createGemAction(this.ctx, this.deps as GeminiActionDeps, options);
+    }
+
+    async updateGem(id: string, options: { name?: string, instructions?: string, files?: string[] }) {
+        return actions.updateGemAction(this.ctx, this.deps as GeminiActionDeps, id, options);
+    }
+
+    async deleteGem(id: string) {
+        return actions.deleteGemAction(this.ctx, this.deps as GeminiActionDeps, id);
+    }
+
+    async openGem(nameOrId: string) {
+        return actions.openGemAction(this.ctx, this.deps as GeminiActionDeps, nameOrId);
+    }
+
+    async chatWithGem(nameOrId: string, message: string) {
+        return actions.chatWithGemAction(this.ctx, this.deps as GeminiActionDeps, nameOrId, message);
+    }
+
+    // --- Scraping & Research ---
+
+    async scrapeConversations(limit?: number, offset?: number, cb?: (data: any) => void) {
+        return actions.scrapeConversationsAction(this.ctx, this.deps as GeminiActionDeps, limit, offset, cb);
+    }
+
+    async extractCurrentConversation() {
+        return actions.extractCurrentConversationAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async openSession(identifier: string) {
+        return this.init(identifier);
+    }
+
+    async listDeepResearchDocuments(limit?: number) {
+        return actions.listDeepResearchDocsAction(this.ctx, this.deps as GeminiActionDeps, limit);
+    }
+
+    async getAllResearchDocsInSession() {
+        return actions.getAllResearchDocsInSessionAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    // --- Utilities ---
+
+    async uploadFile(filePath: string) {
+        return this.uploadFiles([filePath]);
+    }
+
+    async goto(url: string) {
+        return this.page.goto(url);
+    }
+
+    async wait(ms: number) {
+        return this.page.waitForTimeout(ms);
     }
 
     // --- Legacy Bridge & Helpers ---

@@ -167,6 +167,22 @@ export class ConversationManager {
         return (result.data || []).map(row => (row.c?.properties || row.c || row[0]));
     }
 
+    async getConversationState(platformId: string, platform: string): Promise<{ exists: boolean; id?: string; updatedAt?: number }> {
+        const result = await this.query<any[]>(`
+            MATCH (c:Conversation {platformId: '${escapeString(platformId)}', platform: '${escapeString(platform)}'})
+            RETURN c.id as id, c.updatedAt as updatedAt
+        `);
+        
+        if (result.data && result.data.length > 0) {
+            return {
+                exists: true,
+                id: result.data[0].id,
+                updatedAt: result.data[0].updatedAt
+            };
+        }
+        return { exists: false };
+    }
+
     async getChangedConversations(since: number): Promise<any[]> {
         const result = await this.query<any[]>(`
             MATCH (c:Conversation)

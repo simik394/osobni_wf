@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { cliContext } from './context';
 import { serveCommand, stopCommand, shutdownCommand } from '../commands/server';
 import { profileCommand } from '../commands/profile';
-import { geminiCommand } from '../commands/gemini';
+import { geminiCommand } from '../commands/gemini/index';
 import { notebookCommand } from '../commands/notebooklm';
 import { queryCommand, batchCommand, authCommand, loginCommand } from '../commands/perplexity';
 import { graphCommand } from '../commands/graph';
