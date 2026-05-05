@@ -29,28 +29,29 @@ export class GeminiClient extends EventEmitter {
             config,
         };
 
+        // Use instance methods directly in closures to ensure spies work in tests
         this.deps = {
             selectors,
             telemetry,
             verbose: this.verbose,
             getGraphStore: () => getGraphStore(),
-            checkAuth: async () => { try { await this.ensureSidebar(); return true; } catch(e) { return false; } },
+            checkAuth: async () => this.checkAuth(),
             getCurrentSessionId: () => this.getCurrentSessionIdSync(),
-            getLatestResponseData: async () => await this.extractResponse(),
-            getLatestResponse: async () => (await this.extractResponse())?.text || null,
+            getLatestResponseData: async () => await this.getLatestResponseData(),
+            getLatestResponse: async () => await this.getLatestResponse(),
             injectText: async (text: string) => { 
                 const input = this.page.locator(selectors.gemini.chat.input).first();
                 if (await input.isVisible()) {
                     await input.click();
                 }
-                await this.page.fill(selectors.gemini.chat.input, text); 
+                await this.page.locator(selectors.gemini.chat.input).first().fill(text); 
             },
             injectSources: async (sources: any[]) => { this.log('injectSources not implemented in bridge (legacy)', 'warn'); },
             
-            setModel: async (model: string) => { await actions.setModelAction(this.ctx, this.deps as GeminiActionDeps, model); return true; },
-            resetToNewChat: async () => { await actions.resetToNewChatAction(this.ctx, this.deps as GeminiActionDeps); },
+            setModel: async (model: string) => await this.setModel(model),
+            resetToNewChat: async () => await this.resetToNewChat(),
             
-            uploadFiles: async (files: string[]) => { await actions.uploadFilesAction(this.ctx, this.deps as GeminiActionDeps, files); return true; },
+            uploadFiles: async (files: string[]) => await this.uploadFiles(files),
             recycle: async () => {
                 const { BrowserClient } = await import('./base');
                 const b = new BrowserClient();
@@ -60,8 +61,8 @@ export class GeminiClient extends EventEmitter {
                 if (b.release) await b.release();
             },
             dumpState: async (name: string) => await this.dumpState(name),
-            listGems: async () => actions.listGemsAction(this.ctx, this.deps as GeminiActionDeps),
-            selectGem: async (name: string) => actions.selectGemAction(this.ctx, this.deps as GeminiActionDeps, name)
+            listGems: async () => await this.listGems(),
+            selectGem: async (name: string) => await this.selectGem(name)
         };
     }
 
@@ -137,9 +138,31 @@ export class GeminiClient extends EventEmitter {
 
     async init(sessionId?: string) {
         if (sessionId) {
-            await this.page.goto(`${config.urls.gemini}/app/${sessionId}`);
-            await this.ensureSidebar();
+            await this.page.goto(`${config.urls.gemini}/app/${sessionId}`, { waitUntil: 'domcontentloaded' });
+        } else {
+            // Force navigation to home if no session provided (test requirement)
+            await this.page.goto(`${config.urls.gemini}/app`, { waitUntil: 'domcontentloaded' });
         }
+
+        // Handle initial state (auth, cookies, overlays)
+        try {
+            await actions.handleInitialOverlaysAction(this.ctx, this.deps as GeminiActionDeps);
+            await actions.checkAuthRequiredAction(this.ctx, this.deps as GeminiActionDeps);
+            
+            // Wait for chat app to be ready
+            await this.page.waitForSelector(selectors.gemini.chat.app, { timeout: 15000 }).catch(async (e) => {
+                await this.dumpState('gemini_init_fail');
+                throw e;
+            });
+
+            await this.ensureSidebar();
+        } catch (e: any) {
+            if (e.message.includes('authentication')) {
+                await this.dumpState('gemini_auth_required');
+            }
+            throw e;
+        }
+
         return true;
     }
 
@@ -240,19 +263,20 @@ export class GeminiClient extends EventEmitter {
 
     /**
      * Legacy method to get all response texts.
-     * In the modular version, we just return the latest one in an array for compatibility.
      */
     async getResponses(): Promise<string[]> {
-        const data = await this.extractResponse();
-        return data ? [data.text] : [];
+        const data = await actions.extractAllResponsesAction(this.ctx, this.deps as GeminiActionDeps);
+        return data.map(d => d.text);
     }
 
     /**
      * Legacy method to get a response by index.
+     * Uses 1-based indexing for positive values (1 = first), 
+     * and 0-based negative indexing for relative to end (-1 = latest).
      */
     async getResponse(index: number): Promise<string | null> {
-        const responses = await this.getResponses();
-        if (index < 0) index = responses.length + index;
-        return responses[index] || null;
+        const targetIndex = index > 0 ? index - 1 : index;
+        const data = await actions.extractResponseAction(this.ctx, this.deps as GeminiActionDeps, undefined, targetIndex);
+        return data ? data.text : null;
     }
 }

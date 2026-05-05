@@ -119,7 +119,7 @@ export async function sendMessageAction(
             return null;
         }
 
-        log('Waiting for response...');
+        log(`Waiting for response... (Before count: ${responsesBefore})`);
         const maxWait = 90000;
         const pollInterval = 1000;
         let elapsed = 0;
@@ -149,6 +149,7 @@ export async function sendMessageAction(
                 }
 
                 let currentText = await latestResponse.innerText().catch(() => '');
+                if (deps.verbose) log(`Response text length: ${currentText.length}, stableCount: ${stableCount}`);
 
                 if (onProgress && currentText.length > lastResponseLength) {
                     onProgress(currentText);
@@ -157,7 +158,7 @@ export async function sendMessageAction(
                 if (currentText.length > 0 && currentText.length === lastResponseLength) {
                     stableCount++;
                     if (stableCount >= 2) {
-                        log('Response stabilized');
+                        if (deps.verbose) log('Response stabilized');
                         break;
                     }
                 } else {

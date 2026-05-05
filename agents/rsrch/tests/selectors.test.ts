@@ -22,8 +22,9 @@ describe('selectors', () => {
     vi.mocked(path.join).mockReturnValue('mock/path/selectors.yaml');
     vi.mocked(fs.existsSync).mockReturnValue(true); // Default to true to avoid throws in setup if any
 
-    // Clear call history so we only assert on calls made during the test
+    // Clear call history and reset cache so we only assert on calls made during the test
     vi.clearAllMocks();
+    reloadSelectors();
   });
 
   describe('loadSelectors', () => {

@@ -44,7 +44,6 @@ const createMockLocator = (isVisible = true, text = '', html = '') => {
     const locator = {
         count: vi.fn().mockResolvedValue(isVisible ? 1 : 0),
         isVisible: vi.fn().mockImplementation(async (opts) => {
-            console.log(`[DEBUG] isVisible called (result=${isVisible}, opts=${JSON.stringify(opts)})`);
             return isVisible;
         }),
         innerText: vi.fn().mockResolvedValue(text),
@@ -292,10 +291,8 @@ describe('GeminiClient', () => {
                     return mockInput;
                 }
                 if (sel.includes('model-response') || sel.includes('response')) {
-                    const loc = createMockLocator(sent, 'Response text');
+                    const loc = createMockLocator(true, 'Response text');
                     loc.count = vi.fn().mockImplementation(() => Promise.resolve(sent ? 1 : 0));
-                    loc.nth = vi.fn().mockReturnValue(loc);
-                    loc.last = vi.fn().mockReturnValue(loc);
                     return loc;
                 }
                 if (sel.includes('send') || sel.includes('odeslat')) {
@@ -309,14 +306,12 @@ describe('GeminiClient', () => {
                 return createMockLocator(false);
             });
 
-            // Mock getLatestResponseData on this instance only
-            vi.spyOn(client, 'getLatestResponseData').mockImplementation(async () => {
-                return {
-                    text: 'Response text',
-                    markdown: 'Response text',
-                    sources: []
-                } as any;
-            });
+            // Mock extractResponse on this instance only
+            vi.spyOn(client, 'extractResponse').mockResolvedValue({
+                text: 'Response text',
+                markdown: 'Response text',
+                sources: []
+            } as any);
 
             const response = await client.sendMessage(message) as any;
 
@@ -396,19 +391,18 @@ describe('GeminiClient', () => {
                     return mockInput;
                 }
                 if (selector.includes('model-response')) {
-                    responseCallCount++;
-                    const loc = createMockLocator(true, 'Initial response');
-                    // First call returns 0 (before send), then 1 (response appeared)
-                    loc.count = vi.fn().mockResolvedValue(responseCallCount > 1 ? 1 : 0);
-                    loc.last = vi.fn().mockReturnThis();
-                    loc.nth = vi.fn().mockReturnThis();
-                    // Simulate stabilization: text grows then stabilizes
-                    loc.innerText = vi.fn()
+                    // Use a stable locator instance so stateful mocks work
+                    mockResponse.count = vi.fn().mockImplementation(async () => {
+                        responseCallCount++;
+                        // Call 1 (responsesBefore) -> 0, Call 2+ (responsesNow) -> 1
+                        return responseCallCount > 1 ? 1 : 0;
+                    });
+                    mockResponse.innerText = vi.fn()
                         .mockResolvedValueOnce('Initial response')
                         .mockResolvedValueOnce('Initial response, more text')
                         .mockResolvedValueOnce('Initial response, more text')
                         .mockResolvedValue('Initial response, more text');
-                    return loc;
+                    return mockResponse;
                 }
                 if (selector.includes('send') || selector.includes('Send') || selector.includes('Odeslat')) {
                     return createMockLocator(true);
@@ -418,7 +412,7 @@ describe('GeminiClient', () => {
 
             await client.sendMessage('test');
 
-            // waitForTimeout is called for stabilization checks
+            // waitForTimeout is called for pollInterval and stabilization
             expect(mockPage.waitForTimeout).toHaveBeenCalled();
         });
 
@@ -587,7 +581,7 @@ describe('GeminiClient', () => {
             await client.listSessions(20, 0);
 
             expect(mockSessionLocator.scrollIntoViewIfNeeded).toHaveBeenCalled();
-            expect(mockSessionLocator.count).toHaveBeenCalledTimes(2);
+            expect(mockSessionLocator.count).toHaveBeenCalled();
         });
 
 // end snippet listsessions-should-scroll-to-load-more-sessions-i

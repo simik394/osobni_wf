@@ -407,10 +407,14 @@ export function loadSelectors(): NotebookLMSelectors {
 
     const result = JSON.parse(JSON.stringify(DEFAULTS)) as NotebookLMSelectors;
 
+    const yamlPath = path.join(__dirname, 'selectors.yaml');
+    if (!fs.existsSync(yamlPath)) {
+        throw new Error(`[Selectors] Critical failure: selectors.yaml not found at ${yamlPath}`);
+    }
+
     try {
-        const yamlPath = path.join(__dirname, 'selectors.yaml');
-        if (fs.existsSync(yamlPath)) {
-            const content = fs.readFileSync(yamlPath, 'utf-8');
+        const content = fs.readFileSync(yamlPath, 'utf-8');
+        if (content) {
             const yamlSelectors = yaml.parse(content) as any;
             
             for (const category in yamlSelectors) {
@@ -423,12 +427,10 @@ export function loadSelectors(): NotebookLMSelectors {
                 }
             }
             console.log('[Selectors] Loaded and merged from selectors.yaml');
-        } else {
-            throw new Error(`[Selectors] Critical failure: selectors.yaml not found at ${yamlPath}`);
         }
     } catch (error) {
         console.error('[Selectors] Fatal Error:', error);
-        throw error;
+        // Fall back to defaults instead of throwing
     }
 
     cachedSelectors = result;

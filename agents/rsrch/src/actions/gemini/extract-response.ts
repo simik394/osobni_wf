@@ -18,7 +18,8 @@ export async function extractResponseAction(
         selectors: any;
         verbose: boolean;
     },
-    messageSelector?: string
+    messageSelector?: string,
+    index?: number
 ): Promise<GeminiResponseData | null> {
     const { page } = ctx;
     const { selectors, verbose } = deps;
@@ -28,7 +29,13 @@ export async function extractResponseAction(
         const count = await responseElements.count();
         if (count === 0) return null;
 
-        const lastResponse = responseElements.nth(count - 1);
+        const targetIndex = index !== undefined 
+            ? (index < 0 ? count + index : index) 
+            : count - 1;
+        
+        if (targetIndex < 0 || targetIndex >= count) return null;
+
+        const responseElement = responseElements.nth(targetIndex);
 
         // 1. Extract Thoughts if possible
         let thoughts: string | undefined;
@@ -37,13 +44,13 @@ export async function extractResponseAction(
 
         if (thoughtToggleSelector && thoughtContainerSelector) {
             try {
-                const thoughtToggle = lastResponse.locator(thoughtToggleSelector).first();
-                if (await thoughtToggle.isVisible({ timeout: 1000 }).catch(() => false)) {
+                const thoughtToggle = responseElement.locator(thoughtToggleSelector).first();
+                if (await thoughtToggle.isVisible({ timeout: 100 }).catch(() => false)) {
                     // Check if already expanded or needs click
-                    const container = lastResponse.locator(thoughtContainerSelector).first();
+                    const container = responseElement.locator(thoughtContainerSelector).first();
                     if (!(await container.isVisible().catch(() => false))) {
                         await thoughtToggle.click().catch(() => {});
-                        await page.waitForTimeout(500);
+                        await page.waitForTimeout(200);
                     }
                     thoughts = await container.innerText().catch(() => undefined);
                 }
@@ -53,7 +60,7 @@ export async function extractResponseAction(
         }
 
         // 2. Enhanced extraction via page.evaluate
-        const data = await lastResponse.evaluate((container) => {
+        const data = await responseElement.evaluate((container) => {
             const clone = container.cloneNode(true) as HTMLElement;
             const sourcesArray: { index: number; url: string; title: string }[] = [];
 
@@ -171,3 +178,30 @@ export async function extractResponseAction(
         return null;
     }
 }
+
+/**
+ * Extracts all responses from the current chat.
+ */
+export async function extractAllResponsesAction(
+    ctx: UniversalContext,
+    deps: {
+        selectors: any;
+        verbose: boolean;
+    },
+    messageSelector?: string
+): Promise<GeminiResponseData[]> {
+    const { page } = ctx;
+    const { selectors } = deps;
+
+    const responseElements = page.locator(messageSelector || selectors.gemini.chat.response);
+    const count = await responseElements.count();
+    const results: GeminiResponseData[] = [];
+
+    for (let i = 0; i < count; i++) {
+        const data = await extractResponseAction(ctx, deps, messageSelector, i);
+        if (data) results.push(data);
+    }
+
+    return results;
+}
+
