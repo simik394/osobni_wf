@@ -165,10 +165,24 @@ export class GraphStore {
         return this.conversation.updateLastExportedAt(id, timestamp);
     }
 
+    async syncConversation(data: any): Promise<{ id: string; isNew: boolean; turnsUpdated?: boolean }> {
+        return this.conversation.syncConversation(data);
+    }
+
     // --- Citations ---
 
     async mergeCitation(url: string, text: string, domain?: string): Promise<string> {
         return this.citations.mergeCitation(url, text, domain);
+    }
+
+    async addCitation(citation: { url: string; title?: string; domain?: string }, targetId?: string): Promise<string> {
+        const id = await this.citations.mergeCitation(citation.url, citation.title || '', citation.domain);
+        if (targetId) {
+            await this.citations.linkCitationsToTurn(targetId, [citation.url]).catch(() => {
+                return this.research.linkSessionToDocument(targetId, id); // Fallback for docs
+            }).catch(() => {});
+        }
+        return id;
     }
 
     async mergeCitationsBatch(citations: Array<{ url: string; text?: string; domain?: string }>): Promise<void> {

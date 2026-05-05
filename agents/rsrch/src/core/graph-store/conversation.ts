@@ -182,4 +182,80 @@ export class ConversationManager {
             SET c.lastExportedAt = ${timestamp}
         `);
     }
+
+    /**
+     * Sync a conversation and its turns (upsert)
+     */
+    async syncConversation(data: {
+        platform: 'gemini' | 'perplexity' | 'aimode';
+        platformId: string;
+        title: string;
+        type: 'regular' | 'deep-research';
+        turns: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>;
+        researchDocs?: any[];
+    }): Promise<{ id: string; isNew: boolean; turnsUpdated?: boolean }> {
+        const capturedAt = Date.now();
+        const id = `conv_${data.platformId}`; // Match test expectation
+
+        // Check if conversation already exists
+        const existing = await this.query<any[]>(`
+            MATCH (c:Conversation {platformId: '${escapeString(data.platformId)}', platform: '${data.platform}'})
+            OPTIONAL MATCH (c)-[:HAS_TURN]->(t:Turn)
+            RETURN c.id as id, count(t) as turnCount
+        `);
+
+        const isNew = !existing.data || existing.data.length === 0;
+        const existingTurnCount = isNew ? 0 : ((existing.data as any[])[0]?.turnCount ?? 0);
+        const newTurnCount = data.turns.length;
+
+        if (isNew) {
+            await this.query(`
+                MERGE (a:Agent {id: '${data.platform}'})
+                CREATE (c:Conversation {
+                    id: '${id}',
+                    platformId: '${escapeString(data.platformId)}',
+                    platform: '${data.platform}',
+                    title: '${escapeString(data.title)}',
+                    type: '${data.type}',
+                    createdAt: ${capturedAt},
+                    capturedAt: ${capturedAt},
+                    updatedAt: ${capturedAt}
+                })
+                CREATE (a)-[:HAD]->(c)
+            `);
+        } else {
+            await this.query(`
+                MATCH (c:Conversation {id: '${id}'})
+                SET c.title = '${escapeString(data.title)}',
+                    c.updatedAt = ${capturedAt}
+            `);
+        }
+
+        // Only add new turns if count increased
+        if (newTurnCount > existingTurnCount) {
+            const newTurns = data.turns.slice(existingTurnCount);
+            await this.insertTurns(id, newTurns, capturedAt);
+        }
+
+        return { id, isNew, turnsUpdated: newTurnCount > existingTurnCount };
+    }
+
+    private async insertTurns(
+        conversationId: string,
+        turns: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: number }>,
+        capturedAt: number
+    ): Promise<void> {
+        for (const turn of turns) {
+            const timestamp = turn.timestamp || capturedAt;
+            await this.query(`
+                MATCH (c:Conversation { id: '${conversationId}' })
+                CREATE (t:Turn {
+                    role: '${turn.role}',
+                    content: '${escapeString(turn.content)}',
+                    timestamp: ${timestamp}
+                })
+                CREATE (c)-[:HAS_TURN]->(t)
+            `);
+        }
+    }
 }

@@ -15,11 +15,12 @@ export class CitationManager {
      */
     async mergeCitation(url: string, text: string, domain?: string): Promise<string> {
         const domainValue = domain || (url.includes('://') ? url.split('://')[1].split('/')[0] : 'unknown');
+        const citationId = 'cit_' + Math.random().toString(36).substring(2, 10);
         
         await this.query(`
             MERGE (c:Citation {url: '${escapeString(url)}'})
             ON CREATE SET 
-                c.id = 'cit_' + apoc.text.random(8),
+                c.id = '${citationId}',
                 c.text = '${escapeString(text)}',
                 c.domain = '${escapeString(domainValue)}',
                 c.firstSeenAt = ${Date.now()}
@@ -43,6 +44,7 @@ export class CitationManager {
             url: c.url,
             text: c.text || '',
             domain: c.domain || (c.url.includes('://') ? c.url.split('://')[1].split('/')[0] : 'unknown'),
+            id: 'cit_' + Math.random().toString(36).substring(2, 10),
             now
         }));
 
@@ -50,7 +52,7 @@ export class CitationManager {
             UNWIND $batch as row
             MERGE (c:Citation {url: row.url})
             ON CREATE SET 
-                c.id = 'cit_' + apoc.text.random(8),
+                c.id = row.id,
                 c.text = row.text,
                 c.domain = row.domain,
                 c.firstSeenAt = row.now

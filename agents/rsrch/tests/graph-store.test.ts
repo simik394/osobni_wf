@@ -6,11 +6,7 @@ describe('GraphStore', () => {
 
     beforeAll(async () => {
         store = new GraphStore('rsrch_test_vitest');
-        try {
-            await store.connect('localhost', 6379);
-        } catch (e) {
-            console.warn('⚠️ FalkorDB not available at localhost:6379. Skipping tests.');
-        }
+        await store.connect('127.0.0.1', 6379);
     });
 
     afterAll(async () => {
@@ -19,9 +15,7 @@ describe('GraphStore', () => {
         }
     });
 
-    const runIfConnected = () => (store && store.getIsConnected() ? it : it.skip);
-
-    runIfConnected()('should add and retrieve a job', async () => {
+    it('should add and retrieve a job', async () => {
         const job = await store.addJob('query', 'What is AI?', { deep: true });
         expect(job.id.length).toBe(8);
         expect(job.status).toBe('queued');
@@ -32,7 +26,7 @@ describe('GraphStore', () => {
         expect(retrieved?.query).toBe('What is AI?');
     });
 
-    runIfConnected()('should update job status', async () => {
+    it('should update job status', async () => {
         const job = await store.addJob('query', 'Status test');
         await store.updateJobStatus(job.id, 'running');
 
@@ -46,7 +40,7 @@ describe('GraphStore', () => {
         expect(completed?.result).toEqual({ ok: true });
     });
 
-    runIfConnected()('should add and find entities', async () => {
+    it('should add and find entities', async () => {
         const entityId = `topic-${Date.now()}`;
         await store.addEntity({
             id: entityId,
@@ -61,7 +55,7 @@ describe('GraphStore', () => {
         expect(found?.name).toBe('Artificial Intelligence');
     });
 
-    runIfConnected()('should manage relationships', async () => {
+    it('should manage relationships', async () => {
         const id1 = `e1-${Date.now()}`;
         const id2 = `e2-${Date.now()}`;
 
@@ -74,7 +68,7 @@ describe('GraphStore', () => {
         expect(related.some(e => e.id === id2)).toBe(true);
     });
 
-    runIfConnected()('should sync notebooks', async () => {
+    it('should sync notebooks', async () => {
         const platformId = `nb-${Date.now()}`;
         const result = await store.syncNotebook({
             platformId,
@@ -92,7 +86,7 @@ describe('GraphStore', () => {
         expect(resync.isNew).toBe(false);
     });
 
-    runIfConnected()('should sync conversations', async () => {
+    it('should sync conversations', async () => {
         const platformId = `conv-${Date.now()}`;
         const result = await store.syncConversation({
             platformId,
@@ -105,7 +99,7 @@ describe('GraphStore', () => {
         expect(result.isNew).toBe(true);
     });
 
-    runIfConnected()('should store facts with source', async () => {
+    it('should store facts with source', async () => {
         const sourceId = `src-${Date.now()}`;
         // Create a dummy node with this ID first
         await store.addEntity({ id: sourceId, type: 'Source', name: 'Test Source', properties: {} });
@@ -114,7 +108,7 @@ describe('GraphStore', () => {
         // Ideally we verify this with a query, but for now we just ensure no error
     });
 
-    runIfConnected()('should add citations', async () => {
+    it('should add citations', async () => {
         const targetId = `target-${Date.now()}`;
         await store.addEntity({ id: targetId, type: 'Fact', name: 'Fact 1', properties: {} });
 
