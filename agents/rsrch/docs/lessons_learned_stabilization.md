@@ -16,3 +16,7 @@
 ## 4. Next Steps for Rsrch
 - **Self-Correction**: The next phase should focus on agentic self-correction—if a selector fails, the agent should be able to "look around" and find the new one automatically.
 - **Intelligent Batching**: Now that citations are modular, we can implement intelligent citation deduplication across multiple research sessions.
+
+## 5. FalkorDB & Cypher Nuances
+- **APOC Portability**: FalkorDB does not support all Neo4j APOC functions (e.g., `apoc.text.random`). Generating IDs in the application layer (TypeScript) using `Math.random().toString(36)` or `uuid` is more robust and portable across different graph databases.
+- **Connection Readiness**: `nc -zv` check is superior to simple `try/catch` on connect in test environments, as it distinguishes between "DB not started" and "DB rejected connection."

@@ -42,9 +42,17 @@ export type GeminiActionDeps = ActionDeps & {
     getLatestResponseData: () => Promise<{ text: string, markdown: string, sources: any[], thoughts?: string } | null>;
     getCurrentSessionId: () => string | null;
     dumpState: (prefix: string) => Promise<any>;
+    uploadFromDrive: (fileName: string) => Promise<boolean>;
     listGems: () => Promise<{ name: string; url: string | null }[]>;
     selectGem: (name: string) => Promise<boolean>;
+    checkModelStatus: () => Promise<Array<{ id: string; name: string; info?: string; isLimited: boolean; resetTime?: string }>>;
+    listArtifacts: () => Promise<Array<{ name: string; id?: string; type: string }>>;
+    readCanvas: () => Promise<{ title: string; content: string; markdown: string } | null>;
+    openArtifact: (name: string) => Promise<boolean>;
+    scrollToTop: () => Promise<void>;
 };
+
+
 
 /**
  * NotebookLM-specific action dependencies.

@@ -229,4 +229,21 @@ export function registerSessionCommands(gemini: Command) {
                 process.exit(1);
             }
         });
+    gemini.command('model-status')
+        .description('Check Gemini model availability and rate limits')
+        .option('--local', 'Use local execution', true)
+        .action(async (opts, cmd) => {
+            const globalOpts = getOptionsWithGlobals(cmd);
+            await runLocalGeminiAction(async (client, gemini) => {
+                const statuses = await gemini.getModelStatus();
+                console.log('\n--- Gemini Model Status ---');
+                statuses.forEach(s => {
+                    const limitTag = s.isLimited ? ' [LIMITED]' : ' [READY]';
+                    console.log(`${s.name.padEnd(20)} ${limitTag} ${s.resetTime ? `(Reset: ${s.resetTime})` : ''}`);
+                    if (s.info) console.log(`   Info: ${s.info}`);
+                });
+                console.log('---------------------------\n');
+            });
+        });
 }
+

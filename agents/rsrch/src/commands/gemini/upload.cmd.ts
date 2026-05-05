@@ -108,6 +108,17 @@ export function registerUploadCommands(gemini: Command) {
                 }
             }, sessionId);
         });
+    
+    gemini.command('upload-drive <fileName> [sessionId]')
+        .description('Upload a file from Google Drive')
+        .option('--local', 'Use local execution', true)
+        .action(async (fileName, sessionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.uploadFromDrive(fileName);
+                if (success) console.log(`\n✅ File attached from Drive: ${fileName}`);
+                else console.log(`\n❌ Failed to attach file from Drive: ${fileName}`);
+            }, sessionId);
+        });
 
     gemini.command('sources')
         .description('List available context sources')

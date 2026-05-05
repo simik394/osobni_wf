@@ -80,3 +80,72 @@ export async function uploadFilesAction(
         return false;
     }
 }
+
+/**
+ * Upload files from Google Drive using the Drive picker.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param fileName Name of the file to search for and select in Drive
+ */
+export async function uploadFromDriveAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    fileName: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        log(`Uploading file from Drive: ${fileName}`);
+
+        // 1. Open "+" menu
+        const plusBtn = page.locator(selectors.gemini.upload.button).first();
+        await plusBtn.waitFor({ state: 'visible', timeout: 5000 });
+        await plusBtn.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Click "Google Drive"
+        const driveItem = page.locator(selectors.gemini.upload.drive).first();
+        await driveItem.click();
+        
+        // 3. Wait for and handle the picker iframe
+        log('Waiting for Drive picker iframe...');
+        const iframeElement = await page.waitForSelector(selectors.gemini.upload.picker.iframe, { timeout: 10000 });
+        const frame = await iframeElement.contentFrame();
+        
+        if (!frame) {
+            log('Could not access Drive picker iframe', 'error');
+            return false;
+        }
+
+        // 4. Search for the file
+        log(`Searching for "${fileName}" in Drive...`);
+        const searchInput = frame.locator(selectors.gemini.upload.picker.search).first();
+        await searchInput.waitFor({ state: 'visible', timeout: 5000 });
+        await searchInput.fill(fileName);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(2000);
+
+        // 5. Select the file
+        const fileRow = frame.locator(selectors.gemini.upload.picker.fileRow).first();
+        if (!await fileRow.isVisible()) {
+            log(`File "${fileName}" not found in Drive search results.`, 'error');
+            return false;
+        }
+        await fileRow.click();
+        await page.waitForTimeout(500);
+
+        // 6. Click "Select" / "Insert" / "Vložit"
+        const selectBtn = frame.locator(selectors.gemini.upload.picker.selectButton).first();
+        await selectBtn.click();
+
+        log('Waiting for file to be attached to Gemini...');
+        await page.waitForTimeout(3000);
+
+        return true;
+    } catch (e: any) {
+        log(`Drive upload failed: ${e.message}`, 'error');
+        return false;
+    }
+}

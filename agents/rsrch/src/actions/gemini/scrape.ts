@@ -83,10 +83,24 @@ export async function extractCurrentConversationAction(ctx: UniversalContext, de
         
         return containers.map(container => {
             const isAssistant = container.tagName.toLowerCase() === 'model-response' || container.classList.contains('model-response');
+            
+            // Extract citations if assistant
+            const citations: any[] = [];
+            if (isAssistant) {
+                const chips = container.querySelectorAll(sel.chat.citations);
+                chips.forEach(chip => {
+                    citations.push({
+                        text: (chip as HTMLElement).innerText.trim(),
+                        url: (chip as HTMLAnchorElement).href || null
+                    });
+                });
+            }
+
             return {
                 role: isAssistant ? 'assistant' : 'user',
                 content: (container as HTMLElement).innerText.trim(),
-                timestamp: Date.now() // Gemini doesn't always show precise per-message timestamps in DOM
+                citations: citations.length > 0 ? citations : undefined,
+                timestamp: Date.now()
             };
         });
     }, selectors.gemini);

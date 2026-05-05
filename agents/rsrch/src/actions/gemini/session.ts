@@ -306,3 +306,94 @@ export async function listSessionsAction(
     return sessions;
 }
 
+/**
+ * Checks the status of available Gemini models, detecting rate limits and reset times.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @returns Array of model statuses
+ */
+export async function checkModelStatusAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps
+): Promise<Array<{ id: string; name: string; info?: string; isLimited: boolean; resetTime?: string }>> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log('Checking model statuses and rate limits...');
+
+    try {
+        const triggers = [
+            selectors.gemini.model.trigger,
+            'button[aria-haspopup="menu"]',
+            'button[aria-label*="Model"]',
+            'button:has-text("Gemini")',
+            '[data-test-id="model-selector-button"]'
+        ];
+
+        let triggerBtn = null;
+        for (const selector of triggers) {
+            const el = page.locator(selector).first();
+            if (await el.isVisible().catch(() => false)) {
+                triggerBtn = el;
+                break;
+            }
+        }
+
+        if (!triggerBtn) {
+            log('Model selector trigger not found', 'error');
+            return [];
+        }
+
+        await triggerBtn.click();
+        await page.waitForTimeout(1000);
+
+        const menuItems = page.locator(selectors.gemini.model.item + ', [role="menuitem"], [role="option"]');
+        const count = await menuItems.count();
+        const results: Array<{ id: string; name: string; info?: string; isLimited: boolean; resetTime?: string }> = [];
+
+        for (let i = 0; i < count; i++) {
+            const item = menuItems.nth(i);
+            const text = await item.innerText().catch(() => '');
+            if (!text) continue;
+
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            const name = lines[0];
+            const subtext = lines.slice(1).join(' ');
+
+            const isLimited = /limit|reset|vyčerpán|obnoví/i.test(text);
+            let resetTime = undefined;
+
+            // Extract reset time if present (e.g. "5. 5. 19:29" or "19:29")
+            const timeMatch = text.match(/(\d{1,2}\.\s?\d{1,2}\.\s?)?(\d{1,2}:\d{2})/);
+            if (timeMatch) {
+                resetTime = timeMatch[0];
+            }
+
+            // Map UI name to internal ID
+            let id = 'unknown';
+            if (/flash|rychl/i.test(name)) id = 'flash';
+            else if (/think|mysl/i.test(name)) id = 'thinking';
+            else if (/pro|adv/i.test(name)) id = 'pro';
+
+            results.push({
+                id,
+                name,
+                info: subtext,
+                isLimited,
+                resetTime
+            });
+        }
+
+        // Close menu (click trigger again or ESC)
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+
+        log(`Detected model statuses: ${results.map(r => `${r.id}${r.isLimited ? ' (LIMITED)' : ''}`).join(', ')}`);
+        return results;
+
+    } catch (e: any) {
+        log(`Check model status failed: ${e.message}`, 'error');
+        return [];
+    }
+}

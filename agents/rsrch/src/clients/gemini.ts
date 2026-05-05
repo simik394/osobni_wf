@@ -47,6 +47,7 @@ export class GeminiClient extends EventEmitter {
             resetToNewChat: async () => await this.resetToNewChat(),
             
             uploadFiles: async (files: string[]) => await this.uploadFiles(files),
+            uploadFromDrive: async (fileName: string) => await this.uploadFromDrive(fileName),
             recycle: async () => {
                 const { BrowserClient } = await import('./base');
                 const b = new BrowserClient();
@@ -57,7 +58,12 @@ export class GeminiClient extends EventEmitter {
             },
             dumpState: async (name: string) => await this.dumpState(name),
             listGems: async () => await this.listGems(),
-            selectGem: async (name: string) => await this.selectGem(name)
+            selectGem: async (name: string) => await this.selectGem(name),
+            checkModelStatus: async () => await this.getModelStatus(),
+            listArtifacts: async () => await this.listArtifacts(),
+            readCanvas: async () => await this.readCanvas(),
+            openArtifact: async (name: string) => await this.openArtifact(name),
+            scrollToTop: async () => await this.scrollToTop()
         };
     }
 
@@ -140,7 +146,19 @@ export class GeminiClient extends EventEmitter {
     }
 
     async setModel(model: string) {
+        // Optional: Pre-check status if it's "pro" to warn early
+        if (model.toLowerCase().includes('pro')) {
+            const statuses = await this.getModelStatus();
+            const pro = statuses.find(s => s.id === 'pro');
+            if (pro?.isLimited) {
+                this.log(`Warning: Target model "Pro" is currently limited. Reset time: ${pro.resetTime || 'unknown'}`, 'warn');
+            }
+        }
         return actions.setModelAction(this.ctx, this.deps as GeminiActionDeps, model);
+    }
+
+    async getModelStatus() {
+        return actions.checkModelStatusAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
     async listGems() {
@@ -153,6 +171,22 @@ export class GeminiClient extends EventEmitter {
 
     async ensureSidebar() {
         return actions.ensureSidebarAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async listArtifacts() {
+        return actions.listSessionArtifactsAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async readCanvas() {
+        return actions.readCanvasAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async openArtifact(name: string) {
+        return actions.openArtifactAction(this.ctx, this.deps as GeminiActionDeps, name);
+    }
+
+    async scrollToTop() {
+        return actions.scrollToTopAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
     async init(sessionId?: string) {
@@ -243,6 +277,11 @@ export class GeminiClient extends EventEmitter {
     async uploadFiles(files: string[]) {
         
         return actions.uploadFilesAction(this.ctx, this.deps as GeminiActionDeps, files);
+    }
+
+    async uploadFromDrive(fileName: string) {
+        
+        return actions.uploadFromDriveAction(this.ctx, this.deps as GeminiActionDeps, fileName);
     }
 
     async exportToGoogleDocs() {

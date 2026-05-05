@@ -115,6 +115,7 @@ export interface GeminiSelectors {
         response: string;
         history: string;
         newChat: string;
+        citations: string;
         thoughtToggle?: string;
         thoughtContainer?: string;
     };
@@ -150,6 +151,26 @@ export interface GeminiSelectors {
         photos: string;
         importCode: string;
         notebooklm: string;
+        picker: {
+            iframe: string;
+            search: string;
+            fileRow: string;
+            selectButton: string;
+        };
+    };
+    canvas: {
+        sidePanel: string;
+        header: string;
+        navButton: string;
+        previewTab: string;
+        codeTab: string;
+        content: string;
+        close: string;
+    };
+    session: {
+        moreMenu: string;
+        filesMenu: string;
+        artifactItem: string;
     };
 }
 
@@ -311,7 +332,8 @@ const DEFAULTS: NotebookLMSelectors = {
             send: 'button[aria-label="Send"]',
             response: '.model-response',
             history: '.chat-history',
-            newChat: 'New chat'
+            newChat: 'New chat',
+            citations: '.citation-chip'
         },
         sidebar: {
             menu: '.sidebar-menu',
@@ -342,7 +364,27 @@ const DEFAULTS: NotebookLMSelectors = {
             drive: 'Google Drive',
             photos: 'Google Photos',
             importCode: 'Import code',
-            notebooklm: 'NotebookLM'
+            notebooklm: 'NotebookLM',
+            picker: {
+                iframe: 'iframe.picker-frame',
+                search: 'input[type="search"]',
+                fileRow: '.picker-grid-tile',
+                selectButton: 'button:has-text("Select")'
+            }
+        },
+        canvas: {
+            sidePanel: '.canvas-side-panel',
+            header: '.canvas-header',
+            navButton: '.nav-button',
+            previewTab: 'Preview',
+            codeTab: 'Code',
+            content: '.ql-editor',
+            close: 'Close'
+        },
+        session: {
+            moreMenu: '.more-menu',
+            filesMenu: 'Files',
+            artifactItem: '.artifact-item'
         }
     },
     perplexity: {

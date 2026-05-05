@@ -170,6 +170,7 @@ gemini:
     # .model-response-text: Class on the text content container
     # .response-content: Wrapper div for response body
     response: "model-response, structured-content-container, .model-response-text, .response-content"
+    citations: ".citation-chip, a[href*='google.com/search?q='], .source-link, sup a, .citation-link"
     history: '.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]'
     newChat: 'button[aria-label*="New chat"], button[aria-label*="Nový chat"], button:has-text("New chat"), button:has-text("Nový chat"), [data-testid="new-chat-button"]'
   sidebar:
@@ -203,12 +204,28 @@ gemini:
     button: 'button[mattooltip*="Přidat"], button[mattooltip*="Upload"], button[aria-label*="Přidat"], button[aria-label*="Upload"], .fonticon-plus-new, .fonticon-add-circle'
     fileInput: 'input[type="file"]'
     menu: '[role="menu"]'
-    # Upload options
     uploadFile: 'text="Přidat soubory"|text="Upload files"|text="Nahrát soubory"|text="Upload from computer"'
-    drive: 'text="Přidat z Disku"|text="Drive"'
+    drive: 'button[aria-label*="Přidat z Disku"], button[aria-label*="Drive"], text="Přidat z Disku"|text="Drive"'
     photos: 'text="Fotky"|text="Photos"'
     importCode: 'text="Importovat kód"|text="Import code"'
     notebooklm: 'text="NotebookLM"'
+    picker:
+      iframe: 'iframe.picker-frame, iframe[src*="docs.google.com/picker"]'
+      search: 'input[type="text"][placeholder*="Vyhledejte"], input[type="text"][placeholder*="Search"]'
+      fileRow: 'div[role="listitem"], div[role="row"], .picker-grid-tile'
+      selectButton: 'button:has-text("Vložit"), div[role="button"]:has-text("Vložit"), button:has-text("Select"), button:has-text("Insert")'
+  canvas:
+    sidePanel: 'canvas-view, .canvas-side-panel, [data-testid="canvas-container"]'
+    header: ".canvas-header"
+    navButton: 'button.navigation-button, button[aria-label*="Navigation"]'
+    previewTab: 'button:has-text("Preview"), button:has-text("Náhled")'
+    codeTab: 'button:has-text("Code"), button:has-text("Kód")'
+    content: ".canvas-content, .ql-editor, [contenteditable='true']"
+    close: 'button[aria-label*="Close"], button[aria-label*="Zavřít"]'
+  session:
+    moreMenu: 'button[aria-label*="More options"], button[aria-label*="Další možnosti"], button:has(mat-icon:has-text("more_vert"))'
+    filesMenu: 'button[aria-label*="Files"], button[aria-label*="Soubory"]'
+    artifactItem: 'button[role="menuitem"], .artifact-list-item'
 # ============================================================
 # AI MODE (Google Search AI) SELECTORS
 # ============================================================

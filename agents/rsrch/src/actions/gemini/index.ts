@@ -9,3 +9,5 @@ export * from './auth';
 export * from './gems';
 export * from './scrape';
 export * from './research';
+export * from './canvas';
+export * from './history';
