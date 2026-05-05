@@ -203,5 +203,25 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.get('/info', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const info = await gemini.getResearchInfo();
+            res.json({
+                success: true,
+                data: {
+                    ...info,
+                    isReady: !!gemini.page
+                }
+            });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/status', async (req: Request, res: Response) => {
+        res.json({ success: true, status: 'ok' });
+    });
+
     return router;
 }

@@ -177,8 +177,12 @@ export async function waitForAudioGenerationAction(
     while (attempts < maxAttempts) {
         attempts++;
         const isGenerating = await page.evaluate(() => {
-            return document.body.innerText.match(/Generování|Generating|Vytváření|Creating/i) !== null ||
-                   document.querySelector('mat-progress-bar, mat-spinner, .loading-indicator') !== null;
+            // 1. Check for explicit progress indicators
+            if (document.querySelector('mat-progress-bar, mat-spinner, [role="progressbar"], .loading-indicator')) return true;
+
+            // 2. Check for common generation keywords (broader regex)
+            const text = document.body.innerText;
+            return /generov|vytvář|generat|creat/i.test(text);
         });
 
         if (!isGenerating) {

@@ -9,6 +9,7 @@ export async function getStudioArtifactsAction(
 ): Promise<Array<{ 
     type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; 
     title: string; 
+    isSystem?: boolean;
     details?: string; 
     sourceCount?: number; 
     absoluteTime?: string; 
@@ -18,6 +19,7 @@ export async function getStudioArtifactsAction(
     const artifacts: Array<{ 
         type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; 
         title: string; 
+        isSystem?: boolean;
         details?: string; 
         sourceCount?: number; 
         absoluteTime?: string; 
@@ -45,6 +47,11 @@ export async function getStudioArtifactsAction(
         const artifactItems = container.locator('.artifact-stretched-button');
         const count = await artifactItems.count();
         log(`Found ${count} artifact items in studio-panel`);
+
+        const systemTitles = [
+            'faq', 'study guide', 'table of contents', 'briefing doc', 
+            'často kladené otázky', 'studijní příručka', 'obsah', 'dokument s pokyny'
+        ];
 
         for (let i = 0; i < count; i++) {
             const item = artifactItems.nth(i);
@@ -78,6 +85,10 @@ export async function getStudioArtifactsAction(
             else if (iconText.includes('table_view')) type = 'table';
             else if (iconText.includes('tablet')) type = 'presentation';
 
+            // Identify System Artifacts
+            const isSystem = systemTitles.some(st => titleText.toLowerCase().includes(st)) || 
+                             (i < 6 && (type === 'faq' || type === 'briefing' || type === 'table' || type === 'timeline'));
+
             let detailsResult = '';
             const metadataLoc = item.locator('.artifact-metadata').first();
             if (await metadataLoc.count() > 0) {
@@ -100,6 +111,7 @@ export async function getStudioArtifactsAction(
             artifacts.push({
                 type,
                 title: titleText,
+                isSystem,
                 details: detailsResult,
                 sourceCount,
                 id

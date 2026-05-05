@@ -1,25 +1,20 @@
 /**
  * Research Watcher Service
  * 
- * Monitors Gemini for research completion and optionally triggers 
- * NotebookLM audio generation.
+ * Monitors Gemini for research completion via REST API and 
+ * triggers NotebookLM audio generation.
  * 
- * Usage:
- *   rsrch watch --audio            # Generate audio inline
- *   rsrch watch --queue            # Submit to server queue (recommended)
- *   rsrch watch --folder ~/audio   # Save audio to specific folder
+ * This follows the "Thin CLI" mandate by delegating all browser
+ * heavy lifting to the rsrch server.
  */
 
 import { discordService } from './services/notification';
 import { config } from './config';
-import { BrowserClient } from './clients/base';
-import { GeminiClient } from './clients/gemini';
-import * as path from 'path';
 import * as fs from 'fs';
 
 export interface WatcherOptions {
     generateAudio: boolean;
-    submitToQueue: boolean;  // Submit to server queue instead of inline
+    submitToQueue: boolean;  // Submit to server queue (recommended)
     serverUrl: string;
     audioFolder: string;
     pollIntervalMs: number;
@@ -28,7 +23,7 @@ export interface WatcherOptions {
 
 const DEFAULT_OPTIONS: WatcherOptions = {
     generateAudio: false,
-    submitToQueue: false,
+    submitToQueue: true, // Default to queue mode in refactored version
     serverUrl: 'http://localhost:3000',
     audioFolder: process.env.HOME + '/research/audio',
     pollIntervalMs: 30000, // 30 seconds
@@ -42,29 +37,15 @@ interface ResearchState {
 }
 
 /**
- * Watch for Gemini research completion
+ * Watch for Gemini research completion via REST API
  */
 export async function watchForResearch(options: Partial<WatcherOptions> = {}): Promise<void> {
     const opts: WatcherOptions = { ...DEFAULT_OPTIONS, ...options };
 
-    console.log('🔍 Starting Research Watcher...');
+    console.log('🔍 Starting Research Watcher (API Mode)...');
+    console.log(`   Server: ${opts.serverUrl}`);
     console.log(`   Poll interval: ${opts.pollIntervalMs / 1000}s`);
-    console.log(`   Mode: ${opts.submitToQueue ? 'queue (server)' : opts.generateAudio ? 'inline' : 'notify only'}`);
-    if (opts.submitToQueue) {
-        console.log(`   Server: ${opts.serverUrl}`);
-    } else if (opts.generateAudio) {
-        console.log(`   Audio folder: ${opts.audioFolder}`);
-    }
     console.log('');
-
-    // Notification config is handled by NotificationService/config
-
-
-    // Initialize client
-    const client = new BrowserClient();
-    await client.init();
-    const gemini = await client.createGeminiClient();
-    await gemini.init();
 
     let lastKnownSession: string | null = null;
     let processedSessions = new Set<string>();
@@ -75,7 +56,7 @@ export async function watchForResearch(options: Partial<WatcherOptions> = {}): P
     // Polling loop
     while (true) {
         try {
-            const state = await checkResearchState(gemini);
+            const state = await checkResearchState(opts.serverUrl);
 
             if (state.isComplete && state.sessionId && !processedSessions.has(state.sessionId)) {
                 console.log(`\n✅ Research complete: "${state.title || 'Untitled'}"`);
@@ -85,14 +66,16 @@ export async function watchForResearch(options: Partial<WatcherOptions> = {}): P
                 processedSessions.add(state.sessionId);
 
                 // Process the completed research
-                await processCompletedResearch(client, gemini, state, opts);
+                await processCompletedResearch(state, opts);
             } else if (state.sessionId && state.sessionId !== lastKnownSession) {
                 console.log(`📊 Active research: "${state.title || 'In progress...'}" (${state.sessionId})`);
                 lastKnownSession = state.sessionId;
+            } else if (!state.sessionId) {
+                // Server might be idle or no active session
             }
 
         } catch (e: any) {
-            console.warn(`⚠️ Check failed: ${e.message}`);
+            console.warn(`⚠️ Poll failed: ${e.message}. Is the server running?`);
         }
 
         // Wait before next poll
@@ -101,14 +84,19 @@ export async function watchForResearch(options: Partial<WatcherOptions> = {}): P
 }
 
 /**
- * Check current research state
+ * Check current research state via Server API
  */
-async function checkResearchState(gemini: GeminiClient): Promise<ResearchState> {
+async function checkResearchState(serverUrl: string): Promise<ResearchState> {
     try {
-        const info = await gemini.getResearchInfo();
+        const response = await fetch(`${serverUrl}/gemini/info`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const res = await response.json();
+        if (!res.success) return { sessionId: null, title: null, isComplete: false, lastCheck: Date.now() };
 
-        // Check for completion indicators
-        // Research is complete if we can get a title and there's content
+        const info = res.data;
+
+        // Research is complete if we have a title and a heading (server-side logic)
         const isComplete = !!(info.title && info.firstHeading);
 
         return {
@@ -118,80 +106,28 @@ async function checkResearchState(gemini: GeminiClient): Promise<ResearchState> 
             lastCheck: Date.now(),
         };
     } catch (e) {
-        return {
-            sessionId: null,
-            title: null,
-            isComplete: false,
-            lastCheck: Date.now(),
-        };
+        throw e;
     }
 }
 
 /**
- * Process a completed research session
+ * Process a completed research session by submitting to queue
  */
 async function processCompletedResearch(
-    client: BrowserClient,
-    gemini: GeminiClient,
     state: ResearchState,
     opts: WatcherOptions
 ): Promise<void> {
     const title = state.title || 'Research';
-    const timestamp = new Date().toISOString().split('T')[0];
-    const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 50);
 
-    let audioPath: string | undefined;
-
-    // Queue mode: submit to server
-    if (opts.submitToQueue) {
-        await submitToServerQueue(state, opts);
-    } else if (opts.generateAudio) {
-        console.log('\n🎧 Generating NotebookLM audio (inline)...');
-
-        try {
-            // Create audio folder if needed
-            if (!fs.existsSync(opts.audioFolder)) {
-                fs.mkdirSync(opts.audioFolder, { recursive: true });
-            }
-
-            const notebook = await client.createNotebookLMClient();
-
-            // Create notebook with research title
-            const notebookTitle = `Research: ${title}`;
-            await notebook.createNotebook(notebookTitle);
-
-            // Add the research as source (export to Google Docs first)
-            console.log('   Exporting research to Google Docs...');
-            const exportResult = await gemini.exportCurrentToGoogleDocs();
-
-            if (exportResult.docUrl) {
-                console.log('   Adding to NotebookLM...');
-                await notebook.addSourceUrl(exportResult.docUrl);
-
-                // Generate audio (wet run)
-                console.log('   Generating audio overview...');
-                await notebook.generateAudioOverview(notebookTitle, undefined, undefined, true, false);
-
-                // Download audio
-                audioPath = path.join(opts.audioFolder, `${timestamp}_${safeName}_overview.mp3`);
-                console.log(`   Downloading to: ${audioPath}`);
-                await notebook.downloadAudio(notebookTitle, audioPath);
-
-                console.log('✅ Audio generated and saved!');
-            } else {
-                console.warn('⚠️ Could not export research to Docs');
-            }
-
-        } catch (e: any) {
-            console.error(`❌ Audio generation failed: ${e.message}`);
-        }
-    }
+    // Always submit to queue in the refactored version
+    // If the user wants audio, the server handles it via the job queue.
+    await submitToServerQueue(state, opts);
 
     // Send notification
     console.log('\n📬 Sending notification...');
-    await discordService.sendNotification(title + (audioPath ? ' (with audio)' : ''), { 
-        title: 'Research Complete',
-        url: audioPath ? `file://${audioPath}` : undefined
+    await discordService.sendNotification(title, { 
+        title: 'Research Complete (Watcher)',
+        description: `Session ${state.sessionId} is complete. Audio generation queued.`
     });
 
     console.log('✅ Notification sent!');
@@ -213,11 +149,6 @@ async function submitToServerQueue(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 notebookTitle: `Research: ${title}`,
-                // The server will handle:
-                // 1. Creating notebook
-                // 2. Adding source
-                // 3. Generating audio
-                // 4. Storing in graph DB
                 dryRun: false,
                 metadata: {
                     source: 'watcher',
@@ -229,15 +160,13 @@ async function submitToServerQueue(
 
         if (response.ok) {
             const data = await response.json();
-            console.log(`✅ Job queued: ${data.jobId}`);
-            console.log(`   Status: ${opts.serverUrl}${data.statusUrl}`);
+            console.log(`✅ Job queued successfully.`);
         } else {
             const error = await response.text();
             console.error(`❌ Queue submission failed: ${response.status} - ${error}`);
         }
     } catch (e: any) {
         console.error(`❌ Server connection failed: ${e.message}`);
-        console.log('   Is the server running? Start with: rsrch serve');
     }
 }
 
@@ -251,24 +180,19 @@ function sleep(ms: number): Promise<void> {
 export async function checkAndProcess(options: Partial<WatcherOptions> = {}): Promise<boolean> {
     const opts: WatcherOptions = { ...DEFAULT_OPTIONS, ...options };
 
-    const client = new BrowserClient();
-    await client.init();
-
     try {
-        const gemini = await client.createGeminiClient();
-        await gemini.init();
-
-        const state = await checkResearchState(gemini);
+        const state = await checkResearchState(opts.serverUrl);
 
         if (state.isComplete && state.title) {
             console.log(`✅ Found completed research: "${state.title}"`);
-            await processCompletedResearch(client, gemini, state, opts);
+            await processCompletedResearch(state, opts);
             return true;
         } else {
             console.log('❌ No completed research found');
             return false;
         }
-    } finally {
-        await client.close();
+    } catch (e: any) {
+        console.error(`❌ Error checking research state: ${e.message}`);
+        return false;
     }
 }

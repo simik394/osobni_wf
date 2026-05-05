@@ -238,7 +238,7 @@ export async function downloadAllArtifactsAction(
     }
 
     const artifacts = await getStudioArtifactsAction(ctx, deps);
-    const textArtifacts = artifacts.slice(9).filter(a => a.type !== 'audio');
+    const textArtifacts = artifacts.filter(a => !a.isSystem && a.type !== 'audio');
 
     log(`Found ${textArtifacts.length} text artifacts to download.`);
 
