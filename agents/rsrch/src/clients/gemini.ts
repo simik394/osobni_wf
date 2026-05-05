@@ -39,14 +39,9 @@ export class GeminiClient extends EventEmitter {
             getCurrentSessionId: () => this.getCurrentSessionIdSync(),
             getLatestResponseData: async () => await this.getLatestResponseData(),
             getLatestResponse: async () => await this.getLatestResponse(),
-            injectText: async (text: string) => { 
-                const input = this.page.locator(selectors.gemini.chat.input).first();
-                if (await input.isVisible()) {
-                    await input.click();
-                }
-                await this.page.locator(selectors.gemini.chat.input).first().fill(text); 
-            },
-            injectSources: async (sources: any[]) => { this.log('injectSources not implemented in bridge (legacy)', 'warn'); },
+            injectText: async (text: string) => await this.injectText(text),
+            injectUrl: async (url: string) => await this.injectUrl(url),
+            injectSources: async (sources: any[]) => await this.injectSources(sources),
             
             setModel: async (model: string) => await this.setModel(model),
             resetToNewChat: async () => await this.resetToNewChat(),
@@ -108,6 +103,30 @@ export class GeminiClient extends EventEmitter {
     async extractResponse(messageSelector?: string) {
         
         return actions.extractResponseAction(this.ctx, this.deps as GeminiActionDeps, messageSelector);
+    }
+
+    async injectText(text: string) {
+        const input = this.page.locator(selectors.gemini.chat.input).first();
+        if (await input.isVisible()) {
+            await input.click();
+        }
+        await input.fill(text);
+    }
+
+    async injectUrl(url: string) {
+        return this.injectText(url);
+    }
+
+    async injectSources(sources: { type: string; content: string }[]) {
+        for (const source of sources) {
+            if (source.type === 'file') {
+                await this.uploadFiles([source.content]);
+            } else if (source.type === 'url') {
+                await this.injectUrl(source.content);
+            } else if (source.type === 'text') {
+                await this.injectText(source.content);
+            }
+        }
     }
 
     // --- Session & State ---
@@ -273,8 +292,10 @@ export class GeminiClient extends EventEmitter {
      * Legacy method to get a response by index.
      * Uses 1-based indexing for positive values (1 = first), 
      * and 0-based negative indexing for relative to end (-1 = latest).
+     * @param index 1 for first, -1 for latest. Passing 0 is invalid and will return null.
      */
     async getResponse(index: number): Promise<string | null> {
+        if (index === 0) return null; // 0 is invalid in this 1-based convention
         const targetIndex = index > 0 ? index - 1 : index;
         const data = await actions.extractResponseAction(this.ctx, this.deps as GeminiActionDeps, undefined, targetIndex);
         return data ? data.text : null;

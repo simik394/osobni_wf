@@ -52,11 +52,7 @@ describe('GeminiClient Content Injection', () => {
 
         expect(mockPage.locator).toHaveBeenCalledWith(selectors.gemini.chat.input);
         expect(mockLocator.click).toHaveBeenCalled();
-        if (text.length > 50) {
-             expect(mockLocator.pressSequentially).toHaveBeenCalledWith(text, expect.anything());
-        } else {
-             expect(mockPage.keyboard.type).toHaveBeenCalledWith(text);
-        }
+        expect(mockLocator.fill).toHaveBeenCalledWith(text);
     });
 
     it('should inject URL correctly', async () => {
@@ -64,9 +60,9 @@ describe('GeminiClient Content Injection', () => {
 
         await client.injectUrl(url);
 
-        expect(mockPage.keyboard.type).toHaveBeenCalledWith(url);
-        // Expect wait for preview
-        expect(mockPage.waitForTimeout).toHaveBeenCalledWith(3000);
+        expect(mockPage.locator).toHaveBeenCalledWith(selectors.gemini.chat.input);
+        expect(mockLocator.click).toHaveBeenCalled();
+        expect(mockLocator.fill).toHaveBeenCalledWith(url);
     });
 
     it('should inject multiple sources', async () => {

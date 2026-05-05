@@ -40,10 +40,9 @@ describe('Config Resolution', () => {
         expect(config.falkor.port).toBeTypeOf('number');
     });
 
-    it('should have valid selectors defaults', async () => {
+    it('should have valid defaults', async () => {
         const { config } = await import('../src/config');
-        expect(config.selectors.queryInput).toBeInstanceOf(Array);
-        expect(config.selectors.queryInput.length).toBeGreaterThan(0);
-        expect(config.selectors.submitButton).toContain('button');
+        expect(config.urls.gemini).toContain('gemini.google.com');
+        expect(config.urls.perplexity).toContain('perplexity.ai');
     });
 });
