@@ -270,12 +270,13 @@ export async function exportBulk(
                 platformId: conv.platformId || conv.id,
                 title: full.conversation.title || conv.title || 'Untitled',
                 type: (full.conversation.type || conv.type || 'regular') as 'regular' | 'deep-research',
-                turns: full.turns.map(t => ({
-                    role: t.role as 'user' | 'assistant',
+                turns: (full.turns as any[]).map((t: any) => ({
+                    role: t.role,
                     content: t.content,
-                    timestamp: t.timestamp
+                    timestamp: t.timestamp,
+                    thoughts: t.thoughts
                 })),
-                researchDocs: full.researchDocs?.map(d => ({
+                researchDocs: (full.researchDocs as any[] | undefined)?.map((d: any) => ({
                     title: d.title,
                     content: d.content,
                     sources: d.sources || [],

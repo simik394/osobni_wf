@@ -32,6 +32,7 @@ export type GeminiActionDeps = ActionDeps & {
     uploadFiles: (files: string[]) => Promise<boolean>;
     injectSources: (sources: any[]) => Promise<void>;
     injectText: (text: string) => Promise<void>;
+    injectUrl: (url: string) => Promise<void>;
     resetToNewChat: () => Promise<void>;
     recycle: () => Promise<void>;
     telemetry: any;

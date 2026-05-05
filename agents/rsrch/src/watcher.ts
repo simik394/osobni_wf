@@ -125,9 +125,8 @@ async function processCompletedResearch(
 
     // Send notification
     console.log('\n📬 Sending notification...');
-    await discordService.sendNotification(title, { 
-        title: 'Research Complete (Watcher)',
-        description: `Session ${state.sessionId} is complete. Audio generation queued.`
+    await discordService.sendNotification(`Session ${state.sessionId} is complete. Audio generation queued.`, { 
+        title: 'Research Complete (Watcher)'
     });
 
     console.log('✅ Notification sent!');
