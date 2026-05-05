@@ -57,6 +57,7 @@ function validateMessages(messages: ChatMessage[]): string | null {
         const msg = messages[i];
         if (!msg.role || !validRoles.includes(msg.role)) return `Invalid role at index ${i}`;
         if (typeof msg.content !== 'string') return `Content at index ${i} must be string`;
+        if (msg.content.trim() === '') return `Content at index ${i} cannot be empty`;
     }
     if (!messages.some(m => m.role === 'user')) return 'At least one user message is required';
     return null;

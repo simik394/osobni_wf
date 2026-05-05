@@ -113,7 +113,8 @@ app.use('/system', createSystemRouter(dependencies));
 // Server Startup
 // ----------------------------------------------------------------------------
 
-export async function startServer() {
+export async function startServer(overridePort?: number) {
+    const listenPort = overridePort || port;
     console.log('--- Rsrch Agent Server (Modular) ---');
     
     if (process.env.PREINTI_BROWSER === 'true') {
@@ -126,10 +127,10 @@ export async function startServer() {
     }
 
     return new Promise((resolve, reject) => {
-        const server = app.listen(port, '0.0.0.0', () => {
-            console.log(`Server running at http://0.0.0.0:${port}`);
+        const server = app.listen(listenPort, '0.0.0.0', () => {
+            console.log(`Server running at http://0.0.0.0:${listenPort}`);
             console.log(`Mode: ${process.env.USE_WINDMILL === 'true' ? 'Windmill Passive' : 'Local Execution'}`);
-            // Keep the process alive or handle close events if needed
+            resolve(server);
         });
 
         server.on('error', (err) => {

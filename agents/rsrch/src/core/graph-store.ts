@@ -211,6 +211,17 @@ export class GraphStore {
         return this.research.createOrUpdateSession(session);
     }
 
+    /**
+     * Specialized helper for Gemini sessions (legacy support)
+     */
+    async createOrUpdateGeminiSession(data: { sessionId: string; title: string }): Promise<void> {
+        return this.research.createOrUpdateSession({
+            id: data.sessionId,
+            title: data.title,
+            platform: 'gemini'
+        });
+    }
+
     async syncNotebook(data: { platformId: string; title: string; url?: string }): Promise<{ isNew: boolean, id: string }> {
         return this.research.syncNotebook(data);
     }
@@ -312,6 +323,17 @@ export class GraphStore {
             const urls = data.citations.map(c => c.url);
             await this.citations.linkCitationsToTurn(turnId, urls);
         }
+    }
+
+    /**
+     * Synonym for addGeminiTurn(role: 'user')
+     */
+    async addGeminiQuery(data: { sessionId: string; query: string }): Promise<void> {
+        return this.addGeminiTurn({
+            sessionId: data.sessionId,
+            role: 'user',
+            content: data.query
+        });
     }
 }
 

@@ -141,7 +141,7 @@ describe('GraphStore Resilience', () => {
     it('should connect successfully on the first attempt', async () => {
         await graphStore.connect();
         expect(mockConnect).toHaveBeenCalledTimes(1);
-        expect((graphStore as any).isConnected).toBe(true);
+        expect(graphStore.getIsConnected()).toBe(true);
     });
 
 // end snippet should-connect-successfully-on-the-first-attempt
@@ -151,11 +151,17 @@ describe('GraphStore Resilience', () => {
     it('should retry connection and eventually succeed', async () => {
         mockConnect
             .mockRejectedValueOnce(new Error('Connection failed'))
-            .mockResolvedValueOnce({ selectGraph: () => ({ query: vi.fn() }), close: vi.fn() });
+            .mockResolvedValueOnce({ 
+                selectGraph: () => ({ 
+                    query: vi.fn().mockResolvedValue({ data: [] }),
+                    createNodeRangeIndex: vi.fn().mockResolvedValue(undefined)
+                }), 
+                close: vi.fn() 
+            });
 
         await graphStore.connect('localhost', 6379, 2);
         expect(mockConnect).toHaveBeenCalledTimes(2);
-        expect((graphStore as any).isConnected).toBe(true);
+        expect(graphStore.getIsConnected()).toBe(true);
     });
 
 // end snippet should-retry-connection-and-eventually-succeed
@@ -166,7 +172,7 @@ describe('GraphStore Resilience', () => {
         mockConnect.mockRejectedValue(new Error('Persistent connection failure'));
         await expect(graphStore.connect('localhost', 6379, 2)).rejects.toThrow(NetworkError);
         expect(mockConnect).toHaveBeenCalledTimes(2);
-        expect((graphStore as any).isConnected).toBe(false);
+        expect(graphStore.getIsConnected()).toBe(false);
     });
 
 // end snippet should-fail-to-connect-after-max-retries
@@ -175,17 +181,17 @@ describe('GraphStore Resilience', () => {
 
     it('should trip circuit breaker after enough consecutive failures', async () => {
         await graphStore.connect();
-        // @ts-ignore - Access private method for mocking
-        mockQuery = graphStore.graph.query;
+        // @ts-ignore - Access private connection for mocking
+        mockQuery = (graphStore as any).connection.graph.query;
         mockQuery.mockRejectedValue(new Error('Query failed'));
 
         // Trigger failures to trip the circuit
         for (let i = 0; i < 5; i++) {
-            await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow();
+            await expect((graphStore as any).connection.query('FAIL')).rejects.toThrow();
         }
 
         // Now the circuit should be open
-        await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow('circuit breaker is open');
+        await expect((graphStore as any).connection.query('FAIL')).rejects.toThrow('Circuit breaker is OPEN');
     });
 
 // end snippet should-trip-circuit-breaker-after-enough-consecuti
@@ -195,28 +201,28 @@ describe('GraphStore Resilience', () => {
     it('should transition from OPEN to HALF_OPEN and then to CLOSED', async () => {
         await graphStore.connect();
         // @ts-ignore
-        mockQuery = graphStore.graph.query;
+        mockQuery = (graphStore as any).connection.graph.query;
         mockQuery.mockClear(); // Clear calls from initSchema
 
         mockQuery.mockRejectedValue(new Error('Query failed'));
 
         // Trip the circuit
         for (let i = 0; i < 5; i++) {
-            await expect((graphStore as any)._executeQuery('FAIL')).rejects.toThrow();
+            await expect((graphStore as any).connection.query('FAIL')).rejects.toThrow();
         }
 
         // It is now OPEN. Wait for reset timeout.
         // @ts-ignore - access private property
-        graphStore.lastFailure = Date.now() - 31000;
+        (graphStore as any).connection.lastFailure = Date.now() - 31000;
 
         // First call should be in HALF_OPEN. Let it succeed.
         mockQuery.mockResolvedValue({ data: [] });
-        await (graphStore as any)._executeQuery('SUCCESS');
+        await (graphStore as any).connection.query('SUCCESS');
 
         // Now it should be CLOSED. Let it succeed again.
-        await (graphStore as any)._executeQuery('SUCCESS');
-        // 5 failures + 1 HALF_OPEN success (which transitions to CLOSED) = 6 total calls
-        // Note: The second SUCCESS doesn't increment because circuit resets call tracking
+        await (graphStore as any).connection.query('SUCCESS');
+        // Clear happened after connect(), so we don't count initSchema calls (10).
+        // 5 failures + 1 HALF_OPEN success + 1 CLOSED success = 7 total calls
         expect(mockQuery).toHaveBeenCalledTimes(7);
     });
 
