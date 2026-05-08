@@ -232,6 +232,17 @@ gemini:
     pin: 'button[role="menuitem"]:has-text("Přišpendlit"), button[role="menuitem"]:has-text("Pin")'
     unpin: 'button[role="menuitem"]:has-text("Odepnout"), button[role="menuitem"]:has-text("Unpin")'
 # ============================================================
+# GOOGLE KEEP SELECTORS
+# ============================================================
+keep:
+  noteInput: 'div[role="button"][aria-label*="Poznámka" i], div[role="button"][aria-label*="Take a note" i]'
+  titleInput: 'div[role="textbox"][aria-label*="Nadpis" i], div[role="textbox"][aria-label*="Title" i]'
+  contentInput: 'div[role="textbox"][aria-label*="Poznámka" i], div[role="textbox"][aria-label*="Note" i]'
+  saveButton: 'div[role="button"]:has-text("Hotovo"), div[role="button"]:has-text("Done")'
+  noteItem: 'div[role="button"][aria-label*="Poznámka" i], div.IZ65Hb-n0wRZb'
+  noteTitle: '.IZ65Hb-YPqjS-IDT92e'
+  noteContent: '.IZ65Hb-sBy40b'
+# ============================================================
 # AI MODE (Google Search AI) SELECTORS
 # ============================================================
 aiMode:

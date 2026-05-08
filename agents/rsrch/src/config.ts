@@ -28,6 +28,7 @@ const configSchema = z.object({
     perplexity: z.string().url().default('https://www.perplexity.ai'),
     gemini: z.string().url().default('https://gemini.google.com'),
     notebooklm: z.string().url().default('https://notebooklm.google.com'),
+    keep: z.string().url().default('https://keep.google.com'),
   }).default({}),
   auth: z.object({
     userDataDir: z.string().default(path.join(os.homedir(), '.config', 'rsrch', 'user-data')),
@@ -101,6 +102,7 @@ function loadConfig() {
       perplexity: process.env.RSRCH_URL_PERPLEXITY || localConfig.urls?.perplexity,
       gemini: process.env.RSRCH_URL_GEMINI || localConfig.urls?.gemini,
       notebooklm: process.env.RSRCH_URL_NOTEBOOKLM || localConfig.urls?.notebooklm,
+      keep: process.env.RSRCH_URL_KEEP || localConfig.urls?.keep,
     },
     auth: {
       userDataDir: process.env.PERPLEXITY_USER_DATA_DIR || localConfig.auth?.userDataDir,

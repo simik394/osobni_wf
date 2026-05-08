@@ -146,4 +146,39 @@ export function registerCanvasCommands(gemini: Command) {
                 }
             });
         });
+
+    canvas.command('update <content>')
+        .description('Update or append content in the active Canvas editor')
+        .option('--append', 'Append instead of replacing', false)
+        .option('--local', 'Use local execution', true)
+        .action(async (content, opts) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.updateCanvas(content, { mode: opts.append ? 'append' : 'replace' });
+                if (success) console.log('Canvas updated successfully.');
+            });
+        });
+
+    canvas.command('tab <preview|code>')
+        .description('Switch Canvas view tab')
+        .option('--local', 'Use local execution', true)
+        .action(async (tab) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                if (tab !== 'preview' && tab !== 'code') {
+                    console.error('Invalid tab name. Use "preview" or "code".');
+                    return;
+                }
+                const success = await gemini.switchCanvasTab(tab as any);
+                if (success) console.log(`Switched to ${tab} tab.`);
+            });
+        });
+
+    canvas.command('close')
+        .description('Close the Canvas side panel')
+        .option('--local', 'Use local execution', true)
+        .action(async () => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.closeCanvas();
+                if (success) console.log('Canvas closed.');
+            });
+        });
 }

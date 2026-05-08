@@ -156,6 +156,7 @@ export async function runLocalAction<T>(
 
 import { NotebookLMClient } from '../clients/notebooklm';
 import { GeminiClient } from '../clients/gemini';
+import { KeepClient } from '../clients/keep';
 
 // Helper for local Notebook execution
 export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: NotebookLMClient) => Promise<void>) {
@@ -170,6 +171,11 @@ export async function runLocalGeminiAction(
 ) {
     const actionOptions = typeof options === 'string' ? { sessionId: options } : options;
     return runLocalAction('Gemini', (c) => c.createGeminiClient() as Promise<GeminiClient>, action, actionOptions, hasLocalFlag);
+}
+
+// Helper for local Keep execution
+export async function runLocalKeepAction(action: (client: BrowserClient, keep: KeepClient) => Promise<void>) {
+    return runLocalAction('Keep', (c) => c.createKeepClient() as Promise<KeepClient>, action);
 }
 
 /**

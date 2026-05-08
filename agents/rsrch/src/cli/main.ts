@@ -9,6 +9,7 @@ import { queryCommand, batchCommand, authCommand, loginCommand } from '../comman
 import { graphCommand } from '../commands/graph';
 import { registryCommand } from '../commands/registry';
 import { aimodeCommand } from '../commands/aimode';
+import { keepCommand } from '../commands/keep';
 import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from '../commands/misc';
 
 const program = new Command();
@@ -51,5 +52,6 @@ program.addCommand(geminiCommand);
 program.addCommand(graphCommand);
 program.addCommand(registryCommand);
 program.addCommand(aimodeCommand);
+program.addCommand(keepCommand);
 
 program.parseAsync(process.argv);

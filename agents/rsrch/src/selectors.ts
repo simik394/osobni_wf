@@ -235,6 +235,16 @@ export interface AIModeSelectors {
     };
 }
 
+export interface KeepSelectors {
+    noteInput: string;
+    titleInput: string;
+    contentInput: string;
+    saveButton: string;
+    noteItem: string;
+    noteTitle: string;
+    noteContent: string;
+}
+
 export interface NotebookLMSelectors {
     home: HomeSelectors;
     notebook: NotebookSelectors;
@@ -246,6 +256,7 @@ export interface NotebookLMSelectors {
     gemini: GeminiSelectors;
     perplexity: PerplexitySelectors;
     aiMode: AIModeSelectors;
+    keep: KeepSelectors;
 }
 
 // ============================================================
@@ -459,6 +470,15 @@ const DEFAULTS: NotebookLMSelectors = {
         auth: {
             acceptAll: 'Accept all'
         }
+    },
+    keep: {
+        noteInput: 'Take a note',
+        titleInput: 'Title',
+        contentInput: 'Note',
+        saveButton: 'Done',
+        noteItem: '.IZ65Hb-n0wRZb',
+        noteTitle: '.IZ65Hb-YPqjS-IDT92e',
+        noteContent: '.IZ65Hb-sBy40b'
     }
 };
 
