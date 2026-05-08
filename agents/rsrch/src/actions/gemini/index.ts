@@ -12,3 +12,4 @@ export * from './research';
 export * from './canvas';
 export * from './history';
 export * from './archival';
+export * from './audio_bridge';

@@ -141,7 +141,13 @@ export class GeminiClient extends EventEmitter {
         return actions.resetToNewChatAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
-    async listSessions(options: { limit?: number, offset?: number, query?: string, pinnedOnly?: boolean } = {}) {
+    async listSessions(options: { 
+        limit?: number, 
+        offset?: number, 
+        query?: string, 
+        pinnedOnly?: boolean,
+        strategy?: 'search' | 'scroll' | 'hybrid'
+    } = {}) {
         return actions.listSessionsAction(this.ctx, this.deps as GeminiActionDeps, options);
     }
 
@@ -187,6 +193,14 @@ export class GeminiClient extends EventEmitter {
 
     async archiveArtifacts(options: { outputDir?: string } = {}) {
         return actions.archiveArtifactsAction(this.ctx, this.deps as GeminiActionDeps, options);
+    }
+
+    async syncRegistryToGraph(manager: any) {
+        return actions.syncRegistryToGraphAction(this.ctx, { ...(this.deps as GeminiActionDeps), researchManager: manager });
+    }
+
+    async researchToAudio(options: { artifactId: string, notebookTitle?: string, customPrompt?: string }) {
+        return actions.researchToAudioAction(this.ctx, options);
     }
 
     async scrollToTop(options: { limit?: number, untilText?: string } = {}) {

@@ -120,14 +120,15 @@ export interface GeminiSelectors {
         thoughtContainer?: string;
     };
     sidebar: {
-        menu: string;
+        container: string;
         conversations: string;
-        showMore: string;
-        myStuff: string;
-        gems: string;
+        showMore?: string;
+        pinnedIndicator?: string;
         searchToggle?: string;
         searchInput?: string;
-        pinnedIndicator?: string;
+        myStuff?: string;
+        menu: string;
+        gems: string;
     };
     deepResearch: {
         panel: string;
@@ -341,26 +342,27 @@ const DEFAULTS: NotebookLMSelectors = {
             citations: '.citation-chip'
         },
         sidebar: {
-        menu: '.sidebar-menu',
-        conversations: '.conversation-list, a.conversation',
-        showMore: 'Show more, button:has-text("Show more")',
-        myStuff: 'My stuff',
-        gems: 'Gems',
-        searchToggle: 'button[aria-label*="Search" i], button[aria-label*="Hledat" i]',
-        searchInput: 'input.search-input, .search-input input',
-        pinnedIndicator: 'mat-icon:has-text("keep"), [aria-label*="pinned" i]',
-    },
+            container: '.conversations-container, [role="navigation"] .scrollable-content',
+            conversations: 'a.conversation, a[data-conversation-id], .conversation-item',
+            showMore: 'button:has-text("Show more"), button:has-text("Zobrazit další")',
+            pinnedIndicator: 'mat-icon:has-text("keep"), [aria-label*="pinned" i]',
+            searchToggle: 'button[aria-label*="Search" i]',
+            searchInput: 'input.search-input',
+            myStuff: 'button:has-text("My stuff"), button:has-text("Moje věci")',
+            menu: 'button[aria-label*="Menu" i]',
+            gems: 'a[href*="/gems/"]'
+        },
         deepResearch: {
-        panel: '.research-panel, .container[scrollable="true"]',
-        documentCard: '.doc-card, [role="article"]:has-text("Deep Research")',
-        documentTitle: '.doc-title, h1, h2',
-        toggle: '.research-toggle',
-        citation: 'button.mat-mdc-tooltip-trigger.button.image-fade-on',
-        sourcesHeader: 'button:has-text("Sources used"), button:has-text("Zdroje použité")',
-        sourceLink: '.container[scrollable="true"] a[href*="http"]',
-        thoughtsSection: 'button:has-text("Thoughts"), button:has-text("Myšlenky")',
-        immersiveTitle: '.immersive-title'
-    },
+            panel: '.research-panel, .container[scrollable="true"]',
+            documentCard: '.doc-card, [role="article"]:has-text("Deep Research")',
+            documentTitle: '.doc-title, h1, h2',
+            toggle: '.research-toggle',
+            citation: 'button.mat-mdc-tooltip-trigger.button.image-fade-on',
+            sourcesHeader: 'button:has-text("Sources used"), button:has-text("Zdroje použité")',
+            sourceLink: '.container[scrollable="true"] a[href*="http"]',
+            thoughtsSection: 'button:has-text("Thoughts"), button:has-text("Myšlenky")',
+            immersiveTitle: '.immersive-title'
+        },
         gems: {
             card: '.gem-card',
             name: '.gem-name',

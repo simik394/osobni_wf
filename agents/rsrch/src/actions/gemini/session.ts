@@ -189,72 +189,58 @@ export async function ensureSidebarAction(
 export async function listSessionsAction(
     ctx: UniversalContext,
     deps: GeminiActionDeps,
-    options: { limit?: number, offset?: number, query?: string, pinnedOnly?: boolean } = {}
+    options: { 
+        limit?: number, 
+        offset?: number, 
+        query?: string, 
+        pinnedOnly?: boolean,
+        strategy?: 'search' | 'scroll' | 'hybrid'
+    } = {}
 ): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
     const { page, log } = ctx;
     const { selectors } = deps;
-    const { limit = 50, offset = 0, query, pinnedOnly } = options;
+    const { limit = 50, offset = 0, query, pinnedOnly, strategy = 'hybrid' } = options;
 
-    log(`Listing sessions (limit: ${limit}, offset: ${offset}, query: ${query || 'none'}, pinnedOnly: ${pinnedOnly})...`);
+    log(`Listing sessions (limit: ${limit}, offset: ${offset}, query: ${query || 'none'}, pinnedOnly: ${pinnedOnly}, strategy: ${strategy})...`);
 
     try {
         await ensureSidebarAction(ctx, deps);
 
-        // 1. If query is provided, use the UI search if possible
-        if (query) {
-            return await searchSessionsAction(ctx, deps, query, { limit, offset, pinnedOnly });
+        let sessions: { name: string; id: string | null; pinned: boolean }[] = [];
+
+        // 1. Search Strategy
+        if (query && (strategy === 'search' || strategy === 'hybrid')) {
+            sessions = await searchSessionsAction(ctx, deps, query, { limit, offset, pinnedOnly });
+            
+            if (sessions.length >= limit || strategy === 'search') {
+                log(`Found ${sessions.length} sessions via search.`);
+                return sessions;
+            }
+            log(`Search returned only ${sessions.length} sessions, falling back to scroll discovery...`);
         }
 
-        // 2. Otherwise, scan the sidebar efficiently
-        let sessionItems = page.locator(selectors.gemini.sidebar.conversations);
-        let count = await sessionItems.count();
-
-        // Targeted scrolling: only scroll if we haven't reached the limit/offset
-        const targetCount = offset + limit;
-        let retries = 0;
-        
-        while (count < targetCount && retries < 3) {
-            const lastItem = sessionItems.last();
-            if (await lastItem.isVisible().catch(() => false)) {
-                await lastItem.scrollIntoViewIfNeeded().catch(() => {});
-                await page.waitForTimeout(800);
+        // 2. Scroll Strategy (Fallback or primary)
+        if (strategy === 'scroll' || strategy === 'hybrid') {
+            const scrollResults = await discoverByScrollingAction(ctx, deps, { 
+                limit, 
+                offset, 
+                query, 
+                pinnedOnly,
+                maxDepth: 200 // Max messages to scan via scrolling
+            });
+            
+            // Merge results if we had search results
+            if (sessions.length > 0) {
+                const seenIds = new Set(sessions.map(s => s.id));
+                for (const s of scrollResults) {
+                    if (!seenIds.has(s.id)) {
+                        sessions.push(s);
+                    }
+                }
+                return sessions.slice(0, limit);
             }
-
-            const showMore = page.locator(selectors.gemini.sidebar.showMore).first();
-            if (await showMore.isVisible().catch(() => false)) {
-                await showMore.click().catch(() => {});
-                await page.waitForTimeout(800);
-            }
-
-            const newCount = await sessionItems.count();
-            if (newCount === count) retries++;
-            else {
-                count = newCount;
-                retries = 0;
-            }
-        }
-
-        const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
-        const start = Math.min(offset, count);
-        
-        for (let i = start; i < count && sessions.length < limit; i++) {
-            const item = sessionItems.nth(i);
-            const name = (await item.innerText().catch(() => '')).split('\n')[0].trim();
-            if (!name) continue;
-
-            const pinnedSelector = selectors.gemini.sidebar.pinnedIndicator || 'mat-icon:has-text("keep")';
-            const isPinned = (await item.locator(pinnedSelector).count() > 0) || 
-                             (await item.getAttribute('aria-label').catch(() => '') || '').toLowerCase().includes('pinned');
-
-            if (pinnedOnly && !isPinned) continue;
-
-            let id: string | null = null;
-            const href = await item.getAttribute('href').catch(() => null);
-            if (href && href.includes('/app/')) {
-                id = href.split('/app/')[1].split('?')[0];
-            }
-
-            sessions.push({ name, id, pinned: isPinned });
+            
+            return scrollResults;
         }
 
         return sessions;
@@ -262,6 +248,98 @@ export async function listSessionsAction(
         log(`Error listing sessions: ${e.message}`, 'error');
         return [];
     }
+}
+
+/**
+ * High-speed discovery by scrolling the sidebar and scanning the DOM.
+ */
+async function discoverByScrollingAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    options: { limit: number, offset: number, query?: string, pinnedOnly?: boolean, maxDepth: number }
+): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+    const { limit, offset, query, pinnedOnly, maxDepth } = options;
+
+    log('Discovering sessions via rapid scroll...');
+
+    const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
+    const seenIds = new Set<string>();
+
+    const containerSelector = selectors.gemini.sidebar.container;
+    const itemSelector = selectors.gemini.sidebar.conversations;
+
+    let scannedCount = 0;
+    let retries = 0;
+    
+    while (sessions.length < limit && scannedCount < maxDepth && retries < 5) {
+        // Scan current view
+        const items = page.locator(itemSelector);
+        const count = await items.count();
+        
+        let foundNewInView = false;
+        for (let i = 0; i < count; i++) {
+            const item = items.nth(i);
+            
+            // Extract ID
+            let id = await item.getAttribute('data-conversation-id').catch(() => null);
+            if (!id) {
+                const href = await item.getAttribute('href').catch(() => null);
+                if (href && href.includes('/app/') && !href.includes('[object')) {
+                    id = href.split('/app/')[1].split('?')[0];
+                }
+            }
+
+            if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                scannedCount++;
+                foundNewInView = true;
+
+                // Extract Title
+                const rawText = await item.textContent().catch(() => '');
+                const name = (rawText || '').split('\n').map(l => l.trim()).find(l => l.length > 0) || 'Untitled Session';
+                
+                const pinnedSelector = selectors.gemini.sidebar.pinnedIndicator || 'mat-icon:has-text("keep")';
+                const isPinned = (await item.locator(pinnedSelector).count() > 0);
+
+                const matchesQuery = !query || name.toLowerCase().includes(query.toLowerCase());
+                const matchesPinned = !pinnedOnly || isPinned;
+
+                if (matchesQuery && matchesPinned) {
+                    sessions.push({ name, id, pinned: isPinned });
+                }
+            }
+        }
+
+        if (sessions.length >= limit) break;
+
+        // Scroll down
+        const lastCount = count;
+        await page.evaluate((sel) => {
+            const container = document.querySelector(sel);
+            if (container) container.scrollBy(0, 1000);
+        }, containerSelector);
+        
+        await page.waitForTimeout(500);
+
+        // Handle "Show more" button
+        const showMore = page.locator(selectors.gemini.sidebar.showMore || 'button:has-text("Show more")').first();
+        if (await showMore.isVisible().catch(() => false)) {
+            await showMore.click().catch(() => {});
+            await page.waitForTimeout(500);
+        }
+
+        const newCount = await items.count();
+        if (!foundNewInView && newCount === lastCount) {
+            retries++;
+        } else {
+            retries = 0;
+        }
+    }
+
+    log(`Discovery complete. Scanned ${scannedCount} items, found ${sessions.length} matches.`);
+    return sessions;
 }
 
 /**
@@ -299,29 +377,35 @@ export async function searchSessionsAction(
         }
 
         // Extract results
-        const results: { name: string; id: string | null; pinned: boolean }[] = [];
-        const items = page.locator(selectors.gemini.sidebar.conversations);
-        const count = await items.count();
+        const results = await page.locator(selectors.gemini.sidebar.conversations).all();
+        const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
 
-        for (let i = 0; i < count && results.length < limit; i++) {
-            const item = items.nth(i);
+        for (const item of results) {
             const name = (await item.innerText().catch(() => '')).split('\n')[0].trim();
             if (!name) continue;
 
             const pinnedSelector = selectors.gemini.sidebar.pinnedIndicator || 'mat-icon:has-text("keep")';
-            const isPinned = await item.locator(pinnedSelector).count() > 0;
+            const isPinned = (await item.locator(pinnedSelector).count() > 0);
+
             if (pinnedOnly && !isPinned) continue;
 
+            let id: string | null = null;
             const href = await item.getAttribute('href').catch(() => null);
-            const id = href && href.includes('/app/') ? href.split('/app/')[1].split('?')[0] : null;
+            if (href && href.includes('/app/')) {
+                id = href.split('/app/')[1].split('?')[0];
+            }
 
-            results.push({ name, id, pinned: isPinned });
+            sessions.push({ name, id, pinned: isPinned });
         }
 
-        // Close search if needed
-        await page.keyboard.press('Escape');
+        // Cleanup: clear search to restore sidebar
+        if (await input.isVisible()) {
+            await input.fill('');
+            await page.waitForTimeout(3000); // UI needs time to reset
+            await page.keyboard.press('Escape');
+        }
 
-        return results;
+        return sessions.slice(0, limit);
     } catch (e: any) {
         log(`Search failed: ${e.message}`, 'error');
         return [];

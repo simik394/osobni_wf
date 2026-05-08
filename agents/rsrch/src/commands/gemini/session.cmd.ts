@@ -24,27 +24,30 @@ export function registerSessionCommands(gemini: Command) {
 
     gemini.command('list-sessions')
         .description('List sessions with efficient search and filtering')
-        .option('-q, --query <text>', 'Search sessions by name (uses UI search for efficiency)')
+        .option('-l, --limit <number>', 'Limit number of sessions', '20')
+        .option('-o, --offset <number>', 'Offset for pagination', '0')
+        .option('-q, --query <string>', 'Search query')
         .option('-p, --pinned', 'Show only pinned sessions')
-        .option('-l, --limit <number>', 'Limit results', (val) => parseInt(val), 20)
-        .option('-o, --offset <number>', 'Offset results', (val) => parseInt(val), 0)
+        .option('-s, --strategy <strategy>', 'Discovery strategy: search, scroll, hybrid', 'hybrid')
         .option('--local', 'Use local execution', true)
-        .action(async (opts, cmd) => {
+        .action(async (opts) => {
             await runLocalGeminiAction(async (client, gemini) => {
-                const sessions = await gemini.listSessions({ 
-                    limit: opts.limit, 
-                    offset: opts.offset, 
-                    query: opts.query, 
-                    pinnedOnly: opts.pinned 
+                const sessions = await gemini.listSessions({
+                    limit: parseInt(opts.limit),
+                    offset: parseInt(opts.offset),
+                    query: opts.query,
+                    pinnedOnly: opts.pinned,
+                    strategy: opts.strategy
                 });
                 
                 console.log(`\n--- Gemini Sessions (Query: ${opts.query || 'none'}, Pinned: ${opts.pinned || 'any'}) ---`);
                 if (sessions.length === 0) {
-                    console.log('No sessions found matching criteria.');
+                    console.log('No sessions found.');
                 } else {
                     sessions.forEach(s => {
-                        const pin = s.pinned ? '📌 ' : '   ';
-                        console.log(`${pin}${s.name.padEnd(40)} (ID: ${s.id || 'N/A'})`);
+                        const pinnedMark = s.pinned ? '📌' : '  ';
+                        const title = s.name.length > 40 ? s.name.substring(0, 37) + '...' : s.name.padEnd(40);
+                        console.log(`${pinnedMark} ${title} (ID: ${s.id})`);
                     });
                 }
                 console.log('----------------------------------------------------------\n');

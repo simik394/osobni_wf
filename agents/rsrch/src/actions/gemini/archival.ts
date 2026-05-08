@@ -118,3 +118,46 @@ export async function archiveArtifactsAction(
 
     return archivedFiles;
 }
+
+/**
+ * Synchronizes the local artifact registry to the Graph Store.
+ */
+export async function syncRegistryToGraphAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps & { researchManager?: any }
+): Promise<{ synced: number, total: number }> {
+    const { log } = ctx;
+    const registry = getRegistry();
+    const artifacts = (registry as any).registry.artifacts;
+    const artifactIds = Object.keys(artifacts);
+    
+    log(`Syncing ${artifactIds.length} artifacts to Graph Store...`);
+    
+    let synced = 0;
+    const manager = deps.researchManager;
+    
+    if (!manager) {
+        log('No ResearchManager provided for sync.', 'error');
+        return { synced: 0, total: artifactIds.length };
+    }
+
+    for (const id of artifactIds) {
+        const art = artifacts[id];
+        try {
+            await manager.saveArtifact({
+                id: art.geminiSessionId + '_' + id,
+                type: art.type,
+                title: art.currentTitle || art.originalTitle,
+                markdownPath: art.markdownPath,
+                references: art.references,
+                sessionId: art.geminiSessionId
+            });
+            synced++;
+        } catch (e: any) {
+            log(`Failed to sync artifact ${id}: ${e.message}`, 'warn');
+        }
+    }
+
+    log(`Sync complete. Synced ${synced}/${artifactIds.length} artifacts.`);
+    return { synced, total: artifactIds.length };
+}

@@ -83,4 +83,21 @@ export function registerSyncCommands(gemini: Command) {
                 });
             });
         });
+
+    gemini.command('sync-registry')
+        .description('Sync local artifact registry to Graph Store')
+        .option('--local', 'Use local execution', true)
+        .action(async () => {
+            const store = getGraphStore();
+            await store.connect(config.falkor.host, config.falkor.port);
+
+            try {
+                await runLocalGeminiAction(async (client, gemini) => {
+                    const res = await gemini.syncRegistryToGraph(store);
+                    console.log(`[CLI] Registry sync complete: ${res.synced}/${res.total} artifacts synced.`);
+                });
+            } finally {
+                await store.disconnect();
+            }
+        });
 }

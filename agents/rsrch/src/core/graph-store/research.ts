@@ -84,6 +84,52 @@ export class ResearchManager {
     }
 
     /**
+     * Save an Artifact (Canvas or ResearchDoc)
+     */
+    async saveArtifact(artifact: { id: string, type: string, title: string, markdownPath?: string, references?: string[], sessionId: string }): Promise<void> {
+        const platformId = artifact.id;
+        const nodeId = `art_${platformId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        
+        await this.query(`
+            MERGE (a:Artifact { platformId: '${escapeString(platformId)}' })
+            ON CREATE SET
+                a.id = '${nodeId}',
+                a.type = '${artifact.type}',
+                a.title = '${escapeString(artifact.title)}',
+                a.markdownPath = '${escapeString(artifact.markdownPath || '')}',
+                a.createdAt = ${Date.now()}
+            ON MATCH SET
+                a.title = '${escapeString(artifact.title)}',
+                a.markdownPath = '${escapeString(artifact.markdownPath || '')}',
+                a.updatedAt = ${Date.now()}
+        `);
+
+        // Link to session
+        await this.query(`
+            MATCH (s:Session { platformId: '${escapeString(artifact.sessionId)}' })
+            MATCH (a:Artifact { id: '${nodeId}' })
+            MERGE (s)-[:PRODUCED]->(a)
+        `);
+
+        // Link references
+        if (artifact.references) {
+            for (const ref of artifact.references) {
+                const domain = new URL(ref).hostname;
+                await this.query(`
+                    MERGE (c:Citation { url: '${escapeString(ref)}' })
+                    ON CREATE SET
+                        c.id = 'cit_${escapeString(ref.replace(/[^a-zA-Z0-9]/g, '_'))}',
+                        c.domain = '${escapeString(domain)}',
+                        c.createdAt = ${Date.now()}
+                    WITH c
+                    MATCH (a:Artifact { id: '${nodeId}' })
+                    MERGE (a)-[:CITES]->(c)
+                `);
+            }
+        }
+    }
+
+    /**
      * Save an Audio node.
      */
     async saveAudio(audio: Audio): Promise<void> {

@@ -124,4 +124,26 @@ export function registerCanvasCommands(gemini: Command) {
             }
             console.log('-----------------------------------------------------\n');
         });
+
+    gemini.command('audio-overview <artifactId>')
+        .description('Generate a NotebookLM audio overview for an archived artifact')
+        .option('-n, --notebook <title>', 'Target notebook title')
+        .option('-p, --prompt <text>', 'Custom audio generation prompt')
+        .option('--local', 'Use local execution', true)
+        .action(async (artifactId, opts) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                console.log(`Brdiging artifact ${artifactId} to NotebookLM audio...`);
+                const result = await gemini.researchToAudio({
+                    artifactId,
+                    notebookTitle: opts.notebook,
+                    customPrompt: opts.prompt
+                });
+                
+                if (result.success) {
+                    console.log(`Successfully triggered audio generation: ${result.artifactTitle || 'Pending'}`);
+                } else {
+                    console.log('Failed to generate audio overview.');
+                }
+            });
+        });
 }

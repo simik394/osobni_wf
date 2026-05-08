@@ -8,7 +8,7 @@ export async function listDeepResearchDocsAction(ctx: UniversalContext, deps: Ge
     
     // Ensure sidebar is open to see "My Stuff" or research docs
     // Deep Research docs are often listed in the "My Stuff" sidebar section
-    const myStuff = page.locator(selectors.gemini.sidebar.myStuff).first();
+    const myStuff = page.locator(selectors.gemini.sidebar.myStuff || 'button:has-text("My stuff")').first();
     if (await myStuff.isVisible()) {
         await myStuff.click();
         await page.waitForTimeout(1000);

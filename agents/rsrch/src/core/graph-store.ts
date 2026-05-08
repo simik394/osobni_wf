@@ -234,6 +234,10 @@ export class GraphStore {
         return this.research.saveDocument(doc);
     }
 
+    async saveArtifact(artifact: any): Promise<void> {
+        return this.research.saveArtifact(artifact);
+    }
+
     async saveAudio(audio: Audio): Promise<void> {
         return this.research.saveAudio(audio);
     }
