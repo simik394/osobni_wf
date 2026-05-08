@@ -7,43 +7,80 @@ import { UniversalContext, GeminiActionDeps } from '../types';
  * @param ctx UniversalContext
  * @param deps Dependencies
  */
+/**
+ * Robust history loading with support for limits and offsets.
+ * Instead of scrolling to the absolute top, it can stop when enough messages are loaded.
+ */
 export async function scrollToTopAction(
     ctx: UniversalContext,
-    deps: GeminiActionDeps
+    deps: GeminiActionDeps,
+    options: { limit?: number, untilText?: string } = {}
 ): Promise<void> {
     const { page, log } = ctx;
+    const { limit, untilText } = options;
     
-    log('Scrolling to top of chat history to load all artifacts...');
+    log(`Initiating targeted history loading (limit: ${limit || 'max'}, until: ${untilText || 'none'})...`);
 
-    // Locate the scrollable container. 
-    // Usually it's the main chat window or a specific history container.
-    const container = page.locator('chat-window, .chat-history, [data-test-id="chat-history"]').first();
+    const containerSelector = 'chat-window, .chat-history, [data-test-id="chat-history"], main div[style*="overflow-y: scroll"]';
+    const container = page.locator(containerSelector).first();
+    const messageSelector = deps.selectors.gemini.chat.response || '.model-response';
     
-    let lastHeight = 0;
-    let retries = 0;
+    let lastScrollHeight = 0;
+    let stableCount = 0;
+    const MAX_STABLE = 3; 
+    const MAX_ITERATIONS = limit ? Math.ceil(limit / 5) + 5 : 50; 
     
-    while (retries < 15) { // Limit to 15 scrolls to avoid infinite loops
-        const currentHeight = await container.evaluate(el => el.scrollHeight).catch(() => 0);
-        
-        if (currentHeight === lastHeight) {
-            retries++;
-        } else {
-            retries = 0;
-            lastHeight = currentHeight;
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+        const messageCount = await page.locator(messageSelector).count();
+        log(`Current message count in DOM: ${messageCount}`);
+
+        // Check if we met the limit
+        if (limit && messageCount >= limit) {
+            log(`Reached requested limit of ${limit} messages.`);
+            break;
         }
 
-        // Scroll to the very top
-        await container.evaluate(el => el.scrollTo(0, 0));
-        await page.waitForTimeout(1000); // Wait for potential lazy loading
+        // Check if we found the target text
+        if (untilText) {
+            const found = await page.locator(`:has-text("${untilText}")`).count() > 0;
+            if (found) {
+                log(`Found target text: "${untilText}". Stopping.`);
+                break;
+            }
+        }
 
-        // Check if a "load more" indicator or button exists
-        const loadMore = page.locator('button:has-text("Load more"), button:has-text("Načíst další")').first();
-        if (await loadMore.isVisible().catch(() => false)) {
-            log('Clicking "Load more" button...');
-            await loadMore.click();
-            await page.waitForTimeout(1000);
+        const state = await container.evaluate(el => ({
+            scrollHeight: el.scrollHeight,
+            scrollTop: el.scrollTop
+        })).catch(() => ({ scrollHeight: 0, scrollTop: 0 }));
+
+        if (state.scrollHeight === lastScrollHeight && state.scrollTop === 0) {
+            stableCount++;
+            if (stableCount >= MAX_STABLE) break;
+        } else {
+            stableCount = 0;
+            lastScrollHeight = state.scrollHeight;
+        }
+
+        await container.evaluate(el => el.scrollTo(0, 0));
+        await page.waitForTimeout(1000); 
+
+        // Efficient load-more detection
+        const loadMoreSelectors = [
+            'button:has-text("Load more")',
+            'button:has-text("Načíst další")',
+            'button[aria-label*="load more" i]'
+        ];
+
+        for (const sel of loadMoreSelectors) {
+            const btn = page.locator(sel).first();
+            if (await btn.isVisible().catch(() => false)) {
+                await btn.click();
+                await page.waitForTimeout(1500);
+                break; 
+            }
         }
     }
 
-    log('Finished scrolling to top.');
+    log('Finished history loading.');
 }

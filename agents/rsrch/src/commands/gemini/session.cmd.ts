@@ -23,31 +23,47 @@ export function registerSessionCommands(gemini: Command) {
         });
 
     gemini.command('list-sessions')
-        .description('List sessions')
-        .argument('[limit]', 'Limit', parseInt, 20)
-        .argument('[offset]', 'Offset', parseInt, 0)
-        .action(async (limit, offset, opts, cmd) => {
-            const globalOpts = getOptionsWithGlobals(cmd);
-            const { serverUrl } = cliContext.get();
-
-            if (globalOpts.local) {
-                await runLocalGeminiAction(async (client, gemini) => {
-                    const sessions = await gemini.listSessions({ limit, offset });
-                    console.log(`\n--- Recent Sessions (Limit: ${limit}, Offset: ${offset}) ---`);
-                    sessions.forEach((s: { name: string; id: string | null }) => console.log(`- ${s.name} (ID: ${s.id || 'N/A'})`));
+        .description('List sessions with efficient search and filtering')
+        .option('-q, --query <text>', 'Search sessions by name (uses UI search for efficiency)')
+        .option('-p, --pinned', 'Show only pinned sessions')
+        .option('-l, --limit <number>', 'Limit results', (val) => parseInt(val), 20)
+        .option('-o, --offset <number>', 'Offset results', (val) => parseInt(val), 0)
+        .option('--local', 'Use local execution', true)
+        .action(async (opts, cmd) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const sessions = await gemini.listSessions({ 
+                    limit: opts.limit, 
+                    offset: opts.offset, 
+                    query: opts.query, 
+                    pinnedOnly: opts.pinned 
                 });
-                return;
-            }
+                
+                console.log(`\n--- Gemini Sessions (Query: ${opts.query || 'none'}, Pinned: ${opts.pinned || 'any'}) ---`);
+                if (sessions.length === 0) {
+                    console.log('No sessions found matching criteria.');
+                } else {
+                    sessions.forEach(s => {
+                        const pin = s.pinned ? '📌 ' : '   ';
+                        console.log(`${pin}${s.name.padEnd(40)} (ID: ${s.id || 'N/A'})`);
+                    });
+                }
+                console.log('----------------------------------------------------------\n');
+            });
+        });
 
-            try {
-                const result = await executeGeminiGet('sessions', { limit, offset }, { server: serverUrl });
-                const sessions = result.data || [];
-                console.log(`\n--- Recent Sessions (Limit: ${limit}, Offset: ${offset}) ---`);
-                sessions.forEach((s: { name: string; id: string | null }) => console.log(`- ${s.name} (ID: ${s.id || 'N/A'})`));
-            } catch (e: any) {
-                console.error(`[CLI] Error: ${e.message}`);
-                process.exit(1);
-            }
+    gemini.command('load-history')
+        .description('Targeted history loading (efficient infinite scroll)')
+        .option('-l, --limit <number>', 'Stop after loading N messages', (val) => parseInt(val))
+        .option('-u, --until <text>', 'Stop scrolling when this text is found')
+        .option('--local', 'Use local execution', true)
+        .action(async (opts, cmd) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                await gemini.scrollToTop({ 
+                    limit: opts.limit, 
+                    untilText: opts.until 
+                });
+                console.log('History loading task completed.');
+            });
         });
 
     gemini.command('get-response [sessionIdOrIndex] [index]')
@@ -229,11 +245,11 @@ export function registerSessionCommands(gemini: Command) {
                 process.exit(1);
             }
         });
+
     gemini.command('model-status')
         .description('Check Gemini model availability and rate limits')
         .option('--local', 'Use local execution', true)
         .action(async (opts, cmd) => {
-            const globalOpts = getOptionsWithGlobals(cmd);
             await runLocalGeminiAction(async (client, gemini) => {
                 const statuses = await gemini.getModelStatus();
                 console.log('\n--- Gemini Model Status ---');
@@ -246,4 +262,3 @@ export function registerSessionCommands(gemini: Command) {
             });
         });
 }
-

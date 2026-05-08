@@ -141,7 +141,7 @@ export class GeminiClient extends EventEmitter {
         return actions.resetToNewChatAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
-    async listSessions(options: { limit?: number, offset?: number } = {}) {
+    async listSessions(options: { limit?: number, offset?: number, query?: string, pinnedOnly?: boolean } = {}) {
         return actions.listSessionsAction(this.ctx, this.deps as GeminiActionDeps, options);
     }
 
@@ -185,8 +185,8 @@ export class GeminiClient extends EventEmitter {
         return actions.openArtifactAction(this.ctx, this.deps as GeminiActionDeps, name);
     }
 
-    async scrollToTop() {
-        return actions.scrollToTopAction(this.ctx, this.deps as GeminiActionDeps);
+    async scrollToTop(options: { limit?: number, untilText?: string } = {}) {
+        return actions.scrollToTopAction(this.ctx, this.deps as GeminiActionDeps, options);
     }
 
     async init(sessionId?: string) {

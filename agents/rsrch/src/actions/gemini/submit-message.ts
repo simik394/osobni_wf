@@ -48,7 +48,7 @@ export async function submitMessageAction(
     // 3. Click Send or Press Enter
     let sendClicked = false;
     const sendBtn = page.locator(deps.selectors.gemini.chat.send).first();
-    if (await sendBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await sendBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
         await sendBtn.click();
         sendClicked = true;
     }

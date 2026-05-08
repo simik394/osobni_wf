@@ -125,6 +125,9 @@ export interface GeminiSelectors {
         showMore: string;
         myStuff: string;
         gems: string;
+        searchToggle?: string;
+        searchInput?: string;
+        pinnedIndicator?: string;
     };
     deepResearch: {
         panel: string;
@@ -336,12 +339,15 @@ const DEFAULTS: NotebookLMSelectors = {
             citations: '.citation-chip'
         },
         sidebar: {
-            menu: '.sidebar-menu',
-            conversations: '.conversation-list',
-            showMore: 'Show more',
-            myStuff: 'My stuff',
-            gems: 'Gems'
-        },
+        menu: '.sidebar-menu',
+        conversations: '.conversation-list, a.conversation',
+        showMore: 'Show more, button:has-text("Show more")',
+        myStuff: 'My stuff',
+        gems: 'Gems',
+        searchToggle: 'button[aria-label*="Search" i], button[aria-label*="Hledat" i]',
+        searchInput: 'input.search-input, .search-input input',
+        pinnedIndicator: 'mat-icon:has-text("keep"), [aria-label*="pinned" i]',
+    },
         deepResearch: {
             panel: '.research-panel',
             documentCard: '.doc-card',
@@ -459,16 +465,19 @@ export function loadSelectors(): NotebookLMSelectors {
         if (content) {
             const yamlSelectors = yaml.parse(content) as any;
             
-            for (const category in yamlSelectors) {
-                if (result[category as keyof NotebookLMSelectors]) {
-                    if (typeof yamlSelectors[category] === 'object') {
-                        Object.assign(result[category as keyof NotebookLMSelectors], yamlSelectors[category]);
+            const deepMerge = (target: any, source: any) => {
+                for (const key in source) {
+                    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                        if (!target[key]) target[key] = {};
+                        deepMerge(target[key], source[key]);
                     } else {
-                        (result as any)[category] = yamlSelectors[category];
+                        target[key] = source[key];
                     }
                 }
-            }
-            console.log('[Selectors] Loaded and merged from selectors.yaml');
+            };
+
+            deepMerge(result, yamlSelectors);
+            console.log('[Selectors] Deep-merged selectors from selectors.yaml');
         }
     } catch (error) {
         console.error('[Selectors] Fatal Error:', error);

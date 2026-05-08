@@ -13,6 +13,8 @@ import * as path from 'path';
 const SERVER_URL = process.env.RSRCH_URL || 'http://localhost:3001';
 
 describe('rsrch Smoke Test (Ready to Operate)', () => {
+    // Increase timeout for server-side browser init
+    const timeout = 60000;
 
     describe('1. Server Health & Connectivity', () => {
         it('should respond to /health with browser status', async () => {
@@ -25,7 +27,7 @@ describe('rsrch Smoke Test (Ready to Operate)', () => {
             // Accept both 'connected' (legacy) and 'ready' (modular)
             expect(['connected', 'ready']).toContain(data.browser);
             console.log(`✅ Server is healthy and Browser is ${data.browser}.`);
-        });
+        }, timeout);
 
         it('should respond to /system/status', async () => {
             const response = await fetch(`${SERVER_URL}/system/status`);
@@ -34,7 +36,7 @@ describe('rsrch Smoke Test (Ready to Operate)', () => {
             const data = await response.json();
             expect(data.uptime).toBeDefined();
             console.log(`✅ System status retrieved. Uptime: ${Math.floor(data.uptime / 60)}m`);
-        });
+        }, timeout);
     });
 
     describe('2. API & Routing (OpenAI Compatible)', () => {
@@ -51,13 +53,13 @@ describe('rsrch Smoke Test (Ready to Operate)', () => {
                     ],
                     max_tokens: 5
                 })
-            });
+            }, timeout);
 
             expect(response.status).toBe(200);
             const data = await response.json();
             expect(data.choices[0].message.content.toUpperCase()).toContain('PONG');
             console.log('✅ API Routing and Gemini connectivity verified.');
-        });
+        }, timeout);
     });
 
     describe('3. Local Persistence (Artifact Registry)', () => {
@@ -80,7 +82,7 @@ describe('rsrch Smoke Test (Ready to Operate)', () => {
             // Cleanup
             fs.rmSync(testDir, { recursive: true });
             console.log('✅ Artifact Registry persistence verified.');
-        });
+        }, timeout);
     });
 
     describe('4. NotebookLM (State Check)', () => {
@@ -89,7 +91,7 @@ describe('rsrch Smoke Test (Ready to Operate)', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
-            });
+            }, timeout);
 
             expect(response.status).toBe(200);
             const data = await response.json();

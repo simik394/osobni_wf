@@ -117,7 +117,7 @@ export async function startServer(overridePort?: number) {
     const listenPort = overridePort || port;
     console.log('--- Rsrch Agent Server (Modular) ---');
     
-    if (process.env.PREINTI_BROWSER === 'true') {
+    if (config.preinitBrowser) {
         try {
             await client.init();
             console.log('Browser pre-initialized successfully.');
@@ -141,6 +141,14 @@ export async function startServer(overridePort?: number) {
 }
 
 if (require.main === module) {
+    process.on('uncaughtException', (err) => {
+        console.error('UNCAUGHT EXCEPTION:', err);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('UNHANDLED REJECTION:', reason);
+    });
+
     startServer().catch(err => {
         console.error('SERVER FATAL ERROR:', err);
         process.exit(1);

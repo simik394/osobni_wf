@@ -70,7 +70,11 @@ export abstract class BaseClient {
     }
 
     isBrowserInitialized(): boolean {
-        return this.isInitialized && (this.browser !== null || this.context !== null);
+        if (!this.isInitialized) return false;
+        if (this.isConnectedOverCDP) {
+            return this.browser !== null && this.browser.isConnected();
+        }
+        return this.browser !== null || this.context !== null;
     }
 
     protected getContext(): UniversalContext {
@@ -95,10 +99,20 @@ export class BrowserClient extends BaseClient {
         super(options);
     }
 
-    async init(options: { keepAlive?: boolean, local?: boolean, profileId?: string, cdpEndpoint?: string } = {}) {
-        if (this.isInitialized) {
-            this.log('Client already initialized');
-            return;
+    async init(options: { keepAlive?: boolean, local?: boolean, profileId?: string, cdpEndpoint?: string, force?: boolean } = {}) {
+        if (this.isInitialized && !options.force) {
+            if (this.isConnectedOverCDP) {
+                if (this.browser && this.browser.isConnected()) {
+                    this.log('Client already initialized and connected');
+                    return;
+                } else {
+                    this.log('Client initialized but browser disconnected, re-initializing...');
+                    this.isInitialized = false;
+                }
+            } else {
+                this.log('Client already initialized (local)');
+                return;
+            }
         }
         this.keepAlive = options.keepAlive || this.options.keepAlive || false;
 
@@ -106,7 +120,7 @@ export class BrowserClient extends BaseClient {
         this.profileId = profileId;
         
         // CDP endpoint override for container mode
-        const cdpEndpoint = options.cdpEndpoint || this.options.cdpEndpoint || process.env.BROWSER_CDP_ENDPOINT;
+        const cdpEndpoint = options.cdpEndpoint || this.options.cdpEndpoint || config.browserCdpEndpoint;
 
         if (cdpEndpoint) {
             // CDP Mode (Remote Control)
@@ -130,8 +144,12 @@ export class BrowserClient extends BaseClient {
                     const fetchTarget = target.replace(/^ws/, 'http');
                     console.log(`Fetching version from: ${fetchTarget}/json/version`);
                     
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
                     // @ts-ignore
-                    const response = await fetch(`${fetchTarget}/json/version`);
+                    const response = await fetch(`${fetchTarget}/json/version`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
                     if (!response.ok) throw new Error(`Failed to fetch version info: ${response.statusText}`);
                     const data = await response.json();
                     let wsEndpoint = data.webSocketDebuggerUrl;
@@ -188,6 +206,7 @@ export class BrowserClient extends BaseClient {
                 ensureProfileDir(profileId);
                 const headless = process.env.FORCE_LOCAL_BROWSER === 'true' ? false : this.options.headless;
                 
+                console.log(`[BrowserClient] Local launch: headless=${headless}, stateDir=${stateDir}`);
                 this.context = await (chromium as any).launchPersistentContext(stateDir, {
                     headless: headless,
                     slowMo: 100,

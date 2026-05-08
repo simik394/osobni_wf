@@ -7,8 +7,8 @@
     "rsrch": "dist/cli/main.js"
   },
   "scripts": {
-    "rsrch": "ts-node src/cli.ts",
-    "auth": "ts-node src/cli.ts auth",
+    "rsrch": "ts-node src/cli/main.ts",
+    "auth": "ts-node src/cli/main.ts auth",
     "login": "HEADLESS=false ts-node src/cli.ts login",
     "start": "node dist/cli.js",
     "serve": "ts-node src/server.ts",

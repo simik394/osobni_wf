@@ -191,119 +191,150 @@ export async function ensureSidebarAction(
  * Lists the current user's Gemini sessions/conversations.
  * Handles infinite scroll and "Show more" logic.
  */
+/**
+ * Lists the current user's Gemini sessions/conversations.
+ * Optimized for efficiency with search and pinned chat support.
+ */
 export async function listSessionsAction(
     ctx: UniversalContext,
     deps: GeminiActionDeps,
-    options: { limit?: number, offset?: number } = {}
+    options: { limit?: number, offset?: number, query?: string, pinnedOnly?: boolean } = {}
 ): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
     const { page, log } = ctx;
     const { selectors } = deps;
-    const { limit = 50, offset = 0 } = options;
+    const { limit = 50, offset = 0, query, pinnedOnly } = options;
 
-    const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
-    
+    log(`Listing sessions (limit: ${limit}, offset: ${offset}, query: ${query || 'none'}, pinnedOnly: ${pinnedOnly})...`);
+
     try {
-        // Ensure sidebar is visible
         await ensureSidebarAction(ctx, deps);
 
-        // Wait for history loading spinner
-        try {
-            const spinner = page.locator('.loading-history-spinner-container');
-            if (await spinner.count() > 0 && await spinner.isVisible().catch(() => false)) {
-                await spinner.last().waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { });
-            }
-        } catch (e) { /* Ignore */ }
+        // 1. If query is provided, use the UI search if possible
+        if (query) {
+            return await searchSessionsAction(ctx, deps, query, { limit, offset, pinnedOnly });
+        }
 
-        const targetCount = offset + limit;
-        log(`Listing sessions (limit: ${limit}, offset: ${offset})...`);
-
+        // 2. Otherwise, scan the sidebar efficiently
         let sessionItems = page.locator(selectors.gemini.sidebar.conversations);
         let count = await sessionItems.count();
 
-        // Scroll to load more if needed
+        // Targeted scrolling: only scroll if we haven't reached the limit/offset
+        const targetCount = offset + limit;
         let retries = 0;
-        while (count < targetCount && retries < 5) {
-            const preCount = count;
+        
+        while (count < targetCount && retries < 3) {
             const lastItem = sessionItems.last();
             if (await lastItem.isVisible().catch(() => false)) {
                 await lastItem.scrollIntoViewIfNeeded().catch(() => {});
-                await page.waitForTimeout(1000); // Give time for infinite scroll
+                await page.waitForTimeout(800);
             }
 
-            // Check if "show more" button exists (for deep history)
             const showMore = page.locator(selectors.gemini.sidebar.showMore).first();
             if (await showMore.isVisible().catch(() => false)) {
                 await showMore.click().catch(() => {});
-                await page.waitForTimeout(1000);
+                await page.waitForTimeout(800);
             }
 
-            // Refresh selector count
-            sessionItems = page.locator(selectors.gemini.sidebar.conversations);
-            count = await sessionItems.count();
-
-            if (count === preCount) {
-                retries++;
-            } else {
+            const newCount = await sessionItems.count();
+            if (newCount === count) retries++;
+            else {
+                count = newCount;
                 retries = 0;
             }
         }
 
-        // Define range to extract
+        const sessions: { name: string; id: string | null; pinned: boolean }[] = [];
         const start = Math.min(offset, count);
-        const end = Math.min(offset + limit, count);
-
-        if (start >= count) {
-            return [];
-        }
-
-        for (let i = start; i < end; i++) {
+        
+        for (let i = start; i < count && sessions.length < limit; i++) {
             const item = sessionItems.nth(i);
+            const name = (await item.innerText().catch(() => '')).split('\n')[0].trim();
+            if (!name) continue;
 
-            // 1. Get Name
-            let name = await item.innerText().catch(() => '');
-            name = name.split('\n')[0].trim();
+            const pinnedSelector = selectors.gemini.sidebar.pinnedIndicator || 'mat-icon:has-text("keep")';
+            const isPinned = (await item.locator(pinnedSelector).count() > 0) || 
+                             (await item.getAttribute('aria-label').catch(() => '') || '').toLowerCase().includes('pinned');
 
-            // 2. Get ID
+            if (pinnedOnly && !isPinned) continue;
+
             let id: string | null = null;
-
-            // Method A: Check href
             const href = await item.getAttribute('href').catch(() => null);
             if (href && href.includes('/app/')) {
-                id = href.split('/app/')[1];
-            } else {
-                const link = item.locator('a[href*="/app/"]').first();
-                if (await link.count() > 0) {
-                    const linkHref = await link.getAttribute('href');
-                    if (linkHref) id = linkHref.split('/app/')[1];
-                }
+                id = href.split('/app/')[1].split('?')[0];
             }
 
-            // Method B: jslog attribute (backup)
-            if (!id) {
-                const jslog = await item.getAttribute('jslog').catch(() => null);
-                if (jslog) {
-                    const match = jslog.match(/\["c_([a-zA-Z0-9]+)"/);
-                    if (match) id = match[1];
-                }
-            }
-
-            // Method C: data-id attribute
-            if (!id) id = await item.getAttribute('data-id').catch(() => null);
-
-            // 3. Check Pinned Status
-            const hasPinIcon = await item.locator('svg path[d*="M16 9V4l1"]').count() > 0;
-            const isPinned = hasPinIcon || (await item.getAttribute('aria-label') || '').toLowerCase().includes('pinned');
-
-            if (name) {
-                sessions.push({ name, id, pinned: isPinned });
-            }
+            sessions.push({ name, id, pinned: isPinned });
         }
+
+        return sessions;
     } catch (e: any) {
         log(`Error listing sessions: ${e.message}`, 'error');
+        return [];
     }
+}
 
-    log(`Found ${sessions.length} sessions`);
-    return sessions;
+/**
+ * Searches for sessions using the Gemini UI search functionality.
+ * Much faster than manual scrolling for targeted lookups.
+ */
+export async function searchSessionsAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    query: string,
+    options: { limit?: number, offset?: number, pinnedOnly?: boolean } = {}
+): Promise<{ name: string; id: string | null; pinned: boolean }[]> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+    const { limit = 20, pinnedOnly = false } = options;
+
+    log(`Searching for sessions matching: "${query}"`);
+
+    try {
+        const searchToggle = selectors.gemini.sidebar.searchToggle || 'button[aria-label*="Search" i]';
+        const searchInput = selectors.gemini.sidebar.searchInput || 'input.search-input';
+
+        const toggle = page.locator(searchToggle).first();
+        if (await toggle.isVisible()) {
+            await toggle.click();
+            await page.waitForTimeout(500);
+        }
+
+        const input = page.locator(searchInput).first();
+        if (await input.isVisible()) {
+            await input.fill(query);
+            await page.waitForTimeout(1000); // Wait for results
+        } else {
+            log('Search input not found, falling back to local filtering', 'warn');
+        }
+
+        // Extract results
+        const results: { name: string; id: string | null; pinned: boolean }[] = [];
+        const items = page.locator(selectors.gemini.sidebar.conversations);
+        const count = await items.count();
+
+        for (let i = 0; i < count && results.length < limit; i++) {
+            const item = items.nth(i);
+            const name = (await item.innerText().catch(() => '')).split('\n')[0].trim();
+            if (!name) continue;
+
+            const pinnedSelector = selectors.gemini.sidebar.pinnedIndicator || 'mat-icon:has-text("keep")';
+            const isPinned = await item.locator(pinnedSelector).count() > 0;
+            if (pinnedOnly && !isPinned) continue;
+
+            const href = await item.getAttribute('href').catch(() => null);
+            const id = href && href.includes('/app/') ? href.split('/app/')[1].split('?')[0] : null;
+
+            results.push({ name, id, pinned: isPinned });
+        }
+
+        // Close search if needed
+        await page.keyboard.press('Escape');
+
+        return results;
+    } catch (e: any) {
+        log(`Search failed: ${e.message}`, 'error');
+        return [];
+    }
 }
 
 /**

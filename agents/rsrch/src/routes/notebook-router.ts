@@ -33,7 +33,7 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         try {
             const client = await getNotebookClient();
             const notebooks = await client!.listNotebooks();
-            res.json(notebooks);
+            res.json({ success: true, data: notebooks });
         } catch (e: any) {
             console.error('[NotebookRouter] List notebooks failed:', e);
             res.status(500).json({ error: e.message });

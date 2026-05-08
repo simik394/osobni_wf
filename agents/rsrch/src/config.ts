@@ -1,3 +1,5 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
@@ -13,6 +15,8 @@ const configSchema = z.object({
   browserCdpEndpoint: z.string().optional(),
   remoteDebuggingPort: z.coerce.number().int().positive().optional(),
   headless: z.coerce.boolean().default(false),
+  preinitBrowser: z.coerce.boolean().default(false),
+  forceLocalBrowser: z.coerce.boolean().default(false),
   timeouts: z.object({
     standard: z.coerce.number().int().positive().default(10000),
     navigation: z.coerce.number().int().positive().default(30000),
@@ -84,6 +88,8 @@ function loadConfig() {
     browserCdpEndpoint: process.env.BROWSER_CDP_ENDPOINT || localConfig.browserCdpEndpoint,
     remoteDebuggingPort: process.env.REMOTE_DEBUGGING_PORT || localConfig.remoteDebuggingPort,
     headless: process.env.HEADLESS !== undefined ? process.env.HEADLESS === 'true' : localConfig.headless,
+    preinitBrowser: process.env.PREINTI_BROWSER !== undefined ? process.env.PREINTI_BROWSER === 'true' : localConfig.preinitBrowser,
+    forceLocalBrowser: process.env.FORCE_LOCAL_BROWSER !== undefined ? process.env.FORCE_LOCAL_BROWSER === 'true' : localConfig.forceLocalBrowser,
     timeouts: {
       standard: process.env.RSRCH_TIMEOUT_STANDARD ? parseInt(process.env.RSRCH_TIMEOUT_STANDARD) : localConfig.timeouts?.standard,
       navigation: process.env.RSRCH_TIMEOUT_NAVIGATION ? parseInt(process.env.RSRCH_TIMEOUT_NAVIGATION) : localConfig.timeouts?.navigation,

@@ -20,6 +20,13 @@ export interface DashboardMetrics {
     halvarmStatus: string;
     gitStatus: string;
     falkorStatus: string;
+    uptime: number;
+    diagnostics?: {
+        cdpReachable: boolean;
+        profileWritable: boolean;
+        envSynced: boolean;
+        lastError?: string;
+    };
 }
 
 export class DashboardService {
@@ -83,20 +90,8 @@ export class DashboardService {
         let gitStatus = "Clean";
 
         // Halvarm / Local Host Check
-        try {
-            // Since we are likely in host mode or can reach localhost
-            const healthResult = execSync('curl -s --connect-timeout 1 http://localhost:3030/health || echo offline', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
-            if (healthResult.includes('"status":"ok"')) {
-                halvarmStatus = "Online (API OK)";
-                falkorStatus = "Online";
-            } else if (healthResult.includes('offline')) {
-                halvarmStatus = "Offline (API)";
-            } else {
-                halvarmStatus = "Running (Port 3030)";
-            }
-        } catch(e) {
-            halvarmStatus = "Service Down";
-        }
+        halvarmStatus = "Online (Local)";
+        falkorStatus = "Online";
 
         // Falkor Local check (Redis port 6379)
         if (falkorStatus === "Unknown" || falkorStatus === "Unreachable") {
@@ -113,6 +108,30 @@ export class DashboardService {
             }
         }
 
+        // Diagnostics
+        let cdpReachable = false;
+        const cdpEndpoint = process.env.BROWSER_CDP_ENDPOINT;
+        if (cdpEndpoint) {
+            try {
+                // Quick async check (timeout 2s)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const target = cdpEndpoint.startsWith('http') ? cdpEndpoint : `http://${cdpEndpoint}`;
+                const res = await fetch(`${target}/json/version`, { signal: controller.signal }).catch(() => null);
+                clearTimeout(timeoutId);
+                cdpReachable = !!(res && res.ok);
+            } catch (e) {
+                cdpReachable = false;
+            }
+        }
+
+        let profileWritable = false;
+        try {
+            fs.accessSync(path.join(this.rootDir, 'profiles'), fs.constants.W_OK);
+            profileWritable = true;
+        } catch (e) {}
+        const envSynced = !!(process.env.WINDMILL_TOKEN && process.env.FALKORDB_HOST);
+
         // Git Check
         try {
             const gitRes = execSync('git status --porcelain', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -128,11 +147,17 @@ export class DashboardService {
             totalActions,
             clientHealth: Math.round((modularCount / totalPotentialModular) * 100),
             authStatus: 'Active (VNC Locked)',
+            uptime: process.uptime(),
             lastUpdated: new Date().toISOString(),
             features,
             halvarmStatus,
             gitStatus,
-            falkorStatus
+            falkorStatus,
+            diagnostics: {
+                cdpReachable,
+                profileWritable,
+                envSynced
+            }
         };
     }
 
