@@ -195,6 +195,10 @@ export class GeminiClient extends EventEmitter {
         return actions.archiveArtifactsAction(this.ctx, this.deps as GeminiActionDeps, options);
     }
 
+    async shareSession() {
+        return actions.shareSessionAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
     async syncRegistryToGraph(manager: any) {
         return actions.syncRegistryToGraphAction(this.ctx, { ...(this.deps as GeminiActionDeps), researchManager: manager });
     }

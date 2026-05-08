@@ -226,6 +226,9 @@ gemini:
     moreMenu: 'button[aria-label*="More options"], button[aria-label*="Další možnosti"], button:has(mat-icon:has-text("more_vert"))'
     filesMenu: 'button[aria-label*="Files"], button[aria-label*="Soubory"]'
     artifactItem: 'button[role="menuitem"], .artifact-list-item'
+    share: 'button[aria-label*="Sdílet" i], button[aria-label*="Share" i]'
+    menuShare: 'button[role="menuitem"]:has-text("Sdílet konverzaci"), button[role="menuitem"]:has-text("Share conversation")'
+    copyLink: 'button[aria-label*="Kopírovat odkaz" i], button[aria-label*="Copy link" i]'
 # ============================================================
 # AI MODE (Google Search AI) SELECTORS
 # ============================================================

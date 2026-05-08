@@ -13,3 +13,5 @@ export * from './canvas';
 export * from './history';
 export * from './archival';
 export * from './audio_bridge';
+export * from './model';
+export * from './sharing';
