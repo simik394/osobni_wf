@@ -196,3 +196,39 @@ export async function waitForAudioGenerationAction(
 
     log('Timed out waiting for generation.', 'warn');
 }
+/**
+ * Checks the current status of audio generation in the open notebook.
+ */
+export async function getAudioGenerationStatusAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps
+): Promise<{ status: 'idle' | 'generating' | 'ready'; progress?: string }> {
+    const { page, log } = ctx;
+
+    try {
+        const isGenerating = await page.evaluate(() => {
+            const text = document.body.innerText;
+            const progress = document.querySelector('mat-progress-bar, mat-spinner, .loading-indicator, .progress-bar');
+            const generatingText = /generov|vytvář|generat|creat/i.test(text);
+            
+            if (progress || generatingText) {
+                // Try to extract percentage if visible
+                const percentageMatch = text.match(/(\d+)%/);
+                return { active: true, progress: percentageMatch ? percentageMatch[0] : undefined };
+            }
+            return { active: false };
+        });
+
+        if (isGenerating.active) {
+            return { status: 'generating', progress: isGenerating.progress };
+        }
+
+        const artifacts = await getStudioArtifactsAction(ctx, deps);
+        const hasAudio = artifacts.some(a => a.type === 'audio');
+
+        return { status: hasAudio ? 'ready' : 'idle' };
+    } catch (e: any) {
+        log(`Error checking audio status: ${e.message}`, 'error');
+        return { status: 'idle' };
+    }
+}

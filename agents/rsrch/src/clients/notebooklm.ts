@@ -240,6 +240,12 @@ export class NotebookLMClient {
         }, this.deps);
     }
 
+    /** Checks if audio is being generated or is already present */
+    async getAudioStatus(notebookTitle?: string) {
+        if (notebookTitle) await this.openNotebook(notebookTitle);
+        return actions.getAudioGenerationStatusAction(this.ctx, this.deps);
+    }
+
     /** Renames an artifact in the studio panel */
     async renameArtifact(oldTitle: string, newTitle: string) {
         return actions.renameStudioArtifactAction(this.ctx, this.deps, oldTitle, newTitle);

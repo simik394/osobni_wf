@@ -129,17 +129,33 @@ export function registerAudioCommands(notebook: Command) {
         });
 
     notebook.command('audio-status')
-        .description('Check audio status')
+        .description('Check audio status (including generation progress)')
         .requiredOption('--notebook <title>', 'Notebook title')
         .option('--local', 'Use local execution', false)
         .action(async (opts) => {
             if (opts.local || cliContext.get().local) {
                 await runLocalNotebookAction(async (client, nb) => {
-                    const status = await nb.checkAudioStatus(opts.notebook);
-                    console.log(JSON.stringify(status, null, 2));
+                    const status = await nb.getAudioStatus(opts.notebook);
+                    console.log('\n--- NotebookLM Audio Status ---');
+                    console.log(`Notebook: ${opts.notebook}`);
+                    console.log(`Status:   ${status.status.toUpperCase()}`);
+                    if (status.progress) {
+                        console.log(`Progress: ${status.progress}`);
+                    }
+                    console.log('-------------------------------\n');
                 });
             } else {
-                await sendServerRequest('/notebook/audio-status', { notebookTitle: opts.notebook });
+                try {
+                    const result = await sendServerRequest('/notebook/audio-status', { notebookTitle: opts.notebook });
+                    const status = result.data || result;
+                    console.log('\n--- NotebookLM Audio Status (via Server) ---');
+                    console.log(`Notebook: ${opts.notebook}`);
+                    console.log(`Status:   ${status.status?.toUpperCase() || 'UNKNOWN'}`);
+                    if (status.progress) console.log(`Progress: ${status.progress}`);
+                    console.log('-------------------------------------------\n');
+                } catch (e: any) {
+                    console.error(`[CLI] Error: ${e.message}`);
+                }
             }
         });
 
