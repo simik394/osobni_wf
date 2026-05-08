@@ -181,4 +181,55 @@ export function registerCanvasCommands(gemini: Command) {
                 if (success) console.log('Canvas closed.');
             });
         });
+
+    canvas.command('versions')
+        .description('List history versions of the current Canvas artifact')
+        .option('--local', 'Use local execution', true)
+        .action(async () => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const versions = await gemini.listCanvasVersions();
+                console.log('\n--- Canvas Version History ---');
+                if (versions.length === 0) {
+                    console.log('No history found or history button not accessible.');
+                } else {
+                    versions.forEach(v => {
+                        console.log(`${v.id}: ${v.timestamp}`);
+                    });
+                }
+                console.log('------------------------------\n');
+            });
+        });
+
+    canvas.command('restore <versionId>')
+        .description('Restore the Canvas artifact to a specific version')
+        .option('--local', 'Use local execution', true)
+        .action(async (versionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.restoreCanvasVersion(versionId);
+                if (success) console.log(`Successfully restored version ${versionId}.`);
+                else console.log(`Failed to restore version ${versionId}.`);
+            });
+        });
+
+    canvas.command('prompt <instruction>')
+        .description('Send a modification prompt to the active Canvas')
+        .option('--local', 'Use local execution', true)
+        .action(async (instruction) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.promptCanvas(instruction);
+                if (success) console.log('Prompt sent to Canvas.');
+                else console.log('Failed to send prompt to Canvas.');
+            });
+        });
+
+    canvas.command('export [target]')
+        .description('Export the Canvas artifact (default: docs)')
+        .option('--local', 'Use local execution', true)
+        .action(async (target) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.exportCanvas(target || 'docs');
+                if (success) console.log(`Export to ${target || 'docs'} triggered.`);
+                else console.log('Failed to trigger export.');
+            });
+        });
 }

@@ -22,6 +22,12 @@ For low-level UI behavior customization or reuse in other projects, see `src/act
 - **NotebookLM**: `src/actions/notebooklm/`
 - **Shared**: `src/actions/common/`
 
+### 4. Canvas / Artifacts
+Programmable controls for Gemini's artifact system are exposed via `rsrch gemini canvas ...`.
+- **History Management**: `versions`, `restore <id>`
+- **Direct Modification**: `prompt <text>` (bypasses main chat flow)
+- **Exporting**: `export [target]`
+
 ## 🤝 Jules Integration
 1. **`jules-cli`**: List, get, status, retry.
 2. **`jules-mcp`**: Create, approve, send_message.

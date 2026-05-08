@@ -220,6 +220,152 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.get('/sessions', async (req: Request, res: Response) => {
+        try {
+            const { limit, offset, query, pinnedOnly, strategy } = req.query;
+            const gemini = await getGeminiClient();
+            const sessions = await gemini.listSessions({
+                limit: limit ? parseInt(limit as string) : undefined,
+                offset: offset ? parseInt(offset as string) : undefined,
+                query: query as string,
+                pinnedOnly: pinnedOnly === 'true',
+                strategy: strategy as any
+            });
+            res.json({ success: true, data: sessions });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/pin', async (req: Request, res: Response) => {
+        try {
+            const { sessionId } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.pinSession(sessionId);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/unpin', async (req: Request, res: Response) => {
+        try {
+            const { sessionId } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.unpinSession(sessionId);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    // --- Canvas Actions ---
+    router.get('/canvas/list', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const artifacts = await gemini.listArtifacts();
+            res.json({ success: true, data: artifacts });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/canvas/read', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const content = await gemini.readCanvas();
+            res.json({ success: true, data: content });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/open', async (req: Request, res: Response) => {
+        try {
+            const { name } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.openArtifact(name);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/update', async (req: Request, res: Response) => {
+        try {
+            const { content, mode } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.updateCanvas(content, { mode });
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/tab', async (req: Request, res: Response) => {
+        try {
+            const { tab } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.switchCanvasTab(tab);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/close', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const success = await gemini.closeCanvas();
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/canvas/versions', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const versions = await gemini.listCanvasVersions();
+            res.json({ success: true, data: versions });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/restore', async (req: Request, res: Response) => {
+        try {
+            const { versionId } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.restoreCanvasVersion(versionId);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/prompt', async (req: Request, res: Response) => {
+        try {
+            const { instruction } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.promptCanvas(instruction);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/export', async (req: Request, res: Response) => {
+        try {
+            const { target } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.exportCanvas(target);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.get('/status', async (req: Request, res: Response) => {
         res.json({ success: true, status: 'ok' });
     });

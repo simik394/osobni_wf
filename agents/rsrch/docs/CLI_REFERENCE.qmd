@@ -339,6 +339,33 @@ Chat with a Gem
 _Source: [gemini.ts:L1085](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L1085)_
 
 ***
+
+## GEMINI CANVAS Commands
+
+Commands for interacting with Gemini Canvas / Artifacts.
+
+### `canvas list`
+List all Canvas artifacts in the current session.
+
+### `canvas open <name>`
+Open a specific Canvas artifact by name.
+
+### `canvas read`
+Read the content of the currently open Canvas artifact.
+
+### `canvas versions`
+List history versions of the current Canvas artifact.
+
+### `canvas restore <versionId>`
+Restore the Canvas artifact to a specific version (e.g., v0, v1).
+
+### `canvas prompt <instruction>`
+Send a modification prompt directly to the active Canvas (e.g., "add a summary").
+
+### `canvas export [target]`
+Export the Canvas artifact to a target (default: docs).
+
+***
 ## GRAPH Commands
 
 ### `notebooks`

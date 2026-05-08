@@ -173,6 +173,12 @@ export interface GeminiSelectors {
         codeTab: string;
         content: string;
         close: string;
+        historyButton: string;
+        versionItem: string;
+        restoreButton: string;
+        geminiIcon: string;
+        promptInput: string;
+        exportButton: string;
     };
     session: {
         moreMenu: string;
@@ -411,7 +417,13 @@ const DEFAULTS: NotebookLMSelectors = {
             previewTab: 'Preview',
             codeTab: 'Code',
             content: '.ql-editor',
-            close: 'Close'
+            close: 'Close',
+            historyButton: 'history',
+            versionItem: '.version-item',
+            restoreButton: 'Restore',
+            geminiIcon: '.gemini-icon-button',
+            promptInput: 'textarea',
+            exportButton: 'Share'
         },
         session: {
             moreMenu: '.more-menu',

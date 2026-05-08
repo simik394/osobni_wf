@@ -222,6 +222,12 @@ gemini:
     codeTab: 'button:has-text("Code"), button:has-text("Kód")'
     content: ".canvas-content, .ql-editor, [contenteditable='true']"
     close: 'button[aria-label*="Close"], button[aria-label*="Zavřít"]'
+    historyButton: 'button[aria-label*="history" i], button[aria-label*="Historie" i], button:has(mat-icon:has-text("history"))'
+    versionItem: '.version-item, [role="option"], mat-list-item'
+    restoreButton: 'button:has-text("Restore"), button:has-text("Obnovit"), button:has(mat-icon:has-text("settings_backup_restore"))'
+    geminiIcon: 'button:has(svg[class*="gemini"]), .gemini-icon-button, button[aria-label*="Gemini"]'
+    promptInput: 'textarea[placeholder*="Ask Gemini" i], textarea[placeholder*="Zeptejte se" i]'
+    exportButton: 'button:has-text("Export"), button[aria-label*="Export" i], button:has-text("Sdílet"), button:has-text("Share")'
   session:
     moreMenu: 'button[aria-label*="More options"], button[aria-label*="Další možnosti"], button:has(mat-icon:has-text("more_vert"))'
     filesMenu: 'button[aria-label*="Files"], button[aria-label*="Soubory"]'

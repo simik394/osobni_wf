@@ -284,3 +284,162 @@ export async function closeCanvasAction(
         return false;
     }
 }
+
+/**
+ * Lists versions of the current Canvas artifact.
+ */
+export async function listCanvasVersionsAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps
+): Promise<Array<{ id: string; timestamp: string; author?: string }>> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log('Listing Canvas versions...');
+
+    const versions: Array<{ id: string; timestamp: string; author?: string }> = [];
+
+    try {
+        const historyBtn = page.locator(selectors.gemini.canvas.historyButton).first();
+        if (!(await historyBtn.isVisible())) {
+            log('History button not found or Canvas not open.', 'warn');
+            return [];
+        }
+
+        await historyBtn.click();
+        await page.waitForTimeout(1000);
+
+        const items = page.locator(selectors.gemini.canvas.versionItem);
+        const count = await items.count();
+
+        for (let i = 0; i < count; i++) {
+            const item = items.nth(i);
+            const text = await item.innerText();
+            // Typically looks like "Oct 24, 2024, 10:00 AM" or similar
+            versions.push({
+                id: `v${i}`,
+                timestamp: text.trim()
+            });
+        }
+
+        // Close history view if it's an overlay (optional, usually clicking again or Escape)
+        // await page.keyboard.press('Escape');
+
+    } catch (e: any) {
+        log(`Error listing canvas versions: ${e.message}`, 'error');
+    }
+
+    return versions;
+}
+
+/**
+ * Restores a specific version of the current Canvas artifact.
+ */
+export async function restoreCanvasVersionAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    versionId: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log(`Restoring Canvas version: ${versionId}`);
+
+    try {
+        const historyBtn = page.locator(selectors.gemini.canvas.historyButton).first();
+        await historyBtn.click();
+        await page.waitForTimeout(500);
+
+        // Map versionId (v0, v1...) back to index if needed, or find by text
+        const index = parseInt(versionId.replace('v', ''));
+        const item = page.locator(selectors.gemini.canvas.versionItem).nth(index);
+        
+        if (await item.isVisible()) {
+            await item.click();
+            await page.waitForTimeout(1000);
+
+            const restoreBtn = page.locator(selectors.gemini.canvas.restoreButton).first();
+            if (await restoreBtn.isVisible()) {
+                await restoreBtn.click();
+                await page.waitForTimeout(2000);
+                return true;
+            }
+        }
+
+        return false;
+    } catch (e: any) {
+        log(`Failed to restore canvas version ${versionId}: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Sends a modification prompt to the active Canvas.
+ */
+export async function promptCanvasAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    instruction: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log(`Sending Canvas modification prompt: ${instruction}`);
+
+    try {
+        const geminiBtn = page.locator(selectors.gemini.canvas.geminiIcon).first();
+        if (await geminiBtn.isVisible()) {
+            await geminiBtn.click();
+            await page.waitForTimeout(500);
+        }
+
+        const input = page.locator(selectors.gemini.canvas.promptInput).first();
+        await input.waitFor({ state: 'visible', timeout: 5000 });
+        
+        await input.fill(instruction);
+        await page.keyboard.press('Enter');
+        
+        // Wait for response to start generating
+        await page.waitForTimeout(3000);
+        
+        return true;
+    } catch (e: any) {
+        log(`Failed to prompt canvas: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Triggers an export action for the current Canvas.
+ */
+export async function exportCanvasAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    target: string = 'docs'
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log(`Exporting Canvas to: ${target}`);
+
+    try {
+        const exportBtn = page.locator(selectors.gemini.canvas.exportButton).first();
+        if (await exportBtn.isVisible()) {
+            await exportBtn.click();
+            await page.waitForTimeout(1000);
+
+            // Find target in menu (e.g. "Export to Google Docs" or "Exportovat do Dokumentů Google")
+            const targetItem = page.locator(`[role="menuitem"]:has-text("${target}"), [role="option"]:has-text("${target}")`).first();
+            if (await targetItem.isVisible()) {
+                await targetItem.click();
+                await page.waitForTimeout(3000);
+                return true;
+            }
+        }
+
+        return false;
+    } catch (e: any) {
+        log(`Failed to export canvas: ${e.message}`, 'error');
+        return false;
+    }
+}

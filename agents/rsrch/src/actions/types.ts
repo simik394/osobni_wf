@@ -50,6 +50,10 @@ export type GeminiActionDeps = ActionDeps & {
     readCanvas: () => Promise<{ title: string; content: string; markdown: string } | null>;
     openArtifact: (name: string) => Promise<boolean>;
     scrollToTop: () => Promise<void>;
+    listCanvasVersions: () => Promise<Array<{ id: string; timestamp: string; author?: string }>>;
+    restoreCanvasVersion: (versionId: string) => Promise<boolean>;
+    promptCanvas: (instruction: string) => Promise<boolean>;
+    exportCanvas: (target: string) => Promise<boolean>;
 };
 
 

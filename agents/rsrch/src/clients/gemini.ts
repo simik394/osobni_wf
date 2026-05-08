@@ -63,7 +63,11 @@ export class GeminiClient extends EventEmitter {
             listArtifacts: async () => await this.listArtifacts(),
             readCanvas: async () => await this.readCanvas(),
             openArtifact: async (name: string) => await this.openArtifact(name),
-            scrollToTop: async () => await this.scrollToTop()
+            scrollToTop: async () => await this.scrollToTop(),
+            listCanvasVersions: async () => await this.listCanvasVersions(),
+            restoreCanvasVersion: async (id: string) => await this.restoreCanvasVersion(id),
+            promptCanvas: async (text: string) => await this.promptCanvas(text),
+            exportCanvas: async (target: string) => await this.exportCanvas(target)
         };
     }
 
@@ -438,5 +442,23 @@ export class GeminiClient extends EventEmitter {
         const targetIndex = index > 0 ? index - 1 : index;
         const data = await actions.extractResponseAction(this.ctx, this.deps as GeminiActionDeps, undefined, targetIndex);
         return data ? data.text : null;
+    }
+
+    // --- New Canvas Actions ---
+
+    async listCanvasVersions() {
+        return actions.listCanvasVersionsAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async restoreCanvasVersion(versionId: string) {
+        return actions.restoreCanvasVersionAction(this.ctx, this.deps as GeminiActionDeps, versionId);
+    }
+
+    async promptCanvas(instruction: string) {
+        return actions.promptCanvasAction(this.ctx, this.deps as GeminiActionDeps, instruction);
+    }
+
+    async exportCanvas(target: string) {
+        return actions.exportCanvasAction(this.ctx, this.deps as GeminiActionDeps, target);
     }
 }

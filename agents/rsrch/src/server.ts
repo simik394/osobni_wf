@@ -14,6 +14,7 @@ import { createWebhookRouter } from './routes/webhook-router';
 import { createResearchRouter } from './routes/research-router';
 import { createWorkflowRouter } from './routes/workflow-router';
 import { createChatRouter, createGeminiRouter } from './routes/chat-router';
+import { createKeepRouter } from './routes/keep-router';
 import { createSystemRouter } from './routes/system-router';
 
 // Initialize App
@@ -106,7 +107,10 @@ app.use('/v1', createChatRouter({ ...dependencies }));
 // 5. Legacy Gemini Routes
 app.use('/gemini', createGeminiRouter(dependencies));
 
-// 6. System & Dashboard
+// 6. Google Keep
+app.use('/keep', createKeepRouter(dependencies));
+
+// 7. System & Dashboard
 app.use('/system', createSystemRouter(dependencies));
 
 // ----------------------------------------------------------------------------
