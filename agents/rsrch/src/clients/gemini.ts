@@ -199,6 +199,14 @@ export class GeminiClient extends EventEmitter {
         return actions.shareSessionAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
+    async pinSession(sessionId?: string) {
+        return actions.pinSessionAction(this.ctx, this.deps as GeminiActionDeps, true, sessionId);
+    }
+
+    async unpinSession(sessionId?: string) {
+        return actions.pinSessionAction(this.ctx, this.deps as GeminiActionDeps, false, sessionId);
+    }
+
     async syncRegistryToGraph(manager: any) {
         return actions.syncRegistryToGraphAction(this.ctx, { ...(this.deps as GeminiActionDeps), researchManager: manager });
     }

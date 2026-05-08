@@ -276,4 +276,24 @@ export function registerSessionCommands(gemini: Command) {
                 }
             }, sessionId);
         });
+
+    gemini.command('pin [sessionId]')
+        .description('Pin a session in the sidebar')
+        .option('--local', 'Use local execution', true)
+        .action(async (sessionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.pinSession(sessionId);
+                if (success) console.log(`Session ${sessionId || 'current'} pinned.`);
+            }, sessionId);
+        });
+
+    gemini.command('unpin [sessionId]')
+        .description('Unpin a session in the sidebar')
+        .option('--local', 'Use local execution', true)
+        .action(async (sessionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.unpinSession(sessionId);
+                if (success) console.log(`Session ${sessionId || 'current'} unpinned.`);
+            }, sessionId);
+        });
 }

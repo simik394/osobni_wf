@@ -503,3 +503,78 @@ export async function checkModelStatusAction(
         return [];
     }
 }
+/**
+ * Pins or unpins a session.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param pin Whether to pin (true) or unpin (false)
+ * @param sessionId Optional session ID (if not provided, uses current)
+ */
+export async function pinSessionAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    pin: boolean,
+    sessionId?: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        await ensureSidebarAction(ctx, deps);
+
+        let targetItem = null;
+        if (sessionId) {
+            // Find session in sidebar
+            const itemSelector = selectors.gemini.sidebar.conversations;
+            const items = page.locator(itemSelector);
+            const count = await items.count();
+            
+            for (let i = 0; i < count; i++) {
+                const item = items.nth(i);
+                const id = await item.getAttribute('data-conversation-id').catch(() => null);
+                if (id === sessionId) {
+                    targetItem = item;
+                    break;
+                }
+            }
+        } else {
+            // Use currently active session
+            targetItem = page.locator(selectors.gemini.sidebar.conversations + '.active').first();
+        }
+
+        if (!targetItem || await targetItem.count() === 0) {
+            log('Could not find target session item in sidebar', 'error');
+            return false;
+        }
+
+        // Hover to reveal more menu
+        await targetItem.hover();
+        
+        const moreBtn = targetItem.locator('button[aria-label*="options"], button[aria-label*="akcí"]').first();
+        if (await moreBtn.count() === 0 || !await moreBtn.isVisible()) {
+            log('More options button not found for session', 'error');
+            return false;
+        }
+
+        await moreBtn.click();
+        await page.waitForTimeout(500);
+
+        const pinSelector = pin ? selectors.gemini.session.pin : selectors.gemini.session.unpin;
+        const pinBtn = page.locator(pinSelector).first();
+
+        if (await pinBtn.isVisible()) {
+            log(`${pin ? 'Pinning' : 'Unpinning'} session...`);
+            await pinBtn.click();
+            await page.waitForTimeout(1000);
+            return true;
+        } else {
+            log(`${pin ? 'Pin' : 'Unpin'} option not found in menu (maybe already in target state?)`, 'warn');
+            await page.keyboard.press('Escape');
+            return false;
+        }
+    } catch (e: any) {
+        log(`Pin/Unpin failed: ${e.message}`, 'error');
+        return false;
+    }
+}
