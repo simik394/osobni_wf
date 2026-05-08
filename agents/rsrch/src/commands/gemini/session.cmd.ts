@@ -263,5 +263,17 @@ export function registerSessionCommands(gemini: Command) {
                 });
                 console.log('---------------------------\n');
             });
+        gemini.command('share-session [sessionId]')
+        .description('Generate a shareable public link for a session')
+        .option('--local', 'Use local execution', true)
+        .action(async (sessionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const link = await gemini.shareSession();
+                if (link) {
+                    console.log(`\nPublic share link: ${link}\n`);
+                } else {
+                    console.error('Failed to generate share link.');
+                }
+            }, sessionId);
         });
 }
