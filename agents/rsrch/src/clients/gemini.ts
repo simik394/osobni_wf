@@ -207,6 +207,18 @@ export class GeminiClient extends EventEmitter {
         return actions.pinSessionAction(this.ctx, this.deps as GeminiActionDeps, false, sessionId);
     }
 
+    async updateCanvas(content: string, options?: { mode: 'replace' | 'append' }) {
+        return actions.updateCanvasAction(this.ctx, this.deps as GeminiActionDeps, content, options);
+    }
+
+    async switchCanvasTab(tab: 'preview' | 'code') {
+        return actions.switchCanvasTabAction(this.ctx, this.deps as GeminiActionDeps, tab);
+    }
+
+    async closeCanvas() {
+        return actions.closeCanvasAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
     async syncRegistryToGraph(manager: any) {
         return actions.syncRegistryToGraphAction(this.ctx, { ...(this.deps as GeminiActionDeps), researchManager: manager });
     }

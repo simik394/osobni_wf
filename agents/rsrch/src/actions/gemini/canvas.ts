@@ -182,3 +182,105 @@ export async function openArtifactAction(
         return false;
     }
 }
+/**
+ * Updates content in the Canvas editor.
+ */
+export async function updateCanvasAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    content: string,
+    options: { mode: 'replace' | 'append' } = { mode: 'replace' }
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log(`Updating Canvas content (${options.mode})...`);
+
+    try {
+        const editor = page.locator(selectors.gemini.canvas.content).first();
+        await editor.waitFor({ state: 'visible', timeout: 5000 });
+
+        await editor.click();
+        
+        if (options.mode === 'replace') {
+            // Select all and delete
+            await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
+        } else {
+            // Move to end
+            await page.keyboard.press('Control+End');
+        }
+
+        await page.keyboard.type(content, { delay: 10 });
+        
+        // Wait for "Saving..." to complete (often a status indicator in the header)
+        await page.waitForTimeout(2000); 
+        
+        log('Canvas update sent.');
+        return true;
+    } catch (e: any) {
+        log(`Failed to update canvas: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Switches between Canvas tabs (e.g., Preview vs Code).
+ */
+export async function switchCanvasTabAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    tab: 'preview' | 'code'
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log(`Switching Canvas tab to: ${tab}`);
+
+    try {
+        const selector = tab === 'preview' ? selectors.gemini.canvas.previewTab : selectors.gemini.canvas.codeTab;
+        const tabBtn = page.locator(`button:has-text("${selector}"), [role="tab"]:has-text("${selector}")`).first();
+        
+        if (await tabBtn.isVisible()) {
+            await tabBtn.click();
+            await page.waitForTimeout(1000);
+            return true;
+        }
+        
+        log(`Tab "${selector}" not found.`, 'warn');
+        return false;
+    } catch (e: any) {
+        log(`Failed to switch canvas tab: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Closes the Canvas side panel.
+ */
+export async function closeCanvasAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log('Closing Canvas side panel...');
+
+    try {
+        const closeBtn = page.locator(selectors.gemini.canvas.close).first();
+        if (await closeBtn.isVisible()) {
+            await closeBtn.click();
+            await page.waitForTimeout(1000);
+            return true;
+        }
+
+        // Fallback: Click outside or Escape
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        return true;
+    } catch (e: any) {
+        log(`Failed to close canvas: ${e.message}`, 'error');
+        return false;
+    }
+}
