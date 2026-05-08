@@ -422,3 +422,25 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 - **Terminology Purge**: Strictly enforce **Principal/Sidecar** terminology. The "Singleton" term is discarded as it misleadingly suggests a monolithic approach that led to the destructive refactoring.
 
 **Key Rule for Future Agents**: RSRCH MUST remain modular. Never flatten routes or actions. The infrastructure is a distributed web of services (Principal/Sidecar), not a single monolithic container.
+
+---
+
+### [[20. File Management in Wine/Docker (2026-05-08)]]
+
+**Context**: Managing imports and exports in a Wine application running inside a Docker container without a native file manager bridge.
+
+#### LESSONS LEARNED:
+
+1. **Host-to-Container Path Mapping**: 
+   - Wine's `C:\` drive is purely virtual. To persist data or interact with the host, the Wine prefix (`~/.wine`) must be a mounted volume.
+   - **Path Equivalence**: `C:\users\remarkable\Documents` inside the container maps to `${HOST_VOLUME}/drive_c/users/remarkable/Documents` on the host. 
+   - **User Tip**: Users should be directed to the host's volume path for manual file injection/extraction instead of trying to find a "shared folder" feature within the Wine UI.
+
+2. **The "Z:\" Drive Trap**:
+   - Wine provides a `Z:\` drive that maps to the root of the container's filesystem. While tempting, it is often read-only or permission-restricted in secure Docker setups. 
+   - **Best Practice**: Always use the persistent `drive_c` structure for data exchange to ensure consistent permissions and persistence across container restarts.
+
+3. **Desktop Entry Refresh**:
+   - Modifying a `.desktop` file or its icon on disk often requires an explicit `update-desktop-database` and a shell restart (`Alt+F2` -> `r` in GNOME) to clear the icon cache. Simply overwriting the PNG file is rarely enough for immediate UI updates.
+
+- **Outcome**: Established a clear data exchange protocol for the reMarkable Wine project, reducing user confusion regarding "missing" exported files.

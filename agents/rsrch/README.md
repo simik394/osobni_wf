@@ -84,3 +84,4 @@ rsrch graph lineage <AudioID>
 | [LESSONS_LEARNED.md](./docs/LESSONS_LEARNED.md) | Historical context & critical fixes |
 | [ARCHITECTURE.qmd](./docs/ARCHITECTURE.qmd) | Visual Dependency Graph |
 | [Local CDP Guide](./docs/local_cdp_workflow.md) | How to use your local browser |
+| [REMARKABLE_WINE.md](./docs/REMARKABLE_WINE.md) | **reMarkable Desktop (Wine/Docker) Setup & Guide** |
