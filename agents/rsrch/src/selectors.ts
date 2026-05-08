@@ -148,6 +148,7 @@ export interface GeminiSelectors {
         nameInput: string;
         instructionInput: string;
         save: string;
+        updateButton: string;
     };
     upload: {
         button: string;
@@ -177,6 +178,11 @@ export interface GeminiSelectors {
         moreMenu: string;
         filesMenu: string;
         artifactItem: string;
+        share: string;
+        menuShare: string;
+        copyLink: string;
+        pin: string;
+        unpin: string;
     };
 }
 
@@ -369,7 +375,8 @@ const DEFAULTS: NotebookLMSelectors = {
             create: 'Create Gem',
             nameInput: 'input[name="gem-name"]',
             instructionInput: 'textarea[name="instructions"]',
-            save: 'Save'
+            save: 'Save',
+            updateButton: 'button.save-button'
         },
         upload: {
             button: 'button[aria-label="Upload"]',
@@ -398,7 +405,12 @@ const DEFAULTS: NotebookLMSelectors = {
         session: {
             moreMenu: '.more-menu',
             filesMenu: 'Files',
-            artifactItem: '.artifact-item'
+            artifactItem: '.artifact-item',
+            share: 'button[aria-label*="Share" i]',
+            menuShare: 'Share conversation',
+            copyLink: 'Copy link',
+            pin: 'Pin',
+            unpin: 'Unpin'
         }
     },
     perplexity: {

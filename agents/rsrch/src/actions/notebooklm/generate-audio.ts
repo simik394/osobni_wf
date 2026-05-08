@@ -1,4 +1,5 @@
 import { UniversalContext, NotebookLMActionDeps } from '../types';
+import { getStudioArtifactsAction } from './studio';
 
 export async function generateAudioOverviewAction(
     ctx: UniversalContext,

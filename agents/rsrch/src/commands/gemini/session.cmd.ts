@@ -263,7 +263,9 @@ export function registerSessionCommands(gemini: Command) {
                 });
                 console.log('---------------------------\n');
             });
-        gemini.command('share-session [sessionId]')
+        });
+
+    gemini.command('share-session [sessionId]')
         .description('Generate a shareable public link for a session')
         .option('--local', 'Use local execution', true)
         .action(async (sessionId) => {
