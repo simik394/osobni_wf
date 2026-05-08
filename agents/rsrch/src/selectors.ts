@@ -133,10 +133,12 @@ export interface GeminiSelectors {
         panel: string;
         documentCard: string;
         documentTitle: string;
-        toolbarTitle: string;
-        immersiveTitle: string;
         toggle?: string;
-        closeButton?: string;
+        citation?: string;
+        sourcesHeader?: string;
+        sourceLink?: string;
+        thoughtsSection?: string;
+        immersiveTitle?: string;
     };
     gems: {
         card: string;
@@ -349,12 +351,16 @@ const DEFAULTS: NotebookLMSelectors = {
         pinnedIndicator: 'mat-icon:has-text("keep"), [aria-label*="pinned" i]',
     },
         deepResearch: {
-            panel: '.research-panel',
-            documentCard: '.doc-card',
-            documentTitle: '.doc-title',
-            toolbarTitle: '.toolbar-title',
-            immersiveTitle: '.immersive-title'
-        },
+        panel: '.research-panel, .container[scrollable="true"]',
+        documentCard: '.doc-card, [role="article"]:has-text("Deep Research")',
+        documentTitle: '.doc-title, h1, h2',
+        toggle: '.research-toggle',
+        citation: 'button.mat-mdc-tooltip-trigger.button.image-fade-on',
+        sourcesHeader: 'button:has-text("Sources used"), button:has-text("Zdroje použité")',
+        sourceLink: '.container[scrollable="true"] a[href*="http"]',
+        thoughtsSection: 'button:has-text("Thoughts"), button:has-text("Myšlenky")',
+        immersiveTitle: '.immersive-title'
+    },
         gems: {
             card: '.gem-card',
             name: '.gem-name',

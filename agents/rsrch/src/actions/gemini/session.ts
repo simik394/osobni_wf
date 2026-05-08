@@ -49,18 +49,9 @@ export async function resetToNewChatAction(
             const drToggle = page.locator(toggleSelector).first();
             if (await drToggle.isVisible({ timeout: 1000 }).catch(() => false)) {
                 log('Deep Research mode detected active. Disabling...');
-                const closeSelector = selectors.gemini.deepResearch.closeButton;
-                let closeClicked = false;
-                if (closeSelector) {
-                    const closeBtn = page.locator(closeSelector).first();
-                    if (await closeBtn.isVisible({ timeout: 500 }).catch(() => false)) {
-                        await closeBtn.click();
-                        closeClicked = true;
-                    }
-                }
-                if (!closeClicked) {
-                    await drToggle.click();
-                }
+                // Toggle it off
+                await drToggle.click();
+                await page.waitForTimeout(500);
                 await page.waitForTimeout(500);
             }
         } catch (e) {

@@ -4,22 +4,26 @@ import * as path from 'path';
 // Character set for ID generation (excludes confusing chars: 0/O, 1/I/L)
 const ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-export type ArtifactType = 'session' | 'document' | 'audio';
+export type ArtifactType = 'session' | 'document' | 'audio' | 'research_doc' | 'canvas';
 
 export interface ArtifactEntry {
     type: ArtifactType;
-    parentId?: string;           // For doc/audio, links to parent
+    parentId?: string;           // For doc/audio/canvas, links to parent
     createdAt: string;           // ISO timestamp
 
     // Session-specific
     geminiSessionId?: string;
     query?: string;
 
-    // Document-specific
+    // Document-specific (Google Docs)
     googleDocId?: string;
     originalTitle?: string;
     currentTitle?: string;
 
+    // Local Archival
+    markdownPath?: string;       // Path to local .md file
+    references?: string[];       // Extracted links/references
+    
     // Audio-specific
     notebookTitle?: string;
     localPath?: string;

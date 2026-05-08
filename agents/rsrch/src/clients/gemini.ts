@@ -185,6 +185,10 @@ export class GeminiClient extends EventEmitter {
         return actions.openArtifactAction(this.ctx, this.deps as GeminiActionDeps, name);
     }
 
+    async archiveArtifacts(options: { outputDir?: string } = {}) {
+        return actions.archiveArtifactsAction(this.ctx, this.deps as GeminiActionDeps, options);
+    }
+
     async scrollToTop(options: { limit?: number, untilText?: string } = {}) {
         return actions.scrollToTopAction(this.ctx, this.deps as GeminiActionDeps, options);
     }

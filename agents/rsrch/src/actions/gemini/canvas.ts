@@ -19,8 +19,8 @@ export async function listSessionArtifactsAction(
 
     log('Listing session artifacts (discovery mode)...');
 
-    // 1. Ensure all history is loaded
-    await scrollToTopAction(ctx, deps);
+    // 1. Ensure enough history is loaded for discovery
+    await scrollToTopAction(ctx, deps, { limit: 50 }); 
 
     const artifacts: Array<{ name: string; id?: string; type: string }> = [];
 
@@ -83,7 +83,7 @@ export async function listSessionArtifactsAction(
 export async function readCanvasAction(
     ctx: UniversalContext,
     deps: GeminiActionDeps
-): Promise<{ title: string; content: string; markdown: string } | null> {
+): Promise<{ title: string; content: string; markdown: string; references: string[] } | null> {
     const { page, log } = ctx;
     const { selectors } = deps;
 
@@ -102,6 +102,17 @@ export async function readCanvasAction(
         const content = await editor.innerText();
         const html = await editor.innerHTML();
         
+        // Extract References/Citations
+        const references: string[] = [];
+        const links = editor.locator('a[href*="http"]');
+        const linkCount = await links.count();
+        for (let i = 0; i < linkCount; i++) {
+            const href = await links.nth(i).getAttribute('href');
+            if (href && !references.includes(href) && !href.includes('google.com')) {
+                references.push(href);
+            }
+        }
+
         // Basic HTML -> MD conversion
         let markdown = html
             .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
@@ -114,9 +125,9 @@ export async function readCanvasAction(
             .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
             .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
             .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, ''); // Strip remaining tags
+            .replace(/<[^>]+>/g, ''); 
 
-        return { title, content, markdown };
+        return { title, content, markdown, references };
     } catch (e: any) {
         log(`Error reading canvas: ${e.message}`, 'error');
         return null;

@@ -1,8 +1,6 @@
 import { Command } from 'commander';
-import { 
-    runLocalGeminiAction, 
-    getOptionsWithGlobals 
-} from '../../cli/utils';
+import { runLocalGeminiAction } from '../../cli/utils';
+import { getRegistry } from '../../core/artifact-registry';
 
 export function registerCanvasCommands(gemini: Command) {
     const canvas = gemini.command('canvas')
@@ -80,5 +78,50 @@ export function registerCanvasCommands(gemini: Command) {
                 fs.writeFileSync(targetPath, data.content);
                 console.log(`Artifact saved to: ${targetPath}`);
             });
+        });
+    gemini.command('archive-artifacts')
+        .description('Archive all artifacts (Canvas & Deep Research) from the current session locally')
+        .option('-o, --output <dir>', 'Output directory', 'data/artifacts/gemini')
+        .option('--local', 'Use local execution', true)
+        .action(async (opts, cmd) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                console.log('Starting archival process...');
+                const files = await gemini.archiveArtifacts({ outputDir: opts.output });
+                console.log(`\n--- Archival Complete ---`);
+                if (files.length === 0) {
+                    console.log('No artifacts found to archive.');
+                } else {
+                    console.log(`Archived ${files.length} artifacts:`);
+                    files.forEach(f => console.log(`- ${f}`));
+                }
+                console.log('-------------------------\n');
+            });
+        });
+
+    gemini.command('list-archived')
+        .description('List locally archived artifacts from the registry')
+        .option('-t, --type <type>', 'Filter by type (research_doc, canvas)', 'all')
+        .action(async (opts) => {
+            const registry = getRegistry();
+            const ids = opts.type === 'all' 
+                ? registry.listIds() 
+                : registry.listIds().filter(id => registry.get(id)?.type === opts.type);
+            
+            console.log(`\n--- Locally Archived Artifacts (Type: ${opts.type}) ---`);
+            if (ids.length === 0) {
+                console.log('No archived artifacts found.');
+            } else {
+                ids.forEach(id => {
+                    const entry = registry.get(id);
+                    if (entry && (entry.type === 'research_doc' || entry.type === 'canvas')) {
+                        console.log(`[${id}] ${entry.currentTitle || entry.originalTitle}`);
+                        if (entry.markdownPath) console.log(`      Path: ${entry.markdownPath}`);
+                        if (entry.references && entry.references.length > 0) {
+                            console.log(`      Sources: ${entry.references.length}`);
+                        }
+                    }
+                });
+            }
+            console.log('-----------------------------------------------------\n');
         });
 }
