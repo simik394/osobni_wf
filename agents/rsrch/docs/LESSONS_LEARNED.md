@@ -16,6 +16,7 @@ This is a living record of technical challenges, architectural discoveries, and 
 - **Modular Actions**: Logic MUST be stateless functions in `src/actions/`. Clients are thin wrappers for orchestration.
 - **UniversalContext**: Always use `ctx.log` and `ctx.config` instead of `console.log` or direct imports.
 - **Surgical Cleanup**: Frequent `npm run build` is mandatory to catch broken imports after deep refactoring.
+- **Stateless Bridge Pattern**: Adapting native GUI features requires a "stateless bridge" approach: actions should be atomic, use stable selectors (aria-labels, data-tests), and bypass complex automation where possible to ensure reliability.
 
 ---
 
