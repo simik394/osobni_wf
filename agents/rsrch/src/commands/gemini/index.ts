@@ -6,6 +6,7 @@ import { registerUploadCommands } from './upload.cmd';
 import { registerGemCommands } from './gems.cmd';
 import { registerJobCommands } from './jobs.cmd';
 import { registerCanvasCommands } from './canvas.cmd';
+import { registerEnvironmentCommands } from './environment.cmd';
 
 const gemini = new Command('gemini').description('Gemini commands');
 
@@ -16,6 +17,7 @@ registerUploadCommands(gemini);
 registerGemCommands(gemini);
 registerJobCommands(gemini);
 registerCanvasCommands(gemini);
+registerEnvironmentCommands(gemini);
 
 export const geminiCommand = gemini;
 export default gemini;

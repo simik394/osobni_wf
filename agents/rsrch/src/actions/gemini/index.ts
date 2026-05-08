@@ -15,3 +15,4 @@ export * from './archival';
 export * from './audio_bridge';
 export * from './model';
 export * from './sharing';
+export * from './environment';

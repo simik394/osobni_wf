@@ -481,11 +481,147 @@ export async function pinSessionAction(
             return true;
         } else {
             log(`${pin ? 'Pin' : 'Unpin'} option not found in menu (maybe already in target state?)`, 'warn');
-            await page.keyboard.press('Escape');
             return false;
         }
     } catch (e: any) {
         log(`Pin/Unpin failed: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Renames a Gemini session.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param newName New title for the session
+ * @param sessionId Optional session ID (if not provided, uses current)
+ */
+export async function renameSessionAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    newName: string,
+    sessionId?: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        await ensureSidebarAction(ctx, deps);
+
+        let targetItem = null;
+        if (sessionId) {
+            const itemSelector = selectors.gemini.sidebar.conversations;
+            const items = page.locator(itemSelector);
+            const count = await items.count();
+            for (let i = 0; i < count; i++) {
+                const item = items.nth(i);
+                if (await item.getAttribute('data-conversation-id') === sessionId) {
+                    targetItem = item;
+                    break;
+                }
+            }
+        } else {
+            targetItem = page.locator(selectors.gemini.sidebar.conversations + '.active').first();
+        }
+
+        if (!targetItem || await targetItem.count() === 0) {
+            log('Could not find target session for rename', 'error');
+            return false;
+        }
+
+        await targetItem.hover();
+        const moreBtn = targetItem.locator(selectors.gemini.session.moreMenu).first();
+        await moreBtn.click();
+        await page.waitForTimeout(500);
+
+        const renameBtn = page.locator(selectors.gemini.session.rename).first();
+        if (await renameBtn.isVisible()) {
+            await renameBtn.click();
+            await page.waitForTimeout(500);
+
+            const input = page.locator(selectors.gemini.session.renameInput).first();
+            if (await input.isVisible()) {
+                await input.fill(newName);
+                await page.keyboard.press('Enter');
+                await page.waitForTimeout(1000);
+                log(`Session renamed to: ${newName}`);
+                return true;
+            }
+        }
+
+        log('Rename UI sequence failed', 'error');
+        await page.keyboard.press('Escape');
+        return false;
+    } catch (e: any) {
+        log(`Rename failed: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Deletes a Gemini session.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param sessionId Optional session ID (if not provided, uses current)
+ */
+export async function deleteSessionAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    sessionId?: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        await ensureSidebarAction(ctx, deps);
+
+        let targetItem = null;
+        if (sessionId) {
+            const itemSelector = selectors.gemini.sidebar.conversations;
+            const items = page.locator(itemSelector);
+            const count = await items.count();
+            for (let i = 0; i < count; i++) {
+                const item = items.nth(i);
+                if (await item.getAttribute('data-conversation-id') === sessionId) {
+                    targetItem = item;
+                    break;
+                }
+            }
+        } else {
+            targetItem = page.locator(selectors.gemini.sidebar.conversations + '.active').first();
+        }
+
+        if (!targetItem || await targetItem.count() === 0) {
+            log('Could not find target session for delete', 'error');
+            return false;
+        }
+
+        await targetItem.hover();
+        const moreBtn = targetItem.locator(selectors.gemini.session.moreMenu).first();
+        await moreBtn.click();
+        await page.waitForTimeout(500);
+
+        const deleteBtn = page.locator(selectors.gemini.session.delete).first();
+        if (await deleteBtn.isVisible()) {
+            await deleteBtn.click();
+            await page.waitForTimeout(1000);
+
+            const confirmBtn = page.locator(selectors.gemini.session.confirmDelete).first();
+            if (await confirmBtn.isVisible()) {
+                await confirmBtn.click();
+                await page.waitForTimeout(1000);
+                log('Session deleted.');
+                return true;
+            }
+        }
+
+        log('Delete UI sequence failed', 'error');
+        await page.keyboard.press('Escape');
+        return false;
+    } catch (e: any) {
+        log(`Delete failed: ${e.message}`, 'error');
         return false;
     }
 }

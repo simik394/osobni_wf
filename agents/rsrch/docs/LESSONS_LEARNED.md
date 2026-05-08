@@ -445,3 +445,29 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - Modifying a `.desktop` file or its icon on disk often requires an explicit `update-desktop-database` and a shell restart (`Alt+F2` -> `r` in GNOME) to clear the icon cache. Simply overwriting the PNG file is rarely enough for immediate UI updates.
 
 - **Outcome**: Established a clear data exchange protocol for the reMarkable Wine project, reducing user confusion regarding "missing" exported files.
+
+---
+
+### [[21. Gemini Advanced UI Navigation (2026-05-08)]]
+
+**Context**: Implementing programmatic access to "Deep Research" toggles, extension management, and session renaming in Gemini.
+
+#### LESSONS LEARNED:
+
+1. **State-Machine Menu Navigation**:
+   - Toggles like "Deep Research" are often hidden behind a "Tools" menu (`button[aria-label*='Tools']`). Programmatic actions must first ensure this menu is open before attempting to click the inner toggle. 
+   - **Verification**: Always use `page.waitForSelector()` for the inner toggle after clicking the parent menu to handle animation delays.
+
+2. **Redirect-Based Settings (Extensions)**:
+   - Gemini Extension management ("Connected Apps") is located at a separate URL (`/settings/connected-apps`). 
+   - **Sidecar Workflow**: When an action navigates away from `/app` to `/settings`, it MUST navigate back to `/app` (or the previous session URL) before finishing to prevent subsequent actions from failing in the wrong context.
+   - **Extension Identification**: Extensions in the settings list are best identified by their names within `div` containers that also contain the toggle `aria-checked` state.
+
+3. **Context Menu Persistence**:
+   - Session renaming/deletion is triggered by a "three-dot" menu (`button[aria-label*='More' i]`) on the specific session item. 
+   - **ARIA Hierarchy**: Since multiple sessions have similar menus, use the session title or ID to isolate the correct container before searching for the "More" button.
+
+4. **Feedback Loop Logic**:
+   - Feedback buttons (Like/Dislike) only appear on the *last* response and are often part of a dynamic toolbar. Using `.last()` on the response locator and then finding the child button is more robust than a global button search.
+
+- **Outcome**: Successfully implemented a "Stateless Bridge" for 7+ advanced Gemini features, achieving full GUI parity via CLI and REST.

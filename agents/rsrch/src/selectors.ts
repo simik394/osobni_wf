@@ -116,6 +116,9 @@ export interface GeminiSelectors {
         history: string;
         newChat: string;
         citations: string;
+        like: string;
+        dislike: string;
+        editPrompt: string;
         thoughtToggle?: string;
         thoughtContainer?: string;
     };
@@ -189,6 +192,21 @@ export interface GeminiSelectors {
         copyLink: string;
         pin: string;
         unpin: string;
+        rename: string;
+        delete: string;
+        renameInput: string;
+        confirmRename: string;
+        confirmDelete: string;
+    };
+    tools: {
+        trigger: string;
+        deepResearch: string;
+    };
+    settings: {
+        trigger: string;
+        connectedApps: string;
+        extensionItem: string;
+        extensionToggle: string;
     };
 }
 
@@ -362,7 +380,10 @@ const DEFAULTS: NotebookLMSelectors = {
             response: '.model-response',
             history: '.chat-history',
             newChat: 'New chat',
-            citations: '.citation-chip'
+            citations: '.citation-chip',
+            like: 'thumb_up',
+            dislike: 'thumb_down',
+            editPrompt: 'Edit text'
         },
         sidebar: {
             container: '.conversations-container, [role="navigation"] .scrollable-content',
@@ -433,7 +454,22 @@ const DEFAULTS: NotebookLMSelectors = {
             menuShare: 'Share conversation',
             copyLink: 'Copy link',
             pin: 'Pin',
-            unpin: 'Unpin'
+            unpin: 'Unpin',
+            rename: 'Rename',
+            delete: 'Delete',
+            renameInput: 'input[aria-label="Rename chat"]',
+            confirmRename: 'Rename',
+            confirmDelete: 'Delete'
+        },
+        tools: {
+            trigger: 'Tools',
+            deepResearch: 'button[aria-label="Deep Research"]'
+        },
+        settings: {
+            trigger: 'Settings & help',
+            connectedApps: 'Connected apps',
+            extensionItem: '.extension-item',
+            extensionToggle: 'mat-slide-toggle'
         }
     },
     perplexity: {

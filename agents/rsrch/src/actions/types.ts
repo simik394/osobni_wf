@@ -54,6 +54,13 @@ export type GeminiActionDeps = ActionDeps & {
     restoreCanvasVersion: (versionId: string) => Promise<boolean>;
     promptCanvas: (instruction: string) => Promise<boolean>;
     exportCanvas: (target: string) => Promise<boolean>;
+    renameSession: (newName: string, sessionId?: string) => Promise<boolean>;
+    deleteSession: (sessionId?: string) => Promise<boolean>;
+    toggleDeepResearch: (enabled: boolean) => Promise<boolean>;
+    listExtensions: () => Promise<Array<{ name: string; description?: string; enabled: boolean }>>;
+    toggleExtension: (name: string, enabled: boolean) => Promise<boolean>;
+    submitFeedback: (isGood: boolean, comment?: string) => Promise<boolean>;
+    editLastPrompt: (newText: string) => Promise<boolean>;
 };
 
 

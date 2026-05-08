@@ -1,4 +1,4 @@
-import { UniversalContext } from '../types';
+import { UniversalContext, GeminiActionDeps } from '../types';
 
 export interface Source {
     type: 'text' | 'file' | 'url';
@@ -221,5 +221,109 @@ export async function sendMessageAction(
         deps.telemetry.endTrace(trace, undefined, false);
 
         return null;
+    }
+}
+
+/**
+ * Submits feedback (like/dislike) for the last Gemini response.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param isGood True for like, false for dislike
+ * @param comment Optional feedback text
+ */
+export async function submitFeedbackAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    isGood: boolean,
+    comment?: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        const lastResponse = page.locator(selectors.gemini.chat.response).last();
+        if (!await lastResponse.isVisible()) {
+            log('No response found to provide feedback on', 'error');
+            return false;
+        }
+
+        const btnSelector = isGood ? selectors.gemini.chat.like : selectors.gemini.chat.dislike;
+        const btn = lastResponse.locator(btnSelector).first();
+        
+        if (await btn.isVisible()) {
+            await btn.click();
+            await page.waitForTimeout(500);
+
+            if (comment) {
+                // If a feedback dialog appears, try to fill it
+                const feedbackInput = page.locator('textarea[aria-label*="feedback" i], mat-dialog-container textarea').first();
+                if (await feedbackInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    await feedbackInput.fill(comment);
+                    const submitBtn = page.locator('button:has-text("Submit"), button:has-text("Odeslat")').first();
+                    await submitBtn.click();
+                    await page.waitForTimeout(500);
+                }
+            }
+
+            log(`Feedback (${isGood ? 'Good' : 'Bad'}) submitted.`);
+            return true;
+        }
+
+        log('Feedback button not found', 'error');
+        return false;
+    } catch (e: any) {
+        log(`Feedback failed: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Edits the last user prompt and re-submits it.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param newText New prompt content
+ */
+export async function editLastPromptAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    newText: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        // User messages usually have an "Edit" button visible on hover
+        const userMessages = page.locator('.user-query-container, .user-query');
+        const lastUserMsg = userMessages.last();
+        
+        if (!await lastUserMsg.isVisible()) {
+            log('No user message found to edit', 'error');
+            return false;
+        }
+
+        await lastUserMsg.hover();
+        const editBtn = lastUserMsg.locator(selectors.gemini.chat.editPrompt).first();
+        
+        if (await editBtn.isVisible()) {
+            await editBtn.click();
+            await page.waitForTimeout(500);
+
+            const editor = page.locator('textarea, [contenteditable="true"]').first();
+            if (await editor.isVisible()) {
+                await editor.fill(newText);
+                await page.keyboard.press('Enter');
+                await page.waitForTimeout(1000);
+                log('Prompt edited and re-submitted.');
+                return true;
+            }
+        }
+
+        log('Edit prompt UI sequence failed', 'error');
+        return false;
+    } catch (e: any) {
+        log(`Edit prompt failed: ${e.message}`, 'error');
+        return false;
     }
 }

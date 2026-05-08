@@ -173,6 +173,9 @@ gemini:
     citations: ".citation-chip, a[href*='google.com/search?q='], .source-link, sup a, .citation-link"
     history: '.chat-history-list, nav[aria-label="Rozhovory"], nav[aria-label="Conversations"]'
     newChat: 'button[aria-label*="New chat"], button[aria-label*="Nový chat"], button:has-text("New chat"), button:has-text("Nový chat"), [data-testid="new-chat-button"]'
+    like: 'button[aria-label*="dobrá odpověď" i], button[aria-label*="Good response" i], button:has(mat-icon:has-text("thumb_up"))'
+    dislike: 'button[aria-label*="špatná odpověď" i], button[aria-label*="Bad response" i], button:has(mat-icon:has-text("thumb_down"))'
+    editPrompt: 'button[aria-label*="Upravit text" i], button[aria-label*="Edit text" i]'
   sidebar:
     menu: 'button[aria-label*="Hlavní nabídka"], button[aria-label*="nabídka"], button[aria-label*="Main menu"], button[aria-label*="Menu"]'
     conversations: 'div.conversation[role="button"], a[href*="/app/"], nav [role="listitem"]'
@@ -199,7 +202,7 @@ gemini:
     moreMenu: 'button[aria-label="Otevřít nabídku akcí v konverzaci."], button.mat-mdc-menu-trigger, button[aria-label*="nabídka akcí"]'
     editOption: '.mat-mdc-menu-item:has-text("Upravit"), .mat-mdc-menu-item:has-text("Edit")'
     deleteOption: '.mat-mdc-menu-item:has-text("Vymazat"), .mat-mdc-menu-item:has-text("Smazat"), .mat-mdc-menu-item:has-text("Delete")'
-    confirmDelete: 'mat-dialog-container button:has-text("Smazat"), mat-dialog-container button:has-text("Delete")'
+    confirmDelete: 'mat-dialog-container button:has-text("Smazat"), mat-dialog-container button:has-text("Delete"), button:has-text("Vymazat")'
   upload:
     button: 'button[mattooltip*="Přidat"], button[mattooltip*="Upload"], button[aria-label*="Přidat"], button[aria-label*="Upload"], .fonticon-plus-new, .fonticon-add-circle'
     fileInput: 'input[type="file"]'
@@ -237,6 +240,19 @@ gemini:
     copyLink: 'button[aria-label*="Kopírovat odkaz" i], button[aria-label*="Copy link" i]'
     pin: 'button[role="menuitem"]:has-text("Přišpendlit"), button[role="menuitem"]:has-text("Pin")'
     unpin: 'button[role="menuitem"]:has-text("Odepnout"), button[role="menuitem"]:has-text("Unpin")'
+    rename: 'button[role="menuitem"]:has-text("Přejmenovat"), button[role="menuitem"]:has-text("Rename")'
+    delete: 'button[role="menuitem"]:has-text("Vymazat"), button[role="menuitem"]:has-text("Delete")'
+    renameInput: 'input[aria-label="Přejmenovat chat"], input[aria-label="Rename chat"]'
+    confirmRename: 'button:has-text("Přejmenovat"), button:has-text("Rename")'
+    confirmDelete: 'button:has-text("Vymazat"), button:has-text("Delete")'
+  tools:
+    trigger: 'button:has-text("Nástroje"), button:has-text("Tools")'
+    deepResearch: 'button[aria-label="Deep Research"]'
+  settings:
+    trigger: 'button[aria-label="Settings & help"], button[aria-label="Nastavení a nápověda"]'
+    connectedApps: 'button[role="menuitem"]:has-text("Připojené aplikace"), button[role="menuitem"]:has-text("Connected apps")'
+    extensionItem: '.extension-item, [role="listitem"]:has(.extension-name)'
+    extensionToggle: 'mat-slide-toggle, input[type="checkbox"]'
 # ============================================================
 # GOOGLE KEEP SELECTORS
 # ============================================================

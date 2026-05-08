@@ -366,6 +366,82 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.post('/session/rename', async (req: Request, res: Response) => {
+        try {
+            const { sessionId, newName } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.renameSession(newName, sessionId);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/delete', async (req: Request, res: Response) => {
+        try {
+            const { sessionId } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.deleteSession(sessionId);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/environment/deep-research', async (req: Request, res: Response) => {
+        try {
+            const { enabled } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.toggleDeepResearch(enabled);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/environment/extensions', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const extensions = await gemini.listExtensions();
+            res.json({ extensions });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/environment/extensions/toggle', async (req: Request, res: Response) => {
+        try {
+            const { name, enabled } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.toggleExtension(name, enabled);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/chat/feedback', async (req: Request, res: Response) => {
+        try {
+            const { isGood, comment } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.submitFeedback(isGood, comment);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/chat/edit', async (req: Request, res: Response) => {
+        try {
+            const { newText } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.editLastPrompt(newText);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.get('/status', async (req: Request, res: Response) => {
         res.json({ success: true, status: 'ok' });
     });

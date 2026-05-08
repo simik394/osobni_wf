@@ -288,7 +288,6 @@ export function registerSessionCommands(gemini: Command) {
                 if (success) console.log(`Session ${sessionId || 'current'} pinned.`);
             }, sessionId);
         });
-
     gemini.command('unpin [sessionId]')
         .description('Unpin a session in the sidebar')
         .option('--local', 'Use local execution', true)
@@ -296,6 +295,26 @@ export function registerSessionCommands(gemini: Command) {
             await runLocalGeminiAction(async (client, gemini) => {
                 const success = await gemini.unpinSession(sessionId);
                 if (success) console.log(`Session ${sessionId || 'current'} unpinned.`);
+            }, sessionId);
+        });
+
+    gemini.command('rename <newName> [sessionId]')
+        .description('Rename a session')
+        .option('--local', 'Use local execution', true)
+        .action(async (newName, sessionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.renameSession(newName, sessionId);
+                if (success) console.log(`Session renamed to "${newName}".`);
+            }, sessionId);
+        });
+
+    gemini.command('delete [sessionId]')
+        .description('Delete a session')
+        .option('--local', 'Use local execution', true)
+        .action(async (sessionId) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.deleteSession(sessionId);
+                if (success) console.log(`Session deleted.`);
             }, sessionId);
         });
 }

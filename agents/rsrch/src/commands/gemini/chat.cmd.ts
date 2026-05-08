@@ -151,4 +151,25 @@ export function registerChatCommands(gemini: Command) {
                 });
             }
         });
+
+    gemini.command('feedback <good|bad> [comment]')
+        .description('Submit feedback for the last response')
+        .option('--local', 'Use local execution', true)
+        .action(async (type, comment) => {
+            const isGood = type === 'good';
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.submitFeedback(isGood, comment);
+                if (success) console.log('Feedback submitted.');
+            });
+        });
+
+    gemini.command('edit <newText>')
+        .description('Edit the last user prompt and re-submit')
+        .option('--local', 'Use local execution', true)
+        .action(async (newText) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const success = await gemini.editLastPrompt(newText);
+                if (success) console.log('Prompt edited and re-submitted.');
+            });
+        });
 }

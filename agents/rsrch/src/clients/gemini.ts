@@ -66,8 +66,15 @@ export class GeminiClient extends EventEmitter {
             scrollToTop: async () => await this.scrollToTop(),
             listCanvasVersions: async () => await this.listCanvasVersions(),
             restoreCanvasVersion: async (id: string) => await this.restoreCanvasVersion(id),
-            promptCanvas: async (text: string) => await this.promptCanvas(text),
-            exportCanvas: async (target: string) => await this.exportCanvas(target)
+            promptCanvas: async (instruction: string) => await actions.promptCanvasAction(this.ctx, this.deps, instruction),
+            exportCanvas: async (target: string) => await actions.exportCanvasAction(this.ctx, this.deps, target),
+            renameSession: async (newName: string, sessionId?: string) => await actions.renameSessionAction(this.ctx, this.deps, newName, sessionId),
+            deleteSession: async (sessionId?: string) => await actions.deleteSessionAction(this.ctx, this.deps, sessionId),
+            toggleDeepResearch: async (enabled: boolean) => await actions.toggleDeepResearchAction(this.ctx, this.deps, enabled),
+            listExtensions: async () => await actions.listExtensionsAction(this.ctx, this.deps),
+            toggleExtension: async (name: string, enabled: boolean) => await actions.toggleExtensionAction(this.ctx, this.deps, name, enabled),
+            submitFeedback: async (isGood: boolean, comment?: string) => await actions.submitFeedbackAction(this.ctx, this.deps, isGood, comment),
+            editLastPrompt: async (newText: string) => await actions.editLastPromptAction(this.ctx, this.deps, newText),
         };
     }
 
@@ -460,5 +467,33 @@ export class GeminiClient extends EventEmitter {
 
     async exportCanvas(target: string) {
         return actions.exportCanvasAction(this.ctx, this.deps as GeminiActionDeps, target);
+    }
+
+    async renameSession(newName: string, sessionId?: string) {
+        return actions.renameSessionAction(this.ctx, this.deps as GeminiActionDeps, newName, sessionId);
+    }
+
+    async deleteSession(sessionId?: string) {
+        return actions.deleteSessionAction(this.ctx, this.deps as GeminiActionDeps, sessionId);
+    }
+
+    async toggleDeepResearch(enabled: boolean) {
+        return actions.toggleDeepResearchAction(this.ctx, this.deps as GeminiActionDeps, enabled);
+    }
+
+    async listExtensions() {
+        return actions.listExtensionsAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async toggleExtension(name: string, enabled: boolean) {
+        return actions.toggleExtensionAction(this.ctx, this.deps as GeminiActionDeps, name, enabled);
+    }
+
+    async submitFeedback(isGood: boolean, comment?: string) {
+        return actions.submitFeedbackAction(this.ctx, this.deps as GeminiActionDeps, isGood, comment);
+    }
+
+    async editLastPrompt(newText: string) {
+        return actions.editLastPromptAction(this.ctx, this.deps as GeminiActionDeps, newText);
     }
 }
