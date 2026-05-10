@@ -339,6 +339,65 @@ Chat with a Gem
 _Source: [gemini.ts:L1085](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/gemini.ts#L1085)_
 
 ***
+### `session rename <newName> [sessionId]`
+
+Rename a Gemini session.
+
+***
+### `session delete [sessionId]`
+
+Delete a Gemini session.
+
+***
+### `session export [sessionId]`
+
+Export the full session history to Markdown.
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output <path>` | Output file path |
+| `--local` | Use local execution |
+
+***
+### `env deep-research <on|off>`
+
+Toggle Deep Research mode.
+
+***
+### `env extensions`
+
+List available extensions and their status.
+
+***
+### `env toggle-extension <name> <on|off>`
+
+Toggle a specific extension.
+
+***
+### `feedback <good|bad> [comment]`
+
+Submit feedback for the last response.
+
+***
+### `archive-artifacts`
+
+Archive all artifacts (Canvas & Deep Research) and session history from the current session locally.
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output <dir>` | Output directory (default: data/artifacts/gemini) |
+| `--local` | Use local execution |
+
+***
+### `edit <newText>`
+
+Edit the last user prompt and re-submit.
+
+***
 
 ## GEMINI CANVAS Commands
 

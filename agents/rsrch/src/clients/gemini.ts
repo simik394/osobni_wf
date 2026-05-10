@@ -75,6 +75,7 @@ export class GeminiClient extends EventEmitter {
             toggleExtension: async (name: string, enabled: boolean) => await actions.toggleExtensionAction(this.ctx, this.deps, name, enabled),
             submitFeedback: async (isGood: boolean, comment?: string) => await actions.submitFeedbackAction(this.ctx, this.deps, isGood, comment),
             editLastPrompt: async (newText: string) => await actions.editLastPromptAction(this.ctx, this.deps, newText),
+            exportSession: async () => await actions.exportFullSessionAction(this.ctx, { ...this.deps, extractResponse: actions.extractResponseAction }),
         };
     }
 
@@ -495,5 +496,9 @@ export class GeminiClient extends EventEmitter {
 
     async editLastPrompt(newText: string) {
         return actions.editLastPromptAction(this.ctx, this.deps as GeminiActionDeps, newText);
+    }
+
+    async exportSession() {
+        return actions.exportFullSessionAction(this.ctx, { ...(this.deps as GeminiActionDeps), extractResponse: actions.extractResponseAction });
     }
 }

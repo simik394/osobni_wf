@@ -61,6 +61,7 @@ export type GeminiActionDeps = ActionDeps & {
     toggleExtension: (name: string, enabled: boolean) => Promise<boolean>;
     submitFeedback: (isGood: boolean, comment?: string) => Promise<boolean>;
     editLastPrompt: (newText: string) => Promise<boolean>;
+    exportSession: () => Promise<{ title: string; markdown: string; turns: any[] }>;
 };
 
 

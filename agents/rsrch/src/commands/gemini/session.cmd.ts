@@ -317,4 +317,25 @@ export function registerSessionCommands(gemini: Command) {
                 if (success) console.log(`Session deleted.`);
             }, sessionId);
         });
+
+    gemini.command('export [sessionId]')
+        .description('Export the full session history to Markdown')
+        .option('-o, --output <path>', 'Output file path')
+        .option('--local', 'Use local execution', true)
+        .action(async (sessionId, opts) => {
+            await runLocalGeminiAction(async (client, gemini) => {
+                const data = await gemini.exportSession();
+                const fs = await import('node:fs');
+                const path = await import('node:path');
+                
+                const targetPath = opts.output || path.join(process.cwd(), `gemini_session_${data.title.replace(/[^a-z0-9]/gi, '_')}.md`);
+                fs.writeFileSync(targetPath, data.markdown, 'utf-8');
+                
+                console.log(`\n--- Session Exported ---`);
+                console.log(`Title: ${data.title}`);
+                console.log(`Turns: ${data.turns.length}`);
+                console.log(`Saved to: ${targetPath}`);
+                console.log(`------------------------\n`);
+            }, sessionId);
+        });
 }

@@ -84,3 +84,55 @@ export async function scrollToTopAction(
 
     log('Finished history loading.');
 }
+
+/**
+ * Exports the full current session history as high-fidelity Markdown.
+ */
+export async function exportFullSessionAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps & { extractResponse: typeof import('./extract-response').extractResponseAction }
+): Promise<{ title: string; markdown: string; turns: any[] }> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log('Exporting full session history...');
+
+    // 1. Ensure all history is loaded
+    await scrollToTopAction(ctx, deps, { limit: 100 });
+
+    const title = await page.title().then(t => t.replace('Gemini - ', '').trim());
+    
+    // 2. Identify all turns (User prompts and Model responses)
+    // We use a broader set of selectors to catch the turn containers
+    const turnSelector = 'user-query, model-response, .user-message, .model-response, [data-test-id="chat-turn"]';
+    const turns = page.locator(turnSelector);
+    const count = await turns.count();
+    
+    const turnData: any[] = [];
+    let markdown = `# ${title}\n\n`;
+
+    for (let i = 0; i < count; i++) {
+        const turn = turns.nth(i);
+        const isAssistant = await turn.evaluate(el => 
+            el.tagName.toLowerCase() === 'model-response' || 
+            el.classList.contains('model-response') ||
+            !!el.querySelector('model-response')
+        );
+
+        if (isAssistant) {
+            // Use high-fidelity extraction for model responses
+            const data = await deps.extractResponse(ctx, { selectors, verbose: deps.verbose }, turnSelector, i);
+            if (data) {
+                markdown += `### Gemini\n\n${data.markdown}\n\n`;
+                turnData.push({ role: 'assistant', ...data });
+            }
+        } else {
+            // User prompt
+            const text = await turn.innerText();
+            markdown += `### User\n\n${text.trim()}\n\n`;
+            turnData.push({ role: 'user', text: text.trim() });
+        }
+    }
+
+    return { title, markdown: markdown.trim(), turns: turnData };
+}

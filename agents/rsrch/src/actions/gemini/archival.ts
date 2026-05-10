@@ -4,6 +4,8 @@ import { UniversalContext, GeminiActionDeps } from '../types';
 import { getRegistry } from '../../core/artifact-registry';
 import { listSessionArtifactsAction, readCanvasAction, openArtifactAction } from './canvas';
 import { listDeepResearchDocsAction, readDeepResearchDocAction } from './research';
+import { exportFullSessionAction } from './history';
+import { extractResponseAction } from './extract-response';
 
 /**
  * Archives all artifacts from the current Gemini session to local storage.
@@ -115,6 +117,14 @@ export async function archiveArtifactsAction(
             await ctx.page.keyboard.press('Escape');
         }
     }
+
+    // 4. Export Session History
+    log('Exporting full session history...');
+    const sessionExport = await exportFullSessionAction(ctx, { ...deps, extractResponse: extractResponseAction });
+    const sessionFilePath = path.join(sessionDir, 'session.md');
+    fs.writeFileSync(sessionFilePath, sessionExport.markdown, 'utf-8');
+    archivedFiles.push(sessionFilePath);
+    log(`Archived full session history to session.md`);
 
     return archivedFiles;
 }
