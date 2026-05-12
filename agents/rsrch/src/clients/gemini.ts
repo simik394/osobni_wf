@@ -76,7 +76,9 @@ export class GeminiClient extends EventEmitter {
             submitFeedback: async (isGood: boolean, comment?: string) => await actions.submitFeedbackAction(this.ctx, this.deps, isGood, comment),
             editLastPrompt: async (newText: string) => await actions.editLastPromptAction(this.ctx, this.deps, newText),
             exportSession: async () => await actions.exportFullSessionAction(this.ctx, { ...this.deps, extractResponse: actions.extractResponseAction }),
+            archiveArtifacts: async (options?: { outputDir?: string, format?: 'md' | 'qmd', incremental?: boolean }) => await actions.archiveArtifactsAction(this.ctx, this.deps, options),
         };
+
     }
 
     async dumpState(name: string) {
@@ -203,9 +205,10 @@ export class GeminiClient extends EventEmitter {
         return actions.openArtifactAction(this.ctx, this.deps as GeminiActionDeps, name);
     }
 
-    async archiveArtifacts(options: { outputDir?: string } = {}) {
+    async archiveArtifacts(options: { outputDir?: string, format?: 'md' | 'qmd', incremental?: boolean } = {}) {
         return actions.archiveArtifactsAction(this.ctx, this.deps as GeminiActionDeps, options);
     }
+
 
     async shareSession() {
         return actions.shareSessionAction(this.ctx, this.deps as GeminiActionDeps);

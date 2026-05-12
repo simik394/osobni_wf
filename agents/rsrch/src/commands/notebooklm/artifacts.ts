@@ -93,4 +93,32 @@ export function registerArtifactCommands(notebook: Command) {
                 process.exit(1);
             }
         });
+
+    notebook.command('archive <title>')
+        .description('Full archival of a notebook (sources, all artifacts, and latest audio)')
+        .option('-o, --output <dir>', 'Output directory', 'data/artifacts/notebooklm')
+        .option('-f, --format <format>', 'Output format (md, qmd)', 'md')
+        .option('-s, --sources', 'Extract full text content of all sources', false)
+        .option('-i, --incremental', 'Skip already archived items', false)
+        .option('--local', 'Use local execution', true)
+        .action(async (title, opts) => {
+            await runLocalNotebookAction(async (client, nb) => {
+                console.log(`[CLI] Starting full archival for notebook: "${title}" (format: ${opts.format}, sources: ${!!opts.sources}, incremental: ${!!opts.incremental})`);
+                const files = await nb.archiveNotebook(title, { 
+                    outputDir: opts.output, 
+                    format: opts.format,
+                    extractSources: !!opts.sources,
+                    incremental: !!opts.incremental
+                });
+
+                console.log(`\n--- Archival Summary ---`);
+                if (files.length === 0) {
+                    console.log('No files archived.');
+                } else {
+                    console.log(`Successfully archived ${files.length} items to ${opts.output}.`);
+                    files.forEach(f => console.log(`- ${path.relative(process.cwd(), f)}`));
+                }
+                console.log('------------------------\n');
+            });
+        });
 }

@@ -28,10 +28,27 @@ export async function listNotebooksAction(
 
         const cards = page.locator(selectors.home.projectButton);
         const count = await cards.count();
-        log(`Found ${count} notebook cards.`);
+    log(`Found ${count} notebook cards initially. Scrolling to load all...`);
+    
+    let lastCount = 0;
+    let currentCount = count;
+    let attempts = 0;
+    
+    while (currentCount > lastCount && attempts < 15) {
+        lastCount = currentCount;
+        await page.evaluate(() => window.scrollBy(0, 5000));
+        await page.waitForTimeout(1000);
+        currentCount = await cards.count();
+        attempts++;
+        log(`Scroll attempt ${attempts}: found ${currentCount} cards`);
+    }
+    
+    log(`Total notebook cards found after ${attempts} scrolls: ${currentCount}`);
 
-        const notebooks: NotebookInfo[] = [];
-        for (let i = 0; i < count; i++) {
+    const notebooks: NotebookInfo[] = [];
+    for (let i = 0; i < currentCount; i++) {
+
+
             const card = cards.nth(i);
             const title = await card.locator(selectors.home.projectButtonTitle).first().innerText().catch(() => 'Untitled');
             const text = await card.innerText().catch(() => '');

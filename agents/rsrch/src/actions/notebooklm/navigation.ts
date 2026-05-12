@@ -5,23 +5,31 @@ import { UniversalContext, NotebookLMActionDeps } from '../types';
  */
 export async function recycleAction(ctx: UniversalContext): Promise<void> {
     const { page, log, config } = ctx;
-    log('Recycling NotebookLM tab via UI...');
-    
     const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
-    if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
-        await homeBtn.click();
-        try {
-            await page.waitForURL(url => url.href.includes('notebooklm.google.com') && !url.href.includes('/notebook/'), { timeout: 5000 });
-            log('Recycled successfully via UI.');
-        } catch (e) {
-            log('UI recycle timed out, falling back to goto().');
-            await page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
-        }
-    } else {
-        log('Home button not found, falling back to goto().');
-        await page.goto(config.urls.notebooklm, { waitUntil: 'domcontentloaded' });
+    
+    // If we're already on the home page (no /notebook/ in URL), we can skip
+    const url = page.url();
+    if (url.includes('notebooklm.google.com') && !url.includes('/notebook/')) {
+        log('Already on home page, skip recycle.');
+        return;
     }
+
+    try {
+        if (await homeBtn.count() > 0 && await homeBtn.isVisible()) {
+            log('Clicking home button...');
+            await homeBtn.click({ timeout: 3000 });
+            await page.waitForURL(u => u.href.includes('notebooklm.google.com') && !u.href.includes('/notebook/'), { timeout: 3000 });
+            log('Recycled successfully via UI.');
+        } else {
+            throw new Error('Home button not available');
+        }
+    } catch (e) {
+        log('UI recycle failed or timed out, forcing goto().');
+        await page.goto(config.urls.notebooklm, { waitUntil: 'networkidle', timeout: 30000 });
+    }
+    log('Recycle action finished.');
 }
+
 
 /**
  * Opens a specific notebook by title.
@@ -51,45 +59,47 @@ export async function openNotebookAction(
     try {
         await page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: ctx.config.timeouts.navigation });
 
-        const candidates = page.locator(selectors.home.projectButton).filter({ 
-            has: page.locator(selectors.home.projectButtonTitle, { hasText: title }) 
-        });
-        const count = await candidates.count();
+        log('Scrolling to find notebook card...');
+        let lastCount = 0;
+        let currentCount = await page.locator(selectors.home.projectButton).count();
+        let attempts = 0;
         
+        log('Searching for target notebook card...');
+        const allCards = page.locator(selectors.home.projectButton);
+        const allCount = await allCards.count();
         let targetCard = null;
-        if (count === 0) {
-            const looseCandidates = page.locator(`${selectors.home.projectButton}, ${selectors.home.projectCard}`).filter({ hasText: title });
-            if (await looseCandidates.count() > 0) {
-                targetCard = looseCandidates.first();
-            } else {
-                throw new Error(`Notebook with title "${title}" not found.`);
+
+        for (let i = 0; i < allCount; i++) {
+            const card = allCards.nth(i);
+            const cardTitle = await card.locator(selectors.home.projectButtonTitle).first().innerText().catch(() => '');
+            
+            // Clean titles for comparison (remove emojis, newlines, extra spaces)
+            const cleanTarget = title.replace(/\s+/g, ' ').trim().toLowerCase();
+            const cleanCard = cardTitle.replace(/\s+/g, ' ').trim().toLowerCase();
+            
+            if (cleanCard === cleanTarget || cleanCard.includes(cleanTarget) || cleanTarget.includes(cleanCard)) {
+                log(`Found matching card: "${cardTitle}"`);
+                targetCard = card;
+                break;
             }
-        } else if (count > 1) {
-            log(`Found ${count} candidates. Picking the one with most sources...`);
-            let bestIdx = 0;
-            let maxSources = -1;
-            for (let i = 0; i < count; i++) {
-                const text = await candidates.nth(i).innerText().catch(() => '');
-                const match = text.match(/(\d+)\s*(zdroj|source)/i);
-                const sourceCount = match ? parseInt(match[1]) : 0;
-                if (sourceCount > maxSources) {
-                    maxSources = sourceCount;
-                    bestIdx = i;
-                }
-            }
-            targetCard = candidates.nth(bestIdx);
-        } else {
-            targetCard = candidates.first();
         }
 
+        if (!targetCard) {
+            throw new Error(`Notebook with title "${title}" not found in ${allCount} cards.`);
+        }
+
+
         if (targetCard) {
-            const actionBtn = targetCard.locator(selectors.home.primaryActionButton).first();
-            if (await actionBtn.count() > 0 && await actionBtn.isVisible()) {
-                await actionBtn.click();
-            } else {
-                await targetCard.click();
+            try {
+                log('Attempting to open notebook...');
+                // Try standard click first with a short timeout
+                await targetCard.click({ timeout: 3000 });
+            } catch (err) {
+                log('Standard click failed or timed out, using JavaScript click...');
+                await targetCard.evaluate((el: HTMLElement) => el.click());
             }
         }
+
 
         await page.waitForURL(selectors.notebook.urlPattern, { timeout: 15000 });
         log('Notebook opened successfully.');

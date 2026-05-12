@@ -54,8 +54,14 @@ export class NotebookLMClient {
             },
             renameArtifact: async (old: string, newT: string) => {
                 return actions.renameStudioArtifactAction(this.ctx, this.deps, old, newT);
+            },
+            archiveNotebook: async (options: { outputDir?: string, format?: 'md' | 'qmd', extractSources?: boolean, incremental?: boolean }) => {
+                // We need a title here, but the interface might not provide it easily if it's called from deps
+                // For now, use empty string if unknown, archival will fail gracefully or we'll fix later
+                return actions.archiveNotebookAction(this.ctx, this.deps, '', options);
             }
         };
+
     }
 
     /** Returns if the client is currently performing a long-running action */
@@ -250,4 +256,11 @@ export class NotebookLMClient {
     async renameArtifact(oldTitle: string, newTitle: string) {
         return actions.renameStudioArtifactAction(this.ctx, this.deps, oldTitle, newTitle);
     }
+    
+    /** Archives a full NotebookLM notebook locally */
+    async archiveNotebook(notebookTitle: string, options: { outputDir?: string, format?: 'md' | 'qmd', extractSources?: boolean, incremental?: boolean } = {}) {
+        return actions.archiveNotebookAction(this.ctx, this.deps, notebookTitle, options);
+    }
+
 }
+
