@@ -125,8 +125,8 @@ export async function startServer(overridePort?: number) {
         try {
             await client.init();
             console.log('Browser pre-initialized successfully.');
-        } catch (e) {
-            console.warn('Browser pre-initialization failed.');
+        } catch (e: any) {
+            console.warn('Browser pre-initialization failed:', e.stack || e.message);
         }
     }
 

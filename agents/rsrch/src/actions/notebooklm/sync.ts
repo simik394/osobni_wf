@@ -19,7 +19,7 @@ export async function scrapeNotebookAction(
     platformId: string;
     sources: Array<{ type: string; title: string; url?: string }>;
     audioOverviews: Array<{ title: string; hasTranscript: boolean }>;
-    artifacts: Array<{ type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; title: string; details?: string; sourceCount?: number; absoluteTime?: string; id?: string }>;
+    artifacts: Array<{ type: 'audio' | 'presentation' | 'video' | 'mindmap' | 'briefing' | 'cards' | 'quiz' | 'infographic' | 'table' | 'other'; title: string; details?: string; sourceCount?: number; absoluteTime?: string; id?: string }>;
     messages: Array<{ role: 'user' | 'ai'; contentPreview: string }>;
 }> {
     const { page, log } = ctx;

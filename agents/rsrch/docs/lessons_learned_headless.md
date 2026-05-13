@@ -1,0 +1,5 @@
+## Headless Architecture and Local Browser Mandates
+- **Strict Compliance**: The user mandate prohibits unrequested, headful local browser instances. When automating, all tasks should rely on the persistent headless server instance running via `rsrch serve`. DO NOT spawn instances of `browser_subagent` if the user complains about local browsers.
+- **Port Resolution**: Ensure CLI tools strictly use `cliContext.get().serverUrl` and respect `--server` flags rather than hardcoding port `3030`. Hardcoded ports break API modularity.
+- **Profile Lock Cleanups**: `launchPersistentContext` failures are frequently caused by `SingletonLock` or root-owned configuration files like `Local State` inside the user's `~/.rsrch/profiles/default/state/`. Safely deleting these corrupt state files (without wiping the actual `Cookies` or user directories) restores Playwright automation capabilities.
+- **Lazy Initialization**: If the background server's `client.init()` fails during startup, the subsequent API routes must feature lazy fallback checks (`if (!browserClient.isBrowserInitialized()) await browserClient.init();`) to prevent cascade `500 Browser not initialized` timeouts.

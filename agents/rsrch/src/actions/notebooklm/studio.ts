@@ -7,7 +7,7 @@ export async function getStudioArtifactsAction(
     ctx: UniversalContext,
     deps: NotebookLMActionDeps
 ): Promise<Array<{ 
-    type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; 
+    type: 'audio' | 'presentation' | 'video' | 'mindmap' | 'briefing' | 'cards' | 'quiz' | 'infographic' | 'table' | 'other'; 
     title: string; 
     isSystem?: boolean;
     details?: string; 
@@ -17,7 +17,7 @@ export async function getStudioArtifactsAction(
 }>> {
     const { page, log } = ctx;
     const artifacts: Array<{ 
-        type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other'; 
+        type: 'audio' | 'presentation' | 'video' | 'mindmap' | 'briefing' | 'cards' | 'quiz' | 'infographic' | 'table' | 'other'; 
         title: string; 
         isSystem?: boolean;
         details?: string; 
@@ -29,7 +29,7 @@ export async function getStudioArtifactsAction(
     try {
         log('Extracting studio artifacts...');
         // Ensure studio is maximized (if applicable)
-        const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio/i }).first();
+        const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio|Průvodce/i }).first();
         if (await studioBtn.count() > 0 && await studioBtn.isVisible()) {
             await studioBtn.click();
             await deps.humanDelay(2500);
@@ -39,6 +39,14 @@ export async function getStudioArtifactsAction(
         if (await studioPanel.count() === 0) {
             log('Studio panel not found.', 'error');
             return [];
+        }
+
+        // Close any active artifact viewer to see the list
+        const collapseBtn = studioPanel.locator('button').filter({ has: page.locator('mat-icon:has-text("collapse_content")') }).first();
+        if (await collapseBtn.count() > 0 && await collapseBtn.isVisible()) {
+            log('Closing active artifact viewer to see list...');
+            await collapseBtn.click();
+            await deps.humanDelay(1500);
         }
 
         const scrollable = studioPanel.locator('div.panel-content-scrollable, .panel-content-scrollable').first();
@@ -54,14 +62,29 @@ export async function getStudioArtifactsAction(
         ];
 
         for (let i = 0; i < count; i++) {
-            const item = artifactItems.nth(i);
+            // The stretched button is just an absolute overlay; the actual content is its sibling.
+            // So we take the parent element as the container for this artifact.
+            const item = artifactItems.nth(i).locator('xpath=..');
             
-            const titleLoc = item.locator('.artifact-title, div.artifact-title').first();
+            const titleLoc = item.locator('.artifact-title, div.artifact-title, [class*="title"]').first();
             let titleText = '';
             if (await titleLoc.count() > 0) {
-                titleText = await titleLoc.evaluate(el => (el as HTMLElement).innerText.trim()).catch(() => '');
+                // If it's an input field, get the value
+                const tagName = await titleLoc.evaluate(el => el.tagName.toLowerCase()).catch(() => '');
+                if (tagName === 'input' || tagName === 'textarea') {
+                    titleText = await titleLoc.inputValue().catch(() => '');
+                } else {
+                    titleText = await titleLoc.evaluate(el => (el as HTMLElement).innerText.trim()).catch(() => '');
+                }
             }
             
+            if (!titleText || titleText.length < 2) {
+                const fullText = await item.evaluate(el => (el as HTMLElement).innerText.trim()).catch(() => '');
+                if (fullText) {
+                    titleText = fullText.split('\n')[0].trim();
+                }
+            }
+
             const iconLoc = item.locator('mat-icon, .artifact-icon, .mat-icon').first();
             let iconText = '';
             if (await iconLoc.count() > 0) {
@@ -72,22 +95,23 @@ export async function getStudioArtifactsAction(
                 titleText = `Artifact ${i + 1}`;
             }
 
-            // Determine type based on icon text
-            let type: 'audio' | 'note' | 'faq' | 'briefing' | 'timeline' | 'table' | 'presentation' | 'other' = 'other';
-            if (iconText.includes('audio_magic_eraser')) type = 'audio';
-            else if (iconText.includes('sticky_note_2') || iconText.includes('description')) type = 'note';
-            else if (iconText.includes('help') || titleText.toLowerCase().includes('faq')) type = 'faq';
-            else if (iconText.includes('auto_tab_group')) {
-                if (titleText.toLowerCase().includes('faq')) type = 'faq';
-                else type = 'briefing';
-            }
-            else if (iconText.includes('timeline')) type = 'timeline';
-            else if (iconText.includes('table_view')) type = 'table';
-            else if (iconText.includes('tablet')) type = 'presentation';
 
-            // Identify System Artifacts
-            const isSystem = systemTitles.some(st => titleText.toLowerCase().includes(st)) || 
-                             (i < 6 && (type === 'faq' || type === 'briefing' || type === 'table' || type === 'timeline'));
+            // Determine type based on icon (Modern Robust Detection)
+            let type: 'audio' | 'presentation' | 'video' | 'mindmap' | 'briefing' | 'cards' | 'quiz' | 'infographic' | 'table' | 'other' = 'other';
+            const lowIcon = iconText.toLowerCase();
+
+            if (lowIcon.includes('audio_magic_eraser')) type = 'audio';
+            else if (lowIcon.includes('tablet')) type = 'presentation';
+            else if (lowIcon.includes('subscriptions')) type = 'video';
+            else if (lowIcon.includes('flowchart')) type = 'mindmap';
+            else if (lowIcon.includes('auto_tab_group')) type = 'briefing';
+            else if (lowIcon.includes('cards_star')) type = 'cards';
+            else if (lowIcon.includes('quiz')) type = 'quiz';
+            else if (lowIcon.includes('stacked_bar_chart')) type = 'infographic';
+            else if (lowIcon.includes('table_view')) type = 'table';
+
+            // Identify System Artifacts (the 9 generators)
+            const isSystem = i < 9;
 
             let detailsResult = '';
             const metadataLoc = item.locator('.artifact-metadata').first();
@@ -134,7 +158,7 @@ export async function maximizeStudioAction(
     const { page, log } = ctx;
     const { selectors } = deps;
 
-    const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio/i }).first();
+    const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio|Průvodce/i }).first();
     if (await studioBtn.count() > 0 && await studioBtn.isVisible()) {
         log('Maximizing Studio panel...');
         await studioBtn.click();

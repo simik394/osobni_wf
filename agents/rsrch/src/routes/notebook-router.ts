@@ -23,6 +23,10 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
     let notebookClient: NotebookLMClient | null = null;
 
     const getNotebookClient = async () => {
+        if (!browserClient.isBrowserInitialized()) {
+            console.log('[NotebookRouter] Lazy initializing browser...');
+            await browserClient.init();
+        }
         if (!notebookClient) {
             notebookClient = await browserClient.createNotebookLMClient();
         }
@@ -31,12 +35,20 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
     router.post('/list', async (req: Request, res: Response) => {
         try {
+            const { offset, limit } = req.body;
             const client = await getNotebookClient();
-            const notebooks = await client!.listNotebooks();
+            let notebooks = await client!.listNotebooks();
+            
+            if (offset !== undefined || limit !== undefined) {
+                const start = parseInt(offset as string) || 0;
+                const end = limit ? start + parseInt(limit as string) : notebooks.length;
+                notebooks = notebooks.slice(start, end);
+            }
+            
             res.json({ success: true, data: notebooks });
         } catch (e: any) {
             console.error('[NotebookRouter] List notebooks failed:', e);
-            res.status(500).json({ error: e.message });
+            res.status(500).json({ success: false, error: e.message });
         }
     });
 
@@ -217,6 +229,75 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         } catch (e: any) {
             console.error('[NotebookRouter] Download artifact failed:', e);
             res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/content-preview', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, type } = req.body;
+            if (!notebookTitle || !type) return res.status(400).json({ error: 'notebookTitle and type are required' });
+
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+
+            let data: any = [];
+            if (type === 'sources') {
+                data = await client!.getSourcesPreview();
+            } else if (type === 'studio') {
+                const artifacts = await client!.getStudioArtifacts();
+                data = artifacts;
+            } else if (type === 'chat') {
+                data = await client!.getChatMessages();
+            } else {
+                return res.status(400).json({ error: 'Invalid type. Use sources, studio, or chat.' });
+            }
+
+            res.json({ success: true, data });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Content preview failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/content-download', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, type, indices, outputDir } = req.body;
+            if (!notebookTitle || !type) return res.status(400).json({ error: 'notebookTitle and type are required' });
+
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+
+            if (type === 'sources') {
+                const sources = await client!.getSources();
+                for (let idx = 0; idx < sources.length; idx++) {
+                    if (indices && !indices.includes(idx + 1)) continue;
+                    await client!.downloadSource(sources[idx].title, outputDir);
+                }
+            } else if (type === 'studio') {
+                const actual = await client!.getStudioArtifacts();
+                for (let idx = 0; idx < actual.length; idx++) {
+                    if (indices && !indices.includes(idx + 1)) continue;
+                    await client!.downloadArtifact(notebookTitle, actual[idx].title, outputDir);
+                }
+            } else if (type === 'chat') {
+                const history = await client!.getChatMessages();
+                // We'll handle chat history formatting on the client side or here. 
+                // Let's just return the data for now, or handle it here if it's supposed to be a file download.
+                // Since the CLI expectes files to be saved, we should save them on the server's disk or return them.
+                // However, the CLI command 'get' expects to save locally.
+                // If it's a server request, 'outputDir' is likely on the server!
+                // Wait, if the user runs the CLI, they want the file LOCALLY.
+                // But if they use the server variant, it saves on the server.
+                // I'll return the chat history data so the CLI can save it locally if it wants, 
+                // OR just follow the pattern where it saves on the server.
+                res.json({ success: true, data: history });
+                return;
+            }
+
+            res.json({ success: true, message: 'Content downloaded successfully' });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Content download failed:', e);
+            res.status(500).json({ error: e.message });
         }
     });
 

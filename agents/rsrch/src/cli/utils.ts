@@ -32,9 +32,8 @@ export async function notifyNtfy(title: string, message: string, tags?: string[]
 
 // Helper to send request to server (returns data for programmatic use)
 export async function sendServerRequest(path: string, body: any = {}): Promise<any> {
-    const port = config.port;
-    const host = config.host;
-    const url = `http://${host}:${port}${path}`;
+    const serverUrl = cliContext.get().serverUrl || DEFAULT_SERVER_URL;
+    const url = `${serverUrl}${path}`;
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -51,7 +50,8 @@ export async function sendServerRequest(path: string, body: any = {}): Promise<a
         console.log(JSON.stringify(data, null, 2));
         return data;
     } catch (e: any) {
-        console.error(`Failed to communicate with server at port ${port}. Is it running?`);
+        const serverUrl = cliContext.get().serverUrl || DEFAULT_SERVER_URL;
+        console.error(`Failed to communicate with server at ${serverUrl}. Is it running?`);
         console.error(e.message);
         process.exit(1);
     }
@@ -59,9 +59,8 @@ export async function sendServerRequest(path: string, body: any = {}): Promise<a
 
 // Helper to send request with SSE streaming (prints progress to console)
 export async function sendServerRequestWithSSE(path: string, body: any = {}): Promise<any> {
-    const port = config.port;
-    const host = config.host;
-    const url = `http://${host}:${port}${path}`;
+    const serverUrl = cliContext.get().serverUrl || DEFAULT_SERVER_URL;
+    const url = `${serverUrl}${path}`;
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -111,7 +110,8 @@ export async function sendServerRequestWithSSE(path: string, body: any = {}): Pr
 
         return result;
     } catch (e: any) {
-        console.error(`Failed to communicate with server at port ${port}. Is it running?`);
+        const serverUrl = cliContext.get().serverUrl || DEFAULT_SERVER_URL;
+        console.error(`Failed to communicate with server at ${serverUrl}. Is it running?`);
         console.error(e.message);
         process.exit(1);
     }
@@ -128,9 +128,17 @@ export async function runLocalAction<T>(
     hasLocalFlag: boolean = true
 ) {
     const { profileId, cdpEndpoint } = cliContext.get();
+    
+    // Mandatory block for --local
+    if (process.argv.includes('--local')) {
+        console.log("STOP USING LOCAL RESOUCES, YOU HAVE SERVER FOR THIS SHIT");
+        process.exit(1);
+    }
+
     const useLocalMode = cdpEndpoint ? false : hasLocalFlag;
     
-    console.log(`Running ${productName} in ${useLocalMode ? 'LOCAL' : 'REMOTE BROWSER'} mode...`);
+    // Only log if we are NOT in local mode (since we haven't exited)
+    console.log(`Running ${productName} in REMOTE BROWSER mode...`);
     
     const client = new BrowserClient({ 
         profileId, 
