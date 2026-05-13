@@ -10,12 +10,14 @@ import { discordService } from './services/notification';
 // Import Modular Routers
 import { createNotebookRouter } from './routes/notebook-router';
 import { createNotebookLMRouter } from './routes/notebooklm-router';
+import { createKeepRouter } from './routes/keep-router';
 import { createWebhookRouter } from './routes/webhook-router';
 import { createResearchRouter } from './routes/research-router';
 import { createWorkflowRouter } from './routes/workflow-router';
 import { createChatRouter, createGeminiRouter } from './routes/chat-router';
-import { createKeepRouter } from './routes/keep-router';
 import { createSystemRouter } from './routes/system-router';
+import { createAIModeRouter } from './routes/aimode-router';
+import { createPerplexityRouter } from './routes/perplexity-router';
 
 // Initialize App
 const app = express();
@@ -39,6 +41,14 @@ let activeGeminiClient: GeminiClient | null = null;
  * Shared helper to get or initialize a Gemini client.
  */
 async function getActiveGeminiClient(): Promise<GeminiClient> {
+    if (activeGeminiClient) {
+        const isAuth = await activeGeminiClient.checkAuth();
+        if (!isAuth) {
+            console.log('[Server] Gemini session expired, re-initializing...');
+            activeGeminiClient = null;
+        }
+    }
+
     if (!activeGeminiClient) {
         if (!client.isBrowserInitialized()) {
             console.log('[Server] Initializing browser for Gemini...');
@@ -49,6 +59,32 @@ async function getActiveGeminiClient(): Promise<GeminiClient> {
         activeGeminiClient = g;
     }
     return activeGeminiClient!;
+}
+
+let activeNotebookLMClient: any = null;
+
+/**
+ * Shared helper to get or initialize a NotebookLM client.
+ */
+async function getActiveNotebookLMClient(): Promise<any> {
+    if (activeNotebookLMClient) {
+        try {
+            // Basic sanity check for NotebookLM (ensure tab/page is still alive)
+            if (activeNotebookLMClient.page && activeNotebookLMClient.page.isClosed()) {
+                activeNotebookLMClient = null;
+            }
+        } catch (e) {
+            activeNotebookLMClient = null;
+        }
+    }
+
+    if (!activeNotebookLMClient) {
+        if (!client.isBrowserInitialized()) {
+            await client.init();
+        }
+        activeNotebookLMClient = await client.createNotebookLMClient();
+    }
+    return activeNotebookLMClient;
 }
 
 // ----------------------------------------------------------------------------
@@ -71,6 +107,7 @@ app.get('/health', (req, res) => {
 const dependencies = {
     browserClient: client,
     getGeminiClient: getActiveGeminiClient,
+    getNotebookLMClient: getActiveNotebookLMClient,
     graphStore: graphStore,
     notifyResearchComplete: async (title: string, path?: string) => {
         console.log(`[Notification] Research complete: ${title}`);
@@ -89,12 +126,15 @@ const webhookRouter = createWebhookRouter(dependencies);
 
 app.use('/notebook', notebookRouter);
 app.use('/notebooklm', notebookLMRouter);
+app.use('/keep', createKeepRouter(dependencies));
 app.use('/webhook', webhookRouter);
+app.use('/aimode', createAIModeRouter(dependencies));
 
-// 2. Deep Research & Jobs
+// 2. Deep Research & Jobs & Graph
 const researchRouter = createResearchRouter(dependencies);
 app.use('/deep-research', researchRouter);
 app.use('/jobs', researchRouter);
+app.use('/graph', researchRouter);
 
 // 3. High-level Workflows
 const workflowRouter = createWorkflowRouter(dependencies);
@@ -104,13 +144,13 @@ app.use('/jules', workflowRouter);
 // 4. OpenAI-Compatible API
 app.use('/v1', createChatRouter({ ...dependencies }));
 
-// 5. Legacy Gemini Routes
+// 5. Perplexity
+app.use('/perplexity', createPerplexityRouter(dependencies));
+
+// 6. Legacy Gemini Routes
 app.use('/gemini', createGeminiRouter(dependencies));
 
-// 6. Google Keep
-app.use('/keep', createKeepRouter(dependencies));
-
-// 7. System & Dashboard
+// 6. System & Dashboard
 app.use('/system', createSystemRouter(dependencies));
 
 // ----------------------------------------------------------------------------

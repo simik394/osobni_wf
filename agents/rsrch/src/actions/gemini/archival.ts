@@ -6,6 +6,7 @@ import { listSessionArtifactsAction, readCanvasAction, openArtifactAction } from
 import { listDeepResearchDocsAction, readDeepResearchDocAction } from './research';
 import { exportFullSessionAction } from './history';
 import { extractResponseAction } from './extract-response';
+import { formatContent } from '../utils';
 
 /**
  * Archives all artifacts from the current Gemini session to local storage.
@@ -14,13 +15,14 @@ import { extractResponseAction } from './extract-response';
 export async function archiveArtifactsAction(
     ctx: UniversalContext,
     deps: GeminiActionDeps,
-    options: { outputDir?: string } = {}
+    options: { outputDir?: string, format?: 'md' | 'qmd', incremental?: boolean } = {}
 ): Promise<string[]> {
     const { log } = ctx;
-    const { outputDir = 'data/artifacts/gemini' } = options;
+    const { outputDir = 'data/artifacts/gemini', format = 'md', incremental = false } = options;
     const registry = getRegistry();
+    const ext = format === 'qmd' ? 'qmd' : 'md';
     
-    log(`Starting archival process to ${outputDir}...`);
+    log(`Starting archival process to ${outputDir} (format: ${format}, incremental: ${incremental})...`);
 
     // 1. Get current session ID
     const currentUrl = ctx.page.url();
@@ -42,21 +44,44 @@ export async function archiveArtifactsAction(
 
     const archivedFiles: string[] = [];
 
+    // Helper to check if artifact is already archived
+    const isAlreadyArchived = (title: string, type: string) => {
+        if (!incremental) return false;
+        return Object.values(registry.listIds()).some((entry: any) => 
+            entry.geminiSessionId === sessionId && 
+            entry.originalTitle === title && 
+            entry.type === type &&
+            fs.existsSync(entry.markdownPath)
+        );
+    };
+
     // 2. Process Deep Research Documents
     log('Checking for Deep Research documents...');
     const researchDocs = await listDeepResearchDocsAction(ctx, deps);
     for (let i = 0; i < researchDocs.length; i++) {
+        const docSummary = researchDocs[i]; // Minimal info
+        if (isAlreadyArchived(docSummary.title, 'research_doc')) {
+            log(`- Skipping already archived research doc: ${docSummary.title}`);
+            continue;
+        }
+
         const doc = await readDeepResearchDocAction(ctx, deps, i);
         if (doc) {
-            const fileName = `${doc.title.replace(/[^a-z0-9]/gi, '_')}.md`;
+            const fileName = `${doc.title.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
             const filePath = path.join(sessionDir, fileName);
             
-            let content = `# ${doc.title}\n\n`;
-            if (doc.thoughts) content += `## AI Reasoning (Thoughts)\n${doc.thoughts}\n\n`;
-            content += `## Report\n${doc.markdown}\n\n`;
+            let body = ``;
+            if (doc.thoughts) body += `## AI Reasoning (Thoughts)\n${doc.thoughts}\n\n`;
+            body += `## Report\n${doc.markdown}\n\n`;
             if (doc.references.length > 0) {
-                content += `## Sources\n${doc.references.map(r => `- ${r}`).join('\n')}\n`;
+                body += `## Sources\n${doc.references.map(r => `- ${r}`).join('\n')}\n`;
             }
+
+            const content = formatContent(body, doc.title, format, {
+                type: 'Deep Research',
+                session: sessionId,
+                sources: doc.references
+            });
 
             fs.writeFileSync(filePath, content, 'utf-8');
             
@@ -83,17 +108,28 @@ export async function archiveArtifactsAction(
     log('Checking for Canvas artifacts...');
     const canvasDocs = await listSessionArtifactsAction(ctx, deps);
     for (const canvas of canvasDocs) {
+        if (isAlreadyArchived(canvas.name, 'canvas')) {
+            log(`- Skipping already archived canvas: ${canvas.name}`);
+            continue;
+        }
+
         const opened = await openArtifactAction(ctx, deps, canvas.name);
         if (opened) {
             const doc = await readCanvasAction(ctx, deps);
             if (doc) {
-                const fileName = `canvas_${doc.title.replace(/[^a-z0-9]/gi, '_')}.md`;
+                const fileName = `canvas_${doc.title.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
                 const filePath = path.join(sessionDir, fileName);
                 
-                let content = `# ${doc.title}\n\n${doc.markdown}\n\n`;
+                let body = `${doc.markdown}\n\n`;
                 if (doc.references.length > 0) {
-                    content += `## Sources\n${doc.references.map(r => `- ${r}`).join('\n')}\n`;
+                    body += `## Sources\n${doc.references.map(r => `- ${r}`).join('\n')}\n`;
                 }
+
+                const content = formatContent(body, doc.title, format, {
+                    type: 'Canvas',
+                    session: sessionId,
+                    sources: doc.references
+                });
 
                 fs.writeFileSync(filePath, content, 'utf-8');
                 
@@ -119,12 +155,23 @@ export async function archiveArtifactsAction(
     }
 
     // 4. Export Session History
-    log('Exporting full session history...');
-    const sessionExport = await exportFullSessionAction(ctx, { ...deps, extractResponse: extractResponseAction });
-    const sessionFilePath = path.join(sessionDir, 'session.md');
-    fs.writeFileSync(sessionFilePath, sessionExport.markdown, 'utf-8');
-    archivedFiles.push(sessionFilePath);
-    log(`Archived full session history to session.md`);
+    const sessionFilePath = path.join(sessionDir, `session.${ext}`);
+    if (incremental && fs.existsSync(sessionFilePath)) {
+        log(`- Skipping session history export (already exists)`);
+    } else {
+        log('Exporting full session history...');
+        const sessionExport = await exportFullSessionAction(ctx, { ...deps, extractResponse: extractResponseAction });
+        
+        const sessionContent = formatContent(sessionExport.markdown, sessionExport.title, format, {
+            type: 'Chat Session',
+            session: sessionId,
+            turns: sessionExport.turns.length
+        });
+
+        fs.writeFileSync(sessionFilePath, sessionContent, 'utf-8');
+        archivedFiles.push(sessionFilePath);
+        log(`Archived full session history to session.${ext}`);
+    }
 
     return archivedFiles;
 }

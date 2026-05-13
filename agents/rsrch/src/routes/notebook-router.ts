@@ -70,19 +70,44 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
     router.post('/add-source', async (req: Request, res: Response) => {
         try {
-            const { url, notebookTitle } = req.body;
-            if (!url) return res.status(400).json({ error: 'URL is required' });
-
+            const { url, files, notebookTitle } = req.body;
             const client = await getNotebookClient();
+
             if (notebookTitle) {
                 console.log(`[NotebookRouter] Switching to notebook: ${notebookTitle}`);
                 await client!.openNotebook(notebookTitle);
             }
 
-            console.log(`[NotebookRouter] Adding source: ${url}`);
-            await client!.addSourceUrl(url);
+            if (url) {
+                console.log(`[NotebookRouter] Adding web source: ${url}`);
+                await client!.addSourceUrl(url);
+            } else if (files && Array.isArray(files)) {
+                console.log(`[NotebookRouter] Processing ${files.length} base64 files...`);
+                const fs = await import('fs');
+                const path = await import('path');
+                const os = await import('os');
 
-            res.json({ success: true, message: `Source added` });
+                const tempDir = path.join(os.tmpdir(), `rsrch_upload_${Date.now()}`);
+                fs.mkdirSync(tempDir, { recursive: true });
+
+                const savedPaths = [];
+                for (const file of files) {
+                    const filePath = path.join(tempDir, file.filename);
+                    fs.writeFileSync(filePath, Buffer.from(file.content, 'base64'));
+                    savedPaths.push(filePath);
+                }
+
+                console.log(`[NotebookRouter] Uploading files to NotebookLM...`);
+                await client!.uploadLocalFile(savedPaths);
+
+                // Cleanup
+                for (const p of savedPaths) fs.unlinkSync(p);
+                fs.rmdirSync(tempDir);
+            } else {
+                return res.status(400).json({ error: 'URL or files are required' });
+            }
+
+            res.json({ success: true, message: `Source(s) added` });
         } catch (e: any) {
             console.error('[NotebookRouter] Add source failed:', e);
             res.status(500).json({ success: false, error: e.message });
@@ -298,6 +323,100 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         } catch (e: any) {
             console.error('[NotebookRouter] Content download failed:', e);
             res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/archive', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, outputDir, format, extractSources, incremental } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+
+            const client = await getNotebookClient();
+            const paths = await client!.archiveNotebook(notebookTitle, { outputDir, format, extractSources, incremental });
+
+            res.json({ success: true, data: paths });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Archive failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/rename-source', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, oldTitle, newTitle } = req.body;
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            await client!.renameSource(oldTitle, newTitle);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/select-sources', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sourcesOrRange } = req.body;
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            await client!.selectSources(sourcesOrRange);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/delete-source', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sourceTitle } = req.body;
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            await client!.deleteSource(sourceTitle);
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/scrape', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, downloadAudio } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+
+            const client = await getNotebookClient();
+            const data = await client!.scrapeNotebook(notebookTitle, downloadAudio);
+            res.json({ success: true, data });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Scrape failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/stats', async (req: Request, res: Response) => {
+        try {
+            const { title } = req.body;
+            if (!title) return res.status(400).json({ error: 'title is required' });
+
+            const client = await getNotebookClient();
+            const stats = await client!.getNotebookStats(title);
+            res.json({ success: true, data: stats });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Stats failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/messages', async (req: Request, res: Response) => {
+        try {
+            const { title } = req.body;
+            if (!title) return res.status(400).json({ error: 'title is required' });
+
+            const client = await getNotebookClient();
+            await client!.openNotebook(title);
+            const messages = await client!.getChatMessages();
+            res.json({ success: true, data: messages });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Messages failed:', e);
+            res.status(500).json({ success: false, error: e.message });
         }
     });
 

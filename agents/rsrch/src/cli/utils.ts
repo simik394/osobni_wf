@@ -117,74 +117,6 @@ export async function sendServerRequestWithSSE(path: string, body: any = {}): Pr
     }
 }
 
-/**
- * Helper for running localized browser actions (Gemini, NotebookLM, etc.)
- */
-export async function runLocalAction<T>(
-    productName: string,
-    clientCreator: (browser: BrowserClient) => Promise<T>,
-    action: (client: BrowserClient, tool: T) => Promise<void>,
-    options: { headless?: boolean, skipAuthCheck?: boolean, sessionId?: string } = {},
-    hasLocalFlag: boolean = true
-) {
-    const { profileId, cdpEndpoint } = cliContext.get();
-    
-    // Mandatory block for --local
-    if (process.argv.includes('--local')) {
-        console.log("STOP USING LOCAL RESOUCES, YOU HAVE SERVER FOR THIS SHIT");
-        process.exit(1);
-    }
-
-    const useLocalMode = cdpEndpoint ? false : hasLocalFlag;
-    
-    // Only log if we are NOT in local mode (since we haven't exited)
-    console.log(`Running ${productName} in REMOTE BROWSER mode...`);
-    
-    const client = new BrowserClient({ 
-        profileId, 
-        cdpEndpoint,
-        headless: options.headless
-    });
-
-    await client.init({ local: useLocalMode, profileId, cdpEndpoint });
-    const tool = await clientCreator(client);
-
-    // Call init if the tool has it (for Gemini)
-    if (tool && typeof (tool as any).init === 'function') {
-        await (tool as any).init(options);
-    }
-
-    try {
-        await action(client, tool);
-    } finally {
-        await client.release();
-        await client.close();
-    }
-}
-
-import { NotebookLMClient } from '../clients/notebooklm';
-import { GeminiClient } from '../clients/gemini';
-import { KeepClient } from '../clients/keep';
-
-// Helper for local Notebook execution
-export async function runLocalNotebookAction(action: (client: BrowserClient, notebook: NotebookLMClient) => Promise<void>) {
-    return runLocalAction('NotebookLM', (c) => c.createNotebookLMClient() as Promise<NotebookLMClient>, action);
-}
-
-// Helper for local Gemini execution
-export async function runLocalGeminiAction(
-    action: (client: BrowserClient, gemini: GeminiClient) => Promise<void>, 
-    options: string | { sessionId?: string, skipAuthCheck?: boolean, headless?: boolean } = {}, 
-    hasLocalFlag: boolean = true
-) {
-    const actionOptions = typeof options === 'string' ? { sessionId: options } : options;
-    return runLocalAction('Gemini', (c) => c.createGeminiClient() as Promise<GeminiClient>, action, actionOptions, hasLocalFlag);
-}
-
-// Helper for local Keep execution
-export async function runLocalKeepAction(action: (client: BrowserClient, keep: KeepClient) => Promise<void>) {
-    return runLocalAction('Keep', (c) => c.createKeepClient() as Promise<KeepClient>, action);
-}
 
 /**
  * Execute a Gemini command via the server API.
@@ -217,7 +149,7 @@ export async function executeGeminiCommand(
         return response.json();
     } catch (e: any) {
         if (e.cause?.code === 'ECONNREFUSED') {
-            throw new Error(`Server not reachable at ${serverUrl}. Start server with 'rsrch serve' or use --local flag.`);
+            throw new Error(`Server not reachable at ${serverUrl}. Start the backend server with 'rsrch serve' or check your connection.`);
         }
         throw e;
     }
@@ -250,7 +182,7 @@ export async function executeGeminiGet(
         return response.json();
     } catch (e: any) {
         if (e.cause?.code === 'ECONNREFUSED') {
-            throw new Error(`Server not reachable at ${serverUrl}. Start server with 'rsrch serve' or use --local flag.`);
+            throw new Error(`Server not reachable at ${serverUrl}. Start the backend server with 'rsrch serve' or check your connection.`);
         }
         throw e;
     }
@@ -313,7 +245,7 @@ export async function executeGeminiStream(
         }
     } catch (e: any) {
         if (e.cause?.code === 'ECONNREFUSED') {
-            throw new Error(`Server not reachable at ${serverUrl}. Start server with 'rsrch serve' or use --local flag.`);
+            throw new Error(`Server not reachable at ${serverUrl}. Start the backend server with 'rsrch serve' or check your connection.`);
         }
         throw e;
     }

@@ -123,7 +123,11 @@ export async function exportFullSessionAction(
             // Use high-fidelity extraction for model responses
             const data = await deps.extractResponse(ctx, { selectors, verbose: deps.verbose }, turnSelector, i);
             if (data) {
-                markdown += `### Gemini\n\n${data.markdown}\n\n`;
+                markdown += `### Gemini\n\n`;
+                if (data.thoughts) {
+                    markdown += `> [!NOTE]\n> **Thinking Process**\n> ${data.thoughts.replace(/\n/g, '\n> ')}\n\n`;
+                }
+                markdown += `${data.markdown}\n\n`;
                 turnData.push({ role: 'assistant', ...data });
             }
         } else {

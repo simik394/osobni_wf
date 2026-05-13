@@ -127,7 +127,7 @@ export async function getSourcesAction(
     await ensureSourcesTab(ctx, deps);
 
     const sourceItems = page.locator('.single-source-container, source-list-item').filter({
-        has: page.locator('.source-title, .title, span')
+        has: page.locator('.source-title, .title')
     });
 
     const count = await sourceItems.count();
@@ -168,6 +168,66 @@ export async function getSourcesAction(
     }
 
     return sources;
+}
+
+/**
+ * Gets sources with a preview of their content (AI summary + text snippet).
+ */
+export async function getSourcesPreviewAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    indices?: number[]
+): Promise<Array<{ title: string; contentSnippet: string }>> {
+    const { page, log } = ctx;
+    const { humanDelay } = deps;
+    const sourcesPreview: Array<{ title: string; contentSnippet: string }> = [];
+
+    await ensureSourcesTab(ctx, deps);
+
+    const sourcesHeader = page.locator('div').filter({ hasText: /^Zdroje$|^Sources$/ }).first();
+    const sourceItems = page.locator('.single-source-container, source-list-item').filter({
+        has: page.locator('.source-title, .title')
+    });
+    const count = await sourceItems.count();
+
+    for (let i = 0; i < count; i++) {
+        if (indices && indices.length > 0 && !indices.includes(i + 1)) {
+            continue;
+        }
+
+        const item = sourceItems.nth(i);
+        const titleEl = item.locator('.source-title, .title').first();
+        const title = await titleEl.innerText().catch(() => `Source_${i}`);
+        log(`Previewing source: ${title}`);
+
+        try {
+            await titleEl.click();
+            await humanDelay(1500);
+
+            const scrollArea = page.locator('.scroll-area').first();
+            await scrollArea.waitFor({ state: 'visible', timeout: 5000 });
+
+            const content = await scrollArea.innerText();
+            const contentSnippet = content.substring(0, 1000) + (content.length > 1000 ? '...' : '');
+            
+            sourcesPreview.push({ title, contentSnippet });
+
+            const closeBtn = page.locator('button:has(mat-icon:has-text("collapse_content")), button:has(mat-icon:has-text("close")), button:has(mat-icon:has-text("arrow_back"))').first();
+            if (await closeBtn.isVisible()) {
+                await closeBtn.click();
+            } else {
+                await sourcesHeader.click().catch(() => {});
+            }
+            await humanDelay(800);
+        } catch (err: any) {
+            log(`Failed to preview source "${title}": ${err.message}`, 'warn');
+            sourcesPreview.push({ title, contentSnippet: '[Chyba při načítání náhledu]' });
+            await sourcesHeader.click().catch(() => {});
+            await humanDelay(800);
+        }
+    }
+
+    return sourcesPreview;
 }
 
 /**

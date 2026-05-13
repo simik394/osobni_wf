@@ -18,6 +18,9 @@ export * from './notebooklm/studio';
 export * from './notebooklm/sync';
 export * from './notebooklm/download';
 export * from './notebooklm/generate-audio';
+export * from './notebooklm/archival';
+export * from './notebooklm/history';
+export * from './notebooklm/extract-sources';
 
 // Perplexity Actions
 export * from './perplexity/query';

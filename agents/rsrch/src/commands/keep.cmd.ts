@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { runLocalKeepAction } from '../cli/utils';
+import { sendServerRequest } from '../cli/utils';
 
 export function registerKeepCommands(program: Command) {
     const keep = program.command('keep')
@@ -7,10 +7,10 @@ export function registerKeepCommands(program: Command) {
 
     keep.command('list')
         .description('List all notes in Google Keep')
-        .option('--local', 'Use local execution', true)
         .action(async () => {
-            await runLocalKeepAction(async (browser, client) => {
-                const notes = await client.listNotes();
+            const response = await sendServerRequest('/keep/notes', {});
+            if (response && response.success) {
+                const notes = response.data;
                 console.log('\n--- Google Keep Notes ---');
                 if (notes.length === 0) {
                     console.log('No notes found.');
@@ -21,20 +21,17 @@ export function registerKeepCommands(program: Command) {
                     });
                 }
                 console.log('-------------------------\n');
-            });
+            }
         });
 
     keep.command('create <title> <content>')
         .description('Create a new note in Google Keep')
-        .option('--local', 'Use local execution', true)
         .action(async (title, content) => {
-            await runLocalKeepAction(async (browser, client) => {
-                const success = await client.createNote(title, content);
-                if (success) {
-                    console.log('Note created successfully.');
-                } else {
-                    console.error('Failed to create note.');
-                }
-            });
+            const response = await sendServerRequest('/keep/notes', { title, content });
+            if (response && response.success) {
+                console.log('Note created successfully.');
+            } else {
+                console.error('Failed to create note.');
+            }
         });
 }

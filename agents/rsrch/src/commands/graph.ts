@@ -34,52 +34,30 @@ graph.command('notebooks')
 
 graph.command('status')
     .description('Show graph status and jobs')
-    .option('--local', 'Use local execution', true)
-    .action(async (opts) => {
-        if (opts.local) {
-            const store = getGraphStore();
-            const graphHost = config.falkor.host;
-            try {
-                await store.connect(graphHost, config.falkor.port);
-                console.log('✅ FalkorDB connection: OK');
-                const jobs = await store.listJobs();
-                const queued = jobs.filter((j) => j.status === 'queued').length;
-                const running = jobs.filter((j) => j.status === 'running').length;
-                const completed = jobs.filter((j) => j.status === 'completed').length;
-                const failed = jobs.filter((j) => j.status === 'failed').length;
-                console.log(`\nJobs: ${jobs.length} total`);
-                console.log(`  Queued: ${queued}`);
-                console.log(`  Running: ${running}`);
-                console.log(`  Completed: ${completed}`);
-                console.log(`  Failed: ${failed}`);
-            } finally {
-                await store.disconnect();
-            }
-        } else {
-            await sendServerRequest('/graph/status');
+    .action(async () => {
+        const response = await sendServerRequest('/graph/graph/status');
+        if (response && response.success) {
+            console.log('✅ FalkorDB connection: OK');
+            const stats = response.stats;
+            console.log(`\nJobs: ${stats.total} total`);
+            console.log(`  Queued: ${stats.queued}`);
+            console.log(`  Running: ${stats.running}`);
+            console.log(`  Completed: ${stats.completed}`);
+            console.log(`  Failed: ${stats.failed}`);
         }
     });
 
 graph.command('jobs [status]')
     .description('List jobs by status')
-    .option('--local', 'Use local execution', true)
-    .action(async (status, opts) => {
-        if (opts.local) {
-            const store = getGraphStore();
-            const graphHost = config.falkor.host;
-            try {
-                await store.connect(graphHost, config.falkor.port);
-                const jobs = status ? await store.listJobs(status) : await store.listJobs();
-                console.log(`\nJobs (${jobs.length}):`);
-                for (const job of jobs) {
-                    const time = new Date(job.createdAt).toISOString();
-                    console.log(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
-                }
-            } finally {
-                await store.disconnect();
+    .action(async (status) => {
+        const response = await sendServerRequest('/jobs/jobs');
+        if (response && response.success) {
+            const jobs = status ? response.jobs.filter((j: any) => j.status === status) : response.jobs;
+            console.log(`\nJobs (${jobs.length}):`);
+            for (const job of jobs) {
+                const time = new Date(job.createdAt).toISOString();
+                console.log(`  [${job.status}] ${job.id} - ${job.type}: "${job.query.substring(0, 50)}..." (${time})`);
             }
-        } else {
-            await sendServerRequest('/jobs');
         }
     });
 

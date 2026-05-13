@@ -77,23 +77,37 @@ export function createResearchRouter(deps: ResearchRouterDeps) {
         res.json({ success: true, jobId: job.id, result: job.result });
     });
 
-    return router;
-}
-
-export function createJobRouter(deps: { graphStore: GraphStore }) {
-    const router = Router();
-    const { graphStore } = deps;
-
-    router.get('/', async (req: Request, res: Response) => {
+    // --- Job Listing ---
+    router.get('/jobs', async (req: Request, res: Response) => {
         const jobs = await graphStore.listJobs();
         res.json({ success: true, jobs });
     });
 
-    router.get('/:id', async (req: Request, res: Response) => {
-        const job = await graphStore.getJob(req.params.id);
-        if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
-        res.json({ success: true, job });
+    // --- Graph Status ---
+    router.get('/graph/status', async (req: Request, res: Response) => {
+        try {
+            const jobs = await graphStore.listJobs();
+            const stats = {
+                total: jobs.length,
+                queued: jobs.filter(j => j.status === 'queued').length,
+                running: jobs.filter(j => j.status === 'running').length,
+                completed: jobs.filter(j => j.status === 'completed').length,
+                failed: jobs.filter(j => j.status === 'failed').length
+            };
+            res.json({ success: true, stats });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
     });
 
     return router;
 }
+
+export const createJobRouter = (deps: { graphStore: GraphStore }) => {
+    const router = Router();
+    router.get('/', async (req, res) => {
+        const jobs = await deps.graphStore.listJobs();
+        res.json({ success: true, jobs });
+    });
+    return router;
+};

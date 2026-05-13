@@ -1,97 +1,46 @@
 import { Command } from 'commander';
-import { runLocalNotebookAction, sendServerRequest } from '../../cli/utils';
-import { getWindmillClient } from '../../clients/windmill';
-import { cliContext } from '../../cli/context';
+import { sendServerRequest } from '../../cli/utils';
 import * as path from 'path';
 
 export function registerArtifactCommands(notebook: Command) {
     notebook.command('artifacts <title>')
         .description('Get notebook artifacts')
-        .option('--local', 'Use local execution', false)
-        .action(async (title, opts) => {
-            if (opts.local || cliContext.get().local) {
-                await runLocalNotebookAction(async (client, nb) => {
-                    await nb.openNotebook(title);
-                    const artifacts = await nb.getStudioArtifacts();
-                    console.log(JSON.stringify(artifacts, null, 2));
-                });
-            } else {
-                await sendServerRequest('/notebook/artifacts', { title });
+        .action(async (title) => {
+            const data = await sendServerRequest('/notebook/content-preview', { notebookTitle: title, type: 'studio' });
+            if (data?.success) {
+                console.log(JSON.stringify(data.data, null, 2));
             }
         });
 
     notebook.command('download-artifact <notebookTitle> <artifactTitle> [outputPathOrDir]')
         .description('Download a specific artifact (audio, text, note, etc.)')
-        .option('--local', 'Use local execution', true)
         .option('--latest', 'Latest matching artifact only', false)
         .option('--pattern', 'Treat the title as a regex pattern', false)
         .action(async (notebookTitle, artifactTitle, outputPathOrDir, opts) => {
             const finalOutputPath = outputPathOrDir || './downloads';
-
-            if (opts.local) {
-                await runLocalNotebookAction(async (client, nb) => {
-                    const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
-                    console.log(`[CLI] Downloading artifact "${artifactTitle}"... Output: ${resolvedOutputPath}`);
-
-                    const success = await nb.downloadArtifact(notebookTitle, artifactTitle, resolvedOutputPath, {
-                        isPattern: opts.pattern,
-                        latestOnly: opts.latest
-                    });
-
-                    if (success) {
-                        console.log('✅ Artifact successfully downloaded.');
-                    } else {
-                        console.log('❌ Failed to download artifact.');
-                        process.exit(1);
-                    }
-                });
-            } else {
-                console.log('📤 Queueing via Windmill...');
-                const windmill = getWindmillClient();
-                const result = await windmill.triggerNotebookLMDownloadArtifact(notebookTitle, artifactTitle, finalOutputPath, {
-                    isPattern: opts.pattern,
-                    latestOnly: opts.latest
-                });
-                console.log(`\n✅ Windmill Job Queued: ${result.jobId || 'Failed'}`);
-                if (result.error) console.error(result.error);
-            }
+            const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
+            console.log(`[CLI] Requesting artifact download: "${artifactTitle}"... Output: ${resolvedOutputPath}`);
+            await sendServerRequest('/notebook/download-artifact', {
+                notebookTitle,
+                artifactTitle,
+                outputPath: resolvedOutputPath,
+                isPattern: opts.pattern,
+                latestOnly: opts.latest
+            });
         });
 
     notebook.command('download-all-artifacts [outputDir]')
         .description('Download all non-audio text artifacts (Briefing Doc, FAQ, Study Guide, etc.) from a notebook')
         .requiredOption('--notebook <title>', 'Notebook title')
-        .option('--local', 'Use local execution', false)
         .action(async (outputDir, opts) => {
             const finalOutputDir = outputDir || './downloads';
-            const notebookTitle = opts.notebook;
-
-            if (opts.local || cliContext.get().local) {
-                await runLocalNotebookAction(async (client, nb) => {
-                    const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
-
-                    console.log(`[CLI] Downloading all non-audio artifacts from "${notebookTitle}" to: ${resolvedOutputDir}`);
-                    
-                    await nb.openNotebook(notebookTitle);
-                    const artifacts = await nb.getStudioArtifacts();
-                    // Skip the first 9 fixed generator tiles (Audio, Presentation, etc.) as they are not artifacts themselves
-                    const textArtifacts = artifacts.slice(9).filter((a: any) => a.type !== 'audio');
-
-                    console.log(`[CLI] Found ${textArtifacts.length} text artifacts to download.`);
-
-                    let successCount = 0;
-                    for (const artifact of textArtifacts) {
-                        console.log(`\n[CLI] Processing artifact: "${artifact.title}" (${artifact.type})`);
-                        const success = await nb.downloadArtifact(notebookTitle, artifact.title, resolvedOutputDir);
-                        if (success) successCount++;
-                    }
-
-                    console.log(`\n✅ Successfully downloaded ${successCount} artifacts.`);
-                });
-            } else {
-                console.log('📤 Queueing all artifacts download via Windmill...');
-                console.log('⚠️ Windmill fallback to local...');
-                process.exit(1);
-            }
+            const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
+            console.log(`[CLI] Requesting all artifacts from "${opts.notebook}" to: ${resolvedOutputDir}`);
+            await sendServerRequest('/notebook/content-download', {
+                notebookTitle: opts.notebook,
+                type: 'studio',
+                outputDir: resolvedOutputDir
+            });
         });
 
     notebook.command('archive <title>')
@@ -100,25 +49,24 @@ export function registerArtifactCommands(notebook: Command) {
         .option('-f, --format <format>', 'Output format (md, qmd)', 'md')
         .option('-s, --sources', 'Extract full text content of all sources', false)
         .option('-i, --incremental', 'Skip already archived items', false)
-        .option('--local', 'Use local execution', true)
         .action(async (title, opts) => {
-            await runLocalNotebookAction(async (client, nb) => {
-                console.log(`[CLI] Starting full archival for notebook: "${title}" (format: ${opts.format}, sources: ${!!opts.sources}, incremental: ${!!opts.incremental})`);
-                const files = await nb.archiveNotebook(title, { 
-                    outputDir: opts.output, 
-                    format: opts.format,
-                    extractSources: !!opts.sources,
-                    incremental: !!opts.incremental
-                });
-
+            console.log(`[CLI] Requesting full archival for: "${title}"`);
+            const data = await sendServerRequest('/notebook/archive', {
+                notebookTitle: title,
+                outputDir: opts.output,
+                format: opts.format,
+                extractSources: !!opts.sources,
+                incremental: !!opts.incremental
+            });
+            if (data?.success && data.data) {
                 console.log(`\n--- Archival Summary ---`);
-                if (files.length === 0) {
+                if (data.data.length === 0) {
                     console.log('No files archived.');
                 } else {
-                    console.log(`Successfully archived ${files.length} items to ${opts.output}.`);
-                    files.forEach(f => console.log(`- ${path.relative(process.cwd(), f)}`));
+                    console.log(`Successfully archived ${data.data.length} items.`);
+                    data.data.forEach((f: string) => console.log(`- ${path.relative(process.cwd(), f)}`));
                 }
                 console.log('------------------------\n');
-            });
+            }
         });
 }

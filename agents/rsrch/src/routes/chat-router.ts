@@ -442,6 +442,257 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.post('/canvas/archive', async (req: Request, res: Response) => {
+        try {
+            const { outputDir, format, incremental } = req.body;
+            const gemini = await getGeminiClient();
+            const files = await gemini.archiveArtifacts({ outputDir, format, incremental });
+            res.json({ success: true, data: files });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/canvas/audio-overview', async (req: Request, res: Response) => {
+        try {
+            const { artifactId, notebookTitle, customPrompt } = req.body;
+            const gemini = await getGeminiClient();
+            const result = await gemini.researchToAudio({ artifactId, notebookTitle, customPrompt });
+            res.json(result);
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gems/create', async (req: Request, res: Response) => {
+        try {
+            const { name, instructions } = req.body;
+            const gemini = await getGeminiClient();
+            const id = await gemini.createGem({ name, instructions });
+            res.json({ success: true, id });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gems/update', async (req: Request, res: Response) => {
+        try {
+            const { id, name, instructions } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.updateGem(id, { name, instructions });
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gems/delete', async (req: Request, res: Response) => {
+        try {
+            const { id } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.deleteGem(id);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gems/chat', async (req: Request, res: Response) => {
+        try {
+            const { nameOrId, message } = req.body;
+            const gemini = await getGeminiClient();
+            const response = await gemini.chatWithGem(nameOrId, message);
+            res.json({ success: true, data: response });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/open', async (req: Request, res: Response) => {
+        try {
+            const { identifier } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.openSession(identifier);
+            if (success) {
+                const sessionId = await gemini.getCurrentSessionId();
+                res.json({ success: true, sessionId });
+            } else {
+                res.json({ success: false });
+            }
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/load-history', async (req: Request, res: Response) => {
+        try {
+            const { limit, untilText } = req.body;
+            const gemini = await getGeminiClient();
+            await gemini.scrollToTop({ limit, untilText });
+            res.json({ success: true });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/share', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const link = await gemini.shareSession();
+            res.json({ success: true, link });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/export', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const data = await gemini.exportSession();
+            res.json({ success: true, data });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/environment/model-status', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const statuses = await gemini.getModelStatus();
+            res.json({ success: true, data: statuses });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/upload', async (req: Request, res: Response) => {
+        try {
+            const { files } = req.body;
+            const gemini = await getGeminiClient();
+            
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+            const os = await import('node:os');
+            const crypto = await import('node:crypto');
+
+            const tmpDir = path.join(os.tmpdir(), `gemini-upload-${crypto.randomBytes(4).toString('hex')}`);
+            fs.mkdirSync(tmpDir, { recursive: true });
+
+            const tempPaths = [];
+            for (const f of files) {
+                const tmpPath = path.join(tmpDir, f.filename);
+                if (f.encoding === 'base64') {
+                    fs.writeFileSync(tmpPath, Buffer.from(f.content, 'base64'));
+                } else {
+                    fs.writeFileSync(tmpPath, f.content);
+                }
+                tempPaths.push(tmpPath);
+            }
+
+            const count = await gemini.uploadFiles(tempPaths);
+
+            // Cleanup temp files
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+
+            res.json({ success: true, count });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/export-to-docs', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const result = await gemini.exportCurrentToGoogleDocs();
+            res.json({ success: true, data: result });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/upload-drive', async (req: Request, res: Response) => {
+        try {
+            const { fileName } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.uploadFromDrive(fileName);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/environment/deep-research', async (req: Request, res: Response) => {
+        try {
+            const { enabled } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.toggleDeepResearch(enabled);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/environment/extensions', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const extensions = await gemini.listExtensions();
+            res.json({ success: true, data: extensions });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/environment/toggle-extension', async (req: Request, res: Response) => {
+        try {
+            const { name, enabled } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.toggleExtension(name, enabled);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/extract', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const data = await gemini.extractCurrentConversation();
+            res.json({ success: true, data });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/session/scrape', async (req: Request, res: Response) => {
+        try {
+            const { limit, offset } = req.body;
+            const gemini = await getGeminiClient();
+            let count = 0;
+            await gemini.scrapeConversations(limit, offset, (p) => { count++; });
+            res.json({ success: true, count });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/sync-registry', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const { getGraphStore } = await import('../core/graph-store');
+            const { config } = await import('../config');
+            const store = getGraphStore();
+            await store.connect(config.falkor.host, config.falkor.port);
+            try {
+                const result = await gemini.syncRegistryToGraph(store);
+                res.json({ success: true, data: result });
+            } finally {
+                await store.disconnect();
+            }
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.get('/status', async (req: Request, res: Response) => {
         res.json({ success: true, status: 'ok' });
     });

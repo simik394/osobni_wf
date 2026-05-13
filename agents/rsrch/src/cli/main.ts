@@ -17,17 +17,13 @@ const program = new Command();
 program
     .version('1.0.35')
     .option('--profile <profileId>', 'Profile ID to use', 'default')
-    .option('--cdp <url>', 'CDP Endpoint URL (for --local mode)')
     .option('--server <url>', 'Server URL for API calls', process.env.RSRCH_SERVER_URL || 'http://localhost:3001')
-    .option('--local', 'Use local browser instead of server (dev only)', false)
     .option('-v, --verbose', 'Enable verbose output', false)
     .hook('preAction', (thisCommand) => {
         const opts = thisCommand.opts();
         cliContext.set({
             profileId: opts.profile,
-            cdpEndpoint: opts.cdp || process.env.BROWSER_CDP_ENDPOINT,
             serverUrl: opts.server,
-            local: opts.local,
             verbose: opts.verbose
         });
     });

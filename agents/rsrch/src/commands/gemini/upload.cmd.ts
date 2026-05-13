@@ -1,78 +1,72 @@
 import { Command } from 'commander';
 import { 
-    runLocalGeminiAction, 
-    sendServerRequest, 
-    getOptionsWithGlobals 
+    sendServerRequest 
 } from '../../cli/utils';
 
 export function registerUploadCommands(gemini: Command) {
-    gemini
-        .command('upload <files...>')
-        .description('Upload files to Gemini')
-        .action(async (files, opts, cmdObj) => {
-            const options = getOptionsWithGlobals(cmdObj);
-            console.log(`Uploading ${files.length} files...`);
-            const useServer = !options.local;
-
-            if (useServer) {
-                const fs = await import('node:fs');
-                const path = await import('node:path');
-
-                const payloadFiles = [];
-                for (const file of files) {
-                    const absPath = path.resolve(file);
-                    if (fs.existsSync(absPath)) {
-                        payloadFiles.push({
-                            content: fs.readFileSync(absPath, 'utf8'),
-                            filename: path.basename(absPath)
-                        });
-                    }
-                }
-
-                if (payloadFiles.length > 0) {
-                    await sendServerRequest('/gemini/upload', { files: payloadFiles });
-                }
-            } else {
-                const path = await import('node:path');
-                await runLocalGeminiAction(async (client, gemini) => {
-                    await gemini.uploadFiles(files.map((f: string) => path.resolve(f)));
+    async function uploadFilesToServer(filePaths: string[], sessionId?: string) {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const payloadFiles = [];
+        for (const file of filePaths) {
+            const absPath = path.resolve(file);
+            if (fs.existsSync(absPath)) {
+                payloadFiles.push({
+                    content: fs.readFileSync(absPath, 'base64'),
+                    filename: path.basename(absPath),
+                    encoding: 'base64'
                 });
+            } else {
+                console.warn(`[CLI] File not found: ${absPath}`);
             }
-            console.log('Upload complete.');
+        }
+
+        if (payloadFiles.length > 0) {
+            if (sessionId) {
+                await sendServerRequest('/session/open', { identifier: sessionId });
+            }
+            return await sendServerRequest('/gemini/upload', { files: payloadFiles });
+        }
+        return { success: false, count: 0 };
+    }
+
+    gemini.command('upload <files...>')
+        .description('Upload files to Gemini')
+        .action(async (files) => {
+            console.log(`Uploading ${files.length} files...`);
+            const res = await uploadFilesToServer(files);
+            if (res?.success) console.log(`Upload complete. (${res.count} files)`);
         });
 
     gemini.command('export-to-docs [sessionId]')
         .description('Export session to Google Docs')
-        .option('--local', 'Use local execution', true)
         .action(async (sessionId) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                console.log('\nExporting to Google Docs...');
-                const result = await gemini.exportCurrentToGoogleDocs();
+            if (sessionId) await sendServerRequest('/session/open', { identifier: sessionId });
+
+            console.log('\nExporting to Google Docs...');
+            const data = await sendServerRequest('/gemini/export-to-docs');
+            if (data?.success && data.data) {
                 console.log('\n--- Export Result ---');
-                if (result.docId) {
-                    console.log(`Google Doc ID: ${result.docId}`);
-                    console.log(`Google Doc URL: ${result.docUrl}`);
+                if (data.data.docId) {
+                    console.log(`Google Doc ID: ${data.data.docId}`);
+                    console.log(`Google Doc URL: ${data.data.docUrl}`);
                 } else {
                     console.log('Export failed - no document created');
                 }
                 console.log('---------------------\n');
-            }, sessionId);
+            }
         });
 
     gemini.command('upload-file <path> [sessionId]')
         .description('Upload a file')
-        .option('--local', 'Use local execution', true)
         .action(async (filePath, sessionId) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.uploadFile(filePath);
-                if (success) console.log(`\n✅ File uploaded: ${filePath}`);
-                else console.log(`\n❌ File upload failed: ${filePath}`);
-            }, sessionId);
+            const res = await uploadFilesToServer([filePath], sessionId);
+            if (res?.success) console.log(`\n✅ File uploaded: ${filePath}`);
+            else console.log(`\n❌ File upload failed: ${filePath}`);
         });
 
     gemini.command('upload-files <files...>')
         .description('Upload multiple files')
-        .option('--local', 'Use local execution', true)
         .action(async (args) => {
             let sessionId: string | undefined;
             let filePaths = args;
@@ -83,48 +77,42 @@ export function registerUploadCommands(gemini: Command) {
                 filePaths = filePaths.slice(1);
             }
 
-            await runLocalGeminiAction(async (client, gemini) => {
-                const count = await gemini.uploadFiles(filePaths);
-                console.log(`\n✅ Uploaded ${count}/${filePaths.length} files`);
-            }, sessionId);
+            const res = await uploadFilesToServer(filePaths, sessionId);
+            if (res?.success) console.log(`\n✅ Uploaded ${res.count}/${filePaths.length} files`);
         });
 
     gemini.command('upload-repo <repoUrl> [sessionId]')
         .description('Upload repository context')
         .option('--branch <branch>', 'Git branch')
-        .option('--local', 'Use local execution', true)
         .action(async (repoUrl, sessionId, opts) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const { RepoLoader } = await import('../../core/repo-loader');
-                const loader = new RepoLoader();
-                try {
-                    console.log(`\n[Repo] Processing repository: ${repoUrl}`);
-                    const contextFile = await loader.loadRepoAsFile(repoUrl, { branch: opts.branch });
-                    console.log(`\n[Repo] Context file created at: ${contextFile}`);
-                    await gemini.uploadFile(contextFile);
-                    console.log(`\n✅ Repository context uploaded successfully!`);
-                } catch (e: any) {
-                    console.error(`\n❌ Error processing repository: ${e.message}`);
-                }
-            }, sessionId);
+            const { RepoLoader } = await import('../../core/repo-loader');
+            const loader = new RepoLoader();
+            try {
+                console.log(`\n[Repo] Processing repository: ${repoUrl}`);
+                const contextFile = await loader.loadRepoAsFile(repoUrl, { branch: opts.branch });
+                console.log(`\n[Repo] Context file created at: ${contextFile}`);
+                const res = await uploadFilesToServer([contextFile], sessionId);
+                if (res?.success) console.log(`\n✅ Repository context uploaded successfully!`);
+            } catch (e: any) {
+                console.error(`\n❌ Error processing repository: ${e.message}`);
+            }
         });
     
     gemini.command('upload-drive <fileName> [sessionId]')
         .description('Upload a file from Google Drive')
-        .option('--local', 'Use local execution', true)
         .action(async (fileName, sessionId) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.uploadFromDrive(fileName);
-                if (success) console.log(`\n✅ File attached from Drive: ${fileName}`);
-                else console.log(`\n❌ Failed to attach file from Drive: ${fileName}`);
-            }, sessionId);
+            if (sessionId) await sendServerRequest('/session/open', { identifier: sessionId });
+            
+            const res = await sendServerRequest('/gemini/upload-drive', { fileName });
+            if (res?.success) console.log(`\n✅ File attached from Drive: ${fileName}`);
+            else console.log(`\n❌ Failed to attach file from Drive: ${fileName}`);
         });
 
     gemini.command('sources')
         .description('List available context sources')
         .action(async () => {
             const response = await sendServerRequest('/gemini/sources');
-            if (response.success && response.sources) {
+            if (response?.success && response.sources) {
                 console.log('Available Context Sources:');
                 response.sources.forEach((s: string) => console.log(` - ${s}`));
             }

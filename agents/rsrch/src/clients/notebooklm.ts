@@ -124,6 +124,11 @@ export class NotebookLMClient {
         return actions.getSourcesAction(this.ctx, this.deps);
     }
 
+    /** Gets all sources with a text snippet preview */
+    async getSourcesPreview(indices?: number[]) {
+        return actions.getSourcesPreviewAction(this.ctx, this.deps, indices);
+    }
+
     /** Deletes a source by title */
     async deleteSource(title: string) {
         return actions.deleteSourceAction(this.ctx, this.deps, title);
@@ -262,5 +267,9 @@ export class NotebookLMClient {
         return actions.archiveNotebookAction(this.ctx, this.deps, notebookTitle, options);
     }
 
+    /** Downloads a single source by title */
+    async downloadSource(title: string, outputDir: string, format: 'md' | 'qmd' = 'md') {
+        return actions.downloadSourceAction(this.ctx, this.deps, title, outputDir, format);
+    }
 }
 

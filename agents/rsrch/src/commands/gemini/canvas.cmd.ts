@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { runLocalGeminiAction } from '../../cli/utils';
+import { sendServerRequest } from '../../cli/utils';
 import { getRegistry } from '../../core/artifact-registry';
 
 export function registerCanvasCommands(gemini: Command) {
@@ -8,94 +8,94 @@ export function registerCanvasCommands(gemini: Command) {
 
     canvas.command('list')
         .description('List all artifacts in the current session (includes history scroll)')
-        .option('--local', 'Use local execution', true)
-        .action(async (opts, cmd) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const artifacts = await gemini.listArtifacts();
+        .action(async () => {
+            const data = await sendServerRequest('/canvas/list');
+            if (data?.success) {
                 console.log('\n--- Session Artifacts ---');
-                if (artifacts.length === 0) {
+                if (data.data.length === 0) {
                     console.log('No artifacts found in this session.');
                 } else {
-                    artifacts.forEach((a, i) => {
+                    data.data.forEach((a: any, i: number) => {
                         console.log(`${i + 1}. [${a.type}] ${a.name}`);
                     });
                 }
                 console.log('--------------------------\n');
-            });
+            }
         });
 
     canvas.command('read')
         .description('Read content from the currently open Canvas panel')
-        .option('--local', 'Use local execution', true)
-        .action(async (opts, cmd) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const data = await gemini.readCanvas();
-                if (!data) {
+        .action(async () => {
+            const data = await sendServerRequest('/canvas/read');
+            if (data?.success) {
+                if (!data.data) {
                     console.log('No Canvas panel is currently open.');
                     return;
                 }
-                console.log(`\n--- Canvas: ${data.title} ---`);
-                console.log(data.content);
+                console.log(`\n--- Canvas: ${data.data.title} ---`);
+                console.log(data.data.content);
                 console.log('---------------------------\n');
-            });
+            }
         });
 
     canvas.command('open <name>')
         .description('Open a specific artifact by name')
-        .option('--local', 'Use local execution', true)
-        .action(async (name, opts, cmd) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.openArtifact(name);
-                if (success) {
-                    console.log(`Artifact "${name}" opened successfully.`);
-                } else {
-                    console.log(`Could not find or open artifact "${name}".`);
-                }
-            });
+        .action(async (name) => {
+            const data = await sendServerRequest('/canvas/open', { name });
+            if (data?.success && data.data) {
+                console.log(`Artifact "${name}" opened successfully.`);
+            } else {
+                console.log(`Could not find or open artifact "${name}".`);
+            }
         });
 
     canvas.command('save <name> [path]')
         .description('Save an artifact to a local file')
-        .option('--local', 'Use local execution', true)
-        .action(async (name, filePath, opts, cmd) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const opened = await gemini.openArtifact(name);
-                if (!opened) {
-                    console.log(`Could not find or open artifact "${name}".`);
-                    return;
-                }
-                
-                const data = await gemini.readCanvas();
-                if (!data) {
-                    console.log('Failed to read canvas content.');
-                    return;
-                }
+        .action(async (name, filePath) => {
+            const openRes = await sendServerRequest('/canvas/open', { name });
+            if (!openRes?.success || !openRes.data) {
+                console.log(`Could not find or open artifact "${name}".`);
+                return;
+            }
+            
+            const readRes = await sendServerRequest('/canvas/read');
+            if (!readRes?.success || !readRes.data) {
+                console.log('Failed to read canvas content.');
+                return;
+            }
 
-                const fs = await import('node:fs');
-                const path = await import('node:path');
-                const targetPath = filePath || path.join(process.cwd(), `${name.replace(/[^a-z0-9]/gi, '_')}.md`);
-                
-                fs.writeFileSync(targetPath, data.content);
-                console.log(`Artifact saved to: ${targetPath}`);
-            });
+            const fs = await import('node:fs');
+            const path = await import('node:path');
+            const targetPath = filePath || path.join(process.cwd(), `${name.replace(/[^a-z0-9]/gi, '_')}.md`);
+            
+            fs.writeFileSync(targetPath, readRes.data.content);
+            console.log(`Artifact saved to: ${targetPath}`);
         });
-    gemini.command('archive-artifacts')
-        .description('Archive all artifacts (Canvas & Deep Research) from the current session locally')
+
+    canvas.command('archive-artifacts')
+        .description('Archive all artifacts from the current session locally')
         .option('-o, --output <dir>', 'Output directory', 'data/artifacts/gemini')
-        .option('--local', 'Use local execution', true)
-        .action(async (opts, cmd) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                console.log('Starting archival process...');
-                const files = await gemini.archiveArtifacts({ outputDir: opts.output });
-                console.log(`\n--- Archival Complete ---`);
+        .option('-f, --format <format>', 'Output format (md, qmd)', 'md')
+        .option('-i, --incremental', 'Skip already archived artifacts', false)
+        .action(async (opts) => {
+            console.log(`[CLI] Archiving session artifacts (format: ${opts.format}, incremental: ${!!opts.incremental})...`);
+            const data = await sendServerRequest('/canvas/archive', { 
+                outputDir: opts.output, 
+                format: opts.format,
+                incremental: !!opts.incremental
+            });
+            if (data?.success) {
+                const files = data.data;
+                console.log(`\n--- Archival Summary ---`);
                 if (files.length === 0) {
                     console.log('No artifacts found to archive.');
                 } else {
-                    console.log(`Archived ${files.length} artifacts:`);
-                    files.forEach(f => console.log(`- ${f}`));
+                    console.log(`Archived ${files.length} artifacts to ${opts.output}:`);
+                    const path = await import('node:path');
+                    files.forEach((f: string) => console.log(`- ${path.relative(process.cwd(), f)}`));
                 }
                 console.log('-------------------------\n');
-            });
+            }
         });
 
     gemini.command('list-archived')
@@ -129,107 +129,85 @@ export function registerCanvasCommands(gemini: Command) {
         .description('Generate a NotebookLM audio overview for an archived artifact')
         .option('-n, --notebook <title>', 'Target notebook title')
         .option('-p, --prompt <text>', 'Custom audio generation prompt')
-        .option('--local', 'Use local execution', true)
         .action(async (artifactId, opts) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                console.log(`Brdiging artifact ${artifactId} to NotebookLM audio...`);
-                const result = await gemini.researchToAudio({
-                    artifactId,
-                    notebookTitle: opts.notebook,
-                    customPrompt: opts.prompt
-                });
-                
-                if (result.success) {
-                    console.log(`Successfully triggered audio generation: ${result.artifactTitle || 'Pending'}`);
-                } else {
-                    console.log('Failed to generate audio overview.');
-                }
+            console.log(`Brdiging artifact ${artifactId} to NotebookLM audio...`);
+            const data = await sendServerRequest('/canvas/audio-overview', {
+                artifactId,
+                notebookTitle: opts.notebook,
+                customPrompt: opts.prompt
             });
+            
+            if (data?.success) {
+                console.log(`Successfully triggered audio generation: ${data.artifactTitle || 'Pending'}`);
+            } else {
+                console.log('Failed to generate audio overview.');
+            }
         });
 
     canvas.command('update <content>')
         .description('Update or append content in the active Canvas editor')
         .option('--append', 'Append instead of replacing', false)
-        .option('--local', 'Use local execution', true)
         .action(async (content, opts) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.updateCanvas(content, { mode: opts.append ? 'append' : 'replace' });
-                if (success) console.log('Canvas updated successfully.');
-            });
+            const data = await sendServerRequest('/canvas/update', { content, mode: opts.append ? 'append' : 'replace' });
+            if (data?.success && data.data) console.log('Canvas updated successfully.');
         });
 
     canvas.command('tab <preview|code>')
         .description('Switch Canvas view tab')
-        .option('--local', 'Use local execution', true)
         .action(async (tab) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                if (tab !== 'preview' && tab !== 'code') {
-                    console.error('Invalid tab name. Use "preview" or "code".');
-                    return;
-                }
-                const success = await gemini.switchCanvasTab(tab as any);
-                if (success) console.log(`Switched to ${tab} tab.`);
-            });
+            if (tab !== 'preview' && tab !== 'code') {
+                console.error('Invalid tab name. Use "preview" or "code".');
+                return;
+            }
+            const data = await sendServerRequest('/canvas/tab', { tab });
+            if (data?.success && data.data) console.log(`Switched to ${tab} tab.`);
         });
 
     canvas.command('close')
         .description('Close the Canvas side panel')
-        .option('--local', 'Use local execution', true)
         .action(async () => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.closeCanvas();
-                if (success) console.log('Canvas closed.');
-            });
+            const data = await sendServerRequest('/canvas/close');
+            if (data?.success && data.data) console.log('Canvas closed.');
         });
 
     canvas.command('versions')
         .description('List history versions of the current Canvas artifact')
-        .option('--local', 'Use local execution', true)
         .action(async () => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const versions = await gemini.listCanvasVersions();
+            const data = await sendServerRequest('/canvas/versions');
+            if (data?.success) {
                 console.log('\n--- Canvas Version History ---');
-                if (versions.length === 0) {
+                if (data.data.length === 0) {
                     console.log('No history found or history button not accessible.');
                 } else {
-                    versions.forEach(v => {
+                    data.data.forEach((v: any) => {
                         console.log(`${v.id}: ${v.timestamp}`);
                     });
                 }
                 console.log('------------------------------\n');
-            });
+            }
         });
 
     canvas.command('restore <versionId>')
         .description('Restore the Canvas artifact to a specific version')
-        .option('--local', 'Use local execution', true)
         .action(async (versionId) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.restoreCanvasVersion(versionId);
-                if (success) console.log(`Successfully restored version ${versionId}.`);
-                else console.log(`Failed to restore version ${versionId}.`);
-            });
+            const data = await sendServerRequest('/canvas/restore', { versionId });
+            if (data?.success && data.data) console.log(`Successfully restored version ${versionId}.`);
+            else console.log(`Failed to restore version ${versionId}.`);
         });
 
     canvas.command('prompt <instruction>')
         .description('Send a modification prompt to the active Canvas')
-        .option('--local', 'Use local execution', true)
         .action(async (instruction) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.promptCanvas(instruction);
-                if (success) console.log('Prompt sent to Canvas.');
-                else console.log('Failed to send prompt to Canvas.');
-            });
+            const data = await sendServerRequest('/canvas/prompt', { instruction });
+            if (data?.success && data.data) console.log('Prompt sent to Canvas.');
+            else console.log('Failed to send prompt to Canvas.');
         });
 
     canvas.command('export [target]')
         .description('Export the Canvas artifact (default: docs)')
-        .option('--local', 'Use local execution', true)
         .action(async (target) => {
-            await runLocalGeminiAction(async (client, gemini) => {
-                const success = await gemini.exportCanvas(target || 'docs');
-                if (success) console.log(`Export to ${target || 'docs'} triggered.`);
-                else console.log('Failed to trigger export.');
-            });
+            const data = await sendServerRequest('/canvas/export', { target: target || 'docs' });
+            if (data?.success && data.data) console.log(`Export to ${target || 'docs'} triggered.`);
+            else console.log('Failed to trigger export.');
         });
 }

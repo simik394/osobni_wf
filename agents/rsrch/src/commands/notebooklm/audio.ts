@@ -1,9 +1,8 @@
 import { Command } from 'commander';
-import { runLocalNotebookAction, sendServerRequest } from '../../cli/utils';
+import { sendServerRequest } from '../../cli/utils';
 import { resolveNotebookTitles } from '../../cli/notebook-utils';
 import { config } from '../../config';
 import { getGraphStore } from '../../core/graph-store';
-import { cliContext } from '../../cli/context';
 import * as path from 'path';
 
 export function registerAudioCommands(notebook: Command) {
@@ -16,7 +15,6 @@ export function registerAudioCommands(notebook: Command) {
         .option('--prompt <prompt>', 'Custom prompt')
         .option('--wet', 'Wet run (consume quota)', false)
         .option('--force', 'Force regenerate', false)
-        .option('--local', 'Use local execution (Deprecated)', false)
         .action(async (opts) => {
             let sources = opts.source || [];
             if (opts.sources) {
@@ -45,12 +43,6 @@ export function registerAudioCommands(notebook: Command) {
                 console.log('⚡ Force mode: will regenerate even if audio already exists');
             }
 
-            if (opts.local || cliContext.get().local) {
-                console.warn('\n⚠️  WARNING: --local flag is DEPRECATED for audio generation.');
-                console.warn('   Routing through server -> Windmill to prevent race conditions.');
-                console.warn('   Remove --local flag - it will be ignored.\n');
-            }
-
             console.log('📤 Queueing via Windmill (prevents race conditions)...\n');
             await sendServerRequest('/notebook/generate-audio', {
                 notebookTitle: opts.notebook,
@@ -64,98 +56,100 @@ export function registerAudioCommands(notebook: Command) {
     notebook.command('download-audio [outputPath]')
         .description('Download audio overview')
         .requiredOption('--notebook <title>', 'Notebook title')
-        .option('--local', 'Use local execution', false)
         .option('--latest', 'Latest audio only', false)
         .option('--pattern <regex>', 'Audio title pattern')
         .action(async (outputPath, opts) => {
             const finalOutputPath = outputPath || 'audio_overview.mp3';
+            const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
+            console.log(`[CLI] Downloading audio... Output: ${resolvedOutputPath}`);
+            if (opts.latest) console.log(`[CLI] Mode: Latest audio only.`);
+            if (opts.pattern) console.log(`[CLI] Mode: Filtering by pattern "${opts.pattern}".`);
 
-            await runLocalNotebookAction(async (client, nb) => {
-                const resolvedOutputPath = path.resolve(process.cwd(), finalOutputPath);
-                console.log(`[CLI] Downloading audio... Output: ${resolvedOutputPath}`);
-                if (opts.latest) console.log(`[CLI] Mode: Latest audio only.`);
-                if (opts.pattern) console.log(`[CLI] Mode: Filtering by pattern "${opts.pattern}".`);
-
-                await nb.downloadAudio(opts.notebook, resolvedOutputPath, {
-                    latestOnly: opts.latest,
-                    audioTitlePattern: opts.pattern
-                });
+            await sendServerRequest('/notebook/download-artifact', {
+                notebookTitle: opts.notebook,
+                artifactTitle: opts.pattern || 'Audio Overview',
+                outputPath: resolvedOutputPath,
+                isPattern: !!opts.pattern,
+                latestOnly: opts.latest
             });
         });
 
     notebook.command('download-all-audio [outputDir]')
         .description('Download all audio overviews')
         .requiredOption('--notebook <title>', 'Notebook title')
-        .option('--local', 'Use local execution', false)
         .option('--limit <number>', 'Limit number of downloads', parseInt)
         .action(async (outputDir, opts) => {
             const finalOutputDir = outputDir || './audio_downloads';
+            const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
+            console.log(`[CLI] Downloading ${opts.limit ? 'top ' + opts.limit : 'ALL'} audio from "${opts.notebook}"...`);
 
-            await runLocalNotebookAction(async (client, nb) => {
-                const resolvedOutputDir = path.resolve(process.cwd(), finalOutputDir);
-                console.log(`[CLI] Downloading ${opts.limit ? 'top ' + opts.limit : 'ALL'} audio... Output: ${resolvedOutputDir}`);
-
-                await nb.downloadAllAudio(opts.notebook, resolvedOutputDir, { limit: opts.limit });
-            });
+            const data = await sendServerRequest('/notebook/content-preview', { notebookTitle: opts.notebook, type: 'studio' });
+            if (data?.success && data.data) {
+                let audios = data.data.filter((a: any) => a.type === 'audio');
+                if (opts.limit) audios = audios.slice(0, opts.limit);
+                
+                for (const audio of audios) {
+                    console.log(`[CLI] Downloading: ${audio.title}`);
+                    await sendServerRequest('/notebook/download-artifact', {
+                        notebookTitle: opts.notebook,
+                        artifactTitle: audio.title,
+                        outputPath: resolvedOutputDir
+                    });
+                }
+                console.log('✅ Done.');
+            }
         });
 
     notebook.command('download-batch-audio')
         .description('Batch download audio from multiple notebooks')
         .requiredOption('--titles <titles>', 'Comma-separated titles or "all"')
         .requiredOption('--output <dir>', 'Output directory')
-        .option('--local', 'Use local execution', false)
         .action(async (opts) => {
-            await runLocalNotebookAction(async (client, nb) => {
-                const notebooksToProcess = await resolveNotebookTitles(opts.titles, () => nb.listNotebooks());
+            const notebooksToProcess = await resolveNotebookTitles(opts.titles, async () => {
+                const res = await sendServerRequest('/notebook/list', {});
+                return res?.data ? res.data.map((n:any) => n.title) : [];
+            });
 
-                for (const title of notebooksToProcess) {
-                    console.log(`[Batch] Processing "${title}"...`);
-                    try {
-                        const result = await nb.scrapeNotebook(title, true, {
-                            outputDir: opts.output,
-                            filename: `${title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}_${Date.now()}.mp3`
-                        });
-
-                        if (result.audioOverviews.length > 0) {
+            for (const title of notebooksToProcess) {
+                console.log(`[Batch] Processing "${title}"...`);
+                try {
+                    const data = await sendServerRequest('/notebook/content-preview', { notebookTitle: title, type: 'studio' });
+                    if (data?.success && data.data) {
+                        const audios = data.data.filter((a: any) => a.type === 'audio');
+                        if (audios.length > 0) {
+                            const audio = audios[0];
+                            const filename = `${title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}_${Date.now()}.mp3`;
+                            const resolvedOutputPath = path.resolve(process.cwd(), path.join(opts.output, filename));
+                            await sendServerRequest('/notebook/download-artifact', {
+                                notebookTitle: title,
+                                artifactTitle: audio.title,
+                                outputPath: resolvedOutputPath
+                            });
                             console.log(`[Batch] ✅ Downloaded audio for "${title}"`);
                         } else {
                             console.log(`[Batch] ⚠️ No audio found for "${title}"`);
                         }
-                    } catch (e: any) {
-                        console.error(`[Batch] ❌ Error processing "${title}": `, e.message);
                     }
+                } catch (e: any) {
+                    console.error(`[Batch] ❌ Error processing "${title}": `, e.message);
                 }
-            });
+            }
         });
 
     notebook.command('audio-status')
         .description('Check audio status (including generation progress)')
         .requiredOption('--notebook <title>', 'Notebook title')
-        .option('--local', 'Use local execution', false)
         .action(async (opts) => {
-            if (opts.local || cliContext.get().local) {
-                await runLocalNotebookAction(async (client, nb) => {
-                    const status = await nb.getAudioStatus(opts.notebook);
-                    console.log('\n--- NotebookLM Audio Status ---');
-                    console.log(`Notebook: ${opts.notebook}`);
-                    console.log(`Status:   ${status.status.toUpperCase()}`);
-                    if (status.progress) {
-                        console.log(`Progress: ${status.progress}`);
-                    }
-                    console.log('-------------------------------\n');
-                });
-            } else {
-                try {
-                    const result = await sendServerRequest('/notebook/audio-status', { notebookTitle: opts.notebook });
-                    const status = result.data || result;
-                    console.log('\n--- NotebookLM Audio Status (via Server) ---');
-                    console.log(`Notebook: ${opts.notebook}`);
-                    console.log(`Status:   ${status.status?.toUpperCase() || 'UNKNOWN'}`);
-                    if (status.progress) console.log(`Progress: ${status.progress}`);
-                    console.log('-------------------------------------------\n');
-                } catch (e: any) {
-                    console.error(`[CLI] Error: ${e.message}`);
-                }
+            try {
+                const result = await sendServerRequest('/notebook/audio-status', { notebookTitle: opts.notebook });
+                const status = result?.data || result;
+                console.log('\n--- NotebookLM Audio Status (via Server) ---');
+                console.log(`Notebook: ${opts.notebook}`);
+                console.log(`Status:   ${status?.status?.toUpperCase() || 'UNKNOWN'}`);
+                if (status?.progress) console.log(`Progress: ${status.progress}`);
+                console.log('-------------------------------------------\n');
+            } catch (e: any) {
+                console.error(`[CLI] Error: ${e.message}`);
             }
         });
 

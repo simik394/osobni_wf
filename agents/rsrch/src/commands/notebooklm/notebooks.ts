@@ -1,32 +1,29 @@
 import { Command } from 'commander';
-import { runLocalNotebookAction, sendServerRequest } from '../../cli/utils';
+import { sendServerRequest } from '../../cli/utils';
 import { config } from '../../config';
 import { getGraphStore } from '../../core/graph-store';
-import { cliContext } from '../../cli/context';
 
 export function registerNotebookCommands(notebook: Command) {
     notebook.command('create <title>')
         .description('Create a new notebook')
-        .option('--local', 'Use local execution', false)
-        .action(async (title, opts) => {
-            await runLocalNotebookAction(async (client, notebook) => {
-                console.log(`[CLI] Creating notebook: ${title}...`);
-                await notebook.createNotebook(title);
-                console.log(`✅ Successfully created notebook "${title}".`);
-            });
+        .action(async (title) => {
+            console.log(`[CLI] Creating notebook: ${title}...`);
+            const data = await sendServerRequest('/notebook/create', { title });
+            if (data?.success) console.log(`✅ Successfully created notebook "${title}".`);
         });
 
     notebook.command('list')
-        .description('List notebooks')
-        .option('--local', 'Use local execution', false)
+        .description('List notebooks with pagination')
+        .option('--offset <n>', 'Offset for pagination', '0')
+        .option('--limit <n>', 'Limit for pagination', '20')
         .action(async (opts) => {
-            if (opts.local || cliContext.get().local) {
-                await runLocalNotebookAction(async (client, nb) => {
-                    const notebooks = await nb.listNotebooks();
-                    console.log(JSON.stringify(notebooks, null, 2));
-                });
+            const offset = parseInt(opts.offset, 10);
+            const limit = parseInt(opts.limit, 10);
+            const data = await sendServerRequest('/notebook/list', { offset, limit });
+            if (data?.success) {
+                console.log(JSON.stringify(data.data, null, 2));
             } else {
-                await sendServerRequest('/notebook/list');
+                console.log(JSON.stringify(data, null, 2));
             }
         });
 
@@ -35,46 +32,50 @@ export function registerNotebookCommands(notebook: Command) {
         .option('--title <title>', 'Notebook title (sync single)')
         .option('--pattern <regex>', 'Regex pattern to filter notebooks')
         .option('-a, --audio', 'Download audio during sync')
-        .option('--local', 'Use local execution', false)
         .action(async (opts) => {
             const store = getGraphStore();
             await store.connect(config.falkor.host, config.falkor.port);
 
             try {
-                await runLocalNotebookAction(async (client, nb) => {
-                    if (opts.title) {
-                        console.log(`\n[Sync] Scraping notebook: "${opts.title}"...`);
-                        const data = await nb.scrapeNotebook(opts.title, opts.audio);
-                        const result = await store.syncNotebook(data);
+                if (opts.title) {
+                    console.log(`\n[Sync] Scraping notebook via server: "${opts.title}"...`);
+                    const res = await sendServerRequest('/notebook/scrape', { notebookTitle: opts.title, downloadAudio: opts.audio });
+                    if (res?.success && res.data) {
+                        const result = await store.syncNotebook(res.data);
                         console.log(`\n[Sync] Result: ${result.isNew ? 'New' : 'Updated'} notebook ${result.id}\n`);
-                    } else {
-                        console.log('\n[Sync] Listing all notebooks...');
-                        let notebooks = await nb.listNotebooks();
+                    }
+                } else {
+                    console.log('\n[Sync] Listing all notebooks from server...');
+                    const listRes = await sendServerRequest('/notebook/list', { limit: 1000 });
+                    let notebooks = listRes?.data || [];
 
+                    if (opts.pattern) {
+                        const regex = new RegExp(opts.pattern, 'i');
+                        notebooks = notebooks.filter((n: { title: string }) => regex.test(n.title));
+                        console.log(`[Sync] Filtered by pattern "${opts.pattern}": ${notebooks.length} notebooks found.`);
+                    }
+
+                    console.log(`\n[Sync] Processing ${notebooks.length} notebooks...`);
+
+                    for (const nbItem of notebooks) {
                         if (opts.pattern) {
-                            const regex = new RegExp(opts.pattern, 'i');
-                            notebooks = notebooks.filter((n: { title: string }) => regex.test(n.title));
-                            console.log(`[Sync] Filtered by pattern "${opts.pattern}": ${notebooks.length} notebooks found.`);
-                        }
-
-                        console.log(`\n[Sync] Processing ${notebooks.length} notebooks...`);
-
-                        for (const nbItem of notebooks) {
-                            if (opts.pattern) {
-                                console.log(`  - Scraping content for "${nbItem.title}"...`);
-                                const data = await nb.scrapeNotebook(nbItem.title, opts.audio);
-                                await store.syncNotebook(data);
+                            console.log(`  - Scraping content for "${nbItem.title}" via server...`);
+                            const scrapeRes = await sendServerRequest('/notebook/scrape', { notebookTitle: nbItem.title, downloadAudio: opts.audio });
+                            if (scrapeRes?.success && scrapeRes.data) {
+                                await store.syncNotebook(scrapeRes.data);
                                 console.log(`    ✓ Synced content.`);
-                            } else {
-                                const result = await store.syncNotebook({
-                                    platformId: nbItem.platformId,
-                                    title: nbItem.title
-                                });
-                                console.log(`  - ${nbItem.title} (${result.id}) [Metadata Only]`);
                             }
+                        } else {
+                            const result = await store.syncNotebook({
+                                platformId: nbItem.platformId,
+                                title: nbItem.title
+                            });
+                            console.log(`  - ${nbItem.title} (${result.id}) [Metadata Only]`);
                         }
                     }
-                });
+                }
+            } catch (e: any) {
+                console.error(`[Sync] Error: ${e.message}`);
             } finally {
                 await store.disconnect();
             }
@@ -82,15 +83,12 @@ export function registerNotebookCommands(notebook: Command) {
 
     notebook.command('stats <title>')
         .description('Get notebook stats')
-        .option('--local', 'Use local execution', false)
-        .action(async (title, opts) => {
-            if (opts.local || cliContext.get().local) {
-                await runLocalNotebookAction(async (client, nb) => {
-                    const stats = await nb.getNotebookStats(title);
-                    console.log(JSON.stringify(stats, null, 2));
-                });
+        .action(async (title) => {
+            const res = await sendServerRequest('/notebook/stats', { title });
+            if (res?.success) {
+                console.log(JSON.stringify(res.data, null, 2));
             } else {
-                await sendServerRequest('/notebook/stats', { title });
+                console.log(JSON.stringify(res, null, 2));
             }
         });
 }

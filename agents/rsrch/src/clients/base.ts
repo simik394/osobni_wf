@@ -168,76 +168,68 @@ export class BrowserClient extends BaseClient {
                     this.isConnectedOverCDP = true;
                     console.log('Connected via chromium.connectOverCDP (Manual WS Fix)');
                 } catch (manualError: any) {
-                    throw new Error(`Failed to connect to browser: ${manualError.message}`);
+                    console.warn(`[BrowserClient] CDP connection failed: ${manualError.message}. Falling back to local mode.`);
                 }
             }
 
-            if (!this.browser) throw new Error('Browser failed to initialize');
-
-            // SMARTER CONTEXT REUSE: Prefer existing interactive context
-            const existingContexts = this.browser.contexts();
-            if (existingContexts.length > 0) {
-                this.context = existingContexts[0];
-                console.log(`[BrowserClient] Reusing existing browser context (contexts: ${existingContexts.length})`);
-            } else {
-                console.log(`[BrowserClient] No active context found, creating new for profile: ${profileId}`);
-                const storageState = loadStorageState(profileId);
-                this.context = await this.browser.newContext({
-                    storageState: storageState,
-                    viewport: { width: 1280, height: 1024 }
-                });
+            if (this.browser) {
+                // SMARTER CONTEXT REUSE: Prefer existing interactive context
+                const existingContexts = this.browser.contexts();
+                if (existingContexts.length > 0) {
+                    this.context = existingContexts[0];
+                    console.log(`[BrowserClient] Reusing existing browser context (contexts: ${existingContexts.length})`);
+                } else {
+                    console.log(`[BrowserClient] No active context found, creating new for profile: ${profileId}`);
+                    const storageState = loadStorageState(profileId);
+                    this.context = await this.browser.newContext({
+                        storageState: storageState,
+                        viewport: { width: 1280, height: 1024 }
+                    });
+                }
+                this.isInitialized = true;
             }
-            this.isInitialized = true;
+        }
 
-        } else {
-            // Local mode
-            if (!options.local && config.browserWsEndpoint) {
-                // Legacy websocket connection (rarely used now)
-                this.browser = await (chromium.connect(config.browserWsEndpoint) as unknown as Browser);
-                this.context = await this.browser.newContext({
-                    storageState: loadStorageState(profileId),
-                    viewport: { width: 1280, height: 1024 }
-                });
-            } else {
-                // Truly local launch
-                if (process.env.FORCE_LOCAL_BROWSER !== 'true') {
-                    throw new Error('STRICT POLICY: Local browser launch PROHIBITED for agents. Set FORCE_LOCAL_BROWSER=true if you are a human debugging locally.');
-                }
-                const stateDir = getStateDir(profileId);
-                ensureProfileDir(profileId);
-                const headless = process.env.FORCE_LOCAL_BROWSER === 'true' ? false : this.options.headless;
-                
-                console.log(`[BrowserClient] Local launch: headless=${headless}, stateDir=${stateDir}`);
-                this.context = await (chromium as any).launchPersistentContext(stateDir, {
-                    headless: headless,
-                    slowMo: 100,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-blink-features=AutomationControlled',
-                        '--disable-infobars',
-                        '--window-size=1280,1024',
-                        '--disable-web-security',
-                        '--remote-debugging-port=9223',
-                        '--remote-debugging-address=0.0.0.0',
-                        '--disable-gpu',
-                        '--disable-dev-shm-usage',
-                        '--no-first-run',
-                        '--no-default-browser-check',
-                        '--password-store=basic',
-                        '--use-mock-keychain'
-                    ],
-                    ignoreDefaultArgs: ['--enable-automation'],
-                    viewport: { width: 1280, height: 1024 }
-                });
-                
-                // Inject cookies if available
-                const storageState = loadStorageState(profileId);
-                if (storageState?.cookies?.length > 0 && this.context) {
-                    await this.context.addCookies(storageState.cookies);
-                }
+        if (!this.isInitialized) {
+            // Truly local launch
+            const headless = process.env.HEADLESS !== 'false'; // Default to headless
+            
+            if (!headless && process.env.FORCE_LOCAL_BROWSER !== 'true') {
+                throw new Error('STRICT POLICY: Headful local browser launch PROHIBITED for agents. Set FORCE_LOCAL_BROWSER=true if you are a human debugging locally.');
             }
             
+            const stateDir = getStateDir(profileId);
+            ensureProfileDir(profileId);
+            
+            console.log(`[BrowserClient] Local launch: headless=${headless}, stateDir=${stateDir}`);
+            this.context = await (chromium as any).launchPersistentContext(stateDir, {
+                headless: headless,
+                slowMo: 100,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-infobars',
+                    '--window-size=1280,1024',
+                    '--disable-web-security',
+                    '--remote-debugging-port=9223',
+                    '--remote-debugging-address=0.0.0.0',
+                    '--disable-gpu',
+                    '--disable-dev-shm-usage',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--password-store=basic',
+                    '--use-mock-keychain'
+                ],
+                ignoreDefaultArgs: ['--enable-automation'],
+                viewport: { width: 1280, height: 1024 }
+            });
+            
+            // Inject cookies if available
+            const storageState = loadStorageState(profileId);
+            if (storageState?.cookies?.length > 0 && this.context) {
+                await this.context.addCookies(storageState.cookies);
+            }
             this.isInitialized = true;
         }
 

@@ -383,13 +383,15 @@ Submit feedback for the last response.
 ***
 ### `archive-artifacts`
 
-Archive all artifacts (Canvas & Deep Research) and session history from the current session locally.
+Archive all artifacts (Canvas & Deep Research) and full session history from the current session locally.
 
 **Options:**
 
 | Flag | Description |
 |------|-------------|
 | `-o, --output <dir>` | Output directory (default: data/artifacts/gemini) |
+| `-f, --format <format>` | Output format (md, qmd) |
+| `-i, --incremental` | Skip already archived artifacts |
 | `--local` | Use local execution |
 
 ***
@@ -873,6 +875,23 @@ _Source: [notebooklm.ts:L571](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/sr
 List sources without generated audio
 
 _Source: [notebooklm.ts:L586](file:///home/sim/Obsi/Prods/01-pwf/agents/rsrch/src/commands/notebooklm.ts#L586)_
+
+***
+### `archive <title>`
+
+Full archival of a notebook (sources, all artifacts, and latest audio).
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output <dir>` | Output directory (default: data/artifacts/notebooklm) |
+| `-f, --format <format>` | Output format (md, qmd) |
+| `-s, --sources` | Extract full text content of all sources |
+| `-i, --incremental` | Skip already archived items |
+| `--local` | Use local execution |
+
+_Source: [notebooklm/artifacts.ts:L97](file:///home/sim/Prods/01-pwf/agents/rsrch/src/commands/notebooklm/artifacts.ts#L97)_
 
 ***
 ## PROFILE Commands

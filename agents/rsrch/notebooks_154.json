@@ -1,0 +1,792 @@
+
+> rsrch@1.0.35 rsrch
+> ts-node src/cli/main.ts notebook list --local
+
+◇ injected env (7) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Running NotebookLM in REMOTE BROWSER mode...
+[BrowserClient] Connecting via CDP to http://localhost:9224 (profile: default)...
+Attempting connectOverCDP to http://localhost:9224...
+Connected via connectOverCDP
+[BrowserClient] Reusing existing browser context (contexts: 1)
+♻️ Found free tab for notebooklm: https://notebooklm.google.com/
+ℹ️ [NotebookLM] Listing notebooks...
+ℹ️ [NotebookLM] Already on home page, skip recycle.
+[Selectors] Deep-merged selectors from selectors.yaml
+ℹ️ [NotebookLM] Found 154 notebook cards initially. Scrolling to load all...
+ℹ️ [NotebookLM] Scroll attempt 1: found 154 cards
+ℹ️ [NotebookLM] Total notebook cards found after 1 scrolls: 154
+[
+  {
+    "title": "📝\nTest z řízení rizik 2021",
+    "platformId": "testzzenrizik202",
+    "sourceCount": 9
+  },
+  {
+    "title": "🗺️\nStrukturní mapa reality: Od ontologie k epistemologii",
+    "platformId": "strukturnmaparea",
+    "sourceCount": 13
+  },
+  {
+    "title": "🏢\nAutonomní systémy a deklarativní vizualizace v AI organizacích",
+    "platformId": "autonomnsystmyad",
+    "sourceCount": 121
+  },
+  {
+    "title": "🌐\nNativní evoluce agentů prostřednictvím znalostí světa",
+    "platformId": "nativnevoluceage",
+    "sourceCount": 23
+  },
+  {
+    "title": "🔌\nTermodynamika softwarové architektury: Mezi fyzikou a informatikou",
+    "platformId": "termodynamikasof",
+    "sourceCount": 12
+  },
+  {
+    "title": "💾\nOptimalizace VFS mezipaměti Rclone pro Google Drive",
+    "platformId": "optimalizacevfsm",
+    "sourceCount": 17
+  },
+  {
+    "title": "⚙️\nAgda: Architektura a kompilace formálně ověřených systémů",
+    "platformId": "agdaarchitektura",
+    "sourceCount": 29
+  },
+  {
+    "title": "🏗️\nPřehled metamodelu a prvků ArchiMate 3.2",
+    "platformId": "pehledmetamodelu",
+    "sourceCount": 3
+  },
+  {
+    "title": "🌐\nUniverzalita algoritmů Approximate Message Passing a tenzorové sítě",
+    "platformId": "univerzalitaalgo",
+    "sourceCount": 10
+  },
+  {
+    "title": "⚖️\n12/11/25 Architektonická analýza Memex.tech a NoteDiscovery",
+    "platformId": "121125architekto",
+    "sourceCount": 22
+  },
+  {
+    "title": "💾\n13/11/25 Analýza a Komparace Terminálových Multiplexorů a Vůdčích Kláves",
+    "platformId": "131125analzaakom",
+    "sourceCount": 24
+  },
+  {
+    "title": "📖\nPrůvodce logickým ověřováním v systému Lean",
+    "platformId": "prvodcelogickmov",
+    "sourceCount": 1
+  },
+  {
+    "title": "📋\n4IT414 Řízení projektů IS_ICT",
+    "platformId": "4it414zenprojekt",
+    "sourceCount": 47
+  },
+  {
+    "title": "🎓\n4IT415 Informační modelování",
+    "platformId": "4it415informanmo",
+    "sourceCount": 33
+  },
+  {
+    "title": "🤖\nProtokolární architektura pro agentní vývoj jader v jazyce Nim",
+    "platformId": "protokolrnarchit",
+    "sourceCount": 4
+  },
+  {
+    "title": "🧪\n4IT415 Informační modelování organizací (MD)",
+    "platformId": "4it415informanmo",
+    "sourceCount": 3
+  },
+  {
+    "title": "📋\n4IT415 Enterprise Information Modelling",
+    "platformId": "4it415enterprise",
+    "sourceCount": 55
+  },
+  {
+    "title": "🎓\n4IT415 Enterprise Information Modelling",
+    "platformId": "4it415enterprise",
+    "sourceCount": 55
+  },
+  {
+    "title": "🏢\n4IT415 - Informační modelování organizací",
+    "platformId": "4it415informanmo",
+    "sourceCount": 28
+  },
+  {
+    "title": "🧠\nPrůvodce světem obecné umělé inteligence: Nástroje a principy adaptability",
+    "platformId": "prvodcesvtemobec",
+    "sourceCount": 11
+  },
+  {
+    "title": "🏗️\nArchitektura konstruktivních výpočtů a sémantika intuicionistické logiky",
+    "platformId": "architekturakons",
+    "sourceCount": 3
+  },
+  {
+    "title": "🛡️\nBezpečné spouštění Lua v jazyce Nim",
+    "platformId": "bezpenspoutnluav",
+    "sourceCount": 16
+  },
+  {
+    "title": "🧬\nArchitektura a implementace kategoriálního hlubokého učení v Julii",
+    "platformId": "architekturaaimp",
+    "sourceCount": 5
+  },
+  {
+    "title": "🏗️\nArchitektura a teorie programovacího jazyka Lean 4",
+    "platformId": "architekturaateo",
+    "sourceCount": 23
+  },
+  {
+    "title": "📋\nMetodika a dokumentace pro řízení projektů IS/ICT",
+    "platformId": "metodikaadokumen",
+    "sourceCount": 7
+  },
+  {
+    "title": "⚛️\nQuantumOptics.jl: Simulace otevřených kvantových systémů v jazyce Julia",
+    "platformId": "quantumopticsjls",
+    "sourceCount": 2
+  },
+  {
+    "title": "📉\nKvantový algoritmus pro hledání minima",
+    "platformId": "kvantovalgoritmu",
+    "sourceCount": 33
+  },
+  {
+    "title": "👶\nZero-shot vizuální modely světa pro efektivní učení dětí",
+    "platformId": "zeroshotvizulnmo",
+    "sourceCount": 6
+  },
+  {
+    "title": "🧠\nSoulad velkých jazykových modelů s lidským mozkem při kreativním myšlení",
+    "platformId": "souladvelkchjazy",
+    "sourceCount": 8
+  },
+  {
+    "title": "♾️\nKategorické základy architektury autonomních a kognitivních systémů",
+    "platformId": "kategorickzklady",
+    "sourceCount": 5
+  },
+  {
+    "title": "🐝\nAgentní AI a vzestup sociální inteligence",
+    "platformId": "agentnaiavzestup",
+    "sourceCount": 27
+  },
+  {
+    "title": "🧱\nSanace vlhkého zdiva: Moderní postupy a dynamika odvětrávání",
+    "platformId": "sanacevlhkhozdiv",
+    "sourceCount": 6
+  },
+  {
+    "title": "⚖️\nEfektivita agentů v uvažování podle rozpočtu na tokeny",
+    "platformId": "efektivitaagentv",
+    "sourceCount": 11
+  },
+  {
+    "title": "🌐\nManifolds.jl: Julia pro analýzu dat na varietách",
+    "platformId": "manifoldsjljulia",
+    "sourceCount": 8
+  },
+  {
+    "title": "📊\nOptimalizace a limity ukládání textových dat v Neo4j 5",
+    "platformId": "optimalizacealim",
+    "sourceCount": 2
+  },
+  {
+    "title": "📦\nCODEDOCS",
+    "platformId": "codedocs",
+    "sourceCount": 190
+  },
+  {
+    "title": "📱\nModerní softwarová architektura: Mobilní systémy a správa dat",
+    "platformId": "modernsoftwarova",
+    "sourceCount": 14
+  },
+  {
+    "title": "💾\nSpráva verzí a architektura obnovy dat v Obsidianu 2026",
+    "platformId": "sprvaverzaarchit",
+    "sourceCount": 21
+  },
+  {
+    "title": "🕸️\nVývoj síťových aplikací v jazyce Nim",
+    "platformId": "vvojsovchaplikac",
+    "sourceCount": 38
+  },
+  {
+    "title": "🧬\nSymbolics.jl a ModelingToolkit.jl: Architektura symbolicko-numerické kompilace SciML",
+    "platformId": "symbolicsjlamode",
+    "sourceCount": 16
+  },
+  {
+    "title": "⚙️\nArchitektonické strategie pro modelování a interoperabilitu v AI systémech",
+    "platformId": "architektonickst",
+    "sourceCount": 14
+  },
+  {
+    "title": "🗃️\nArchitektury pro distribuované sledování souborů a offline katalogizaci metadata",
+    "platformId": "architekturyprod",
+    "sourceCount": 26
+  },
+  {
+    "title": "🐪\nPrůvodce jazykem OCaml: Od základů k imperativnímu programování",
+    "platformId": "prvodcejazykemoc",
+    "sourceCount": 26
+  },
+  {
+    "title": "🏗️\nArchitektury a automatizace systémových vrstev v Linuxu",
+    "platformId": "architekturyaaut",
+    "sourceCount": 13
+  },
+  {
+    "title": "🤝\nKřehkost shody: Limity kooperace a robustnosti AI agentů",
+    "platformId": "kehkostshodylimi",
+    "sourceCount": 23
+  },
+  {
+    "title": "⚠️\nAnalýza selhání a mechanismů obnovy v Androidu 16",
+    "platformId": "analzaselhnamech",
+    "sourceCount": 5
+  },
+  {
+    "title": "🧬\nDifuzní a konceptuální jazykové modely Google a Meta",
+    "platformId": "difuznakonceptul",
+    "sourceCount": 3
+  },
+  {
+    "title": "🏗️\nAlgoritmy a virtualizace: Výpočetní systémy v architektuře",
+    "platformId": "algoritmyavirtua",
+    "sourceCount": 54
+  },
+  {
+    "title": "⚙️\nAlternativy k Google OR-Tools: Analýza Architektury Optimalizace",
+    "platformId": "alternativykgoog",
+    "sourceCount": 18
+  },
+  {
+    "title": "🌐\n++ Webové modely světa: Propojení kódu a generativní inteligence",
+    "platformId": "webovmodelysvtap",
+    "sourceCount": 11
+  },
+  {
+    "title": "⚙️\nOptimalizace inference LLM na starších grafických kartách NVIDIA Tesla",
+    "platformId": "optimalizaceinfe",
+    "sourceCount": 8
+  },
+  {
+    "title": "🌐\nIntegrace ekosystému: Ontologie v výrobních sítích",
+    "platformId": "integraceekosyst",
+    "sourceCount": 7
+  },
+  {
+    "title": "♟️\nAlgoritmy a herní strategie v šachovém motoru",
+    "platformId": "algoritmyahernst",
+    "sourceCount": 12
+  },
+  {
+    "title": "📊\nRENDERING DOCS",
+    "platformId": "renderingdocs",
+    "sourceCount": 50
+  },
+  {
+    "title": "🛠️\nSkillsBench: Měření vlivu expertních dovedností na agenty LLM",
+    "platformId": "skillsbenchmenvl",
+    "sourceCount": 40
+  },
+  {
+    "title": "🌊\nπ-StepNFT: Jemné ladění robotických VLA modelů pomocí RL bez kritika",
+    "platformId": "stepnftjemnladnr",
+    "sourceCount": 32
+  },
+  {
+    "title": "🏗️\nPodniková architektura a řízení procesů v eventové produkci",
+    "platformId": "podnikovarchitek",
+    "sourceCount": 15
+  },
+  {
+    "title": "💻\nLinux Tips&Tricks",
+    "platformId": "linuxtipstricks",
+    "sourceCount": 1
+  },
+  {
+    "title": "🌐\nCode2World: Generování kódu pro simulaci uživatelského rozhraní",
+    "platformId": "code2worldgenero",
+    "sourceCount": 1
+  },
+  {
+    "title": "📜\nRocq Strukturovaná data a indukce v Logických základech",
+    "platformId": "rocqstrukturovan",
+    "sourceCount": 18
+  },
+  {
+    "title": "📈\n1BP426 Financial Derivatives I",
+    "platformId": "1bp426financiald",
+    "sourceCount": 10
+  },
+  {
+    "title": "🏗️\nAnalýza architektury v ArchiMate 3.2 a integrace BPMN a UML",
+    "platformId": "analzaarchitektu",
+    "sourceCount": 4
+  },
+  {
+    "title": "🔋\nTeorie vyčerpání ega a limity lidské vůle",
+    "platformId": "teorievyerpnegaa",
+    "sourceCount": 1
+  },
+  {
+    "title": "🧬\nHybridní architektury NLP: Integrace AR a difuzních modelů",
+    "platformId": "hybridnarchitekt",
+    "sourceCount": 6
+  },
+  {
+    "title": "📈\nAnalýza oceňování a zajištění finančních derivátů",
+    "platformId": "analzaoceovnazaj",
+    "sourceCount": 2
+  },
+  {
+    "title": "🤖\nModerní architektury a chaos v predikci AI systémů",
+    "platformId": "modernarchitektu",
+    "sourceCount": 2
+  },
+  {
+    "title": "🎛️\nAutomatizace MIDI a LLMOps v prostředí Linuxu",
+    "platformId": "automatizacemidi",
+    "sourceCount": 28
+  },
+  {
+    "title": "🧬\nOptimalizace metadatové architektury a paměti v prostředí Obsidian",
+    "platformId": "optimalizacemeta",
+    "sourceCount": 18
+  },
+  {
+    "title": "🎮\nStrategie a implementace pro projekt Pacman: Multi-Agent Search",
+    "platformId": "strategieaimplem",
+    "sourceCount": 1
+  },
+  {
+    "title": "📦\nai1 projects",
+    "platformId": "ai1projects",
+    "sourceCount": 5
+  },
+  {
+    "title": "📋\nTechnický seznam materiálu Shell Milano 2026",
+    "platformId": "technickseznamma",
+    "sourceCount": 1
+  },
+  {
+    "title": "🗣️\nZmatené ozvěny divadelního pódia",
+    "platformId": "zmatenozvnydivad",
+    "sourceCount": 1
+  },
+  {
+    "title": "💧\nVodní chlazení karet Nvidia Tesla díly z AliExpressu",
+    "platformId": "vodnchlazenkaret",
+    "sourceCount": 1
+  },
+  {
+    "title": "📦\nArchitektura a simulace algoritmů minimax a alphabeta",
+    "platformId": "architekturaasim",
+    "sourceCount": 9
+  },
+  {
+    "title": "📋\nArchitektura a limity datového úložiště CopyQ",
+    "platformId": "architekturaalim",
+    "sourceCount": 9
+  },
+  {
+    "title": "🕸️\nLightRAG: Rychlá a efektivní grafová generace s rozšířenou vyhledáváním",
+    "platformId": "lightragrychlaef",
+    "sourceCount": 2
+  },
+  {
+    "title": "⌨️\nVim bez doplňků: Efektivní programování s vestavěnými nástroji",
+    "platformId": "vimbezdoplkefekt",
+    "sourceCount": 1
+  },
+  {
+    "title": "🧑‍🎓\n4IZ431 | AI1",
+    "platformId": "4iz431ai1",
+    "sourceCount": 31
+  },
+  {
+    "title": "🧠\nVyužití myšlenkových map pro získávání informací",
+    "platformId": "vyuitmylenkovchm",
+    "sourceCount": 8
+  },
+  {
+    "title": "🚀\nArchitektonické limity a škálovatelnost systémů Neovim a Obsidian",
+    "platformId": "architektonickli",
+    "sourceCount": 14
+  },
+  {
+    "title": "⚡\nArchitektura a škálovatelnost doplňování kódu v Neovimu",
+    "platformId": "architekturaaklo",
+    "sourceCount": 11
+  },
+  {
+    "title": "🔓\nGIL a architektura správy paměti v Pythonu",
+    "platformId": "gilaarchitektura",
+    "sourceCount": 3
+  },
+  {
+    "title": "📦\nKompletní architektura projektu Metadata Menu",
+    "platformId": "kompletnarchitek",
+    "sourceCount": 3
+  },
+  {
+    "title": "🧬\nArchitektura odolnosti databází a automatizace terminálových konfigurací",
+    "platformId": "architekturaodol",
+    "sourceCount": 8
+  },
+  {
+    "title": "🏗️\nModerní ekosystémy pro správu dat a vývojářské nástroje",
+    "platformId": "modernekosystmyp",
+    "sourceCount": 8
+  },
+  {
+    "title": "🧠\nArchitektura a design osobního operačního systému",
+    "platformId": "architekturaades",
+    "sourceCount": 9
+  },
+  {
+    "title": "🌳\nOptimalizace agentů pomocí AT2PO a stromového vyhledávání",
+    "platformId": "optimalizaceagen",
+    "sourceCount": 2
+  },
+  {
+    "title": "🏗️\nArchitektura agentních systémů: Správa paměti a stavu AI",
+    "platformId": "architekturaagen",
+    "sourceCount": 6
+  },
+  {
+    "title": "🔍\nAnalýza nástrojů pro dotazování kódu a statických aktiv",
+    "platformId": "analzanstrojprod",
+    "sourceCount": 11
+  },
+  {
+    "title": "🏗️\nArchitektonické standardy správy a optimalizace moderních IT systémů",
+    "platformId": "architektonickst",
+    "sourceCount": 4
+  },
+  {
+    "title": "⚠️\nDiagnostika a řešení poruch požárních uzávěrů SPEDOS",
+    "platformId": "diagnostikaaeenp",
+    "sourceCount": 1
+  },
+  {
+    "title": "⚜️\nNávrh grafové báze znalostí pro skautské programy",
+    "platformId": "nvrhgrafovbzezna",
+    "sourceCount": 1
+  },
+  {
+    "title": "🏕️\nThe Evolution of Czech Scouting",
+    "platformId": "theevolutionofcz",
+    "sourceCount": 3
+  },
+  {
+    "title": "🤖\nAntigravity Verification",
+    "platformId": "antigravityverif",
+    "sourceCount": 1
+  },
+  {
+    "title": "🪆\nNestBrowse: Hierarchické učení agentů pro hloubkové vyhledávání informací",
+    "platformId": "nestbrowsehierar",
+    "sourceCount": 5
+  },
+  {
+    "title": "🕹️\nFunctionGemma: Analýza sekvenčního uvažování a nasazení na okraji sítě",
+    "platformId": "functiongemmaana",
+    "sourceCount": 13
+  },
+  {
+    "title": "🧩\nAnalýza softwarové architektury, správy dat a logických reasonerů",
+    "platformId": "analzasoftwarova",
+    "sourceCount": 19
+  },
+  {
+    "title": "🪙\nArchitektura a optimalizace tokenizace v modelech Gemini",
+    "platformId": "architekturaaopt",
+    "sourceCount": 21
+  },
+  {
+    "title": "🧠\nOntologický motor: Cesta od dat k digitální realitě",
+    "platformId": "ontologickmotorc",
+    "sourceCount": 6
+  },
+  {
+    "title": "🧠\nLogika, Grafy a Rekonciliace Stavů Znalostních Systémů",
+    "platformId": "logikagrafyareko",
+    "sourceCount": 11
+  },
+  {
+    "title": "🧪\nAgentní věda a evaluační rámce hlubokého výzkumu LLM",
+    "platformId": "agentnvdaaevalua",
+    "sourceCount": 1
+  },
+  {
+    "title": "⚙️\nArchitektura pokročilých pracovních toků a správa dat",
+    "platformId": "architekturapokr",
+    "sourceCount": 17
+  },
+  {
+    "title": "🤖\nStrategie Osobního AI Orchestrátora a Studijní Plán",
+    "platformId": "strategieosobnho",
+    "sourceCount": 27
+  },
+  {
+    "title": "🕸️\nLangGraph Swarm vs. Nativní Implementace: Srovnání Architektury",
+    "platformId": "langgraphswarmvs",
+    "sourceCount": 2
+  },
+  {
+    "title": "🔗\nSrovnání n8n a Alternativ pro Automatizaci 2025",
+    "platformId": "srovnnn8naaltern",
+    "sourceCount": 28
+  },
+  {
+    "title": "🛸\nDryRun Verification",
+    "platformId": "dryrunverificati",
+    "sourceCount": 4
+  },
+  {
+    "title": "⚖️\nAnalýza nákladů a návratnosti UWB vs. BLE pro RTLS",
+    "platformId": "analzankladanvra",
+    "sourceCount": 2
+  },
+  {
+    "title": "🛡️\nVDA ISA: Hodnocení informační bezpečnosti a TISAX",
+    "platformId": "vdaisahodnocenin",
+    "sourceCount": 6
+  },
+  {
+    "title": "📔\nUntitled notebook",
+    "platformId": "untitlednotebook",
+    "sourceCount": 0
+  },
+  {
+    "title": "🕸️\nObsidian Vault: Data, Indexace a LevelDB Úložiště",
+    "platformId": "obsidianvaultdat",
+    "sourceCount": 25
+  },
+  {
+    "title": "🐍\nMy Final Project",
+    "platformId": "myfinalproject",
+    "sourceCount": 2
+  },
+  {
+    "title": "🚥\nVizualizace stavu agentů: Chat, Discord a Chainlit",
+    "platformId": "vizualizacestavu",
+    "sourceCount": 5
+  },
+  {
+    "title": "📊\n4IZ422 | Automatizace zpracování textů",
+    "platformId": "4iz422automatiza",
+    "sourceCount": 22
+  },
+  {
+    "title": "⚙️\nArchitektura Úkolů: Optimalizace, Hierarchie a Vzdálený Vývoj",
+    "platformId": "architekturakolo",
+    "sourceCount": 4
+  },
+  {
+    "title": "🏆\nŠkoda Loc Prop",
+    "platformId": "kodalocprop",
+    "sourceCount": 3
+  },
+  {
+    "title": "⚖️\n25/11 -AG2 vs. LangGraph: Autonomie, Kontrola",
+    "platformId": "2511ag2vslanggra",
+    "sourceCount": 4
+  },
+  {
+    "title": "💻\n23/11 -Lokalizace Vial GUI: Česká Programátorská Klávesnice na Linuxu",
+    "platformId": "2311lokalizacevi",
+    "sourceCount": 8
+  },
+  {
+    "title": "🏗️\n22/11 Architektura Vizualizace a Zálohování PlantUML z Gemini",
+    "platformId": "2211architektura",
+    "sourceCount": 21
+  },
+  {
+    "title": "💻\n18/11",
+    "platformId": "1811",
+    "sourceCount": 9
+  },
+  {
+    "title": "📝\nPrago technika manualy",
+    "platformId": "pragotechnikaman",
+    "sourceCount": 1
+  },
+  {
+    "title": "🔗\nAutogenrchitektura a Orchestrace AI Agentů",
+    "platformId": "autogenrchitektu",
+    "sourceCount": 36
+  },
+  {
+    "title": "📐\ngrandMA3: Migrace z Avolites a Chamsys",
+    "platformId": "grandma3migracez",
+    "sourceCount": 24
+  },
+  {
+    "title": "💡\nAyrton Rivale Profile: Technická Specifikace a Údržba IP65",
+    "platformId": "ayrtonrivaleprof",
+    "sourceCount": 9
+  },
+  {
+    "title": "🧩\nHybridní Architektura: YouTrack a Obsidian pro Projekty",
+    "platformId": "hybridnarchitekt",
+    "sourceCount": 10
+  },
+  {
+    "title": "🤖\nTools",
+    "platformId": "tools",
+    "sourceCount": 15
+  },
+  {
+    "title": "🔬\n16/10/25 Research",
+    "platformId": "161025research",
+    "sourceCount": 45
+  },
+  {
+    "title": "🧠\nStrategický Vývoj Agentů Gemini Řízený Specifikacemi",
+    "platformId": "strategickvvojag",
+    "sourceCount": 5
+  },
+  {
+    "title": "🧠\nAI Papers 01",
+    "platformId": "aipapers01",
+    "sourceCount": 4
+  },
+  {
+    "title": "🤹‍♂️\n4/11/25 Kompatibilita Agentů a Hybridní Paměťové Architektury",
+    "platformId": "41125kompatibili",
+    "sourceCount": 13
+  },
+  {
+    "title": "🔨\n9/11/25 Obsidian vs. YouTrack a Vlastní Hlasový Asistent",
+    "platformId": "91125obsidianvsy",
+    "sourceCount": 9
+  },
+  {
+    "title": "🐧\nAnsible a Arch Linux: Automatizovaná Správa",
+    "platformId": "ansibleaarchlinu",
+    "sourceCount": 22
+  },
+  {
+    "title": "🧮\nAlgorithm Design and Implementation Exercises",
+    "platformId": "algorithmdesigna",
+    "sourceCount": 2
+  },
+  {
+    "title": "🧠\nConnectome-Based Predictive Modeling of Human Intelligence",
+    "platformId": "connectomebasedp",
+    "sourceCount": 1
+  },
+  {
+    "title": "🤝\nPsychologie a její aplikace | Embodied Communication: Gestures and Action",
+    "platformId": "psychologieajeja",
+    "sourceCount": 9
+  },
+  {
+    "title": "🤔\nFilosofické Problémy Kvantifikace a Měření",
+    "platformId": "filosofickproblm",
+    "sourceCount": 3
+  },
+  {
+    "title": "☁️\nCloud Storage Showdown: Drive, OneDrive, Dropbox, Nextcloud",
+    "platformId": "cloudstorageshow",
+    "sourceCount": 1
+  },
+  {
+    "title": "🧠\ntest Untitled notebook",
+    "platformId": "testuntitlednote",
+    "sourceCount": 9
+  },
+  {
+    "title": "🖱️\nLogitech MX Master 4: The Build Quality Fix",
+    "platformId": "logitechmxmaster",
+    "sourceCount": 1
+  },
+  {
+    "title": "⚙️\nRentman Documentation",
+    "platformId": "rentmandocumenta",
+    "sourceCount": 19
+  },
+  {
+    "title": "🧠\nArtificial Intelligence: A modern approach",
+    "platformId": "artificialintell",
+    "sourceCount": 1
+  },
+  {
+    "title": "👋\nFrom Tmux to Kitty: The Terminal Switch",
+    "platformId": "fromtmuxtokittyt",
+    "sourceCount": 1
+  },
+  {
+    "title": "↔️\nJulia Asynchronous Programming: Tasks and Channels",
+    "platformId": "juliaasynchronou",
+    "sourceCount": 3
+  },
+  {
+    "title": "🏗️\nFollow Spot Tower Design",
+    "platformId": "followspottowerd",
+    "sourceCount": 1
+  },
+  {
+    "title": "⚙️\nVX6s All-in-One Controller User Manual",
+    "platformId": "vx6sallinonecont",
+    "sourceCount": 1
+  },
+  {
+    "title": "🤔\nGame Theory: The Prisoner's Dilemma",
+    "platformId": "gametheorythepri",
+    "sourceCount": 11
+  },
+  {
+    "title": "🧠\nKV | Coupled Ripples and Human Memory Retrieval",
+    "platformId": "kvcoupledripples",
+    "sourceCount": 4
+  },
+  {
+    "title": "📔\nSimulace Systémů",
+    "platformId": "simulacesystm",
+    "sourceCount": 10
+  },
+  {
+    "title": "💡\nPsychologie Kreativity | Defining Creativity",
+    "platformId": "psychologiekreat",
+    "sourceCount": 5
+  },
+  {
+    "title": "🧠\nKV-memory sources",
+    "platformId": "kvmemorysources",
+    "sourceCount": 17
+  },
+  {
+    "title": "🧠\nKognitivní věda",
+    "platformId": "kognitivnvda",
+    "sourceCount": 17
+  },
+  {
+    "title": "🏕️\nSkautskáVzdělávacíMetoda",
+    "platformId": "skautskvzdlvacme",
+    "sourceCount": 10
+  },
+  {
+    "title": "🎭\nPsychologie Kreativity | Školy a kreativita",
+    "platformId": "psychologiekreat",
+    "sourceCount": 15
+  },
+  {
+    "title": "🗣️\nPsychologie a její Aplikace | Komunikace",
+    "platformId": "psychologieajeja",
+    "sourceCount": 5
+  },
+  {
+    "title": "📔\nknowlage mgmt",
+    "platformId": "knowlagemgmt",
+    "sourceCount": 11
+  }
+]
+♻️ [BrowserClient] Releasing 1 leased pages to pool...
+🔓 Tab undefined marked as free
+[Profile] Saved auth state for profile 'default' to /home/sim/.rsrch/profiles/default/auth.json

@@ -1,7 +1,5 @@
 import { Command } from 'commander';
-import { BrowserClient } from '../clients/base';
-import { cliContext } from '../cli/context';
-import { login } from '../services/auth';
+import { sendServerRequest } from '../cli/utils';
 import * as fs from 'fs';
 import { config } from '../config';
 
@@ -11,20 +9,18 @@ export const queryCommand = new Command('query')
     .option('--session <session>', 'Session ID')
     .option('--name <name>', 'Session Name')
     .option('--deep', 'Deep research mode')
-    .option('--keep-alive', 'Keep browser open')
     .action(async (query, opts) => {
-        const { profileId, cdpEndpoint } = cliContext.get();
         if (query) {
-            const browser = new BrowserClient({ profileId, cdpEndpoint });
-            await browser.init({ keepAlive: opts.keepAlive, profileId, cdpEndpoint });
-            try {
-                const client = await browser.createPerplexityClient();
-                const result = await client.query(query);
+            const result = await sendServerRequest('/perplexity/query', {
+                query,
+                sessionId: opts.session,
+                name: opts.name,
+                deep: opts.deep
+            });
+            if (result?.success) {
                 console.log('\n--- Answer ---');
                 console.log(result.answer || 'No answer found.');
                 console.log('\nSource URL:', result.url);
-            } finally {
-                await browser.close();
             }
         } else {
             // Legacy mode (queries.json)
@@ -32,14 +28,11 @@ export const queryCommand = new Command('query')
                 console.log('No query argument provided. Reading from queries.json...');
                 const queries = JSON.parse(fs.readFileSync(config.paths.queriesFile, 'utf-8'));
                 if (Array.isArray(queries)) {
-                    const client = new BrowserClient({ profileId, cdpEndpoint });
-                    await client.init({ profileId, cdpEndpoint });
-                    try {
-                        for (const q of queries) {
-                            await client.query(q, opts);
-                        }
-                    } finally {
-                        await client.close();
+                    const result = await sendServerRequest('/perplexity/batch', { queries });
+                    if (result?.success) {
+                        result.results.forEach((r: any, i: number) => {
+                            console.log(`\n[Query ${i + 1}] Answer: ${r.answer?.substring(0, 100)}...`);
+                        });
                     }
                 } else {
                     console.error('queries.json should be an array of strings.');
@@ -54,7 +47,6 @@ export const batchCommand = new Command('batch')
     .argument('<file>')
     .description('Run batch queries from a file')
     .action(async (file) => {
-        const { profileId, cdpEndpoint } = cliContext.get();
         if (!fs.existsSync(file)) {
             console.error(`Batch file not found: ${file}`);
             process.exit(1);
@@ -68,58 +60,24 @@ export const batchCommand = new Command('batch')
             process.exit(1);
         }
 
-        console.log(`Found ${queries.length} queries in batch file.`);
-
-        const browser = new BrowserClient({ profileId, cdpEndpoint });
-        await browser.init({ profileId, cdpEndpoint });
-
-        try {
-            const client = await browser.createPerplexityClient();
-            for (let i = 0; i < queries.length; i++) {
-                const q = queries[i];
-                console.log(`\n[Batch ${i + 1}/${queries.length}] Processing: "${q}"`);
-                const result = await client.query(q);
-                console.log(`Answer length: ${result.answer?.length || 0}`);
-            }
-        } catch (error) {
-            console.error('Batch processing failed:', error);
-        } finally {
-            await browser.close();
-            console.log('\nBatch complete. Browser closed.');
+        console.log(`Found ${queries.length} queries in batch file. Dispatching to server...`);
+        const result = await sendServerRequest('/perplexity/batch', { queries });
+        if (result?.success) {
+            console.log(`Batch complete. Processed ${result.results.length} queries.`);
         }
     });
 
 export const authCommand = new Command('auth')
-    .description('Login to Perplexity (headless)')
+    .description('Check Perplexity auth status on server')
     .action(async () => {
-        const { profileId } = cliContext.get();
-        const { getStateDir } = await import('../services/profile');
-        const userDataDir = getStateDir(profileId);
-        await login(userDataDir);
+        const result = await sendServerRequest('/perplexity/query', { query: 'test' });
+        if (result?.success) console.log('✓ Perplexity authenticated');
+        else console.log('✗ Perplexity auth failed');
     });
 
 export const loginCommand = new Command('login')
-    .description('Interactive login for Docker/Remote')
-    .action(async () => {
-        const { profileId, cdpEndpoint } = cliContext.get();
-        const client = new BrowserClient({ profileId, cdpEndpoint });
-        await client.init({ profileId, cdpEndpoint });
-
-        console.log('Opening Perplexity for interactive login...');
-        const ppUrl = 'https://www.perplexity.ai';
-        await client.openPage(ppUrl);
-
-        console.log('Opening NotebookLM for interactive login...');
-        await client.openPage('https://notebooklm.google.com/');
-
-        console.log('\nPLEASE LOG IN TO BOTH SERVICES VIA VNC (localhost:5900).');
-        console.log('1. Log in to Perplexity in the first tab.');
-        console.log('2. Log in to Google/NotebookLM in the second tab.');
-        console.log('Press Enter here when you have successfully logged in to BOTH...');
-
-        await new Promise(resolve => process.stdin.once('data', resolve));
-
-        await client.saveAuth();
-        console.log('Session saved! You can now use "query" or "batch".');
-        process.exit(0);
+    .description('Note: Use VNC dashboard for interactive login on server.')
+    .action(() => {
+        console.log('\nStateless CLI Migration: Interactive login is now managed on the server side.');
+        console.log('Please use the VNC dashboard (localhost:5900) or server-side UI to log in.');
     });

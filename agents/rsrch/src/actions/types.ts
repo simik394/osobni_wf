@@ -62,6 +62,7 @@ export type GeminiActionDeps = ActionDeps & {
     submitFeedback: (isGood: boolean, comment?: string) => Promise<boolean>;
     editLastPrompt: (newText: string) => Promise<boolean>;
     exportSession: () => Promise<{ title: string; markdown: string; turns: any[] }>;
+    archiveArtifacts: (options?: { outputDir?: string, format?: 'md' | 'qmd', incremental?: boolean }) => Promise<string[]>;
 };
 
 
@@ -83,6 +84,7 @@ export type NotebookLMActionDeps = ActionDeps & {
     setIsBusy?: (busy: boolean) => void;
     getIsBusy?: () => boolean;
     recycle?: () => Promise<void>;
+    archiveNotebook?: (options: { outputDir?: string, format?: 'md' | 'qmd', extractSources?: boolean, incremental?: boolean }) => Promise<string[]>;
 };
 
 /**

@@ -153,11 +153,12 @@ export async function downloadArtifactAction(
         return downloadAudioAction(ctx, deps, notebookTitle, finalPath, { audioTitlePattern: target.title });
     }
 
-    // Handle Visual/Text Artifacts
+    // 3. Handle Visual/Text Artifacts
     const studioPanel = page.locator('section.studio-panel, .studio-panel, div.right-panel').first();
     
-    // SPECIAL FLOW for Presentations/Blueprints: Use native "Download PDF" from the Sidebar Menu
-    if (target.type === 'presentation' || target.type === 'table') {
+    // SPECIAL FLOW for Presentations/Tables/Infographics/MindMaps: Try native "Download PDF" from the Sidebar Menu
+    const isVisual = ['presentation', 'table', 'infographic', 'mindmap', 'briefing'].includes(target.type);
+    if (isVisual) {
         log(`Target is visual (${target.type}). Attempting Sidebar "More" menu download...`);
         const item = studioPanel.locator('.artifact-stretched-button').nth(targetIndex);
         const moreBtn = item.locator('xpath=..').locator('.artifact-more-button, [aria-label*="Možnosti"], [aria-label*="More"]').first();
@@ -167,7 +168,7 @@ export async function downloadArtifactAction(
             await deps.humanDelay(1000);
             
             const downloadBtn = page.locator('button.mat-mdc-menu-item, [role="menuitem"]').filter({ 
-                hasText: /Stáhnout dokument PDF|Download PDF|Stáhnout PowerPoint|Download PowerPoint/i 
+                hasText: /Stáhnout dokument PDF|Download PDF|Stáhnout PowerPoint|Download PowerPoint|Exportovat/i 
             }).first();
             
             if (await downloadBtn.count() > 0 && await downloadBtn.isVisible()) {
@@ -183,7 +184,7 @@ export async function downloadArtifactAction(
         }
     }
 
-    // STANDARD FLOW: Open and Scrape/Screenshot
+    // 4. STANDARD FLOW: Open and Scrape/Screenshot
     const itemLocator = studioPanel.locator('.artifact-stretched-button').nth(targetIndex);
     await itemLocator.click({ force: true }).catch(() => itemLocator.dispatchEvent('click'));
     await deps.humanDelay(2500);
