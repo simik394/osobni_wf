@@ -122,17 +122,37 @@ describe('ArtifactRegistry', () => {
 
 // end snippet should-persist-data-to-disk
 
-// start snippet should-list-artifacts-by-type
-
-    it('should list artifacts by type', () => {
+    it('should list all artifacts', () => {
         const s1 = registry.registerSession('s1', 'Q1');
         registry.registerDocument(s1, 'd1', 'D1');
-        registry.registerAudio('s1-01', 'N1', 'A1');
-
-        expect(registry.listByType('session').length).toBe(1);
-        expect(registry.listByType('document').length).toBe(1);
-        expect(registry.listByType('audio').length).toBe(1);
+        
+        const all = registry.listAll();
+        expect(Object.keys(all).length).toBe(2);
     });
 
-// end snippet should-list-artifacts-by-type
+    it('should delete an artifact', () => {
+        const s1 = registry.registerSession('s1', 'Q1');
+        expect(registry.get(s1)).toBeDefined();
+        
+        registry.delete(s1);
+        expect(registry.get(s1)).toBeUndefined();
+    });
+
+    it('should support provenance tracking via sourceArtifactId', () => {
+        const s1 = registry.registerSession('s1', 'Q1');
+        const docId = registry.registerDocument(s1, 'g1', 'G1');
+        
+        // Notebook source linked to Gemini doc
+        const sourceId = registry.generateBaseId();
+        (registry as any).registry.artifacts[sourceId] = {
+            type: 'source_text',
+            parentId: 'nb-1',
+            originalTitle: 'G1',
+            sourceArtifactId: docId,
+            createdAt: new Date().toISOString()
+        };
+        
+        const source = registry.get(sourceId);
+        expect(source?.sourceArtifactId).toBe(docId);
+    });
 });

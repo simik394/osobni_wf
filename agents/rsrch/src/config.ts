@@ -57,6 +57,10 @@ const configSchema = z.object({
     workspace: z.string().optional(),
     audioScriptPath: z.string().optional(),
   }).optional(),
+  telemetry: z.object({
+    enabled: z.coerce.boolean().default(true),
+    endpoint: z.string().url().default('http://halvarm.tail288db.ts.net:3000/api/public/otel/v1/traces'),
+  }).default({}),
 });
 
 /**
@@ -130,6 +134,10 @@ function loadConfig() {
       token: process.env.WINDMILL_TOKEN || localConfig.windmill?.token,
       workspace: process.env.WINDMILL_WORKSPACE || localConfig.windmill?.workspace,
       audioScriptPath: process.env.WINDMILL_AUDIO_SCRIPT_PATH || localConfig.windmill?.audioScriptPath,
+    },
+    telemetry: {
+      enabled: process.env.TELEMETRY_ENABLED !== undefined ? process.env.TELEMETRY_ENABLED === 'true' : localConfig.telemetry?.enabled,
+      endpoint: process.env.TELEMETRY_ENDPOINT || localConfig.telemetry?.endpoint,
     }
   };
 

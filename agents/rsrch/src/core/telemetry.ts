@@ -2,14 +2,10 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
-import * as path from 'path';
-import * as os from 'os';
-
-// Custom OTLP endpoint from user configuration
-const OTLP_ENDPOINT = 'http://halvarm.tail288db.ts.net:3000/api/public/otel/v1/traces';
+import { config } from '../config';
 
 const traceExporter = new OTLPTraceExporter({
-  url: OTLP_ENDPOINT,
+  url: config.telemetry.endpoint,
 });
 
 export const sdk = new NodeSDK({
@@ -25,9 +21,13 @@ export const sdk = new NodeSDK({
  * Initialize telemetry and handle graceful shutdown
  */
 export async function initTelemetry() {
+  if (!config.telemetry.enabled) {
+    return;
+  }
+
   try {
     sdk.start();
-    console.log(`[Telemetry] Started. Exporting to ${OTLP_ENDPOINT}`);
+    console.log(`[Telemetry] Started. Exporting to ${config.telemetry.endpoint}`);
 
     process.on('SIGTERM', () => {
       sdk.shutdown()
@@ -41,5 +41,6 @@ export async function initTelemetry() {
 }
 
 export async function shutdownTelemetry() {
+  if (!config.telemetry.enabled) return;
   await sdk.shutdown();
 }
