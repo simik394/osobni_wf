@@ -121,26 +121,42 @@ export async function archiveNotebookAction(
     // 5. Extract Full Source Text (Optional)
     if (extractSources) {
         log('Extracting full source contents...');
-        const sourceFiles = await archiveNotebookSourcesAction(ctx, deps, sessionDir, format);
-        archivedFiles.push(...sourceFiles);
+        const extractedSources = await archiveNotebookSourcesAction(ctx, deps, sessionDir, format);
+        archivedFiles.push(...extractedSources.map(s => s.path));
         
-        // Register sources in registry
+        // Register sources in registry with provenance matching
         try {
-            sourceFiles.forEach(f => {
-                const fileName = path.basename(f);
+            const allArtifacts = registry.listAll();
+            const geminiDocs = Object.entries(allArtifacts).filter(([_, v]) => v.type === 'research_doc' || v.type === 'document');
+
+            extractedSources.forEach(s => {
                 const artifactId = registry.generateBaseId();
-                if (!isAlreadyArchived(fileName, 'source_text')) {
+                if (!isAlreadyArchived(s.title, 'source_text')) {
+                    // Attempt to find original Gemini artifact by title
+                    const matchedGemini = geminiDocs.find(([_, v]) => 
+                        v.originalTitle === s.title || 
+                        s.title.includes(v.originalTitle || '') ||
+                        (v.originalTitle && v.originalTitle.includes(s.title))
+                    );
+
+                    if (matchedGemini) {
+                        log(`  [LINK] Matched source "${s.title}" to Gemini artifact ${matchedGemini[0]}`);
+                    }
+
                     (registry as any).registry.artifacts[artifactId] = {
                         type: 'source_text',
                         parentId: notebookData.platformId,
                         platform: 'notebooklm',
-                        originalTitle: fileName,
-                        markdownPath: f,
+                        originalTitle: s.title,
+                        markdownPath: s.path,
+                        sourceArtifactId: matchedGemini ? matchedGemini[0] : undefined,
                         createdAt: new Date().toISOString()
                     };
                 }
             });
-        } catch (err) {}
+        } catch (err: any) {
+            log(`Failed to register sources: ${err.message}`, 'warn');
+        }
     }
 
     // 6. Export Full Chat History

@@ -4,16 +4,17 @@ import * as path from 'path';
 
 /**
  * Extracts full text content from all sources in the notebook.
+ * Returns metadata and paths for registry integration.
  */
 export async function archiveNotebookSourcesAction(
     ctx: UniversalContext,
     deps: NotebookLMActionDeps,
     outputDir: string,
     format: 'md' | 'qmd' = 'md'
-): Promise<string[]> {
+): Promise<{ title: string, path: string }[]> {
     const { page, log } = ctx;
     const { humanDelay } = deps;
-    const archivedFiles: string[] = [];
+    const extractedSources: { title: string, path: string }[] = [];
     const ext = format === 'qmd' ? 'qmd' : 'md';
 
     log('Starting full source content extraction...');
@@ -52,10 +53,8 @@ export async function archiveNotebookSourcesAction(
             const fileName = `${title.replace(/[^a-z0-9]/gi, '_')}.${ext}`;
             const filePath = path.join(sourcesDir, fileName);
 
-            // In a real scenario, we might want to use formatContent from ../utils
-            // But for simplicity here, I'll just write it
             fs.writeFileSync(filePath, content);
-            archivedFiles.push(filePath);
+            extractedSources.push({ title, path: filePath });
 
             // Close detail view (return to list)
             const closeBtn = page.locator('button:has(mat-icon:has-text("collapse_content")), button:has(mat-icon:has-text("close")), button:has(mat-icon:has-text("arrow_back"))').first();
@@ -75,7 +74,7 @@ export async function archiveNotebookSourcesAction(
         }
     }
 
-    return archivedFiles;
+    return extractedSources;
 }
 
 /**

@@ -11,6 +11,7 @@ import { registryCommand } from '../commands/registry';
 import { aimodeCommand } from '../commands/aimode';
 import { keepCommand } from '../commands/keep';
 import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from '../commands/misc';
+import { initTelemetry, shutdownTelemetry } from '../core/telemetry';
 
 const program = new Command();
 
@@ -50,4 +51,16 @@ program.addCommand(registryCommand);
 program.addCommand(aimodeCommand);
 program.addCommand(keepCommand);
 
-program.parseAsync(process.argv);
+async function main() {
+    try {
+        await initTelemetry();
+        await program.parseAsync(process.argv);
+    } catch (error) {
+        console.error(error);
+        process.exit(1);
+    } finally {
+        await shutdownTelemetry();
+    }
+}
+
+main();

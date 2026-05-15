@@ -27,6 +27,9 @@ export interface ArtifactEntry {
     // Audio-specific
     notebookTitle?: string;
     localPath?: string;
+
+    // Provenance
+    sourceArtifactId?: string;   // Link to original artifact (e.g. Gemini doc -> Notebook source)
 }
 
 export interface Registry {
@@ -202,6 +205,24 @@ export class ArtifactRegistry {
      */
     listIds(): string[] {
         return Object.keys(this.registry.artifacts);
+    }
+
+    /**
+     * List all artifacts
+     */
+    listAll(): Record<string, ArtifactEntry> {
+        return this.registry.artifacts;
+    }
+
+    /**
+     * Delete an artifact by ID
+     */
+    delete(id: string): void {
+        if (this.registry.artifacts[id]) {
+            delete this.registry.artifacts[id];
+            this.save();
+            console.log(`[Registry] Deleted artifact: ${id}`);
+        }
     }
 
     /**
