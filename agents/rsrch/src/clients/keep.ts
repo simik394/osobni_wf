@@ -29,4 +29,16 @@ export class KeepClient {
     async createNote(title: string, content: string) {
         return actions.createKeepNoteAction(this.ctx, this.deps, title, content);
     }
+
+    async deleteNote(title: string) {
+        return actions.deleteKeepNoteAction(this.ctx, this.deps, title);
+    }
+
+    async archiveNote(title: string) {
+        return actions.archiveKeepNoteAction(this.ctx, this.deps, title);
+    }
+
+    async searchNotes(query: string) {
+        return actions.searchKeepNotesAction(this.ctx, this.deps, query);
+    }
 }

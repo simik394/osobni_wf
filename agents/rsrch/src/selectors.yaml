@@ -270,6 +270,11 @@ keep:
   noteItem: 'div[role="button"][aria-label*="Poznámka" i], div.IZ65Hb-n0wRZb'
   noteTitle: '.IZ65Hb-YPqjS-IDT92e'
   noteContent: '.IZ65Hb-sBy40b'
+  moreMenu: 'div[role="button"][aria-label*="Více" i], div[role="button"][aria-label*="More" i]'
+  deleteOption: 'div[role="menuitem"]:has-text("Smazat"), div[role="menuitem"]:has-text("Delete")'
+  archiveButton: 'div[role="button"][aria-label*="Archivovat" i], div[role="button"][aria-label*="Archive" i]'
+  searchInput: 'input[placeholder*="Vyhledat" i], input[placeholder*="Search" i]'
+  clearSearch: 'button[aria-label*="Vymazat" i], button[aria-label*="Clear" i]'
 # ============================================================
 # AI MODE (Google Search AI) SELECTORS
 # ============================================================

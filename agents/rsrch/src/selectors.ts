@@ -286,6 +286,11 @@ export interface KeepSelectors {
     noteItem: string;
     noteTitle: string;
     noteContent: string;
+    moreMenu: string;
+    deleteOption: string;
+    archiveButton: string;
+    searchInput: string;
+    clearSearch: string;
 }
 
 export interface NotebookLMSelectors {
@@ -552,7 +557,12 @@ const DEFAULTS: NotebookLMSelectors = {
         saveButton: 'Done',
         noteItem: '.IZ65Hb-n0wRZb',
         noteTitle: '.IZ65Hb-YPqjS-IDT92e',
-        noteContent: '.IZ65Hb-sBy40b'
+        noteContent: '.IZ65Hb-sBy40b',
+        moreMenu: 'More',
+        deleteOption: 'Delete',
+        archiveButton: 'Archive',
+        searchInput: 'Search',
+        clearSearch: 'Clear'
     },
     googleAuth: {
         accountChooser: {

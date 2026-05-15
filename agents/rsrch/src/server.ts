@@ -8,6 +8,7 @@ import { getGraphStore } from './core/graph-store';
 import { discordService } from './services/notification';
 
 // Import Modular Routers
+console.log(`[Server] @agents/shared resolved to: ${require.resolve('@agents/shared')}`);
 import { createNotebookRouter } from './routes/notebook-router';
 import { createNotebookLMRouter } from './routes/notebooklm-router';
 import { createKeepRouter } from './routes/keep-router';

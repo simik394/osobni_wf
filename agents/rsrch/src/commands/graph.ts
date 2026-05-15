@@ -7,7 +7,7 @@ graph.command('notebooks')
     .description('List synced notebooks')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
     .action(async (opts) => {
-        const response = await sendServerRequest('/graph/notebooks', { limit: opts.limit });
+        const response = await sendServerRequest('/graph/notebooks', { limit: opts.limit }, 'GET');
         if (response?.success) {
             const notebooks = response.notebooks;
             console.log(`\n === Synced Notebooks (${notebooks.length}) ===\n`);
@@ -28,7 +28,7 @@ graph.command('notebooks')
 graph.command('status')
     .description('Show graph status and jobs')
     .action(async () => {
-        const response = await sendServerRequest('/graph/graph/status');
+        const response = await sendServerRequest('/graph/graph/status', {}, 'GET');
         if (response && response.success) {
             console.log('✅ FalkorDB connection: OK');
             const stats = response.stats;
@@ -43,7 +43,7 @@ graph.command('status')
 graph.command('jobs [status]')
     .description('List jobs by status')
     .action(async (status) => {
-        const response = await sendServerRequest('/jobs/jobs');
+        const response = await sendServerRequest('/jobs/jobs', {}, 'GET');
         if (response && response.success) {
             const jobs = status ? response.jobs.filter((j: any) => j.status === status) : response.jobs;
             console.log(`\nJobs (${jobs.length}):`);
@@ -57,7 +57,7 @@ graph.command('jobs [status]')
 graph.command('lineage <artifactId>')
     .description('Show lineage for an artifact')
     .action(async (artifactId) => {
-        const response = await sendServerRequest(`/graph/lineage/${artifactId}`);
+        const response = await sendServerRequest(`/graph/lineage/${artifactId}`, {}, 'GET');
         if (response?.success) {
             const chain = response.chain;
             if (!chain.job && !chain.session && !chain.document && !chain.audio) {
@@ -77,7 +77,7 @@ graph.command('conversations')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
     .option('--platform <platform>', 'Platform (gemini|perplexity)', 'gemini')
     .action(async (opts) => {
-        const response = await sendServerRequest('/graph/conversations', { platform: opts.platform, limit: opts.limit });
+        const response = await sendServerRequest('/graph/conversations', { platform: opts.platform, limit: opts.limit }, 'GET');
         if (response?.success) {
             const conversations = response.conversations;
             console.log(`\n${opts.platform.toUpperCase()} Conversations (${conversations.length}):`);
@@ -106,7 +106,7 @@ graph.command('conversation <id>')
                 answersOnly: opts.answersOnly,
                 includeResearchDocs: opts.researchDocs
             }
-        });
+        }, 'POST');
 
         if (response?.success) {
             if (!response.conversation) {
@@ -140,7 +140,7 @@ graph.command('citations')
     .option('--domain <domain>', 'Filter by domain')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
     .action(async (opts) => {
-        const response = await sendServerRequest('/graph/citations', { domain: opts.domain, limit: opts.limit });
+        const response = await sendServerRequest('/graph/citations', { domain: opts.domain, limit: opts.limit }, 'GET');
         if (response?.success) {
             const citations = response.citations;
             console.log(`\n=== Citations (${citations.length}) ===\n`);
@@ -156,7 +156,7 @@ graph.command('citations')
 graph.command('citation-usage <url>')
     .description('Show where a URL is cited')
     .action(async (url) => {
-        const response = await sendServerRequest('/graph/citation/usage', { url });
+        const response = await sendServerRequest('/graph/citation/usage', { url }, 'POST');
         if (response?.success) {
             const usage = response.usage;
             if (usage.length === 0) {
@@ -177,7 +177,7 @@ graph.command('citation-usage <url>')
 graph.command('migrate-citations')
     .description('Migrate existing ResearchDocs to Citations')
     .action(async () => {
-        const response = await sendServerRequest('/graph/migrate-citations');
+        const response = await sendServerRequest('/graph/migrate-citations', {}, 'POST');
         if (response?.success) {
             const result = response.result;
             console.log(`\n=== Migration Complete ===`);

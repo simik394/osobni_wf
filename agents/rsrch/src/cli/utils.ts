@@ -31,15 +31,24 @@ export async function notifyNtfy(title: string, message: string, tags?: string[]
 }
 
 // Helper to send request to server (returns data for programmatic use)
-export async function sendServerRequest(path: string, body: any = {}): Promise<any> {
+export async function sendServerRequest(path: string, body: any = {}, method: string = 'POST'): Promise<any> {
     const serverUrl = cliContext.get().serverUrl || DEFAULT_SERVER_URL;
     const url = `${serverUrl}${path}`;
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
+        const fetchOpts: RequestInit = {
+            method,
+            headers: { 'Content-Type': 'application/json' }
+        };
+        
+        if (method !== 'GET' && method !== 'HEAD') {
+            fetchOpts.body = JSON.stringify(body);
+        } else if (Object.keys(body).length > 0) {
+            // Convert body to query params for GET
+            const query = new URLSearchParams(body).toString();
+            path += (path.includes('?') ? '&' : '?') + query;
+        }
+
+        const response = await fetch(`${serverUrl}${path}`, fetchOpts);
 
         if (!response.ok) {
             const err = await response.text();

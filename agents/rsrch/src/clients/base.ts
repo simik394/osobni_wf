@@ -12,7 +12,7 @@ import { selectors } from '../selectors';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadStorageState, saveStorageState, getStateDir, ensureProfileDir } from '../services/profile';
-import { getTab, markTabBusy, markTabFree } from '@agents/shared/tab-pool';
+import { getTab, markTabBusy, markTabFree } from '@agents/shared';
 import { UniversalContext } from '../actions/types';
 
 interface Session {
@@ -311,6 +311,7 @@ export class BrowserClient extends BaseClient {
 
     async createKeepClient(): Promise<KeepClient> {
         if (!this.context) throw new Error('Browser not initialized');
+        console.log('[BrowserClient] Calling getTab for keep...');
         const page = await getTab(this.context as any, 'keep' as any);
         this.leasedPages.push(page);
         return new KeepClient(page);

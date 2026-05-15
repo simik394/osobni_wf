@@ -23,7 +23,7 @@ export function registerUploadCommands(gemini: Command) {
 
         if (payloadFiles.length > 0) {
             if (sessionId) {
-                await sendServerRequest('/session/open', { identifier: sessionId });
+                await sendServerRequest('/gemini/session/open', { identifier: sessionId }, 'POST');
             }
             return await sendServerRequest('/gemini/upload', { files: payloadFiles });
         }
@@ -41,7 +41,7 @@ export function registerUploadCommands(gemini: Command) {
     gemini.command('export-to-docs [sessionId]')
         .description('Export session to Google Docs')
         .action(async (sessionId) => {
-            if (sessionId) await sendServerRequest('/session/open', { identifier: sessionId });
+            if (sessionId) await sendServerRequest('/gemini/session/open', { identifier: sessionId }, 'POST');
 
             console.log('\nExporting to Google Docs...');
             const data = await sendServerRequest('/gemini/export-to-docs');
@@ -98,7 +98,7 @@ export function registerUploadCommands(gemini: Command) {
     gemini.command('upload-drive <fileName> [sessionId]')
         .description('Upload a file from Google Drive')
         .action(async (fileName, sessionId) => {
-            if (sessionId) await sendServerRequest('/session/open', { identifier: sessionId });
+            if (sessionId) await sendServerRequest('/gemini/session/open', { identifier: sessionId }, 'POST');
             
             const res = await sendServerRequest('/gemini/upload-drive', { fileName });
             if (res?.success) console.log(`\n✅ File attached from Drive: ${fileName}`);

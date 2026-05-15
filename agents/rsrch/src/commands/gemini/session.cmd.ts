@@ -9,7 +9,7 @@ export function registerSessionCommands(gemini: Command) {
     gemini.command('open-session <identifier>')
         .description('Open a session by ID or Name')
         .action(async (identifier) => {
-            const data = await sendServerRequest('/session/open', { identifier });
+            const data = await sendServerRequest('/gemini/session/open', { identifier }, 'POST');
             if (data?.success) {
                 console.log(`\nSession opened: ${data.sessionId}`);
                 console.log(`URL: https://gemini.google.com/app/${data.sessionId}\n`);
@@ -56,7 +56,7 @@ export function registerSessionCommands(gemini: Command) {
         .option('-l, --limit <number>', 'Stop after loading N messages', (val) => parseInt(val))
         .option('-u, --until <text>', 'Stop scrolling when this text is found')
         .action(async (opts) => {
-            const data = await sendServerRequest('/session/load-history', { limit: opts.limit, untilText: opts.until });
+            const data = await sendServerRequest('/gemini/session/load-history', { limit: opts.limit, untilText: opts.until }, 'POST');
             if (data?.success) console.log('History loading task completed.');
         });
 
@@ -170,7 +170,7 @@ export function registerSessionCommands(gemini: Command) {
     gemini.command('model-status')
         .description('Check Gemini model availability and rate limits')
         .action(async () => {
-            const data = await sendServerRequest('/environment/model-status');
+            const data = await sendServerRequest('/gemini/environment/model-status', {}, 'GET');
             if (data?.success) {
                 console.log('\n--- Gemini Model Status ---');
                 data.data.forEach((s: any) => {
@@ -187,7 +187,7 @@ export function registerSessionCommands(gemini: Command) {
         .action(async (sessionId) => {
             // shareSession endpoint uses active session but passing ID doesn't switch yet on server? 
             // We'll just call the server endpoint
-            const data = await sendServerRequest('/session/share', { sessionId });
+            const data = await sendServerRequest('/gemini/session/share', { sessionId }, 'POST');
             if (data?.success && data.link) {
                 console.log(`\nPublic share link: ${data.link}\n`);
             } else {
@@ -231,9 +231,9 @@ export function registerSessionCommands(gemini: Command) {
         .description('Export the full session history to Markdown')
         .option('-o, --output <path>', 'Output file path')
         .action(async (sessionId, opts) => {
-            const res = await sendServerRequest('/session/export', { sessionId });
-            if (res?.success && res.data) {
-                const data = res.data;
+            const data = await sendServerRequest('/gemini/session/export', { sessionId }, 'POST');
+            if (data?.success && data.data) {
+                const sessionData = data.data;
                 const fs = await import('node:fs');
                 const path = await import('node:path');
                 

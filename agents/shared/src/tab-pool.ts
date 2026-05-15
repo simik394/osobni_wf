@@ -9,6 +9,7 @@
  */
 
 import type { Browser, Page, BrowserContext } from 'playwright';
+console.log('[TabPool] Module loaded successfully.');
 
 // Configuration
 export const DEFAULT_MAX_TABS = 10;
@@ -38,6 +39,7 @@ export const SERVICE_URLS = {
     gemini: 'https://gemini.google.com',
     notebooklm: 'https://notebooklm.google.com',
     aimode: 'https://www.google.com',
+    keep: 'https://keep.google.com',
     angrav: 'chrome-extension://', // Angrav is an extension, URL pattern varies
 } as const;
 
@@ -189,6 +191,8 @@ export async function getTab(
     service: ServiceType,
     sessionId?: string
 ): Promise<Page> {
+    const serviceUrl = SERVICE_URLS[service];
+    console.log(`[TabPool] getTab requested for service: ${service}, resolved URL: ${serviceUrl}`);
     // Handle both Browser and BrowserContext
     let context: BrowserContext;
     if ('contexts' in browser && typeof browser.contexts === 'function') {

@@ -42,5 +42,44 @@ export function createKeepRouter(deps: {
         }
     });
 
+    router.delete('/notes', async (req: Request, res: Response) => {
+        try {
+            const { title } = req.body;
+            if (!title) return res.status(400).json({ error: 'Title is required' });
+            
+            const client = await getKeepClient();
+            const success = await client.deleteNote(title);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/notes/archive', async (req: Request, res: Response) => {
+        try {
+            const { title } = req.body;
+            if (!title) return res.status(400).json({ error: 'Title is required' });
+            
+            const client = await getKeepClient();
+            const success = await client.archiveNote(title);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/search', async (req: Request, res: Response) => {
+        try {
+            const query = req.query.q as string;
+            if (!query) return res.status(400).json({ error: 'Query is required' });
+            
+            const client = await getKeepClient();
+            const notes = await client.searchNotes(query);
+            res.json({ success: true, data: notes });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     return router;
 }

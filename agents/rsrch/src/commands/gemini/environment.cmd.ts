@@ -8,14 +8,14 @@ export function registerEnvironmentCommands(gemini: Command) {
         .description('Toggle Deep Research mode')
         .action(async (state) => {
             const enabled = state === 'on';
-            const data = await sendServerRequest('/environment/deep-research', { enabled });
+            const data = await sendServerRequest('/gemini/environment/deep-research', { enabled }, 'POST');
             if (data?.success) console.log(`Deep Research turned ${state.toUpperCase()}.`);
         });
 
     env.command('extensions')
         .description('List available extensions and their status')
         .action(async () => {
-            const data = await sendServerRequest('/environment/extensions');
+            const data = await sendServerRequest('/gemini/environment/extensions', {}, 'GET');
             if (data?.success) {
                 console.log('\n--- Gemini Extensions ---');
                 if (data.data.length === 0) {
@@ -34,7 +34,7 @@ export function registerEnvironmentCommands(gemini: Command) {
         .description('Toggle a specific extension')
         .action(async (name, state) => {
             const enabled = state === 'on';
-            const data = await sendServerRequest('/environment/toggle-extension', { name, enabled });
+            const data = await sendServerRequest('/gemini/environment/toggle-extension', { name, enabled }, 'POST');
             if (data?.success) console.log(`Extension "${name}" turned ${state.toUpperCase()}.`);
         });
 
@@ -42,7 +42,7 @@ export function registerEnvironmentCommands(gemini: Command) {
         .description('Set the active Gemini model (flash, pro, thinking, advanced)')
         .action(async (model) => {
             console.log(`[CLI] Setting Gemini model to: ${model}...`);
-            const data = await sendServerRequest('/environment/set-model', { model });
+            const data = await sendServerRequest('/gemini/environment/set-model', { model }, 'POST');
             if (data?.success) console.log(`✅ Model successfully set to ${model}.`);
             else console.error(`❌ Failed to set model to ${model}.`);
         });

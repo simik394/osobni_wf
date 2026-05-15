@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { GeminiClient } from '../clients/gemini';
 import { BrowserClient } from '../clients/base';
 import { GraphStore } from '../core/graph-store';
-import { markTabBusy, markTabFree } from '@agents/shared/tab-pool';
+import { markTabBusy, markTabFree } from '@agents/shared';
 import { discordService } from '../services/notification';
 
 export interface ResearchRouterDeps {

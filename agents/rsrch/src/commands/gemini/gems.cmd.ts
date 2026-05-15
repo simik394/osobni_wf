@@ -7,7 +7,7 @@ export function registerGemCommands(gemini: Command) {
     gems.command('list')
         .description('List all available Gems')
         .action(async () => {
-            const data = await sendServerRequest('/gems');
+            const data = await sendServerRequest('/gemini/gems', {}, 'GET');
             if (data?.success) {
                 console.log('\n--- Available Gems ---');
                 if (data.data.length === 0) {
@@ -24,7 +24,7 @@ export function registerGemCommands(gemini: Command) {
     gems.command('create <name> <instructions>')
         .description('Create a new Gem')
         .action(async (name, instructions) => {
-            const data = await sendServerRequest('/gems/create', { name, instructions });
+            const data = await sendServerRequest('/gemini/gems/create', { name, instructions }, 'POST');
             if (data?.success) console.log(`Gem created successfully: ${name} (ID: ${data.id})`);
         });
 
@@ -33,7 +33,7 @@ export function registerGemCommands(gemini: Command) {
         .option('-n, --name <string>', 'New name')
         .option('-i, --instructions <string>', 'New instructions')
         .action(async (id, opts) => {
-            const data = await sendServerRequest('/gems/update', { id, name: opts.name, instructions: opts.instructions });
+            const data = await sendServerRequest('/gemini/gems/update', { id, name: opts.name, instructions: opts.instructions }, 'POST');
             if (data?.success) console.log(`Gem ${id} updated successfully.`);
             else console.error(`Failed to update Gem ${id}.`);
         });
@@ -41,7 +41,7 @@ export function registerGemCommands(gemini: Command) {
     gems.command('delete <id>')
         .description('Delete a Gem')
         .action(async (id) => {
-            const data = await sendServerRequest('/gems/delete', { id });
+            const data = await sendServerRequest('/gemini/gems/delete', { id }, 'POST');
             if (data?.success) console.log(`Gem ${id} deleted.`);
             else console.error(`Failed to delete Gem ${id}.`);
         });
@@ -49,7 +49,7 @@ export function registerGemCommands(gemini: Command) {
     gems.command('chat <nameOrId> <message>')
         .description('Start a chat with a specific Gem')
         .action(async (nameOrId, message) => {
-            const data = await sendServerRequest('/gems/chat', { nameOrId, message });
+            const data = await sendServerRequest('/gemini/gems/chat', { nameOrId, message }, 'POST');
             if (data?.success) {
                 console.log('\n--- Response from Gem ---');
                 console.log(data.data);
