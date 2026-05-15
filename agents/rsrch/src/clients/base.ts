@@ -201,10 +201,13 @@ export class BrowserClient extends BaseClient {
             const stateDir = getStateDir(profileId);
             ensureProfileDir(profileId);
             
+            const userAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+            
             console.log(`[BrowserClient] Local launch: headless=${headless}, stateDir=${stateDir}`);
             this.context = await (chromium as any).launchPersistentContext(stateDir, {
                 headless: headless,
                 slowMo: 100,
+                userAgent,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -274,6 +277,14 @@ export class BrowserClient extends BaseClient {
 
     async saveAuth() {
         if (!this.context) return;
+        const pages = this.context.pages();
+        if (pages.length > 0) {
+            const url = pages[0].url();
+            if (url.includes('accounts.google.com')) {
+                console.log('[BrowserClient] Skipping auth save: currently on Google Accounts page (avoiding session corruption)');
+                return;
+            }
+        }
         await saveStorageState(this.context, this.profileId);
     }
 

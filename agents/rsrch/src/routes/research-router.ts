@@ -100,6 +100,76 @@ export function createResearchRouter(deps: ResearchRouterDeps) {
         }
     });
 
+    router.get('/notebooks', async (req: Request, res: Response) => {
+        try {
+            const limit = parseInt(req.query.limit as string) || 50;
+            const notebooks = await graphStore.getNotebooks(limit);
+            res.json({ success: true, notebooks });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.get('/lineage/:id', async (req: Request, res: Response) => {
+        try {
+            const chain = await graphStore.getLineageChain(req.params.id);
+            res.json({ success: true, chain });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.get('/conversations', async (req: Request, res: Response) => {
+        try {
+            const platform = (req.query.platform as string) || 'gemini';
+            const limit = parseInt(req.query.limit as string) || 50;
+            const conversations = await graphStore.getConversationsByPlatform(platform, limit);
+            res.json({ success: true, conversations });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/conversation/details', async (req: Request, res: Response) => {
+        try {
+            const { id, filters } = req.body;
+            const data = await graphStore.getConversationWithFilters(id, filters);
+            res.json({ success: true, ...data });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.get('/citations', async (req: Request, res: Response) => {
+        try {
+            const domain = req.query.domain as string;
+            const limit = parseInt(req.query.limit as string) || 50;
+            const citations = await graphStore.getCitations({ domain, limit });
+            res.json({ success: true, citations });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/citation/usage', async (req: Request, res: Response) => {
+        try {
+            const { url } = req.body;
+            const usage = await graphStore.getCitationUsage(url);
+            res.json({ success: true, usage });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/migrate-citations', async (req: Request, res: Response) => {
+        try {
+            const result = await graphStore.migrateCitations();
+            res.json({ success: true, result });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     return router;
 }
 

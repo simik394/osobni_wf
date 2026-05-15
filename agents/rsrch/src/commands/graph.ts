@@ -1,8 +1,5 @@
 import { Command } from 'commander';
 import { sendServerRequest } from '../cli/utils';
-import { getGraphStore } from '../core/graph-store';
-import { config } from '../config';
-import { cliContext } from '../cli/context';
 
 const graph = new Command('graph').description('Graph database commands');
 
@@ -10,16 +7,14 @@ graph.command('notebooks')
     .description('List synced notebooks')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
     .action(async (opts) => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            const notebooks = await store.getNotebooks(opts.limit);
-            console.log(`\n === Synced Notebooks(${notebooks.length}) ===\n`);
+        const response = await sendServerRequest('/graph/notebooks', { limit: opts.limit });
+        if (response?.success) {
+            const notebooks = response.notebooks;
+            console.log(`\n === Synced Notebooks (${notebooks.length}) ===\n`);
             if (notebooks.length === 0) {
                 console.log('No notebooks found. Run "rsrch notebook sync" first.\n');
             } else {
-                console.table(notebooks.map(n => ({
+                console.table(notebooks.map((n: any) => ({
                     ID: n.id,
                     Title: n.title,
                     Sources: n.sourceCount,
@@ -27,8 +22,6 @@ graph.command('notebooks')
                     Synced: new Date(n.capturedAt).toLocaleString()
                 })));
             }
-        } finally {
-            await store.disconnect();
         }
     });
 
@@ -64,11 +57,9 @@ graph.command('jobs [status]')
 graph.command('lineage <artifactId>')
     .description('Show lineage for an artifact')
     .action(async (artifactId) => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            const chain = await store.getLineageChain(artifactId);
+        const response = await sendServerRequest(`/graph/lineage/${artifactId}`);
+        if (response?.success) {
+            const chain = response.chain;
             if (!chain.job && !chain.session && !chain.document && !chain.audio) {
                 console.log(`No lineage found for: ${artifactId}`);
             } else {
@@ -78,8 +69,6 @@ graph.command('lineage <artifactId>')
                 if (chain.document) console.log(`  Document: ${chain.document.id} - "${chain.document.title}"`);
                 if (chain.audio) console.log(`  Audio: ${chain.audio.id} - ${chain.audio.path}`);
             }
-        } finally {
-            await store.disconnect();
         }
     });
 
@@ -88,27 +77,19 @@ graph.command('conversations')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
     .option('--platform <platform>', 'Platform (gemini|perplexity)', 'gemini')
     .action(async (opts) => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            const conversations = await store.getConversationsByPlatform(opts.platform, opts.limit);
+        const response = await sendServerRequest('/graph/conversations', { platform: opts.platform, limit: opts.limit });
+        if (response?.success) {
+            const conversations = response.conversations;
             console.log(`\n${opts.platform.toUpperCase()} Conversations (${conversations.length}):`);
             for (const conv of conversations) {
                 let captured = 'N/A';
-                try {
-                    if (conv.capturedAt) {
-                        captured = new Date(conv.capturedAt).toISOString().split('T')[0];
-                    }
-                } catch (e) {
-                    // ignore invalid date
+                if (conv.capturedAt) {
+                    captured = new Date(conv.capturedAt).toISOString().split('T')[0];
                 }
                 const typeTag = conv.type === 'deep-research' ? ' [DR]' : '';
                 const title = conv.title || 'Untitled';
                 console.log(`  ${conv.id}${typeTag} - "${title.substring(0, 40)}..." (${conv.turnCount} turns, synced: ${captured})`);
             }
-        } finally {
-            await store.disconnect();
         }
     });
 
@@ -118,79 +99,39 @@ graph.command('conversation <id>')
     .option('--answers-only', 'Show answers only')
     .option('--research-docs', 'Include research docs')
     .action(async (id, opts) => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            const data = await store.getConversationWithFilters(id, {
+        const response = await sendServerRequest('/graph/conversation/details', {
+            id,
+            filters: {
                 questionsOnly: opts.questionsOnly,
                 answersOnly: opts.answersOnly,
                 includeResearchDocs: opts.researchDocs
-            });
+            }
+        });
 
-            if (!data.conversation) {
+        if (response?.success) {
+            if (!response.conversation) {
                 console.log(`Conversation not found: ${id}`);
             } else {
-                console.log(`\n=== ${data.conversation.title} ===`);
-                console.log(`Platform: ${data.conversation.platform} | Type: ${data.conversation.type}`);
-                console.log(`Synced: ${new Date(data.conversation.capturedAt).toISOString()}\n`);
+                console.log(`\n=== ${response.conversation.title} ===`);
+                console.log(`Platform: ${response.conversation.platform} | Type: ${response.conversation.type}`);
+                console.log(`Synced: ${new Date(response.conversation.capturedAt).toISOString()}\n`);
 
-                for (const turn of data.turns) {
+                for (const turn of response.turns) {
                     const roleLabel = turn.role === 'user' ? '👤 User' : '🤖 Assistant';
                     console.log(`${roleLabel}:`);
                     console.log(turn.content.substring(0, 500) + (turn.content.length > 500 ? '...' : ''));
                     console.log('');
                 }
 
-                if (data.researchDocs && data.researchDocs.length > 0) {
+                if (response.researchDocs && response.researchDocs.length > 0) {
                     console.log('\n--- Research Documents ---');
-                    for (const doc of data.researchDocs) {
+                    for (const doc of response.researchDocs) {
                         console.log(`\n📄 ${doc.title}`);
                         console.log(`Sources: ${doc.sources.length}`);
                         console.log(doc.content.substring(0, 300) + '...');
                     }
                 }
             }
-        } finally {
-            await store.disconnect();
-        }
-    });
-
-graph.command('export')
-    .description('Export graph data')
-    .option('--platform <platform>', 'gemini|perplexity', 'gemini')
-    .option('--format <format>', 'md|json', 'md')
-    .option('--output <path>', 'Output directory', './exports')
-    .option('--since <date>', 'Since date (ISO or timestamp)')
-    .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
-    .action(async (opts) => {
-        let since: number | undefined;
-        if (opts.since) {
-            const parsed = Date.parse(opts.since);
-            if (!isNaN(parsed)) since = parsed;
-            else since = parseInt(opts.since);
-        }
-
-        console.log(`\n[Export] Platform: ${opts.platform}, Format: ${opts.format}, Output: ${opts.output} `);
-        if (since) console.log(`[Export] Since: ${new Date(since).toISOString()} `);
-        console.log(`[Export] Limit: ${opts.limit} \n`);
-
-        const { exportBulk } = await import('../services/exporter');
-        try {
-            const results = await exportBulk(opts.platform, {
-                format: opts.format,
-                outputDir: opts.output,
-                since,
-                limit: opts.limit,
-                includeResearchDocs: true,
-                includeThinking: true
-            });
-            console.log(`\n === Export Complete === `);
-            console.log(`Exported ${results.length} conversations`);
-            results.forEach(r => console.log(`  ✓ ${r.path} `));
-        } catch (error: any) {
-            console.error(`Export failed: ${error.message} `);
-            process.exit(1);
         }
     });
 
@@ -199,31 +140,25 @@ graph.command('citations')
     .option('--domain <domain>', 'Filter by domain')
     .option('--limit <number>', 'Limit', (v) => parseInt(v), 50)
     .action(async (opts) => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            const citations = await store.getCitations({ domain: opts.domain, limit: opts.limit });
+        const response = await sendServerRequest('/graph/citations', { domain: opts.domain, limit: opts.limit });
+        if (response?.success) {
+            const citations = response.citations;
             console.log(`\n=== Citations (${citations.length}) ===\n`);
-            console.table(citations.map(c => ({
+            console.table(citations.map((c: any) => ({
                 ID: c.id,
                 Domain: c.domain,
                 URL: c.url.length > 60 ? c.url.substring(0, 57) + '...' : c.url,
                 FirstSeen: new Date(c.firstSeenAt).toLocaleDateString()
             })));
-        } finally {
-            await store.disconnect();
         }
     });
 
 graph.command('citation-usage <url>')
     .description('Show where a URL is cited')
     .action(async (url) => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            const usage = await store.getCitationUsage(url);
+        const response = await sendServerRequest('/graph/citation/usage', { url });
+        if (response?.success) {
+            const usage = response.usage;
             if (usage.length === 0) {
                 console.log(`No usage found for: ${url}`);
             } else {
@@ -236,25 +171,18 @@ graph.command('citation-usage <url>')
                     }
                 }
             }
-        } finally {
-            await store.disconnect();
         }
     });
 
 graph.command('migrate-citations')
     .description('Migrate existing ResearchDocs to Citations')
     .action(async () => {
-        const store = getGraphStore();
-        const graphHost = config.falkor.host;
-        try {
-            await store.connect(graphHost, config.falkor.port);
-            console.log('\n[Migration] Extracting citations from existing ResearchDocs...\n');
-            const result = await store.migrateCitations();
+        const response = await sendServerRequest('/graph/migrate-citations');
+        if (response?.success) {
+            const result = response.result;
             console.log(`\n=== Migration Complete ===`);
             console.log(`  Processed: ${result.processed} documents`);
             console.log(`  Created:   ${result.citations} new citation links\n`);
-        } finally {
-            await store.disconnect();
         }
     });
 

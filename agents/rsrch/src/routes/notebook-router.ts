@@ -68,6 +68,34 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         }
     });
 
+    router.post('/rename', async (req: Request, res: Response) => {
+        try {
+            const { oldTitle, newTitle } = req.body;
+            if (!oldTitle || !newTitle) return res.status(400).json({ error: 'oldTitle and newTitle are required' });
+
+            const client = await getNotebookClient();
+            await client!.renameNotebook(oldTitle, newTitle);
+            res.json({ success: true, message: `Notebook renamed to '${newTitle}'` });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Rename notebook failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/delete', async (req: Request, res: Response) => {
+        try {
+            const { title } = req.body;
+            if (!title) return res.status(400).json({ error: 'Title is required' });
+
+            const client = await getNotebookClient();
+            await client!.deleteNotebook(title);
+            res.json({ success: true, message: `Notebook '${title}' deleted` });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Delete notebook failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     router.post('/add-source', async (req: Request, res: Response) => {
         try {
             const { url, files, notebookTitle } = req.body;
@@ -416,6 +444,21 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
             res.json({ success: true, data: messages });
         } catch (e: any) {
             console.error('[NotebookRouter] Messages failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/ask', async (req: Request, res: Response) => {
+        try {
+            const { title, message } = req.body;
+            if (!title || !message) return res.status(400).json({ error: 'title and message are required' });
+
+            const client = await getNotebookClient();
+            await client!.openNotebook(title);
+            const response = await client!.query(message);
+            res.json({ success: true, data: response });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Ask failed:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     });

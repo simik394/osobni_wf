@@ -85,6 +85,8 @@ export type NotebookLMActionDeps = ActionDeps & {
     getIsBusy?: () => boolean;
     recycle?: () => Promise<void>;
     archiveNotebook?: (options: { outputDir?: string, format?: 'md' | 'qmd', extractSources?: boolean, incremental?: boolean }) => Promise<string[]>;
+    renameNotebook?: (old: string, newT: string) => Promise<void>;
+    deleteNotebook?: (title: string) => Promise<void>;
 };
 
 /**
@@ -103,5 +105,9 @@ export type AIModeActionDeps = ActionDeps & {
     dumpState?: (prefix: string) => Promise<any>;
     getGraphStore?: () => any;
 };
+/**
+ * Shared Google Authentication action dependencies.
+ */
+export type GoogleAuthActionDeps = ActionDeps;
 
 

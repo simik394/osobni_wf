@@ -610,6 +610,32 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.post('/gemini/upload-repo', async (req: Request, res: Response) => {
+        try {
+            const { repoUrl, sessionId, branch } = req.body;
+            const gemini = await getGeminiClient();
+            
+            if (sessionId) await gemini.openSession(sessionId);
+
+            const { RepoLoader } = await import('../core/repo-loader');
+            const loader = new RepoLoader();
+            
+            console.log(`[Server] Processing repository: ${repoUrl}`);
+            const contextFile = await loader.loadRepoAsFile(repoUrl, { branch });
+            
+            const count = await gemini.uploadFiles([contextFile]);
+            
+            // Cleanup temp file
+            const fs = await import('node:fs');
+            if (fs.existsSync(contextFile)) fs.unlinkSync(contextFile);
+
+            res.json({ success: true, count });
+        } catch (e: any) {
+            console.error('[Server] upload-repo failed:', e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.post('/gemini/upload-drive', async (req: Request, res: Response) => {
         try {
             const { fileName } = req.body;
@@ -653,6 +679,20 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.post('/environment/set-model', async (req: Request, res: Response) => {
+        try {
+            const { model } = req.body;
+            if (!model) return res.status(400).json({ error: 'model is required' });
+
+            const gemini = await getGeminiClient();
+            const success = await gemini.setModel(model);
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[GeminiRouter] setModel failed:', e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.post('/session/extract', async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
@@ -675,19 +715,53 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/gemini/sync-registry', async (req: Request, res: Response) => {
+    router.post('/session/sync', async (req: Request, res: Response) => {
+        try {
+            const { limit = 10 } = req.body;
+            const gemini = await getGeminiClient();
+            const { getGraphStore } = await import('../core/graph-store');
+            const store = getGraphStore();
+            
+            let count = 0;
+            await gemini.scrapeConversations(limit, 0, async (conv) => {
+                await store.syncConversation({
+                    id: conv.id,
+                    platform: 'gemini',
+                    title: conv.title,
+                    turns: conv.turns
+                });
+                count++;
+            });
+            
+            res.json({ success: true, count });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/canvas/list-archived', async (req: Request, res: Response) => {
+        try {
+            const { type = 'all' } = req.query;
+            const { getRegistry } = await import('../core/artifact-registry');
+            const registry = getRegistry();
+            const ids = type === 'all' 
+                ? registry.listIds() 
+                : registry.listIds().filter(id => registry.get(id)?.type === type);
+            
+            const artifacts = ids.map(id => ({ id, ...registry.get(id) }));
+            res.json({ success: true, data: artifacts });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/sync-registry', async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const { getGraphStore } = await import('../core/graph-store');
-            const { config } = await import('../config');
             const store = getGraphStore();
-            await store.connect(config.falkor.host, config.falkor.port);
-            try {
-                const result = await gemini.syncRegistryToGraph(store);
-                res.json({ success: true, data: result });
-            } finally {
-                await store.disconnect();
-            }
+            const result = await gemini.syncRegistryToGraph(store);
+            res.json({ success: true, data: result });
         } catch (e: any) {
             res.status(500).json({ error: e.message });
         }

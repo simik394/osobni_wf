@@ -1,24 +1,18 @@
 import { Command } from 'commander';
-import * as path from 'path';
-import * as fs from 'fs';
-import { execSync } from 'child_process';
-import { getRegistry } from '../core/artifact-registry';
+import { sendServerRequest } from '../cli/utils';
 import chalk from 'chalk';
 
-const registry = new Command('registry').description('Artifact registry commands');
+const registry = new Command('registry').description('Artifact registry commands (Stateless API)');
 
 registry.command('list')
     .description('List artifacts')
     .option('--type <type>', 'Filter by type (session|document|audio|research_doc|canvas)')
     .option('--json', 'Output as JSON')
-    .action((opts) => {
-        const reg = getRegistry();
-        const artifacts = reg.listAll();
+    .action(async (opts) => {
+        const response = await sendServerRequest('/system/registry/list', { type: opts.type });
+        const artifacts = response.data;
         
         let entries = Object.entries(artifacts);
-        if (opts.type) {
-            entries = entries.filter(([_, v]) => v.type === opts.type);
-        }
 
         if (opts.json) {
             console.log(JSON.stringify(Object.fromEntries(entries), null, 2));
@@ -27,7 +21,7 @@ registry.command('list')
 
         console.log(chalk.bold(`\nArtifact Registry (${entries.length} items)`));
         console.log('='.repeat(80));
-        entries.forEach(([id, entry]) => {
+        entries.forEach(([id, entry]: [string, any]) => {
             const title = entry.currentTitle || entry.originalTitle || entry.query || 'N/A';
             const date = new Date(entry.createdAt).toLocaleDateString();
             console.log(`${chalk.cyan(id.padEnd(10))} | ${chalk.yellow(entry.type.padEnd(12))} | ${chalk.green(date)} | ${title}`);
@@ -36,112 +30,55 @@ registry.command('list')
 
 registry.command('status')
     .description('Check registry health and orphaned files')
-    .action(() => {
-        const reg = getRegistry();
-        const artifacts = reg.listAll();
-        const ids = Object.keys(artifacts);
+    .action(async () => {
+        const response = await sendServerRequest('/system/registry/status', {});
+        const { stats, orphans } = response.data;
         
-        console.log(chalk.bold('\nRegistry Health Report'));
+        console.log(chalk.bold('\nRegistry Health Report (via Server)'));
         console.log('='.repeat(40));
         
-        // Stats by type
-        const stats: Record<string, number> = {};
-        ids.forEach(id => {
-            const type = artifacts[id].type;
-            stats[type] = (stats[type] || 0) + 1;
-        });
-
         Object.entries(stats).forEach(([type, count]) => {
             console.log(`${type.padEnd(15)}: ${chalk.green(count)}`);
         });
 
         // Orphaned files check
         console.log(chalk.bold('\nOrphaned Files Check'));
-        const artifactDirs = ['data/artifacts/gemini', 'data/artifacts/notebooklm', 'data/audio'];
-        let orphanedCount = 0;
-        
-        const registeredPaths = new Set(
-            Object.values(artifacts)
-                .map(a => a.markdownPath || a.localPath)
-                .filter(Boolean)
-                .map(p => path.resolve(p!))
-        );
-
-        artifactDirs.forEach(dir => {
-            const fullDir = path.join(process.cwd(), dir);
-            if (!fs.existsSync(fullDir)) return;
-
-            const files = fs.readdirSync(fullDir, { recursive: true }) as string[];
-            files.forEach(file => {
-                const fullPath = path.join(fullDir, file);
-                if (fs.statSync(fullPath).isDirectory()) return;
-                
-                if (!registeredPaths.has(path.resolve(fullPath))) {
-                    console.log(`${chalk.red('[ORPHAN]')} ${fullPath}`);
-                    orphanedCount++;
-                }
-            });
+        orphans.forEach((fullPath: string) => {
+            console.log(`${chalk.red('[ORPHAN]')} ${fullPath}`);
         });
 
-        if (orphanedCount === 0) {
+        if (orphans.length === 0) {
             console.log(chalk.green('No orphaned files found. Registry is healthy.'));
         } else {
-            console.log(chalk.yellow(`\nFound ${orphanedCount} orphaned files. Use 'rsrch registry prune' to clean up.`));
+            console.log(chalk.yellow(`\nFound ${orphans.length} orphaned files. Use 'rsrch registry prune' to clean up.`));
         }
     });
 
 registry.command('prune')
     .description('Remove orphaned files and registry entries')
     .option('--dry-run', 'Show what would be deleted without actually deleting', false)
-    .option('--force', 'Delete without confirmation', false)
-    .action((opts) => {
-        const reg = getRegistry();
-        const artifacts = reg.listAll();
-        
+    .action(async (opts) => {
         console.log(chalk.bold(`\nRegistry Prune (${opts.dryRun ? 'Dry Run' : 'Live'})`));
         console.log('='.repeat(40));
 
-        const artifactDirs = ['data/artifacts/gemini', 'data/artifacts/notebooklm', 'data/audio'];
-        let deletedCount = 0;
+        const response = await sendServerRequest('/system/registry/prune', { dryRun: opts.dryRun });
+        const deleted = response.deleted;
         
-        const registeredPaths = new Set(
-            Object.values(artifacts)
-                .map(a => a.markdownPath || a.localPath)
-                .filter(Boolean)
-                .map(p => path.resolve(p!))
-        );
-
-        artifactDirs.forEach(dir => {
-            const fullDir = path.join(process.cwd(), dir);
-            if (!fs.existsSync(fullDir)) return;
-
-            const files = fs.readdirSync(fullDir, { recursive: true }) as string[];
-            files.forEach(file => {
-                const fullPath = path.join(fullDir, file);
-                if (fs.statSync(fullPath).isDirectory()) return;
-                
-                if (!registeredPaths.has(path.resolve(fullPath))) {
-                    console.log(`${chalk.red('[DELETE]')} ${fullPath}`);
-                    if (!opts.dryRun) {
-                        fs.unlinkSync(fullPath);
-                    }
-                    deletedCount++;
-                }
-            });
+        deleted.forEach((fullPath: string) => {
+            console.log(`${chalk.red('[DELETE]')} ${fullPath}`);
         });
 
         console.log(chalk.bold('\nSummary'));
         console.log('-'.repeat(20));
-        console.log(`Files ${opts.dryRun ? 'to be deleted' : 'deleted'}: ${chalk.green(deletedCount)}`);
+        console.log(`Files ${opts.dryRun ? 'to be deleted' : 'deleted'}: ${chalk.green(deleted.length)}`);
     });
 
 registry.command('show <id>')
     .description('Show artifact details')
-    .action((id) => {
-        const reg = getRegistry();
-        const artifact = reg.get(id);
-        if (artifact) {
-            console.log(JSON.stringify(artifact, null, 2));
+    .action(async (id) => {
+        const response = await sendServerRequest('/system/registry/show', { id });
+        if (response.data) {
+            console.log(JSON.stringify(response.data, null, 2));
         } else {
             console.log(chalk.red('Artifact not found:', id));
         }
@@ -149,11 +86,11 @@ registry.command('show <id>')
 
 registry.command('lineage <id>')
     .description('Show artifact lineage')
-    .action((id) => {
-        const registry = getRegistry();
-        const lineage = registry.getLineage(id);
+    .action(async (id) => {
+        const response = await sendServerRequest('/system/registry/lineage', { id });
+        const lineage = response.data;
 
-        if (lineage.length === 0) {
+        if (!lineage || lineage.length === 0) {
             console.log(chalk.red('Not found'));
         } else {
             console.log(chalk.bold('\nLineage (child → parent):'));

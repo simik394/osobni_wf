@@ -37,4 +37,13 @@ export function registerEnvironmentCommands(gemini: Command) {
             const data = await sendServerRequest('/environment/toggle-extension', { name, enabled });
             if (data?.success) console.log(`Extension "${name}" turned ${state.toUpperCase()}.`);
         });
+
+    env.command('set-model <model>')
+        .description('Set the active Gemini model (flash, pro, thinking, advanced)')
+        .action(async (model) => {
+            console.log(`[CLI] Setting Gemini model to: ${model}...`);
+            const data = await sendServerRequest('/environment/set-model', { model });
+            if (data?.success) console.log(`✅ Model successfully set to ${model}.`);
+            else console.error(`❌ Failed to set model to ${model}.`);
+        });
 }

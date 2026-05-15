@@ -12,7 +12,11 @@ export async function recycleAction(
     const { selectors } = deps;
     
     // Ensure we are not stuck at auth page
-    await ensureAuthAction(ctx, deps);
+    const handled = await ensureAuthAction(ctx, deps);
+    if (handled) {
+        log('Auth was handled, retrying navigation to home...');
+        await page.goto(config.urls.notebooklm, { waitUntil: 'networkidle' });
+    }
 
     const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
     

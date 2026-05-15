@@ -12,6 +12,22 @@ export function registerNotebookCommands(notebook: Command) {
             if (data?.success) console.log(`✅ Successfully created notebook "${title}".`);
         });
 
+    notebook.command('rename <old> <new>')
+        .description('Rename a notebook')
+        .action(async (old, newTitle) => {
+            console.log(`[CLI] Renaming notebook "${old}" to "${newTitle}"...`);
+            const data = await sendServerRequest('/notebook/rename', { oldTitle: old, newTitle });
+            if (data?.success) console.log(`✅ Successfully renamed notebook.`);
+        });
+
+    notebook.command('delete <title>')
+        .description('Delete a notebook')
+        .action(async (title) => {
+            console.log(`[CLI] Deleting notebook: ${title}...`);
+            const data = await sendServerRequest('/notebook/delete', { title });
+            if (data?.success) console.log(`✅ Successfully deleted notebook.`);
+        });
+
     notebook.command('list')
         .description('List notebooks with pagination')
         .option('--offset <n>', 'Offset for pagination', '0')

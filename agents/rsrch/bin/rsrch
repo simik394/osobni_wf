@@ -1,1 +1,2 @@
-../lib/node_modules/rsrch/dist/cli/main.js
+#!/usr/bin/env node
+require('../dist/cli/main.js');

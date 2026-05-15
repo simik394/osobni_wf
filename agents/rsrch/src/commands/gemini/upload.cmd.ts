@@ -82,20 +82,17 @@ export function registerUploadCommands(gemini: Command) {
         });
 
     gemini.command('upload-repo <repoUrl> [sessionId]')
-        .description('Upload repository context')
+        .description('Upload repository context (cloned and processed on server)')
         .option('--branch <branch>', 'Git branch')
         .action(async (repoUrl, sessionId, opts) => {
-            const { RepoLoader } = await import('../../core/repo-loader');
-            const loader = new RepoLoader();
-            try {
-                console.log(`\n[Repo] Processing repository: ${repoUrl}`);
-                const contextFile = await loader.loadRepoAsFile(repoUrl, { branch: opts.branch });
-                console.log(`\n[Repo] Context file created at: ${contextFile}`);
-                const res = await uploadFilesToServer([contextFile], sessionId);
-                if (res?.success) console.log(`\n✅ Repository context uploaded successfully!`);
-            } catch (e: any) {
-                console.error(`\n❌ Error processing repository: ${e.message}`);
-            }
+            console.log(`\n[Repo] Requesting server to process repository: ${repoUrl}`);
+            const res = await sendServerRequest('/gemini/upload-repo', { 
+                repoUrl, 
+                sessionId,
+                branch: opts.branch 
+            });
+            if (res?.success) console.log(`\n✅ Repository context uploaded successfully!`);
+            else console.log(`\n❌ Repository upload failed: ${res?.error || 'Unknown error'}`);
         });
     
     gemini.command('upload-drive <fileName> [sessionId]')

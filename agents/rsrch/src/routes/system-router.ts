@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { dashboardService } from '../services/dashboard-service';
 import { BrowserClient } from '../clients/base';
+import { registryService } from '../services/registry-service';
 
 export function createSystemRouter(deps: { browserClient: BrowserClient }) {
     const router = Router();
@@ -36,6 +37,37 @@ export function createSystemRouter(deps: { browserClient: BrowserClient }) {
             console.error('[SystemRouter] Error during refresh:', error);
             res.status(500).json({ error: 'Refresh failed' });
         }
+    });
+
+    // --- Registry Endpoints ---
+
+    router.post('/registry/list', async (req, res) => {
+        const { type } = req.body;
+        const data = await registryService.list(type);
+        res.json({ success: true, data });
+    });
+
+    router.post('/registry/status', async (req, res) => {
+        const data = await registryService.getStatus();
+        res.json({ success: true, data });
+    });
+
+    router.post('/registry/prune', async (req, res) => {
+        const { dryRun } = req.body;
+        const data = await registryService.prune(dryRun);
+        res.json({ success: true, deleted: data });
+    });
+
+    router.post('/registry/show', async (req, res) => {
+        const { id } = req.body;
+        const data = await registryService.getArtifact(id);
+        res.json({ success: true, data });
+    });
+
+    router.post('/registry/lineage', async (req, res) => {
+        const { id } = req.body;
+        const data = await registryService.getLineage(id);
+        res.json({ success: true, data });
     });
 
     return router;

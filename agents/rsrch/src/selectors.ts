@@ -223,9 +223,9 @@ export interface GoogleAuthSelectors {
         useAnotherAccount: string;
     };
     login: {
-        emailInput: string;
+        identifier: string;
         nextButton: string;
-        passwordInput: string;
+        password: string;
     };
 }
 
@@ -556,14 +556,14 @@ const DEFAULTS: NotebookLMSelectors = {
     },
     googleAuth: {
         accountChooser: {
-            container: 'div[jsname="W607te"], #accountchooser',
-            accountItem: 'div[jsname="PaL3lc"], [data-accountindex]',
-            useAnotherAccount: 'div[jsname="vS779c"], #accountchooser-add-account'
+            container: 'div[jsname="tJHJj"], #accountchooser, h1:has-text("Choose an account"), h1:has-text("Zvolte účet")',
+            accountItem: 'div[data-identifier], div[jsname="PaL3lc"], [data-accountindex], li[role="option"]',
+            useAnotherAccount: 'div[jsname="vS779c"], #accountchooser-add-account, [data-item-index="another"]'
         },
         login: {
-            emailInput: 'input[type="email"]',
+            identifier: 'input[type="email"], input[name="identifier"]',
             nextButton: '#identifierNext, #passwordNext',
-            passwordInput: 'input[type="password"]'
+            password: 'input[type="password"], input[name="password"]'
         }
     }
 };

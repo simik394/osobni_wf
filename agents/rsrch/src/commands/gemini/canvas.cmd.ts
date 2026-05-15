@@ -102,27 +102,23 @@ export function registerCanvasCommands(gemini: Command) {
         .description('List locally archived artifacts from the registry')
         .option('-t, --type <type>', 'Filter by type (research_doc, canvas)', 'all')
         .action(async (opts) => {
-            const registry = getRegistry();
-            const ids = opts.type === 'all' 
-                ? registry.listIds() 
-                : registry.listIds().filter(id => registry.get(id)?.type === opts.type);
-            
-            console.log(`\n--- Locally Archived Artifacts (Type: ${opts.type}) ---`);
-            if (ids.length === 0) {
-                console.log('No archived artifacts found.');
-            } else {
-                ids.forEach(id => {
-                    const entry = registry.get(id);
-                    if (entry && (entry.type === 'research_doc' || entry.type === 'canvas')) {
-                        console.log(`[${id}] ${entry.currentTitle || entry.originalTitle}`);
+            const response = await sendServerRequest(`/gemini/canvas/list-archived?type=${opts.type}`);
+            if (response?.success) {
+                const artifacts = response.data;
+                console.log(`\n--- Archived Artifacts on Server (Type: ${opts.type}) ---`);
+                if (artifacts.length === 0) {
+                    console.log('No archived artifacts found.');
+                } else {
+                    artifacts.forEach((entry: any) => {
+                        console.log(`[${entry.id}] ${entry.currentTitle || entry.originalTitle}`);
                         if (entry.markdownPath) console.log(`      Path: ${entry.markdownPath}`);
                         if (entry.references && entry.references.length > 0) {
                             console.log(`      Sources: ${entry.references.length}`);
                         }
-                    }
-                });
+                    });
+                }
+                console.log('-----------------------------------------------------\n');
             }
-            console.log('-----------------------------------------------------\n');
         });
 
     gemini.command('audio-overview <artifactId>')

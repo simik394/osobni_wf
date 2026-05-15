@@ -170,6 +170,15 @@ export async function startServer(overridePort?: number) {
         }
     }
 
+    // Initialize Graph Store connection
+    try {
+        console.log(`[Server] Connecting to Graph Store at ${config.falkor.host}:${config.falkor.port}...`);
+        await graphStore.connect(config.falkor.host, config.falkor.port);
+        console.log('[Server] Graph Store connected.');
+    } catch (e: any) {
+        console.warn('[Server] Graph Store connection failed:', e.message);
+    }
+
     return new Promise((resolve, reject) => {
         const server = app.listen(listenPort, '0.0.0.0', () => {
             console.log(`Server running at http://0.0.0.0:${listenPort}`);
