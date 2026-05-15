@@ -19,7 +19,7 @@ export async function listNotebooksAction(
     const { selectors } = deps;
 
     log('Listing notebooks...');
-    await recycleAction(ctx);
+    await recycleAction(ctx, deps);
 
     try {
         await page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { 
@@ -85,7 +85,7 @@ export async function createNotebookAction(
 
     log(`Creating notebook: ${title}`);
     try {
-        await recycleAction(ctx);
+        await recycleAction(ctx, deps);
 
         const createBtnSelector = deps.selectors.home.createNewButton;
         await page.waitForSelector(createBtnSelector, { state: 'visible', timeout: 15000 });
@@ -103,6 +103,85 @@ export async function createNotebookAction(
     } catch (e: any) {
         log(`Error creating notebook: ${e.message}`, 'error');
         if (deps.dumpState) await deps.dumpState('create_error');
+        throw e;
+    }
+}
+
+/**
+ * Renames a notebook from the home page.
+ */
+export async function renameNotebookAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    oldTitle: string,
+    newTitle: string
+): Promise<void> {
+    const { page, log } = ctx;
+    const { selectors, humanDelay } = deps;
+
+    log(`Renaming notebook: "${oldTitle}" to "${newTitle}"`);
+    await recycleAction(ctx, deps);
+
+    try {
+        const escapedTitle = oldTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const card = page.locator(selectors.home.projectButton).filter({ hasText: new RegExp(escapedTitle, 'i') }).first();
+        if (await card.count() === 0) throw new Error(`Notebook "${oldTitle}" not found`);
+
+        const moreBtn = card.locator(selectors.home.moreMenuButton).first();
+        await moreBtn.click();
+        await humanDelay(800);
+
+        const renameOpt = page.locator(selectors.home.menuItem).filter({ hasText: new RegExp(selectors.home.renameOption, 'i') }).first();
+        await renameOpt.click();
+        await humanDelay(1000);
+
+        const input = page.locator(selectors.home.renameInput).first();
+        await input.fill(newTitle);
+        await page.keyboard.press('Enter');
+        await humanDelay(2000);
+
+        log('Notebook renamed successfully.');
+    } catch (e: any) {
+        log(`Error renaming notebook: ${e.message}`, 'error');
+        throw e;
+    }
+}
+
+/**
+ * Deletes a notebook from the home page.
+ */
+export async function deleteNotebookAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps,
+    title: string
+): Promise<void> {
+    const { page, log } = ctx;
+    const { selectors, humanDelay } = deps;
+
+    log(`Deleting notebook: "${title}"`);
+    await recycleAction(ctx, deps);
+
+    try {
+        const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const card = page.locator(selectors.home.projectButton).filter({ hasText: new RegExp(escapedTitle, 'i') }).first();
+        if (await card.count() === 0) throw new Error(`Notebook "${title}" not found`);
+
+        const moreBtn = card.locator(selectors.home.moreMenuButton).first();
+        await moreBtn.click();
+        await humanDelay(800);
+
+        const deleteOpt = page.locator(selectors.home.menuItem).filter({ hasText: new RegExp(selectors.home.deleteOption, 'i') }).first();
+        await deleteOpt.click();
+        await humanDelay(1000);
+
+        const confirmBtn = page.locator(selectors.home.confirmDeleteButton).first();
+        await confirmBtn.click();
+        
+        // Wait for removal
+        await humanDelay(3000);
+        log('Notebook deleted successfully.');
+    } catch (e: any) {
+        log(`Error deleting notebook: ${e.message}`, 'error');
         throw e;
     }
 }

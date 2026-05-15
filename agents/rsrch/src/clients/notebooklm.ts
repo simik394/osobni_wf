@@ -59,6 +59,12 @@ export class NotebookLMClient {
                 // We need a title here, but the interface might not provide it easily if it's called from deps
                 // For now, use empty string if unknown, archival will fail gracefully or we'll fix later
                 return actions.archiveNotebookAction(this.ctx, this.deps, '', options);
+            },
+            renameNotebook: async (old: string, newT: string) => {
+                return actions.renameNotebookAction(this.ctx, this.deps, old, newT);
+            },
+            deleteNotebook: async (title: string) => {
+                return actions.deleteNotebookAction(this.ctx, this.deps, title);
             }
         };
 
@@ -97,7 +103,7 @@ export class NotebookLMClient {
 
     /** Navigates back to the NotebookLM home page */
     async recycle() {
-        await actions.recycleAction(this.ctx);
+        await actions.recycleAction(this.ctx, this.deps);
     }
 
     /** Opens a notebook by title */
@@ -115,6 +121,16 @@ export class NotebookLMClient {
     /** Creates a new notebook with the given title */
     async createNotebook(title: string) {
         return actions.createNotebookAction(this.ctx, this.deps, title);
+    }
+
+    /** Renames a notebook from the home page */
+    async renameNotebook(oldTitle: string, newTitle: string) {
+        return actions.renameNotebookAction(this.ctx, this.deps, oldTitle, newTitle);
+    }
+
+    /** Deletes a notebook from the home page */
+    async deleteNotebook(title: string) {
+        return actions.deleteNotebookAction(this.ctx, this.deps, title);
     }
 
     // --- Source Management ---

@@ -21,6 +21,7 @@ export * from './notebooklm/generate-audio';
 export * from './notebooklm/archival';
 export * from './notebooklm/history';
 export * from './notebooklm/extract-sources';
+export * from './notebooklm/auth';
 
 // Perplexity Actions
 export * from './perplexity/query';

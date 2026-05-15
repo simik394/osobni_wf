@@ -21,6 +21,12 @@ export interface HomeSelectors {
     projectButtonTitle: string;
     projectCard: string;
     primaryActionButton: string;
+    moreMenuButton: string;
+    menuItem: string;
+    renameOption: string;
+    deleteOption: string;
+    confirmDeleteButton: string;
+    renameInput: string;
 }
 
 export interface NotebookSelectors {
@@ -210,6 +216,19 @@ export interface GeminiSelectors {
     };
 }
 
+export interface GoogleAuthSelectors {
+    accountChooser: {
+        container: string;
+        accountItem: string;
+        useAnotherAccount: string;
+    };
+    login: {
+        emailInput: string;
+        nextButton: string;
+        passwordInput: string;
+    };
+}
+
 export interface PerplexitySelectors {
     queryInput: string | string[];
     followUpInput: string;
@@ -281,6 +300,7 @@ export interface NotebookLMSelectors {
     perplexity: PerplexitySelectors;
     aiMode: AIModeSelectors;
     keep: KeepSelectors;
+    googleAuth: GoogleAuthSelectors;
 }
 
 // ============================================================
@@ -293,7 +313,13 @@ const DEFAULTS: NotebookLMSelectors = {
         projectButton: 'div[role="button"]',
         projectButtonTitle: '.project-title',
         projectCard: '.project-card',
-        primaryActionButton: '.primary-action'
+        primaryActionButton: '.primary-action',
+        moreMenuButton: 'button[aria-label*="more" i], .more-button',
+        menuItem: 'div[role="menuitem"]',
+        renameOption: 'Rename|Přejmenovat',
+        deleteOption: 'Delete|Smazat',
+        confirmDeleteButton: 'button:has-text("Delete"), button:has-text("Smazat")',
+        renameInput: 'input[aria-label*="name" i]'
     },
     notebook: {
         titleInput: 'input.title-input',
@@ -527,6 +553,18 @@ const DEFAULTS: NotebookLMSelectors = {
         noteItem: '.IZ65Hb-n0wRZb',
         noteTitle: '.IZ65Hb-YPqjS-IDT92e',
         noteContent: '.IZ65Hb-sBy40b'
+    },
+    googleAuth: {
+        accountChooser: {
+            container: 'div[jsname="W607te"], #accountchooser',
+            accountItem: 'div[jsname="PaL3lc"], [data-accountindex]',
+            useAnotherAccount: 'div[jsname="vS779c"], #accountchooser-add-account'
+        },
+        login: {
+            emailInput: 'input[type="email"]',
+            nextButton: '#identifierNext, #passwordNext',
+            passwordInput: 'input[type="password"]'
+        }
     }
 };
 

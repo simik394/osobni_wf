@@ -17,10 +17,16 @@ home:
   # Create new notebook button
   createNewButton: ".create-new-button, .create-button-wrapper button"
   # Project/notebook cards container
-  projectButton: "project-button, tr.mat-mdc-row, .mat-mdc-row"
+  projectButton: "mat-card, tr.mat-mdc-row, div[role='button']"
   projectButtonTitle: ".project-button-title, .project-table-title, .title-column, .title"
   projectCard: "mat-card, tr.mat-mdc-row"
   primaryActionButton: ".primary-action-button, .project-table-title"
+  moreMenuButton: ".project-button-more, button[aria-label*='more' i], button[aria-label*='More'], button[aria-label*='Další']"
+  menuItem: 'div[role="menuitem"], button[role="menuitem"]'
+  renameOption: "Rename|Přejmenovat|Upravit název|Edit title"
+  deleteOption: "Delete|Smazat|Odstranit"
+  renameInput: 'input[aria-label*="name" i], input[formcontrolname="name"], mat-dialog-container input'
+  confirmDeleteButton: 'button.mat-warn, button:has-text("Smazat"), button:has-text("Delete"), button:has-text("Odstranit")'
 
 # ============================================================
 # NOTEBOOK PAGE
@@ -367,3 +373,15 @@ perplexity:
   queryInput: ["textarea[placeholder*='Ask']", "div[contenteditable='true']"]
   followUpInput: 'textarea[placeholder*="follow-up"]'
   answerContainer: "div.prose, .answer-content, [class*='answer-']"
+# ============================================================
+# GOOGLE AUTHENTICATION
+# ============================================================
+googleAuth:
+  accountChooser:
+    container: 'div[jsname="W607te"], #accountchooser'
+    accountItem: 'div[jsname="PaL3lc"], [data-accountindex]'
+    useAnotherAccount: 'div[jsname="vS779c"], #accountchooser-add-account'
+  login:
+    emailInput: 'input[type="email"]'
+    nextButton: '#identifierNext, #passwordNext'
+    passwordInput: 'input[type="password"]'

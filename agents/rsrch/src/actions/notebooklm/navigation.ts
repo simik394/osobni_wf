@@ -1,17 +1,33 @@
 import { UniversalContext, NotebookLMActionDeps } from '../types';
+import { ensureAuthAction } from './auth';
 
 /**
  * Recycle the current tab back to the home page (notebook list) using UI navigation.
  */
-export async function recycleAction(ctx: UniversalContext): Promise<void> {
+export async function recycleAction(
+    ctx: UniversalContext,
+    deps: NotebookLMActionDeps
+): Promise<void> {
     const { page, log, config } = ctx;
+    const { selectors } = deps;
+    
+    // Ensure we are not stuck at auth page
+    await ensureAuthAction(ctx, deps);
+
     const homeBtn = page.locator('a[href="/"], .notebook-logo, [aria-label*="NotebookLM"]').first();
     
     // If we're already on the home page (no /notebook/ in URL), we can skip
     const url = page.url();
-    if (url.includes('notebooklm.google.com') && !url.includes('/notebook/')) {
-        log('Already on home page, skip recycle.');
-        return;
+    try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.hostname === 'notebooklm.google.com' && 
+            (parsedUrl.pathname === '/' || parsedUrl.pathname === '') && 
+            !url.includes('login')) {
+            log('Already on home page, skip recycle.');
+            return;
+        }
+    } catch (e) {
+        // Fallback to full recycle if URL is invalid or unexpected
     }
 
     try {
@@ -54,37 +70,21 @@ export async function openNotebookAction(
         log('On different notebook, navigating to home first...');
     }
 
-    await recycleAction(ctx);
+    await recycleAction(ctx, deps);
 
     try {
-        await page.waitForSelector(`${selectors.home.projectButton}, ${selectors.home.projectCard}`, { timeout: ctx.config.timeouts.navigation });
+        await page.waitForSelector(selectors.home.projectButton, { timeout: ctx.config.timeouts.navigation });
 
         log('Scrolling to find notebook card...');
         let lastCount = 0;
         let currentCount = await page.locator(selectors.home.projectButton).count();
         let attempts = 0;
         
-        log('Searching for target notebook card...');
-        const allCards = page.locator(selectors.home.projectButton);
-        const allCount = await allCards.count();
-        let targetCard = null;
-
-        for (let i = 0; i < allCount; i++) {
-            const card = allCards.nth(i);
-            const cardTitle = await card.locator(selectors.home.projectButtonTitle).first().innerText().catch(() => '');
-            
-            // Clean titles for comparison (remove emojis, newlines, extra spaces)
-            const cleanTarget = title.replace(/\s+/g, ' ').trim().toLowerCase();
-            const cleanCard = cardTitle.replace(/\s+/g, ' ').trim().toLowerCase();
-            
-            if (cleanCard === cleanTarget || cleanCard.includes(cleanTarget) || cleanTarget.includes(cleanCard)) {
-                log(`Found matching card: "${cardTitle}"`);
-                targetCard = card;
-                break;
-            }
-        }
-
-        if (!targetCard) {
+        const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const targetCard = page.locator(selectors.home.projectButton).filter({ hasText: new RegExp(escapedTitle, 'i') }).first();
+        
+        if (await targetCard.count() === 0) {
+            const allCount = await page.locator(selectors.home.projectButton).count();
             throw new Error(`Notebook with title "${title}" not found in ${allCount} cards.`);
         }
 
@@ -105,6 +105,11 @@ export async function openNotebookAction(
         log('Notebook opened successfully.');
     } catch (e: any) {
         log(`Failed to open notebook: ${e.message}`, 'error');
+        // Try to dump state for debugging
+        try {
+            const client = new (await import('../../clients/notebooklm')).NotebookLMClient(page);
+            await client.dumpState('failed_open_notebook');
+        } catch (dumpErr) {}
         throw e;
     }
 }
