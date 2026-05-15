@@ -106,8 +106,11 @@ export class GeminiClient extends EventEmitter {
     // --- Core Interaction Bridge ---
 
     async sendMessage(message: string, options: any = {}) {
-        
-        return actions.sendMessageAction(this.ctx, message, options, this.deps as GeminiActionDeps);
+        const onProgress = (text: string) => {
+            this.emit('progress', { type: 'log', message: text });
+            if (options.onProgress) options.onProgress(text);
+        };
+        return actions.sendMessageAction(this.ctx, message, { ...options, onProgress }, this.deps as GeminiActionDeps);
     }
 
     async submitMessage(message: string, options: any = {}) {
@@ -287,15 +290,16 @@ export class GeminiClient extends EventEmitter {
     /** Legacy streaming bridge */
     async researchWithStreaming(query: string, callback: (chunk: { content: string, isComplete?: boolean }) => void, options: any = {}) {
         let lastLen = 0;
+        const onProgress = (text: string) => {
+            const newContent = text.substring(lastLen);
+            if (newContent) {
+                callback({ content: newContent, isComplete: false });
+                lastLen = text.length;
+            }
+        };
         return this.sendMessage(query, { 
             ...options,
-            onProgress: (text: string) => {
-                const newContent = text.substring(lastLen);
-                if (newContent) {
-                    callback({ content: newContent, isComplete: false });
-                    lastLen = text.length;
-                }
-            }
+            onProgress
         }).then(res => {
             callback({ content: '', isComplete: true });
             return res;

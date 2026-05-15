@@ -163,6 +163,36 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
     const router = Router();
     const { getGeminiClient } = deps;
 
+    router.post('/chat', async (req: Request, res: Response) => {
+        try {
+            const { message, sessionId, model, files } = req.body;
+            if (!message) return res.status(400).json({ error: 'Message is required' });
+
+            const gemini = await getGeminiClient();
+            const wantsSSE = req.headers.accept?.includes('text/event-stream');
+
+            if (wantsSSE) {
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.flushHeaders();
+                const handler = (data: any) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+                gemini.on('progress', handler);
+                try {
+                    const response = await gemini.sendMessage(message, { ...req.body });
+                    res.write(`data: ${JSON.stringify({ type: 'result', success: true, data: response })}\n\n`);
+                    res.end();
+                } finally {
+                    gemini.removeListener('progress', handler);
+                }
+            } else {
+                const response = await gemini.sendMessage(message, { ...req.body });
+                res.json({ success: true, data: response });
+            }
+        } catch (e: any) {
+            console.error('[GeminiRouter] Chat failed:', e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.post('/research', async (req: Request, res: Response) => {
         try {
             const { query } = req.body;
