@@ -22,8 +22,8 @@ export class KeepClient {
         } as NotebookLMActionDeps;
     }
 
-    async listNotes() {
-        return actions.listKeepNotesAction(this.ctx, this.deps);
+    async listNotes(options: { limit?: number; query?: string } = {}) {
+        return actions.listKeepNotesAction(this.ctx, this.deps, options);
     }
 
     async createNote(title: string, content: string) {

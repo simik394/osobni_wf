@@ -450,15 +450,45 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
 
     router.post('/ask', async (req: Request, res: Response) => {
         try {
-            const { title, message } = req.body;
+            const { title, message, sources } = req.body;
             if (!title || !message) return res.status(400).json({ error: 'title and message are required' });
 
             const client = await getNotebookClient();
             await client!.openNotebook(title);
-            const response = await client!.query(message);
+            const response = await client!.query(message, { sources });
             res.json({ success: true, data: response });
         } catch (e: any) {
             console.error('[NotebookRouter] Ask failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/presentation', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generatePresentation({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Presentation failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/infographic', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generateInfographic({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Infographic failed:', e);
             res.status(500).json({ success: false, error: e.message });
         }
     });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { cliContext } from './context';
+import { config } from '../config';
 import { serveCommand, stopCommand, shutdownCommand } from '../commands/server';
 import { profileCommand } from '../commands/profile';
 import { geminiCommand } from '../commands/gemini/index';
@@ -18,7 +19,7 @@ const program = new Command();
 program
     .version('1.0.35')
     .option('--profile <profileId>', 'Profile ID to use', 'default')
-    .option('--server <url>', 'Server URL for API calls', process.env.RSRCH_SERVER_URL || 'http://localhost:3001')
+    .option('--server <url>', 'Server URL for API calls', process.env.RSRCH_SERVER_URL || `http://${config.host}:${config.port}`)
     .option('-v, --verbose', 'Enable verbose output', false)
     .hook('preAction', (thisCommand) => {
         const opts = thisCommand.opts();

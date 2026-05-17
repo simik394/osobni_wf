@@ -30,11 +30,15 @@ describe('selectors', () => {
   describe('loadSelectors', () => {
 
 // start snippet should-return-default-selectors-when-selectors-yam
-    it('should throw when selectors.yaml does not exist', () => {
+    it('should fall back to defaults and warn when selectors.yaml does not exist', () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       
-      // reloadSelectors calls loadSelectors which throws
-      expect(() => reloadSelectors()).toThrow(/Critical failure: selectors.yaml not found/);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = reloadSelectors();
+      
+      expect(result.home.createNewButton).toBe('.create-new-button, .create-new-action-button');
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
 
 // end snippet should-return-default-selectors-when-selectors-yam

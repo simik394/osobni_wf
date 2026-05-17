@@ -5,11 +5,13 @@ export function registerKeepCommands(keep: Command) {
 
     keep.command('list')
         .description('List all notes in Google Keep')
-        .action(async () => {
-            const response = await sendServerRequest('/keep/notes', {}, 'GET');
+        .option('--limit <number>', 'Maximum number of notes to list', (v) => parseInt(v), 50)
+        .option('--query <string>', 'Filter notes by title or content')
+        .action(async (opts) => {
+            const response = await sendServerRequest('/keep/notes', { limit: opts.limit, q: opts.query }, 'GET');
             if (response && response.success) {
                 const notes = response.data;
-                console.log('\n--- Google Keep Notes ---');
+                console.log(`\n--- Google Keep Notes (${notes.length}) ---`);
                 if (notes.length === 0) {
                     console.log('No notes found.');
                 } else {

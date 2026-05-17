@@ -60,8 +60,25 @@ export async function selectSourcesAction(
         await humanDelay(500);
     }
 
-    if (typeof sources === 'string') {
-        log('Index range selection not fully implemented in modular action yet.', 'warn');
+    if (typeof sources === 'string' || (Array.isArray(sources) && sources.some(s => /^\d+(,\d+)*$/.test(s)))) {
+        const indicesStr = typeof sources === 'string' ? sources : sources.join(',');
+        const indices = indicesStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        
+        log(`Selecting ${indices.length} sources by index: ${indices.join(', ')}...`);
+        const sourceItems = page.locator('.single-source-container, source-list-item').filter({
+            has: page.locator('.source-title, .title')
+        });
+        
+        for (const idx of indices) {
+            const item = sourceItems.nth(idx - 1);
+            if (await item.count() > 0) {
+                const checkbox = item.locator('input[type="checkbox"], mat-checkbox').first();
+                if (await checkbox.isVisible().catch(() => false)) {
+                    await checkbox.click();
+                    await humanDelay(300);
+                }
+            }
+        }
     } else {
         log(`Selecting ${sources.length} sources by title...`);
         for (const title of sources) {

@@ -5,28 +5,68 @@ import { UniversalContext, NotebookLMActionDeps } from './types';
  */
 export async function listKeepNotesAction(
     ctx: UniversalContext,
-    deps: NotebookLMActionDeps
+    deps: NotebookLMActionDeps,
+    options: { limit?: number; query?: string } = {}
 ): Promise<Array<{ title: string; content: string }>> {
     const { page, log } = ctx;
     const { selectors } = deps;
+    const { limit = 50, query } = options;
 
-    log('Listing Keep notes...');
+    log(`Listing Keep notes (Limit: ${limit}, Filter: ${query || 'None'})...`);
 
     try {
-        log(`Navigating to Keep: https://keep.google.com (page exists: ${!!page})`);
         await page.goto('https://keep.google.com');
         await page.waitForSelector(selectors.keep.noteItem, { timeout: 10000 });
 
-        const notes = await page.evaluate((sels) => {
-            const items = document.querySelectorAll(sels.noteItem);
-            return Array.from(items).map(item => {
-                const title = item.querySelector(sels.noteTitle)?.textContent || '';
-                const content = item.querySelector(sels.noteContent)?.textContent || '';
-                return { title, content };
-            });
-        }, selectors.keep);
+        const results = new Map<string, { title: string; content: string }>();
+        let lastHeight = 0;
+        let noNewCount = 0;
 
-        return notes;
+        while (results.size < limit && noNewCount < 5) {
+            const currentNotes = await page.evaluate((sels) => {
+                const items = document.querySelectorAll(sels.noteItem);
+                return Array.from(items).map((item) => {
+                    const title = item.querySelector(sels.noteTitle)?.textContent?.trim() || '';
+                    const content = item.querySelector(sels.noteContent)?.textContent?.trim() || '';
+                    return { title, content };
+                });
+            }, selectors.keep);
+
+            // Robust de-duplication using Map (title + content as key)
+            currentNotes.forEach(note => {
+                const key = `${note.title}|${note.content}`;
+                if (key.trim() !== '|' && !results.has(key)) {
+                    results.set(key, note);
+                }
+            });
+
+            if (results.size >= limit) break;
+
+            const currentHeight = await page.evaluate(() => document.body.scrollHeight);
+            if (currentHeight === lastHeight) {
+                noNewCount++;
+            } else {
+                noNewCount = 0;
+                lastHeight = currentHeight;
+            }
+
+            // Professional Scroll & Wait strategy
+            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+            await page.waitForTimeout(800);
+            
+            if (noNewCount >= 5) break;
+        }
+
+        let finalResults = Array.from(results.values());
+
+        // Apply professional regex filtering if query provided
+        if (query) {
+            const regex = new RegExp(query, 'i');
+            finalResults = finalResults.filter(n => regex.test(n.title) || regex.test(n.content));
+        }
+
+        log(`Successfully extracted ${finalResults.length} unique notes.`);
+        return finalResults.slice(0, limit);
     } catch (e: any) {
         log(`Failed to list Keep notes: ${e.message}`, 'error');
         return [];

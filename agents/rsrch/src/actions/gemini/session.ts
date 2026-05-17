@@ -227,6 +227,9 @@ async function discoverByScrollingAction(
 
         // Scroll down
         const lastCount = count;
+        if (count > 0) {
+            await items.last().scrollIntoViewIfNeeded().catch(() => {});
+        }
         await page.evaluate((sel) => {
             const container = document.querySelector(sel);
             if (container) container.scrollBy(0, 1000);

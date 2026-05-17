@@ -80,7 +80,7 @@ function loadConfig() {
     }
   }
 
-  const envPort = process.env.PORT || process.env.NOMAD_PORT_http;
+  const envPort = process.env.RSRCH_PORT || process.env.PORT || process.env.NOMAD_PORT_http;
   const resolvedPort = envPort ? parseInt(envPort, 10) : (localConfig.port || DEFAULTS.RSRCH.API_PORT);
 
   const merged = {

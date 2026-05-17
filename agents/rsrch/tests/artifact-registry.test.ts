@@ -33,7 +33,13 @@ describe('ArtifactRegistry', () => {
     it('should generate unique 3-character base IDs', () => {
         const ids = new Set<string>();
         for (let i = 0; i < 100; i++) {
-            ids.add(registry.generateBaseId());
+            const id = registry.generateBaseId();
+            ids.add(id);
+            // Register it in the registry's internal artifacts to prevent duplicate generation
+            (registry as any).registry.artifacts[id] = {
+                type: 'session',
+                createdAt: new Date().toISOString()
+            };
         }
         expect(ids.size).toBe(100);
         expect([...ids][0].length).toBe(3);

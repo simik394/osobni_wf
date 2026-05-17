@@ -21,8 +21,11 @@ export function createKeepRouter(deps: {
 
     router.get('/notes', async (req: Request, res: Response) => {
         try {
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+            const query = req.query.q as string;
+            
             const client = await getKeepClient();
-            const notes = await client.listNotes();
+            const notes = await client.listNotes({ limit, query });
             res.json({ success: true, data: notes });
         } catch (e: any) {
             res.status(500).json({ error: e.message });

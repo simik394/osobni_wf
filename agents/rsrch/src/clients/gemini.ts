@@ -260,6 +260,7 @@ export class GeminiClient extends EventEmitter {
         // Handle initial state (auth, cookies, overlays)
         try {
             await actions.handleInitialOverlaysAction(this.ctx, this.deps as GeminiActionDeps);
+            await actions.checkAuthRequiredAction(this.ctx, this.deps as GeminiActionDeps);
             const { ensureGoogleAuthAction } = await import('../actions/google-auth');
             await ensureGoogleAuthAction(this.ctx, this.deps);
             

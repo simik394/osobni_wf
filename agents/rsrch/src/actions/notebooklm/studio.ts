@@ -29,11 +29,7 @@ export async function getStudioArtifactsAction(
     try {
         log('Extracting studio artifacts...');
         // Ensure studio is maximized (if applicable)
-        const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio|Průvodce/i }).first();
-        if (await studioBtn.count() > 0 && await studioBtn.isVisible()) {
-            await studioBtn.click();
-            await deps.humanDelay(2500);
-        }
+        await maximizeStudioAction(ctx, deps);
 
         const studioPanel = page.locator('div.right-panel, section.studio-panel, .studio-panel').first();
         if (await studioPanel.count() === 0) {
@@ -159,8 +155,14 @@ export async function maximizeStudioAction(
     const { selectors } = deps;
 
     const studioBtn = page.locator('button').filter({ hasText: /Notebook Guide|Studio|Průvodce/i }).first();
-    if (await studioBtn.count() > 0 && await studioBtn.isVisible()) {
-        log('Maximizing Studio panel...');
+    const expandBtn = page.locator(`${selectors.studio.expandButtonCs}, ${selectors.studio.expandButtonEn}, ${selectors.studio.maximizeButton}`).first();
+    
+    if (await expandBtn.count() > 0 && await expandBtn.isVisible()) {
+        log('Expanding Studio panel via aria-label...');
+        await expandBtn.click();
+        await deps.humanDelay(2000);
+    } else if (await studioBtn.count() > 0 && await studioBtn.isVisible()) {
+        log('Maximizing Studio panel via text...');
         await studioBtn.click();
         await deps.humanDelay(2000);
     }

@@ -69,4 +69,31 @@ export function registerArtifactCommands(notebook: Command) {
                 console.log('------------------------\n');
             }
         });
+    notebook.command('presentation <notebook>')
+        .description('Generate a slide deck (presentation) for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting presentation generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/presentation', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ Presentation generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger presentation generation');
+            }
+        });
+
+    notebook.command('infographic <notebook>')
+        .description('Generate an infographic for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting infographic generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/infographic', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ Infographic generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger infographic generation');
+            }
+        });
 }

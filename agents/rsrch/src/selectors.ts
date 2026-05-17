@@ -55,6 +55,16 @@ export interface SourcesSelectors {
 
 export interface StudioSelectors {
     maximizeButton: string;
+    expandButtonCs: string;
+    expandButtonEn: string;
+    collapseButtonCs: string;
+    collapseButtonEn: string;
+    presentationButtonCs: string;
+    presentationButtonEn: string;
+    infographicButtonCs: string;
+    infographicButtonEn: string;
+    presentationButtonFallback: string;
+    infographicButtonFallback: string;
     artifactButton: string;
     artifactLibraryItem: string;
     artifactTitle: string;
@@ -350,6 +360,16 @@ const DEFAULTS: NotebookLMSelectors = {
     },
     studio: {
         maximizeButton: 'button[aria-label="Maximize"]',
+        expandButtonCs: 'Expand studio panel',
+        expandButtonEn: 'Expand studio panel',
+        collapseButtonCs: 'Collapse studio panel',
+        collapseButtonEn: 'Collapse studio panel',
+        presentationButtonCs: 'Slide deck',
+        presentationButtonEn: 'Slide deck',
+        infographicButtonCs: 'Infographic',
+        infographicButtonEn: 'Infographic',
+        presentationButtonFallback: '.yellow',
+        infographicButtonFallback: '.pink',
         artifactButton: '.artifact-button',
         artifactLibraryItem: '.library-item',
         artifactTitle: '.artifact-title',
@@ -591,9 +611,26 @@ export function loadSelectors(): NotebookLMSelectors {
 
     const result = JSON.parse(JSON.stringify(DEFAULTS)) as NotebookLMSelectors;
 
-    const yamlPath = path.join(__dirname, 'selectors.yaml');
-    if (!fs.existsSync(yamlPath)) {
-        throw new Error(`[Selectors] Critical failure: selectors.yaml not found at ${yamlPath}`);
+    const possiblePaths = [
+        path.join(__dirname, 'selectors.yaml'),
+        path.join(__dirname, '..', 'selectors.yaml'),
+        path.join(__dirname, '..', '..', 'selectors.yaml'),
+        path.join(process.cwd(), 'selectors.yaml'),
+        path.join(process.cwd(), 'src', 'selectors.yaml'),
+        path.join(process.cwd(), 'agents', 'rsrch', 'selectors.yaml'),
+    ];
+
+    let yamlPath = '';
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            yamlPath = p;
+            break;
+        }
+    }
+
+    if (!yamlPath) {
+        console.warn(`[Selectors] Warning: selectors.yaml not found in any of: ${possiblePaths.join(', ')}. Using hardcoded defaults.`);
+        return result;
     }
 
     try {
@@ -613,7 +650,6 @@ export function loadSelectors(): NotebookLMSelectors {
             };
 
             deepMerge(result, yamlSelectors);
-            console.log('[Selectors] Deep-merged selectors from selectors.yaml');
         }
     } catch (error) {
         console.error('[Selectors] Fatal Error:', error);

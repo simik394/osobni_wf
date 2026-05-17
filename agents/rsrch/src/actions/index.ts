@@ -22,6 +22,7 @@ export * from './notebooklm/archival';
 export * from './notebooklm/history';
 export * from './notebooklm/extract-sources';
 export * from './notebooklm/auth';
+export * from './notebooklm/generate-visuals';
 
 // Perplexity Actions
 export * from './perplexity/query';

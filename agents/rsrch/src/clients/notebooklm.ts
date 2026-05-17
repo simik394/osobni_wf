@@ -183,7 +183,10 @@ export class NotebookLMClient {
     // --- Query & Chat ---
 
     /** Sends a query to the chat and returns the response */
-    async query(message: string) {
+    async query(message: string, options: { sources?: string[] } = {}) {
+        if (options.sources) {
+            await this.selectSources(options.sources);
+        }
         return actions.queryNotebookAction(this.ctx, this.deps, message);
     }
 
@@ -254,6 +257,16 @@ export class NotebookLMClient {
     /** Downloads a specific artifact (text, note, etc.) */
     async downloadArtifact(notebookTitle: string, artifactTitle: string, outputPath: string, options: { isPattern?: boolean, latestOnly?: boolean } = {}) {
         return actions.downloadArtifactAction(this.ctx, this.deps, notebookTitle, artifactTitle, outputPath, options);
+    }
+
+    /** Generates a slide deck (presentation) */
+    async generatePresentation(options: { sources?: string[] } = {}) {
+        return actions.generatePresentationAction(this.ctx, this.deps, options);
+    }
+
+    /** Generates an infographic */
+    async generateInfographic(options: { sources?: string[] } = {}) {
+        return actions.generateInfographicAction(this.ctx, this.deps, options);
     }
 
     /** Generates an audio overview for the notebook */

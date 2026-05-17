@@ -8,7 +8,7 @@ export interface ServerOptions {
     cdp?: string;
 }
 
-const DEFAULT_SERVER_URL = process.env.RSRCH_SERVER_URL || 'http://localhost:3001';
+const DEFAULT_SERVER_URL = process.env.RSRCH_SERVER_URL || `http://${config.host}:${config.port}`;
 
 // --- Helpers from index.ts ---
 
@@ -43,9 +43,14 @@ export async function sendServerRequest(path: string, body: any = {}, method: st
         if (method !== 'GET' && method !== 'HEAD') {
             fetchOpts.body = JSON.stringify(body);
         } else if (Object.keys(body).length > 0) {
-            // Convert body to query params for GET
-            const query = new URLSearchParams(body).toString();
-            path += (path.includes('?') ? '&' : '?') + query;
+            // Convert body to query params for GET, filtering out undefined
+            const filteredBody = Object.fromEntries(
+                Object.entries(body).filter(([_, v]) => v !== undefined)
+            );
+            const query = new URLSearchParams(filteredBody as any).toString();
+            if (query) {
+                path += (path.includes('?') ? '&' : '?') + query;
+            }
         }
 
         const response = await fetch(`${serverUrl}${path}`, fetchOpts);
