@@ -17,6 +17,8 @@ This is a living record of technical challenges, architectural discoveries, and 
 - **UniversalContext**: Always use `ctx.log` and `ctx.config` instead of `console.log` or direct imports.
 - **Surgical Cleanup**: Frequent `npm run build` is mandatory to catch broken imports after deep refactoring.
 - **Stateless Bridge Pattern**: Adapting native GUI features requires a "stateless bridge" approach: actions should be atomic, use stable selectors (aria-labels, data-tests), and bypass complex automation where possible to ensure reliability.
+- **In-Browser DOM-to-MD Parser**: When scraping complex SPA editors (like Gemini Canvas), executing recursive DOM-to-Markdown parsing inside the browser via Playwright's `page.evaluate()` is far superior to regex string replacement, and avoids heavy server-side parser dependencies.
+- **CLI Piping/File Hardening**: When designing update subcommands, support both stdin piping and file path inputs with interactive TTY checking to prevent blocking and ensure seamless command-line integration.
 
 ---
 

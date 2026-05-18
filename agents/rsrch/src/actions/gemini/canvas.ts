@@ -113,19 +113,139 @@ export async function readCanvasAction(
             }
         }
 
-        // Basic HTML -> MD conversion
-        let markdown = html
-            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
-            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
-            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
-            .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-            .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-            .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
-            .replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
-            .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
-            .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, ''); 
+        // Robust in-browser DOM to Markdown conversion
+        const markdown = await editor.evaluate((root) => {
+            function traverse(node: any, context: { indent?: number; listType?: 'ul' | 'ol'; listIndex?: number } = {}): string {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return node.nodeValue || '';
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE) {
+                    return '';
+                }
+
+                const tagName = node.tagName.toUpperCase();
+                
+                // Handle code blocks specially to avoid parsing their children recursively
+                if (tagName === 'PRE' || tagName === 'CODE') {
+                    if (tagName === 'PRE') {
+                        const codeNode = node.querySelector('code') || node;
+                        const langClass = Array.from(codeNode.classList).find((c: any) => c.startsWith('language-') || c.startsWith('lang-'));
+                        const lang = langClass ? (langClass as string).replace(/^(language-|lang-)/, '') : '';
+                        return `\n\`\`\`${lang}\n${codeNode.textContent?.trim() || ''}\n\`\`\`\n`;
+                    }
+                    if (node.closest('pre')) {
+                        return node.textContent || '';
+                    }
+                    return `\`${node.textContent || ''}\``;
+                }
+
+                let childrenContent = '';
+                const isList = tagName === 'UL' || tagName === 'OL';
+                const newIndent = (context.indent || 0) + (isList ? 1 : 0);
+                
+                let childIndex = 0;
+                for (const child of Array.from(node.childNodes)) {
+                    childrenContent += traverse(child as HTMLElement, { 
+                        ...context, 
+                        indent: newIndent,
+                        listType: tagName === 'UL' ? 'ul' : tagName === 'OL' ? 'ol' : context.listType,
+                        listIndex: tagName === 'OL' ? ++childIndex : undefined
+                    });
+                }
+
+                switch (tagName) {
+                    case 'H1': return `\n# ${childrenContent.trim()}\n\n`;
+                    case 'H2': return `\n## ${childrenContent.trim()}\n\n`;
+                    case 'H3': return `\n### ${childrenContent.trim()}\n\n`;
+                    case 'H4': return `\n#### ${childrenContent.trim()}\n\n`;
+                    case 'H5': return `\n##### ${childrenContent.trim()}\n\n`;
+                    case 'H6': return `\n###### ${childrenContent.trim()}\n\n`;
+                    case 'P': return `\n${childrenContent.trim()}\n\n`;
+                    case 'BR': return '\n';
+                    case 'HR': return '\n---\n';
+                    
+                    case 'STRONG':
+                    case 'B':
+                        return childrenContent.trim() ? `**${childrenContent.trim()}**` : '';
+                    case 'EM':
+                    case 'I':
+                        return childrenContent.trim() ? `*${childrenContent.trim()}*` : '';
+                    case 'A': {
+                        const href = node.getAttribute('href');
+                        if (href && !href.startsWith('javascript:')) {
+                            return `[${childrenContent.trim() || href}](${href})`;
+                        }
+                        return childrenContent;
+                    }
+                    
+                    case 'UL':
+                    case 'OL':
+                        return `\n${childrenContent}\n`;
+                        
+                    case 'LI': {
+                        const indentStr = '  '.repeat(Math.max(0, (context.indent || 1) - 1));
+                        const bullet = context.listType === 'ol' ? `${context.listIndex || 1}. ` : '- ';
+                        return `${indentStr}${bullet}${childrenContent.trim()}\n`;
+                    }
+                    
+                    case 'TABLE':
+                        return `\n${childrenContent}\n`;
+                    case 'TR':
+                        return `| ${childrenContent.trim()} |\n`;
+                    case 'TD':
+                    case 'TH':
+                        return `${childrenContent.trim()} | `;
+                        
+                    default:
+                        return childrenContent;
+                }
+            }
+
+            function parseTable(tableNode: HTMLTableElement): string {
+                const rows = Array.from(tableNode.querySelectorAll('tr'));
+                if (rows.length === 0) return '';
+                
+                let markdown = '\n';
+                let colCount = 0;
+                
+                rows.forEach((row, rowIndex) => {
+                    const cells = Array.from(row.querySelectorAll('th, td'));
+                    if (rowIndex === 0) {
+                        colCount = cells.length;
+                        markdown += '| ' + cells.map(c => traverse(c).trim().replace(/\|/g, '\\|')).join(' | ') + ' |\n';
+                        markdown += '| ' + Array(colCount).fill('---').join(' | ') + ' |\n';
+                    } else {
+                        markdown += '| ' + cells.map(c => traverse(c).trim().replace(/\|/g, '\\|')).join(' | ') + ' |\n';
+                    }
+                });
+                
+                return markdown + '\n';
+            }
+
+            // Temporarily replace tables to parse them perfectly
+            const tables = Array.from(root.querySelectorAll('table'));
+            const tableReplacements: Array<{ placeholder: string; md: string }> = [];
+            
+            tables.forEach((table, index) => {
+                const placeholder = `<!-- TABLE_PLACEHOLDER_${index} -->`;
+                const md = parseTable(table as HTMLTableElement);
+                tableReplacements.push({ placeholder, md });
+                
+                const marker = document.createTextNode(placeholder);
+                table.parentNode?.replaceChild(marker, table);
+            });
+
+            let result = traverse(root);
+            
+            // Restore tables
+            tableReplacements.forEach(({ placeholder, md }) => {
+                result = result.replace(placeholder, md);
+            });
+            
+            return result
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }); 
 
         return { title, content, markdown, references };
     } catch (e: any) {

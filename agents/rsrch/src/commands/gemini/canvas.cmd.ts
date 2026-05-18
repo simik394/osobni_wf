@@ -140,11 +140,36 @@ export function registerCanvasCommands(gemini: Command) {
             }
         });
 
-    canvas.command('update <content>')
+    canvas.command('update [content]')
         .description('Update or append content in the active Canvas editor')
         .option('--append', 'Append instead of replacing', false)
+        .option('-f, --file <path>', 'Path to local file to read content from')
         .action(async (content, opts) => {
-            const data = await sendServerRequest('/gemini/canvas/update', { content, mode: opts.append ? 'append' : 'replace' }, 'POST');
+            let finalContent = content;
+
+            if (opts.file) {
+                const fs = await import('node:fs');
+                const path = await import('node:path');
+                const resolvedPath = path.resolve(opts.file);
+                if (!fs.existsSync(resolvedPath)) {
+                    console.error(`Error: File not found at ${resolvedPath}`);
+                    process.exit(1);
+                }
+                finalContent = fs.readFileSync(resolvedPath, 'utf8');
+            } else if (!finalContent) {
+                // Read from stdin if not interactive TTY
+                if (process.stdin.isTTY) {
+                    console.error('Error: Please provide content, specify a file with --file <path>, or pipe input via stdin.');
+                    process.exit(1);
+                }
+                finalContent = await new Promise<string>((resolve) => {
+                    let data = '';
+                    process.stdin.on('data', chunk => { data += chunk; });
+                    process.stdin.on('end', () => resolve(data));
+                });
+            }
+
+            const data = await sendServerRequest('/gemini/canvas/update', { content: finalContent, mode: opts.append ? 'append' : 'replace' }, 'POST');
             if (data?.success && data.data) console.log('Canvas updated successfully.');
         });
 
