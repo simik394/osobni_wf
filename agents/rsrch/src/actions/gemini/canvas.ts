@@ -180,7 +180,7 @@ export async function readCanvasAction(
                     
                     case 'UL':
                     case 'OL':
-                        return `\n${childrenContent}\n`;
+                        return context.indent && context.indent > 1 ? childrenContent : `\n${childrenContent}\n`;
                         
                     case 'LI': {
                         const indentStr = '  '.repeat(Math.max(0, (context.indent || 1) - 1));
@@ -194,7 +194,7 @@ export async function readCanvasAction(
                         return `| ${childrenContent.trim()} |\n`;
                     case 'TD':
                     case 'TH':
-                        return `${childrenContent.trim()} | `;
+                        return childrenContent.trim();
                         
                     default:
                         return childrenContent;
