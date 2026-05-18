@@ -510,4 +510,28 @@ export class GeminiClient extends EventEmitter {
     async exportSession() {
         return actions.exportFullSessionAction(this.ctx, { ...(this.deps as GeminiActionDeps), extractResponse: actions.extractResponseAction });
     }
+
+    async uploadFromNotebookLM(notebookTitle: string) {
+        return actions.uploadFromNotebookLMAction(this.ctx, this.deps as GeminiActionDeps, notebookTitle);
+    }
+
+    async uploadFromPhotos(photoTitle: string) {
+        return actions.uploadFromPhotosAction(this.ctx, this.deps as GeminiActionDeps, photoTitle);
+    }
+
+    async draftCurrentToGmail() {
+        return actions.draftInGmailAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async listSharedLinks() {
+        return actions.listSharedLinksAction(this.ctx, this.deps as GeminiActionDeps);
+    }
+
+    async deleteSharedLink(linkIdOrTitle: string) {
+        return actions.deleteSharedLinkAction(this.ctx, this.deps as GeminiActionDeps, linkIdOrTitle);
+    }
+
+    async deleteAllSharedLinks() {
+        return actions.deleteAllSharedLinksAction(this.ctx, this.deps as GeminiActionDeps);
+    }
 }

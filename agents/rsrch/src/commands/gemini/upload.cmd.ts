@@ -105,6 +105,26 @@ export function registerUploadCommands(gemini: Command) {
             else console.log(`\n❌ Failed to attach file from Drive: ${fileName}`);
         });
 
+    gemini.command('upload-notebooklm <notebookTitle> [sessionId]')
+        .description('Attach a NotebookLM notebook to the Gemini session')
+        .action(async (notebookTitle, sessionId) => {
+            if (sessionId) await sendServerRequest('/gemini/session/open', { identifier: sessionId }, 'POST');
+            
+            const res = await sendServerRequest('/gemini/upload-notebooklm', { notebookTitle });
+            if (res?.success) console.log(`\n✅ Attached NotebookLM notebook: ${notebookTitle}`);
+            else console.log(`\n❌ Failed to attach NotebookLM notebook: ${notebookTitle}`);
+        });
+
+    gemini.command('upload-photos <photoTitle> [sessionId]')
+        .description('Attach Google Photos to the Gemini session')
+        .action(async (photoTitle, sessionId) => {
+            if (sessionId) await sendServerRequest('/gemini/session/open', { identifier: sessionId }, 'POST');
+            
+            const res = await sendServerRequest('/gemini/upload-photos', { photoTitle });
+            if (res?.success) console.log(`\n✅ Attached photo: ${photoTitle}`);
+            else console.log(`\n❌ Failed to attach photo: ${photoTitle}`);
+        });
+
     gemini.command('sources')
         .description('List available context sources')
         .action(async () => {

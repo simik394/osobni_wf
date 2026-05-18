@@ -247,4 +247,69 @@ export function registerSessionCommands(gemini: Command) {
                 console.log(`------------------------\n`);
             }
         });
+
+    gemini.command('draft-gmail [sessionId]')
+        .description('Export latest Gemini response as a Gmail draft')
+        .action(async (sessionId) => {
+            if (sessionId) await sendServerRequest('/gemini/session/open', { identifier: sessionId }, 'POST');
+            
+            console.log('\nCreating Gmail draft from the latest response...');
+            const data = await sendServerRequest('/gemini/draft-to-gmail', {}, 'POST');
+            if (data?.success) {
+                console.log('\n✅ Gmail draft created successfully!');
+                if (data.draftUrl) {
+                    console.log(`Draft URL: ${data.draftUrl}`);
+                }
+            } else {
+                console.log('\n❌ Failed to draft in Gmail');
+            }
+            console.log('');
+        });
+
+    gemini.command('list-shared')
+        .description('List all active public shared links')
+        .action(async () => {
+            console.log('\nListing active public shared links...');
+            const res = await sendServerRequest('/gemini/sharing/links', {}, 'GET');
+            if (res?.success && res.links) {
+                console.log('\n--- Active Public Links ---');
+                if (res.links.length === 0) {
+                    console.log('No public links found.');
+                } else {
+                    res.links.forEach((link: any, index: number) => {
+                        console.log(`${index + 1}. Title: ${link.title}`);
+                        console.log(`   URL: ${link.url}`);
+                        console.log(`   ID:  ${link.id}`);
+                        console.log('---------------------------');
+                    });
+                }
+                console.log('');
+            } else {
+                console.log('\n❌ Failed to retrieve public shared links.');
+            }
+        });
+
+    gemini.command('delete-shared <idOrTitle>')
+        .description('Delete a specific public shared link by ID or Session Title')
+        .action(async (idOrTitle) => {
+            console.log(`\nDeleting public shared link: "${idOrTitle}"...`);
+            const res = await sendServerRequest('/gemini/sharing/delete', { linkIdOrTitle: idOrTitle }, 'POST');
+            if (res?.success) {
+                console.log(`\n✅ Successfully deleted public shared link.`);
+            } else {
+                console.log(`\n❌ Failed to delete public shared link.`);
+            }
+        });
+
+    gemini.command('delete-all-shared')
+        .description('Delete ALL public shared links in this Gemini account')
+        .action(async () => {
+            console.log('\nDeleting all public shared links...');
+            const res = await sendServerRequest('/gemini/sharing/delete-all', {}, 'POST');
+            if (res?.success) {
+                console.log(`\n✅ Successfully deleted all public shared links.`);
+            } else {
+                console.log(`\n❌ Failed to delete public shared links.`);
+            }
+        });
 }

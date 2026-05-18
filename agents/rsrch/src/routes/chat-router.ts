@@ -677,6 +677,69 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.post('/gemini/upload-notebooklm', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.uploadFromNotebookLM(notebookTitle);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/upload-photos', async (req: Request, res: Response) => {
+        try {
+            const { photoTitle } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.uploadFromPhotos(photoTitle);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/draft-to-gmail', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const result = await gemini.draftCurrentToGmail();
+            res.json(result);
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/gemini/sharing/links', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const links = await gemini.listSharedLinks();
+            res.json({ success: true, links });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/sharing/delete', async (req: Request, res: Response) => {
+        try {
+            const { linkIdOrTitle } = req.body;
+            const gemini = await getGeminiClient();
+            const success = await gemini.deleteSharedLink(linkIdOrTitle);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/gemini/sharing/delete-all', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const success = await gemini.deleteAllSharedLinks();
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.post('/environment/deep-research', async (req: Request, res: Response) => {
         try {
             const { enabled } = req.body;

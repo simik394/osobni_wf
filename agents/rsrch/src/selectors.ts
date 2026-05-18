@@ -183,6 +183,12 @@ export interface GeminiSelectors {
             fileRow: string;
             selectButton: string;
         };
+        notebooklmDialog: {
+            container: string;
+            searchInput: string;
+            notebookItem: string;
+            insertButton: string;
+        };
     };
     canvas: {
         sidePanel: string;
@@ -213,6 +219,8 @@ export interface GeminiSelectors {
         renameInput: string;
         confirmRename: string;
         confirmDelete: string;
+        draftGmailOption: string;
+        toastGmailLink: string;
     };
     tools: {
         trigger: string;
@@ -223,6 +231,14 @@ export interface GeminiSelectors {
         connectedApps: string;
         extensionItem: string;
         extensionToggle: string;
+        sharing: {
+            linksList: string;
+            linkTitle: string;
+            linkUrl: string;
+            deleteButton: string;
+            deleteAllButton: string;
+            confirmDelete: string;
+        };
     };
 }
 
@@ -480,6 +496,12 @@ const DEFAULTS: NotebookLMSelectors = {
                 search: 'input[type="search"]',
                 fileRow: '.picker-grid-tile',
                 selectButton: 'button:has-text("Select")'
+            },
+            notebooklmDialog: {
+                container: '.notebook-import-dialog, [role="dialog"]:has-text("NotebookLM")',
+                searchInput: 'input[type="search"], input[placeholder*="Search"]',
+                notebookItem: '.notebook-row, .notebook-item, [role="option"]',
+                insertButton: 'button:has-text("Insert"), button:has-text("Vložit"), button:has-text("Přidat")'
             }
         },
         canvas: {
@@ -510,7 +532,9 @@ const DEFAULTS: NotebookLMSelectors = {
             delete: 'Delete',
             renameInput: 'input[aria-label="Rename chat"]',
             confirmRename: 'Rename',
-            confirmDelete: 'Delete'
+            confirmDelete: 'Delete',
+            draftGmailOption: 'Vytvořit koncept v Gmailu|Draft in Gmail',
+            toastGmailLink: 'a[href*="mail.google.com"]'
         },
         tools: {
             trigger: 'Tools',
@@ -520,7 +544,15 @@ const DEFAULTS: NotebookLMSelectors = {
             trigger: 'Settings & help',
             connectedApps: 'Connected apps',
             extensionItem: '.extension-item',
-            extensionToggle: 'mat-slide-toggle'
+            extensionToggle: 'mat-slide-toggle',
+            sharing: {
+                linksList: '.share-link-item, tr:has(a[href*="/share/"])',
+                linkTitle: '.link-title, td:first-child',
+                linkUrl: 'a[href*="/share/"]',
+                deleteButton: 'button[aria-label*="Smazat" i], button[aria-label*="Delete" i], .delete-btn',
+                deleteAllButton: 'button:has-text("Smazat všechny odkazy"), button:has-text("Delete all links")',
+                confirmDelete: 'button:has-text("Smazat"), button:has-text("Delete")'
+            }
         }
     },
     perplexity: {

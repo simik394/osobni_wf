@@ -159,3 +159,74 @@ export async function exportToGoogleDocsAction(
         return { docId: null, docUrl: null, docTitle: null };
     }
 }
+
+/**
+ * Creates a Gmail draft containing the latest response/research.
+ * Returns the Gmail draft direct URL or success indicator.
+ */
+export async function draftInGmailAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps
+): Promise<{ success: boolean; draftUrl?: string }> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    log('Drafting latest response in Gmail...');
+
+    try {
+        // 1. Find export menu button
+        const exportButtonSelectors = [
+            'button[aria-label="Nabídka pro export"]',
+            'button[aria-label="Export menu"]',
+            'button[aria-label*="Nabídka pro export"]',
+            'button[aria-label*="Export menu"]'
+        ];
+
+        let exportButton = null;
+        for (const selector of exportButtonSelectors) {
+            const btn = page.locator(selector).first();
+            if (await btn.count() > 0 && await btn.isVisible().catch(() => false)) {
+                exportButton = btn;
+                break;
+            }
+        }
+
+        if (!exportButton) {
+            log('Export menu button not found', 'error');
+            if (deps.dumpState) await deps.dumpState('gmail_export_btn_not_found');
+            return { success: false };
+        }
+
+        await exportButton.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Locate and click the "Draft in Gmail" option
+        const gmailOption = page.locator(selectors.gemini.session.draftGmailOption).first();
+        if (!await gmailOption.isVisible()) {
+            log('Draft in Gmail menu option not found', 'error');
+            await page.keyboard.press('Escape');
+            return { success: false };
+        }
+
+        log('Clicking "Draft in Gmail"...');
+        await gmailOption.click();
+
+        // 3. Wait for the confirmation toast/overlay to appear
+        log('Waiting for Gmail draft confirmation toast...');
+        const toastLink = page.locator(selectors.gemini.session.toastGmailLink).first();
+        
+        let draftUrl = undefined;
+        try {
+            await toastLink.waitFor({ state: 'visible', timeout: 30000 });
+            draftUrl = await toastLink.getAttribute('href') || undefined;
+            log(`Draft created successfully! Direct Gmail Link: ${draftUrl}`);
+        } catch (err: any) {
+            log('Draft created, but direct link to Gmail was not found in toast.', 'warn');
+        }
+
+        return { success: true, draftUrl };
+    } catch (e: any) {
+        log(`Draft in Gmail failed: ${e.message}`, 'error');
+        return { success: false };
+    }
+}

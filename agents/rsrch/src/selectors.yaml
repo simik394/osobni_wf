@@ -235,6 +235,11 @@ gemini:
       search: 'input[type="text"][placeholder*="Vyhledejte"], input[type="text"][placeholder*="Search"]'
       fileRow: 'div[role="listitem"], div[role="row"], .picker-grid-tile'
       selectButton: 'button:has-text("Vložit"), div[role="button"]:has-text("Vložit"), button:has-text("Select"), button:has-text("Insert")'
+    notebooklmDialog:
+      container: 'mat-dialog-container:has-text("NotebookLM"), .notebook-import-dialog'
+      searchInput: 'input[placeholder*="Search" i], input[placeholder*="Hledat" i]'
+      notebookItem: '.notebook-row, .notebook-item, [role="option"]'
+      insertButton: 'button:has-text("Insert"), button:has-text("Vložit"), button:has-text("Select")'
   canvas:
     sidePanel: 'canvas-view, .canvas-side-panel, [data-testid="canvas-container"]'
     header: ".canvas-header"
@@ -263,6 +268,8 @@ gemini:
     renameInput: 'input[aria-label="Přejmenovat chat"], input[aria-label="Rename chat"]'
     confirmRename: 'button:has-text("Přejmenovat"), button:has-text("Rename")'
     confirmDelete: 'button:has-text("Vymazat"), button:has-text("Delete")'
+    draftGmailOption: 'button[role="menuitem"]:has-text("Vytvořit koncept v Gmailu"), button[role="menuitem"]:has-text("Draft in Gmail")'
+    toastGmailLink: 'a[href*="mail.google.com/mail"]'
   tools:
     trigger: 'button:has-text("Nástroje"), button:has-text("Tools")'
     deepResearch: 'button[aria-label="Deep Research"]'
@@ -271,6 +278,13 @@ gemini:
     connectedApps: 'button[role="menuitem"]:has-text("Připojené aplikace"), button[role="menuitem"]:has-text("Connected apps")'
     extensionItem: '.extension-item, [role="listitem"]:has(.extension-name)'
     extensionToggle: 'mat-slide-toggle, input[type="checkbox"]'
+    sharing:
+      linksList: '.share-link-item, [role="listitem"]:has(.link-title), .shared-links-list-item'
+      linkTitle: '.link-title, .title, .session-title'
+      linkUrl: 'a[href*="gemini.google.com/share/"]'
+      deleteButton: 'button[aria-label*="Smazat" i], button[aria-label*="Delete" i]'
+      deleteAllButton: 'button:has-text("Smazat všechny odkazy"), button:has-text("Delete all links")'
+      confirmDelete: 'mat-dialog-container button:has-text("Smazat"), mat-dialog-container button:has-text("Delete")'
 # ============================================================
 # GOOGLE KEEP SELECTORS
 # ============================================================

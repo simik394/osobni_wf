@@ -149,3 +149,151 @@ export async function uploadFromDriveAction(
         return false;
     }
 }
+
+/**
+ * Attach a notebook/source from NotebookLM directly to the Gemini chat session.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param notebookTitle Name of the NotebookLM notebook to import
+ */
+export async function uploadFromNotebookLMAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    notebookTitle: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        log(`Uploading NotebookLM notebook: ${notebookTitle}`);
+
+        // 1. Open "+" menu
+        const plusBtn = page.locator(selectors.gemini.upload.button).first();
+        await plusBtn.waitFor({ state: 'visible', timeout: 5000 });
+        await plusBtn.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Click "NotebookLM" option
+        const nlmOption = page.locator(selectors.gemini.upload.notebooklm).first();
+        if (!await nlmOption.isVisible()) {
+            log('NotebookLM upload option not found in menu.', 'error');
+            await page.keyboard.press('Escape');
+            return false;
+        }
+        await nlmOption.click();
+        await page.waitForTimeout(1500);
+
+        // 3. Wait for the NotebookLM dialog container
+        const dialog = page.locator(selectors.gemini.upload.notebooklmDialog.container).first();
+        await dialog.waitFor({ state: 'visible', timeout: 10000 });
+
+        // 4. Fill in search input
+        const searchInput = dialog.locator(selectors.gemini.upload.notebooklmDialog.searchInput).first();
+        if (await searchInput.isVisible()) {
+            await searchInput.fill(notebookTitle);
+            await page.keyboard.press('Enter');
+            await page.waitForTimeout(1500);
+        }
+
+        // 5. Find and click the matching notebook item
+        const item = dialog.locator(selectors.gemini.upload.notebooklmDialog.notebookItem)
+            .filter({ hasText: notebookTitle })
+            .first();
+
+        if (!await item.isVisible()) {
+            log(`Notebook "${notebookTitle}" not found in NotebookLM import dialog.`, 'error');
+            await page.keyboard.press('Escape');
+            return false;
+        }
+        await item.click();
+        await page.waitForTimeout(500);
+
+        // 6. Click the Insert/Select button
+        const insertBtn = dialog.locator(selectors.gemini.upload.notebooklmDialog.insertButton).first();
+        await insertBtn.click();
+
+        log('Waiting for NotebookLM notebook to be attached...');
+        await page.waitForTimeout(3000);
+
+        return true;
+    } catch (e: any) {
+        log(`NotebookLM upload failed: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Attach a photo from Google Photos to the Gemini chat session.
+ * 
+ * @param ctx UniversalContext
+ * @param deps Dependencies
+ * @param photoTitle Title of the photo to attach
+ */
+export async function uploadFromPhotosAction(
+    ctx: UniversalContext,
+    deps: GeminiActionDeps,
+    photoTitle: string
+): Promise<boolean> {
+    const { page, log } = ctx;
+    const { selectors } = deps;
+
+    try {
+        log(`Uploading photo from Google Photos: ${photoTitle}`);
+
+        // 1. Open "+" menu
+        const plusBtn = page.locator(selectors.gemini.upload.button).first();
+        await plusBtn.waitFor({ state: 'visible', timeout: 5000 });
+        await plusBtn.click();
+        await page.waitForTimeout(1000);
+
+        // 2. Click "Photos" option
+        const photosOption = page.locator(selectors.gemini.upload.photos).first();
+        if (!await photosOption.isVisible()) {
+            log('Photos upload option not found in menu.', 'error');
+            await page.keyboard.press('Escape');
+            return false;
+        }
+        await photosOption.click();
+        await page.waitForTimeout(1500);
+
+        // 3. Wait for the Google Photos iframe picker
+        log('Waiting for Photos picker iframe...');
+        const iframeElement = await page.waitForSelector(selectors.gemini.upload.picker.iframe, { timeout: 10000 });
+        const frame = await iframeElement.contentFrame();
+        
+        if (!frame) {
+            log('Could not access Photos picker iframe', 'error');
+            return false;
+        }
+
+        // 4. Search for the photo
+        log(`Searching for "${photoTitle}" in Photos...`);
+        const searchInput = frame.locator(selectors.gemini.upload.picker.search).first();
+        await searchInput.waitFor({ state: 'visible', timeout: 5000 });
+        await searchInput.fill(photoTitle);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(2000);
+
+        // 5. Select the file
+        const fileRow = frame.locator(selectors.gemini.upload.picker.fileRow).first();
+        if (!await fileRow.isVisible()) {
+            log(`Photo "${photoTitle}" not found in Photos search results.`, 'error');
+            return false;
+        }
+        await fileRow.click();
+        await page.waitForTimeout(500);
+
+        // 6. Click Select / Insert
+        const selectBtn = frame.locator(selectors.gemini.upload.picker.selectButton).first();
+        await selectBtn.click();
+
+        log('Waiting for photo to be attached to Gemini...');
+        await page.waitForTimeout(3000);
+
+        return true;
+    } catch (e: any) {
+        log(`Photos upload failed: ${e.message}`, 'error');
+        return false;
+    }
+}
