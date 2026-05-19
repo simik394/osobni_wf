@@ -19,3 +19,11 @@
 ## 5. Dependency Injection & Compilation
 - **Issue**: Refactored modular actions can easily break if the `Client` bridge (e.g., `NotebookLMClient.deps`) is not kept in sync with the new action signatures.
 - **Solution**: Always verify that `GeminiActionDeps` (or equivalent interface) is fully satisfied in the client implementation before attempting to run CLI commands.
+
+## 6. Language-Agnostic UIs & Regular Expression Locators
+- **Issue**: Designing separate selectors for multi-lingual websites (e.g., Czech and English NotebookLM) leads to code duplication, selector drift, and fragile logic when localizations change.
+- **Solution**: Utilize generic semantic element filters (`page.locator('button, div, [role="button"]')`) combined with case-insensitive, language-agnostic regular expressions (e.g., `/Studijní příručka|Study guide/i`) to select buttons dynamically and resiliently across all supported locales.
+
+## 7. Unified Action Helpers for Studio Generators
+- **Issue**: Implementing seven distinct, almost identical click-and-wait functions for various visual/textual guide generators in NotebookLM violates the DRY principle and increases the maintenance overhead.
+- **Solution**: Design a parameterized core action helper (`generateStudioGuideByType`) that encapsulates maximization, source selection, selector resolution, clicking, and registration delay. Export individual thin wrapper functions to preserve type safety and specific route/CLI mappings.

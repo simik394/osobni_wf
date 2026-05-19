@@ -493,5 +493,80 @@ export function createNotebookRouter(deps: NotebookRouterDeps) {
         }
     });
 
+    router.post('/study-guide', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generateStudyGuide({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Study Guide failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/faq', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generateFaq({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] FAQ failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/briefing-doc', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generateBriefingDoc({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Briefing Doc failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/timeline', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generateTimeline({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Timeline failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/toc', async (req: Request, res: Response) => {
+        try {
+            const { notebookTitle, sources } = req.body;
+            if (!notebookTitle) return res.status(400).json({ error: 'notebookTitle is required' });
+            
+            const client = await getNotebookClient();
+            await client!.openNotebook(notebookTitle);
+            const success = await client!.generateToc({ sources });
+            res.json({ success });
+        } catch (e: any) {
+            console.error('[NotebookRouter] Table of Contents failed:', e);
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
     return router;
 }

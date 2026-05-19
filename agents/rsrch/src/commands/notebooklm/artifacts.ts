@@ -96,4 +96,74 @@ export function registerArtifactCommands(notebook: Command) {
                 console.error('❌ Failed to trigger infographic generation');
             }
         });
+
+    notebook.command('study-guide <notebook>')
+        .description('Generate a study guide for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting study guide generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/study-guide', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ Study guide generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger study guide generation');
+            }
+        });
+
+    notebook.command('faq <notebook>')
+        .description('Generate a FAQ for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting FAQ generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/faq', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ FAQ generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger FAQ generation');
+            }
+        });
+
+    notebook.command('briefing-doc <notebook>')
+        .description('Generate a briefing doc for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting briefing doc generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/briefing-doc', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ Briefing doc generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger briefing doc generation');
+            }
+        });
+
+    notebook.command('timeline <notebook>')
+        .description('Generate a timeline for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting timeline generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/timeline', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ Timeline generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger timeline generation');
+            }
+        });
+
+    notebook.command('toc <notebook>')
+        .description('Generate a table of contents for a notebook')
+        .option('--sources <sources>', 'Comma-separated sources (indices or titles)')
+        .action(async (notebook, opts) => {
+            console.log(`[CLI] Requesting table of contents generation for notebook: "${notebook}"...`);
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/toc', { notebookTitle: notebook, sources });
+            if (data?.success) {
+                console.log('✅ Table of contents generation triggered.');
+            } else {
+                console.error('❌ Failed to trigger table of contents generation');
+            }
+        });
 }

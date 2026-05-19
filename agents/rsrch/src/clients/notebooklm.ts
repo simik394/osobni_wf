@@ -269,6 +269,31 @@ export class NotebookLMClient {
         return actions.generateInfographicAction(this.ctx, this.deps, options);
     }
 
+    /** Generates a study guide */
+    async generateStudyGuide(options: { sources?: string[] } = {}) {
+        return actions.generateStudyGuideAction(this.ctx, this.deps, options);
+    }
+
+    /** Generates a FAQ */
+    async generateFaq(options: { sources?: string[] } = {}) {
+        return actions.generateFaqAction(this.ctx, this.deps, options);
+    }
+
+    /** Generates a briefing doc */
+    async generateBriefingDoc(options: { sources?: string[] } = {}) {
+        return actions.generateBriefingDocAction(this.ctx, this.deps, options);
+    }
+
+    /** Generates a timeline */
+    async generateTimeline(options: { sources?: string[] } = {}) {
+        return actions.generateTimelineAction(this.ctx, this.deps, options);
+    }
+
+    /** Generates a table of contents */
+    async generateToc(options: { sources?: string[] } = {}) {
+        return actions.generateTocAction(this.ctx, this.deps, options);
+    }
+
     /** Generates an audio overview for the notebook */
     async generateAudioOverview(notebookTitle: string, sources?: string[], prompt?: string, wet: boolean = false, dryRun: boolean = false) {
         return actions.generateAudioOverviewAction(this.ctx, { 
