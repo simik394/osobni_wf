@@ -251,11 +251,17 @@ export class GeminiClient extends EventEmitter {
 
     async init(sessionId?: string) {
         if (sessionId) {
-            await this.page.goto(`${config.urls.gemini}/app/${sessionId}`, { waitUntil: 'domcontentloaded' });
+            const targetUrl = (sessionId.startsWith('http://') || sessionId.startsWith('https://'))
+                ? sessionId
+                : `${config.urls.gemini}/app/${sessionId}`;
+            await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
         } else {
             // Force navigation to home if no session provided (test requirement)
             await this.page.goto(`${config.urls.gemini}/app`, { waitUntil: 'domcontentloaded' });
         }
+
+        // Wait for page to stabilize on gemini.google.com (handling cookie rotation redirects)
+        await this.page.waitForURL(/gemini\.google\.com/, { timeout: 15000 }).catch(() => {});
 
         // Handle initial state (auth, cookies, overlays)
         try {

@@ -577,7 +577,11 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
 
     router.post('/session/export', async (req: Request, res: Response) => {
         try {
+            const { sessionId } = req.body;
             const gemini = await getGeminiClient();
+            if (sessionId) {
+                await gemini.openSession(sessionId);
+            }
             const data = await gemini.exportSession();
             res.json({ success: true, data });
         } catch (e: any) {

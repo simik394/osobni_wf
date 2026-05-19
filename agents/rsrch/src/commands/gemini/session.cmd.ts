@@ -237,12 +237,12 @@ export function registerSessionCommands(gemini: Command) {
                 const fs = await import('node:fs');
                 const path = await import('node:path');
                 
-                const targetPath = opts.output || path.join(process.cwd(), `gemini_session_${data.title.replace(/[^a-z0-9]/gi, '_')}.md`);
-                fs.writeFileSync(targetPath, data.markdown, 'utf-8');
+                const targetPath = opts.output || path.join(process.cwd(), `gemini_session_${sessionData.title.replace(/[^a-z0-9]/gi, '_')}.md`);
+                fs.writeFileSync(targetPath, sessionData.markdown, 'utf-8');
                 
                 console.log(`\n--- Session Exported ---`);
-                console.log(`Title: ${data.title}`);
-                console.log(`Turns: ${data.turns.length}`);
+                console.log(`Title: ${sessionData.title}`);
+                console.log(`Turns: ${sessionData.turns.length}`);
                 console.log(`Saved to: ${targetPath}`);
                 console.log(`------------------------\n`);
             }

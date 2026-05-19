@@ -60,8 +60,34 @@ export async function extractResponseAction(
         }
 
         // 2. Enhanced extraction via page.evaluate
-        const data = await responseElement.evaluate((container) => {
-            const clone = container.cloneNode(true) as HTMLElement;
+        const data = await responseElement.evaluate((container, options) => {
+            let contentElement = container;
+            if (container.tagName.toLowerCase() === 'model-response') {
+                const innerContent = container.querySelector('structured-content-container, .model-response-text, .response-content');
+                if (innerContent) {
+                    contentElement = innerContent as HTMLElement;
+                }
+            }
+            const clone = contentElement.cloneNode(true) as HTMLElement;
+
+            // Prune UI junk
+            const selectorsToRemove = [
+                'button',
+                '.cdk-visually-hidden',
+                '.screen-reader-model-response-label',
+                '.model-response-reasoning',
+                '.thought-placeholder'
+            ];
+            if (options.thoughtToggle) selectorsToRemove.push(options.thoughtToggle);
+            if (options.thoughtContainer) selectorsToRemove.push(options.thoughtContainer);
+
+            selectorsToRemove.forEach(sel => {
+                if (!sel) return;
+                try {
+                    clone.querySelectorAll(sel).forEach((el: any) => el.remove());
+                } catch (e) {}
+            });
+
             const sourcesArray: { index: number; url: string; title: string }[] = [];
 
             // LaTeX/Math Support (Broad Match)
@@ -71,7 +97,8 @@ export async function extractResponseAction(
                 if (tex) {
                     const isDisplay = (el.tagName === 'MJX-CONTAINER' && el.getAttribute('display') === 'true') || 
                                       el.classList.contains('display-math');
-                    el.outerHTML = isDisplay ? `\n$$\n${tex}\n$$\n` : `$${tex}$`;
+                    const textNode = document.createTextNode(isDisplay ? `\n$$\n${tex}\n$$\n` : `$${tex}$`);
+                    el.parentNode?.replaceChild(textNode, el);
                 }
             });
 
@@ -81,7 +108,8 @@ export async function extractResponseAction(
                 const code = pre.querySelector('code');
                 const lang = pre.getAttribute('data-language') || '';
                 const content = code ? code.innerText : pre.innerText;
-                pre.outerHTML = `\n\`\`\`${lang}\n${content.trim()}\n\`\`\`\n`;
+                const textNode = document.createTextNode(`\n\`\`\`${lang}\n${content.trim()}\n\`\`\`\n`);
+                pre.parentNode?.replaceChild(textNode, pre);
             });
 
             // List Preservation (Explicitly add bullets)
@@ -113,7 +141,8 @@ export async function extractResponseAction(
                         }
                         a.innerText = `[^${sourceIndex + 1}]`;
                     } else if (text) {
-                        a.outerHTML = `[${text}](${url})`;
+                        const textNode = document.createTextNode(`[${text}](${url})`);
+                        a.parentNode?.replaceChild(textNode, a);
                     }
                 }
             });
@@ -122,7 +151,8 @@ export async function extractResponseAction(
             const SVGs = clone.querySelectorAll('svg');
             SVGs.forEach((svg: any, i: number) => {
                 const label = svg.getAttribute('aria-label') || `Diagram ${i + 1}`;
-                svg.outerHTML = `\n> [!NOTE]\n> [${label}] (Visual Diagram)\n`;
+                const textNode = document.createTextNode(`\n> [!NOTE]\n> [${label}] (Visual Diagram)\n`);
+                svg.parentNode?.replaceChild(textNode, svg);
             });
 
             // Image Support (Raster)
@@ -131,7 +161,8 @@ export async function extractResponseAction(
                 const alt = img.getAttribute('alt') || 'image';
                 const src = img.getAttribute('src') || '';
                 if (src && !src.startsWith('data:')) {
-                    img.outerHTML = `![${alt}](${src})`;
+                    const textNode = document.createTextNode(`![${alt}](${src})`);
+                    img.parentNode?.replaceChild(textNode, img);
                 }
             });
 
@@ -150,14 +181,15 @@ export async function extractResponseAction(
                         mdTable += `| ${cells.map(() => '---').join(' | ')} |\n`;
                     }
                 });
-                table.outerHTML = mdTable + '\n';
+                const textNode = document.createTextNode(mdTable + '\n');
+                table.parentNode?.replaceChild(textNode, table);
             });
 
             return {
                 text: clone.innerText,
                 sources: sourcesArray
             };
-        });
+        }, { thoughtToggle: thoughtToggleSelector, thoughtContainer: thoughtContainerSelector });
 
         let markdown = data.text;
         if (data.sources.length > 0) {

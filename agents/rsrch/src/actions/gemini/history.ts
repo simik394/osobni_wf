@@ -107,12 +107,16 @@ export async function exportFullSessionAction(
     const turnSelector = 'user-query, model-response, .user-message, .model-response, [data-test-id="chat-turn"]';
     const turns = page.locator(turnSelector);
     const count = await turns.count();
+    log(`[Export] Found ${count} turns with selector: ${turnSelector}`);
     
     const turnData: any[] = [];
     let markdown = `# ${title}\n\n`;
 
     for (let i = 0; i < count; i++) {
         const turn = turns.nth(i);
+        const tag = await turn.evaluate(el => el.tagName.toLowerCase()).catch(() => 'unknown');
+        const cls = await turn.evaluate(el => el.className).catch(() => '');
+        log(`[Export] Turn ${i}: tag=${tag}, class=${cls}`);
         const isAssistant = await turn.evaluate(el => 
             el.tagName.toLowerCase() === 'model-response' || 
             el.classList.contains('model-response') ||
@@ -121,7 +125,7 @@ export async function exportFullSessionAction(
 
         if (isAssistant) {
             // Use high-fidelity extraction for model responses
-            const data = await deps.extractResponse(ctx, { selectors, verbose: deps.verbose }, turnSelector, i);
+            const data = await deps.extractResponse(ctx, { selectors, verbose: true }, turnSelector, i);
             if (data) {
                 markdown += `### Gemini\n\n`;
                 if (data.thoughts) {

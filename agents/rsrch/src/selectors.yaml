@@ -185,7 +185,7 @@ gemini:
     input: 'rich-textarea div[contenteditable="true"], div[contenteditable="true"], textarea, input[type="text"]'
     send: 'button.send-button, button.send-button.submit, button[aria-label*="Send" i], button[aria-label*="Odeslat" i], button[aria-label*="Poslat" i], button[data-testid="send-button"], button[type="submit"]'
     thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header, button[aria-label*="Zobrazit uvažování"], button:has-text("Zobrazit uvažování"), button:has-text("Show reasoning")'
-    thoughtContainer: ".thought-process-content, .reasoning-content, .model-response-reasoning"
+    thoughtContainer: ".thought-process-content, .reasoning-content, .model-response-reasoning, .thoughts-content"
     # Response container - multiple fallbacks for UI changes
     # model-response: Primary container element
     # structured-content-container: Element containing formatted AI output

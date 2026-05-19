@@ -500,3 +500,24 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 
 - **Outcome**: Successfully enabled precise Gemini 3 base model and thinking level configuration via CLI and REST, verified with zero-dependency high-fidelity mock unit tests.
 
+---
+
+### [[23. Trusted Types Bypass and SPA Scraper Hygiene (2026-05-19)]]
+
+**Context**: Resolving the Playwright error `TypeError: Failed to set the 'outerHTML' property on 'Element': This document requires 'TrustedHTML' assignment` on `gemini.google.com` and ensuring clean extraction of assistant responses.
+
+#### LESSONS LEARNED:
+
+1. **Trusted Types Bypass via standard DOM Node Manipulation**:
+   - **Problem**: Modern SPAs (like Gemini) enforce strict Content Security Policies (CSP) and Trusted Types, blocking raw string assignments to `.outerHTML` and `.innerHTML`.
+   - **Solution**: Avoid string manipulation of outerHTML/innerHTML altogether. Instead, use standard DOM manipulation APIs inside `page.evaluate()` to create text nodes and replace elements:
+     ```typescript
+     const textNode = document.createTextNode(markdownText);
+     element.parentNode?.replaceChild(textNode, element);
+     ```
+   - **Benefit**: This complies natively with Trusted Types security policies without needing complex policy configuration or external parsing libraries.
+
+2. **SPA Scraper Context Cleaning**:
+   - **Problem**: The outer `model-response` container contains UI clutter, screen-reader text (e.g. "prpt říká"), interactive toolbar buttons (e.g., "Share", "Copy"), and duplicate thought blocks.
+   - **Solution**: Target the inner content container (e.g. `structured-content-container` or `.model-response-text`) rather than the outer container for markdown text extraction.
+   - **UI Junk Pruning**: Prior to extracting `clone.innerText`, dynamically select and remove UI controls and accessibility labels using `clone.querySelectorAll(selector).forEach(el => el.remove())`. This ensures only the pure, formatted assistant response text is exported.
