@@ -109,6 +109,7 @@ describe('GeminiClient', () => {
             goto: vi.fn().mockResolvedValue(null),
             waitForTimeout: vi.fn().mockResolvedValue(null),
             waitForSelector: vi.fn().mockResolvedValue(null),
+            waitForURL: vi.fn().mockResolvedValue(null),
             url: vi.fn().mockReturnValue('https://gemini.google.com/app/12345'),
             locator: vi.fn((selector) => {
                 if (selector.includes('Sign in')) {
