@@ -614,5 +614,18 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - **Problem**: Standard Playwright `.fill()` completely replaces target textbox values. Simply reading, modifying, and re-filling content is expensive and slow for large notes.
    - **Solution**: Open the note textbox, click it to focus, and use keyboard shortcuts. For replacements: press `Control+A` followed by `Backspace` and `.fill()`. For appends (default): press `Control+End` to position the cursor at the end, then use `.pressSequentially()` to append the text with a pre-pended newline. This perfectly emulates human edits.
 
+---
+
+### [[28. Gemini 3.5 Model Selection Compatibility (2026-05-19)]]
+
+**Context**: Gemini Web App GUI updates introducing updated models (such as "3.5 Flash" and "3.5 Pro").
+
+#### LESSONS LEARNED:
+
+1. **Proactive Dropdown Matching**:
+   - **Problem**: Older dropdown selection rules hardcode static versions (e.g. `2.5 Flash`, `3.1 Pro`), causing selectors to fail as Google rolls out version updates on user profiles.
+   - **Solution**: Keep dropdown selectors highly generic and proactive by including partial text matches for `3.5 Flash` and `3.5 Pro` inside the selectors mapping. This preserves uninterrupted automation as new model versions roll out.
+
+
 
 
