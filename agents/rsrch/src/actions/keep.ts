@@ -94,27 +94,34 @@ export async function createKeepNoteAction(
 
     try {
         await page.goto('https://keep.google.com');
+        await page.waitForSelector(selectors.keep.noteItem, { timeout: 10000 });
         
-        // Click "Take a note..."
+        // Click "Take a note..." using evaluate to prevent intercepts
         const input = page.locator(selectors.keep.noteInput).first();
-        await input.click();
-        await page.waitForTimeout(500);
+        await input.evaluate(el => (el as HTMLElement).click());
+        await page.waitForTimeout(800);
 
-        // Fill title
-        const titleBox = page.locator(selectors.keep.titleInput).first();
+        // Fill title (first textbox/editable element in the active editor wrapper)
+        const titleBox = page.locator('.IZ65Hb-YPqjbf, div[role="textbox"]').first();
         if (await titleBox.isVisible()) {
-            await titleBox.fill(title);
+            await titleBox.evaluate(el => (el as HTMLElement).focus());
+            await page.keyboard.type(title);
         }
 
-        // Fill content
-        const contentBox = page.locator(selectors.keep.contentInput).last();
-        await contentBox.fill(content);
+        // Fill content (second textbox or the one with class IZ65Hb-vIzZGf-L9AdLc-haAclf)
+        const contentBox = page.locator('.IZ65Hb-vIzZGf-L9AdLc-haAclf, div[role="textbox"]').last();
+        if (await contentBox.isVisible()) {
+            await contentBox.evaluate(el => (el as HTMLElement).focus());
+            await page.keyboard.type(content);
+        }
         
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(800);
 
-        // Click Done
+        // Click Done using evaluate to prevent intercepts
         const doneBtn = page.locator(selectors.keep.saveButton).first();
-        await doneBtn.click();
+        if (await doneBtn.isVisible()) {
+            await doneBtn.evaluate(el => (el as HTMLElement).click());
+        }
         
         await page.waitForTimeout(1000);
         return true;
@@ -156,26 +163,58 @@ export async function getKeepNoteAction(
             return null;
         }
 
-        // Open detailed dialog modal
-        await noteLocator.click();
-        await page.waitForSelector(selectors.keep.noteWrapper, { timeout: 5000 });
-        await page.waitForTimeout(500);
+        // Open detailed dialog modal using evaluate click (immune to pointer intercepts)
+        await noteLocator.first().evaluate(el => (el as HTMLElement).click());
+        await page.waitForSelector(selectors.keep.noteWrapper, { timeout: 10000 });
+        await page.waitForTimeout(1000);
 
-        const detailWrapper = page.locator(selectors.keep.noteWrapper);
-        const title = await detailWrapper.locator(selectors.keep.titleInput).textContent() || '';
-        const content = await detailWrapper.locator(selectors.keep.contentInput).textContent() || '';
-        
-        // Extract tags
-        const tags = await detailWrapper.locator(selectors.keep.tagChip).evaluateAll(elements => 
-            elements.map(el => el.textContent?.trim() || '').filter(Boolean)
-        );
+        // Robust, structured extraction via page.evaluate (completely locale-independent!)
+        const extracted = await page.evaluate((sels) => {
+            const dialog = document.querySelector('div[role="dialog"], .IZ65Hb-s2gQvd');
+            if (!dialog) return null;
 
-        // Close the note dialog
-        const doneBtn = detailWrapper.locator(selectors.keep.saveButton).first();
-        await doneBtn.click();
+            // Extract Title
+            const titleEl = dialog.querySelector('.IZ65Hb-YPqjbf, .IZ65Hb-r4nke-haAclf, div[role="textbox"]');
+            const title = titleEl ? titleEl.textContent || '' : '';
+
+            // Check if checklist note
+            const hasCheckboxes = dialog.querySelectorAll('div[role="checkbox"]').length > 0;
+            let content = '';
+            if (hasCheckboxes) {
+                // Checklist note: format as lines with "[ ]" or "[x]"
+                const items = Array.from(dialog.querySelectorAll('.FQqWe, .VIpgJd-TUo6Hb, div.Q0hgme-XPtOyb'));
+                content = items.map(item => {
+                    const checked = item.querySelector('div[role="checkbox"][aria-checked="true"]') !== null;
+                    const textEl = item.querySelector('div[role="textbox"], .XKSfm-L9AdLc, label');
+                    const text = textEl ? textEl.textContent || '' : '';
+                    return `${checked ? '[x]' : '[ ]'} ${text}`;
+                }).filter(t => t.trim().length > 4).join('\n');
+            } else {
+                // Plain text note
+                const contentEl = dialog.querySelector('.IZ65Hb-vIzZGf-L9AdLc-haAclf, .IZ65Hb-sBy40b, .IZ65Hb-TBnied');
+                content = contentEl ? contentEl.textContent || '' : '';
+            }
+
+            // Extract tags
+            const tags = Array.from(dialog.querySelectorAll('a[href*="label/"], .IZ65Hb-gme1ge, .q0usif'))
+                .map(el => el.textContent?.trim() || '')
+                .filter(Boolean);
+
+            return { title: title.trim(), content: content.trim(), tags };
+        }, selectors.keep);
+
+        if (!extracted) {
+            throw new Error("Failed to extract note content from dialog modal.");
+        }
+
+        // Close the note dialog using evaluate click
+        const doneBtn = page.locator(selectors.keep.saveButton).first();
+        if (await doneBtn.isVisible()) {
+            await doneBtn.evaluate(el => (el as HTMLElement).click());
+        }
         await page.waitForTimeout(800);
 
-        return { title: title.trim(), content: content.trim(), tags };
+        return extracted;
     } catch (e: any) {
         log(`Failed to get Keep note detail: ${e.message}`, 'error');
         return null;
@@ -213,43 +252,77 @@ export async function updateKeepNoteAction(
             return false;
         }
 
-        // Open detailed dialog modal
-        await noteLocator.click();
-        await page.waitForSelector(selectors.keep.noteWrapper, { timeout: 5000 });
-        await page.waitForTimeout(500);
+        // Open detailed dialog modal using evaluate click (immune to pointer intercepts)
+        await noteLocator.first().evaluate(el => (el as HTMLElement).click());
+        await page.waitForSelector(selectors.keep.noteWrapper, { timeout: 10000 });
+        await page.waitForTimeout(1000);
 
         const detailWrapper = page.locator(selectors.keep.noteWrapper);
 
         // Update Title if provided
         if (newTitle !== undefined) {
-            const titleBox = detailWrapper.locator(selectors.keep.titleInput).first();
-            await titleBox.click();
+            const titleBox = detailWrapper.locator('.IZ65Hb-YPqjbf, div[role="textbox"]').first();
+            await titleBox.evaluate(el => (el as HTMLElement).focus());
             await page.keyboard.press('Control+A');
             await page.keyboard.press('Backspace');
-            await titleBox.fill(newTitle);
+            await page.keyboard.type(newTitle);
         }
 
         // Update Content if provided
         if (newContent !== undefined) {
-            const contentBox = detailWrapper.locator(selectors.keep.contentInput).first();
-            await contentBox.click();
-            if (replace) {
-                await page.keyboard.press('Control+A');
-                await page.keyboard.press('Backspace');
-                await contentBox.fill(newContent);
+            // Check if it's a checklist note first
+            const hasCheckboxes = await page.evaluate(() => {
+                const dialog = document.querySelector('div[role="dialog"], .IZ65Hb-s2gQvd');
+                return dialog ? dialog.querySelectorAll('div[role="checkbox"]').length > 0 : false;
+            });
+
+            if (hasCheckboxes) {
+                // Checklist note - we can append to the last checklist item textbox or create a new item
+                log("Identified checklist note. Appending new list item...");
+                const newListItemBox = detailWrapper.locator('div[role="textbox"][aria-label*="Položka seznamu" i], div[role="textbox"][aria-label*="List item" i], .Q0hgme-L9AdLc').first();
+                await newListItemBox.evaluate(el => (el as HTMLElement).focus());
+                await page.keyboard.type(newContent);
+                await page.keyboard.press('Enter');
             } else {
-                const currentVal = await contentBox.textContent() || '';
-                const appendVal = currentVal ? `\n${newContent}` : newContent;
-                await page.keyboard.press('Control+End');
-                await contentBox.pressSequentially(appendVal);
+                // Plain text note
+                const contentViewer = detailWrapper.locator('.IZ65Hb-vIzZGf-L9AdLc-haAclf, .IZ65Hb-sBy40b, .IZ65Hb-TBnied').first();
+                await contentViewer.evaluate(el => (el as HTMLElement).click());
+                await page.waitForTimeout(300);
+
+                // Focus the active editable textbox (usually the second textbox inside the dialog wrapper)
+                const activeTextBox = detailWrapper.locator('div[role="textbox"]').nth(1);
+                if (await activeTextBox.isVisible()) {
+                    await activeTextBox.evaluate(el => (el as HTMLElement).focus());
+                } else {
+                    // Fallback to first if there's only one textbox
+                    await detailWrapper.locator('div[role="textbox"]').first().evaluate(el => (el as HTMLElement).focus());
+                }
+
+                if (replace) {
+                    await page.keyboard.press('Control+A');
+                    await page.keyboard.press('Backspace');
+                    await page.keyboard.type(newContent);
+                } else {
+                    // Get current value using evaluate to bypass Playwright's strict textContent whitespace issues
+                    const currentVal = await page.evaluate(() => {
+                        const dialog = document.querySelector('div[role="dialog"], .IZ65Hb-s2gQvd');
+                        const contentEl = dialog?.querySelector('.IZ65Hb-vIzZGf-L9AdLc-haAclf, .IZ65Hb-sBy40b, .IZ65Hb-TBnied');
+                        return contentEl ? contentEl.textContent || '' : '';
+                    });
+                    const appendVal = currentVal.trim() ? `\n${newContent}` : newContent;
+                    await page.keyboard.press('Control+End');
+                    await page.keyboard.type(appendVal);
+                }
             }
         }
 
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(800);
 
-        // Save & Close
+        // Save & Close using evaluate click
         const doneBtn = detailWrapper.locator(selectors.keep.saveButton).first();
-        await doneBtn.click();
+        if (await doneBtn.isVisible()) {
+            await doneBtn.evaluate(el => (el as HTMLElement).click());
+        }
         await page.waitForTimeout(1000);
 
         return true;

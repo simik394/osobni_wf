@@ -293,14 +293,14 @@ gemini:
 # GOOGLE KEEP SELECTORS
 # ============================================================
 keep:
-  noteInput: 'div[role="button"][aria-label*="Poznámka" i], div[role="button"][aria-label*="Take a note" i], .iz65Hb-nSve7c'
-  titleInput: 'div[role="textbox"][aria-label*="Nadpis" i], div[role="textbox"][aria-label*="Title" i]'
-  contentInput: 'div[role="textbox"][aria-label*="Poznámka" i], div[role="textbox"][aria-label*="Note" i]'
-  saveButton: 'div[role="button"]:has-text("Hotovo"), div[role="button"]:has-text("Done")'
+  noteInput: 'div[role="button"][aria-label*="Poznámka" i], div[role="button"][aria-label*="Take a note" i], .iz65Hb-nSve7c, div[role="button"]:has-text("Poznámka"), div[role="button"]:has-text("Note")'
+  titleInput: 'div[role="textbox"].IZ65Hb-YPqjbf, .IZ65Hb-YPqjbf, div[role="textbox"][aria-label*="Nadpis" i], div[role="textbox"][aria-label*="Title" i]'
+  contentInput: 'div[role="textbox"].IZ65Hb-vIzZGf-L9AdLc-haAclf, div[role="textbox"].IZ65Hb-sBy40b, .IZ65Hb-vIzZGf-L9AdLc-haAclf, div[role="textbox"][aria-label*="Poznámka" i], div[role="textbox"][aria-label*="Note" i]'
+  saveButton: 'div[role="button"]:has-text("Hotovo"), div[role="button"]:has-text("Done"), div[role="button"]:has-text("Zavřít"), div[role="button"]:has-text("Close")'
   # Main note card in grid
   noteItem: ".IZ65Hb-n0tgWb, .IZ65Hb-n0wRZb"
   # Note wrapper (Grid/Detail)
-  noteWrapper: ".IZ65Hb-s2gQvd"
+  noteWrapper: 'div[role="dialog"], .IZ65Hb-s2gQvd[role="dialog"]'
   # Title element
   noteTitle: ".IZ65Hb-r4nke-haAclf, .IZ65Hb-YPqjbf, .IZ65Hb-YPqjS-IDT92e"
   # Content/Body element

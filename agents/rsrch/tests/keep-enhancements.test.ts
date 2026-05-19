@@ -29,9 +29,23 @@ describe('Google Keep Action Suite', () => {
             goto: vi.fn().mockResolvedValue(undefined),
             waitForSelector: vi.fn().mockResolvedValue(undefined),
             waitForTimeout: vi.fn().mockResolvedValue(undefined),
-            evaluate: vi.fn().mockResolvedValue([]),
+            evaluate: vi.fn().mockImplementation((fn: any, ...args: any[]) => {
+                const fnStr = typeof fn === 'function' ? fn.toString() : String(fn);
+                if (fnStr.includes('scrollHeight')) {
+                    return 1000;
+                }
+                if (fnStr.includes('checkbox') && !fnStr.includes('titleEl')) {
+                    return false;
+                }
+                if (fnStr.includes('contentEl') && !fnStr.includes('titleEl')) {
+                    return 'Mock Text';
+                }
+                const res = { title: 'Mock Text', content: 'Mock Text', tags: ['Mock Tag'] };
+                return res;
+            }),
             keyboard: {
-                press: vi.fn().mockResolvedValue(undefined)
+                press: vi.fn().mockResolvedValue(undefined),
+                type: vi.fn().mockResolvedValue(undefined)
             },
             locator: vi.fn().mockImplementation((sel: string) => {
                 const mockLocator: any = {
@@ -49,7 +63,10 @@ describe('Google Keep Action Suite', () => {
                     hover: vi.fn().mockResolvedValue(undefined),
                     textContent: vi.fn().mockResolvedValue('Mock Text'),
                     getAttribute: vi.fn().mockResolvedValue('false'),
-                    evaluateAll: vi.fn().mockResolvedValue(['Mock Tag'])
+                    evaluateAll: vi.fn().mockResolvedValue(['Mock Tag']),
+                    evaluate: vi.fn().mockImplementation((fn: any) => {
+                        return fn({ click: () => {}, focus: () => {} });
+                    })
                 };
                 return mockLocator;
             }),
