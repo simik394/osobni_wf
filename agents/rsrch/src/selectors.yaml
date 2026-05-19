@@ -166,10 +166,9 @@ gemini:
     menu: '[role="menu"], [role="listbox"]'
     item: '[role="menuitem"], [role="option"]'
     advanced: 'button:has-text("Advanced"), button:has-text("Pokročilé")'
-    # Model names mapping
     lite: '[role="menuitem"]:has-text("Flash-Lite"), [role="option"]:has-text("Flash-Lite"), [role="menuitem"]:has-text("3.1 Flash-Lite"), [role="option"]:has-text("3.1 Flash-Lite")'
-    flash: '[role="menuitem"]:has-text("2.5 Flash"), [role="option"]:has-text("2.5 Flash"), [role="menuitem"]:has-text("Flash"), [role="option"]:has-text("Flash"), [data-test-id*="bard-mode-option-flash"]'
-    pro: '[role="menuitem"]:has-text("3.1 Pro"), [role="option"]:has-text("3.1 Pro"), [role="menuitem"]:has-text("Pro"), [role="option"]:has-text("Pro"), [data-test-id*="bard-mode-option-pro"]'
+    flash: '[role="menuitem"]:has-text("3.5 Flash"), [role="option"]:has-text("3.5 Flash"), [role="menuitem"]:has-text("2.5 Flash"), [role="option"]:has-text("2.5 Flash"), [role="menuitem"]:has-text("Flash"), [role="option"]:has-text("Flash"), [data-test-id*="bard-mode-option-flash"]'
+    pro: '[role="menuitem"]:has-text("3.5 Pro"), [role="option"]:has-text("3.5 Pro"), [role="menuitem"]:has-text("3.1 Pro"), [role="option"]:has-text("3.1 Pro"), [role="menuitem"]:has-text("Pro"), [role="option"]:has-text("Pro"), [data-test-id*="bard-mode-option-pro"]'
     thinking: '[data-test-id*="bard-mode-option-s"], [data-test-id*="bard-mode-option-think"], text="S myšlením", text="Thinking"'
     thinkingLevel: '[role="menuitem"]:has-text("Úroveň myšlení"), [role="menuitem"]:has-text("Thinking level"), button:has-text("Úroveň myšlení"), button:has-text("Thinking level"), [role="option"]:has-text("Úroveň myšlení"), [role="option"]:has-text("Thinking level")'
     thinkingStandard: '[role="menuitem"]:has-text("Standard"), [role="option"]:has-text("Standard")'
