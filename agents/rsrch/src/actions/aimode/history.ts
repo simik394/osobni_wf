@@ -33,13 +33,15 @@ export interface AIModeConversation {
 export async function listAIModeHistoryAction(
     ctx: UniversalContext,
     deps: AIModeActionDeps,
-    options: { limit?: number } = {}
+    options: { offset?: number; limit?: number; size?: number } = {}
 ): Promise<AIModeHistoryEntry[]> {
     const { page, log } = ctx;
     const { selectors } = deps;
-    const { limit = 20 } = options;
+    const offset = options.offset || 0;
+    const limit = options.limit !== undefined ? options.limit : (options.size !== undefined ? options.size : 20);
+    const loadTarget = offset + limit;
 
-    log('Listing AI Mode history from sidebar...');
+    log(`Listing AI Mode history from sidebar with offset=${offset}, limit=${limit}...`);
 
     // Navigate to AI Mode if not already there
     const url = page.url();
@@ -78,7 +80,7 @@ export async function listAIModeHistoryAction(
 
     // Try to load more if needed
     let retries = 0;
-    while (count < limit && retries < 3) {
+    while (count < loadTarget && retries < 3) {
         const showMore = page.locator(selectors.aiMode.sidebar.showMore).first();
         if (await showMore.isVisible().catch(() => false)) {
             await showMore.click();
@@ -91,7 +93,7 @@ export async function listAIModeHistoryAction(
         }
     }
 
-    const end = Math.min(count, limit);
+    const end = count;
     for (let i = 0; i < end; i++) {
         const item = items.nth(i);
         const text = await item.innerText().catch(() => '');
@@ -106,8 +108,9 @@ export async function listAIModeHistoryAction(
         }
     }
 
-    log(`Found ${entries.length} AI Mode history entries`);
-    return entries;
+    const sliced = entries.slice(offset, loadTarget);
+    log(`Found ${entries.length} AI Mode history entries, returning sliced range [${offset}, ${loadTarget}) size=${sliced.length}`);
+    return sliced;
 }
 
 /**
@@ -117,13 +120,15 @@ export async function listAIModeHistoryAction(
 export async function listAIModeMyActivityAction(
     ctx: UniversalContext,
     deps: AIModeActionDeps,
-    options: { limit?: number } = {}
+    options: { offset?: number; limit?: number; size?: number } = {}
 ): Promise<AIModeHistoryEntry[]> {
     const { page, log } = ctx;
     const { selectors } = deps;
-    const { limit = 20 } = options;
+    const offset = options.offset || 0;
+    const limit = options.limit !== undefined ? options.limit : (options.size !== undefined ? options.size : 20);
+    const loadTarget = offset + limit;
 
-    log('Navigating to My Activity (AI Mode)...');
+    log(`Navigating to My Activity (AI Mode) with offset=${offset}, limit=${limit}...`);
     await page.goto(
         selectors.aiMode.myActivityUrl || 'https://myactivity.google.com/myactivity?product=83',
         { waitUntil: 'domcontentloaded', timeout: 20000 }
@@ -151,7 +156,7 @@ export async function listAIModeMyActivityAction(
 
     // Scroll to load more items if needed
     let retries = 0;
-    while (count < limit && retries < 5) {
+    while (count < loadTarget && retries < 5) {
         const lastItem = activityItems.last();
         if (await lastItem.isVisible().catch(() => false)) {
             await lastItem.scrollIntoViewIfNeeded().catch(() => {});
@@ -163,8 +168,8 @@ export async function listAIModeMyActivityAction(
         count = newCount;
     }
 
-    const end = Math.min(count, limit);
-    log(`Found ${count} activity items, processing ${end}...`);
+    const end = count;
+    log(`Found ${count} activity items, processing...`);
 
     for (let i = 0; i < end; i++) {
         const item = activityItems.nth(i);
@@ -193,8 +198,9 @@ export async function listAIModeMyActivityAction(
         }
     }
 
-    log(`Extracted ${entries.length} AI Mode history entries from My Activity`);
-    return entries;
+    const sliced = entries.slice(offset, loadTarget);
+    log(`Extracted ${entries.length} AI Mode history entries from My Activity, returning sliced range [${offset}, ${loadTarget}) size=${sliced.length}`);
+    return sliced;
 }
 
 /**

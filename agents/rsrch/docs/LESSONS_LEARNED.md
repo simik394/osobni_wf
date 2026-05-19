@@ -550,3 +550,27 @@ curl -X POST http://localhost:3001/v1/chat/completions \
 4. **Synchronous vs. Promise evaluate() Mocks in Playwright Tests**:
    - **Problem**: In Playwright, `page.evaluate()` and `locator.evaluate()` return Promises. If test mocks return values synchronously, any chained `.catch()` on the evaluated result throws a runtime `TypeError` (`not a function`).
    - **Solution**: Always wrap the returned value in a resolved Promise (`Promise.resolve(...)`) in test mocks to match the Playwright interface perfectly.
+
+---
+
+### [[25. Google Search AI Mode Enhancements: Model Switching, Conditional Uploads, and Active Chat Scraping (2026-05-19)]]
+
+**Context**: Implementing high-parity browser control actions for Google Search AI Mode (udm=50), enabling model selection (Auto vs Pro), conditional file type uploads, paginated history lists, and in-browser active chat scraping with sequence overlap merging.
+
+#### LESSONS LEARNED:
+
+1. **State-Preserving Overlap Turn Merging**:
+   - **Problem**: When a chat with Google Search AI is very long, the Google history sidebar might prune early turns on reload due to context limits.
+   - **Solution**: To preserve history without losing early turns, scrape the active DOM turns and merge them with previously saved versions using a sequence alignment algorithm:
+     - Find the maximum overlapping turn sequence (suffix of stored turns matching a prefix of active turns).
+     - Append the non-overlapping active turns to the existing stored turns.
+     - This prevents duplicating turns while ensuring no historical context is lost.
+
+2. **Conditional Mode Constraints in UI Testing**:
+   - **Problem**: In Google AI Mode, switching to the Pro model only allows uploading image files, whereas the Flash (Auto) model allows any document.
+   - **Solution**: Validate file extensions (`.png`, `.jpg`, etc.) dynamically prior to triggering the file chooser to prevent invalid uploads, and auto-detect the active model from the page header if not specified.
+
+3. **Chronological Traversal of Chat Streams**:
+   - **Problem**: User prompts and assistant responses are rendered in separate DOM trees, making standard container scraping prone to order-scrambling.
+   - **Solution**: Query both user prompt elements (`div[jsname="H7tCnf"]`) and assistant turn roots (`div[data-xid="aim-mars-turn-root"]`), then sort them chronologically using their position in the DOM via `compareDocumentPosition` in document tree order.
+

@@ -6,12 +6,15 @@ const aimode = new Command('aimode').description('Google Search AI Mode commands
 
 aimode.command('list')
     .description('List AI Mode conversation history from sidebar')
-    .option('--limit <number>', 'Max items to list', (v) => parseInt(v), 20)
+    .option('--offset <number>', 'Offset to skip', (v) => parseInt(v), 0)
+    .option('--size <number>', 'Number of items to retrieve', (v) => parseInt(v), 20)
+    .option('--limit <number>', 'Number of items to retrieve (alias to size)', (v) => parseInt(v), 20)
     .action(async (opts) => {
-        const data = await sendServerRequest('/aimode/list', { limit: opts.limit });
+        const size = opts.size !== 20 ? opts.size : opts.limit;
+        const data = await sendServerRequest('/aimode/list', { offset: opts.offset, limit: size });
         if (data?.success) {
             const entries = data.data;
-            console.log(chalk.bold(`\n--- AI Mode History (${entries.length} entries) ---`));
+            console.log(chalk.bold(`\n--- AI Mode History (${entries.length} entries, offset: ${opts.offset}) ---`));
             entries.forEach((e: any, i: number) => {
                 console.log(chalk.cyan(`  ${i + 1}. ${e.query}`));
                 if (e.url) console.log(chalk.dim(`     URL: ${e.url}`));
@@ -23,12 +26,15 @@ aimode.command('list')
 
 aimode.command('list-activity')
     .description('List AI Mode history from Google My Activity (product=83)')
-    .option('--limit <number>', 'Max items to list', (v) => parseInt(v), 20)
+    .option('--offset <number>', 'Offset to skip', (v) => parseInt(v), 0)
+    .option('--size <number>', 'Number of items to retrieve', (v) => parseInt(v), 20)
+    .option('--limit <number>', 'Number of items to retrieve (alias to size)', (v) => parseInt(v), 20)
     .action(async (opts) => {
-        const data = await sendServerRequest('/aimode/list-activity', { limit: opts.limit });
+        const size = opts.size !== 20 ? opts.size : opts.limit;
+        const data = await sendServerRequest('/aimode/list-activity', { offset: opts.offset, limit: size });
         if (data?.success) {
             const entries = data.data;
-            console.log(chalk.bold(`\n--- AI Mode Activity (${entries.length} entries) ---`));
+            console.log(chalk.bold(`\n--- AI Mode Activity (${entries.length} entries, offset: ${opts.offset}) ---`));
             entries.forEach((e: any, i: number) => {
                 console.log(chalk.cyan(`  ${i + 1}. ${e.query}`));
                 if (e.url) console.log(chalk.dim(`     URL: ${e.url.substring(0, 80)}...`));
@@ -80,5 +86,52 @@ aimode.command('extract <url>')
         }
     });
 
+aimode.command('model <model>')
+    .description('Switch AI Mode model ("auto" or "pro")')
+    .action(async (model) => {
+        if (!['auto', 'pro'].includes(model)) {
+            console.error(chalk.red('Error: model must be "auto" or "pro"'));
+            process.exit(1);
+        }
+        console.log(chalk.yellow(`Setting model to ${model}...`));
+        const data = await sendServerRequest('/aimode/model', { model });
+        if (data?.success) {
+            console.log(chalk.green(`Successfully switched model to ${model}`));
+        } else {
+            console.error(chalk.red(`Failed to switch model: ${data?.error || 'Unknown error'}`));
+        }
+    });
+
+aimode.command('upload <filePath>')
+    .description('Upload file or image to AI Mode')
+    .option('--model <model>', 'Explicitly set active model for verification ("auto" or "pro")')
+    .action(async (filePath, opts) => {
+        console.log(chalk.yellow(`Uploading ${filePath}...`));
+        const data = await sendServerRequest('/aimode/upload', { filePath, model: opts.model });
+        if (data?.success) {
+            console.log(chalk.green(`Successfully uploaded: ${filePath}`));
+        } else {
+            console.error(chalk.red(`Failed to upload: ${data?.error || 'Unknown error'}`));
+        }
+    });
+
+aimode.command('save-active')
+    .description('Scrape and save active AI Mode chat turns (consolidates with existing session backup)')
+    .option('-o, --output <file>', 'Custom output JSON file path')
+    .action(async (opts) => {
+        console.log(chalk.yellow('Scraping and saving active conversation turns...'));
+        const data = await sendServerRequest('/aimode/save-active', { outputFile: opts.output });
+        if (data?.success && data.data) {
+            const res = data.data;
+            console.log(chalk.green(`\n✅ Saved successfully!`));
+            console.log(`   Path:   ${res.filePath}`);
+            console.log(`   Turns:  ${res.turnCount}`);
+            console.log(`   Merged: ${res.merged ? 'Yes' : 'No (First save)'}\n`);
+        } else {
+            console.error(chalk.red(`Failed to save: ${data?.error || 'Unknown error'}`));
+        }
+    });
+
 export const aimodeCommand = aimode;
 export default aimodeCommand;
+

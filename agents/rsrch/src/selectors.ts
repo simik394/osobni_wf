@@ -306,6 +306,16 @@ export interface AIModeSelectors {
     auth: {
         acceptAll: string;
     };
+    model: {
+        trigger: string;
+        autoOption: string;
+        proOption: string;
+    };
+    upload: {
+        plusButton: string;
+        imageOption: string;
+        fileOption: string;
+    };
 }
 
 export interface KeepSelectors {
@@ -608,6 +618,16 @@ const DEFAULTS: NotebookLMSelectors = {
         },
         auth: {
             acceptAll: 'Accept all'
+        },
+        model: {
+            trigger: 'div.CcNe6e[role="button"]',
+            autoOption: 'button[aria-label="Auto"]',
+            proOption: 'button[aria-label="Pro"]'
+        },
+        upload: {
+            plusButton: 'button.nQpXxb',
+            imageOption: 'button[aria-label="Upload image"]',
+            fileOption: 'button[aria-label="Upload file"]'
         }
     },
     keep: {

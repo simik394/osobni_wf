@@ -414,6 +414,22 @@ aiMode:
   auth:
     acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button:has-text("Alle akzeptieren")'
 
+  # ---------------------------------------------------------------------------
+  # Model Switcher
+  # ---------------------------------------------------------------------------
+  model:
+    trigger: 'div.CcNe6e[role="button"], [role="button"]:has-text("AI Mode"), [role="button"]:has-text("Režim AI")'
+    autoOption: 'button[aria-label="Auto"], button[role="menuitemradio"]:has-text("Auto")'
+    proOption: 'button[aria-label="Pro"], button[role="menuitemradio"]:has-text("Pro")'
+
+  # ---------------------------------------------------------------------------
+  # Uploading
+  # ---------------------------------------------------------------------------
+  upload:
+    plusButton: 'button[aria-label*="plus" i], button:has(svg), button.nQpXxb'
+    imageOption: 'button[aria-label="Upload image"]'
+    fileOption: 'button[aria-label="Upload file"]'
+
 # ============================================================
 # PERPLEXITY SELECTORS
 # ============================================================

@@ -29,4 +29,6 @@ export * from './perplexity/query';
 
 // AI Mode Actions
 export * from './aimode/history';
+export * from './aimode/chat';
+
 

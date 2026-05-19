@@ -6,6 +6,11 @@ import {
     extractAIModeConversationAction,
     syncAIModeHistoryAction,
 } from '../actions/aimode/history';
+import {
+    setAIModeModelAction,
+    uploadAIModeFileAction,
+    saveActiveAIModeChatAction
+} from '../actions/aimode/chat';
 import { selectors } from '../selectors';
 import { config } from '../config';
 
@@ -74,9 +79,10 @@ export function createAIModeRouter(deps: any) {
 
     router.post('/list', async (req, res) => {
         try {
-            const limit = req.body.limit || 20;
+            const limit = req.body.limit !== undefined ? req.body.limit : req.body.size;
+            const offset = req.body.offset || 0;
             const entries = await runAIModeAction(async (ctx, deps) => {
-                return await listAIModeHistoryAction(ctx, deps, { limit });
+                return await listAIModeHistoryAction(ctx, deps, { offset, limit });
             });
             res.json({ success: true, data: entries });
         } catch (e: any) {
@@ -86,9 +92,10 @@ export function createAIModeRouter(deps: any) {
 
     router.post('/list-activity', async (req, res) => {
         try {
-            const limit = req.body.limit || 20;
+            const limit = req.body.limit !== undefined ? req.body.limit : req.body.size;
+            const offset = req.body.offset || 0;
             const entries = await runAIModeAction(async (ctx, deps) => {
-                return await listAIModeMyActivityAction(ctx, deps, { limit });
+                return await listAIModeMyActivityAction(ctx, deps, { offset, limit });
             });
             res.json({ success: true, data: entries });
         } catch (e: any) {
@@ -119,6 +126,48 @@ export function createAIModeRouter(deps: any) {
                 return await extractAIModeConversationAction(ctx, deps, entry);
             });
             res.json({ success: true, data: conversation });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/model', async (req, res) => {
+        try {
+            const { model } = req.body;
+            if (!model || !['auto', 'pro'].includes(model)) {
+                return res.status(400).json({ success: false, error: 'Model must be either "auto" or "pro"' });
+            }
+            const success = await runAIModeAction(async (ctx, deps) => {
+                return await setAIModeModelAction(ctx, deps, model);
+            });
+            res.json({ success, data: { model } });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/upload', async (req, res) => {
+        try {
+            const { filePath, model } = req.body;
+            if (!filePath) {
+                return res.status(400).json({ success: false, error: 'filePath is required' });
+            }
+            const success = await runAIModeAction(async (ctx, deps) => {
+                return await uploadAIModeFileAction(ctx, deps, filePath, { model });
+            });
+            res.json({ success, data: { filePath, model } });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/save-active', async (req, res) => {
+        try {
+            const { outputFile } = req.body;
+            const result = await runAIModeAction(async (ctx, deps) => {
+                return await saveActiveAIModeChatAction(ctx, deps, { outputFile });
+            });
+            res.json({ success: true, data: result });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }
