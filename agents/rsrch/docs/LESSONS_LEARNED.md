@@ -626,6 +626,23 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - **Problem**: Older dropdown selection rules hardcode static versions (e.g. `2.5 Flash`, `3.1 Pro`), causing selectors to fail as Google rolls out version updates on user profiles.
    - **Solution**: Keep dropdown selectors highly generic and proactive by including partial text matches for `3.5 Flash` and `3.5 Pro` inside the selectors mapping. This preserves uninterrupted automation as new model versions roll out.
 
+---
+
+### [[29. Gemini Integration Hardening (2026-05-19)]]
+
+**Context**: Stabilizing the rsrch integration test suite and resolving Vitest mockReset regressions.
+
+#### LESSONS LEARNED:
+
+1. **Playwright waitForURL Mocking in Unit Tests**:
+   - **Problem**: In unit tests where the `Page` object is mocked, refactoring production code to use `page.waitForURL` triggers runtime `TypeError: this.page.waitForURL is not a function` if the mock doesn't define it.
+   - **Solution**: When mocking base framework APIs (like Playwright's `Page`), ensure mocks are kept up-to-date with newly utilized API methods (e.g. `waitForURL`) to prevent regressions.
+
+2. **Vitest mockReset Immune Mocks via Standard Functions**:
+   - **Problem**: When `mockReset: true` is configured in `vitest.config.ts`, all `vi.fn()` mock implementations inside a module mock get cleared between test cases, causing functions like `isBrowserInitialized` to return `undefined` and trigger real, unmocked Playwright instantiation.
+   - **Solution**: Standardize on standard JavaScript functions and classes inside `vi.mock` factory parameters instead of `vi.fn()` when a global `mockReset` is enabled. This makes module mocks immune to resets and guarantees stateless mock execution.
+
+
 
 
 
