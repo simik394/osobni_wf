@@ -120,9 +120,13 @@ export interface GeminiSelectors {
         menu: string;
         item: string;
         advanced: string;
+        lite: string;
         flash: string;
-        thinking: string;
         pro: string;
+        thinking: string;
+        thinkingLevel: string;
+        thinkingStandard: string;
+        thinkingExtended: string;
     };
     chat: {
         app: string;
@@ -436,9 +440,13 @@ const DEFAULTS: NotebookLMSelectors = {
             menu: '.model-menu',
             item: '.model-item',
             advanced: 'Advanced',
+            lite: 'Flash-Lite',
             flash: 'Flash',
+            pro: 'Pro',
             thinking: 'Thinking',
-            pro: 'Pro'
+            thinkingLevel: 'Thinking level',
+            thinkingStandard: 'Standard',
+            thinkingExtended: 'Extended'
         },
         chat: {
             app: '.gemini-app',

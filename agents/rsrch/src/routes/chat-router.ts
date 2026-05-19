@@ -772,6 +772,17 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
+    router.get('/environment/model-status', async (req: Request, res: Response) => {
+        try {
+            const gemini = await getGeminiClient();
+            const statuses = await gemini.getModelStatus();
+            res.json({ success: true, data: statuses });
+        } catch (e: any) {
+            console.error('[GeminiRouter] getModelStatus failed:', e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     router.post('/environment/set-model', async (req: Request, res: Response) => {
         try {
             const { model } = req.body;

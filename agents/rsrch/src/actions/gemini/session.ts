@@ -378,13 +378,28 @@ export async function checkModelStatusAction(
             if (!text) continue;
 
             const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            const name = lines[0];
+            const name = lines[0] || 'Unknown';
             const subtext = lines.slice(1).join(' ');
 
-            const isLimited = /limit|reset|vyčerpán|obnoví/i.test(text);
+            // Skip dropdown section headers / help buttons
+            if (/úroveň myšlení|thinking level|standard|extended/i.test(name)) {
+                continue;
+            }
+
+            // Check if model is disabled or rate limited
+            const ariaDisabled = await item.getAttribute('aria-disabled').catch(() => null);
+            const disabledAttr = await item.getAttribute('disabled').catch(() => null);
+            const hasDisabledClass = await item.evaluate((el) => {
+                return el.classList.contains('disabled') || 
+                       el.classList.contains('aria-disabled') || 
+                       el.getAttribute('aria-disabled') === 'true';
+            }).catch(() => false);
+
+            const isInactive = ariaDisabled === 'true' || disabledAttr !== null || hasDisabledClass;
+            const isLimited = isInactive || /limit|reset|vyčerpán|obnoví/i.test(text);
             let resetTime = undefined;
 
-            // Extract reset time if present (e.g. "5. 5. 19:29" or "19:29")
+            // Extract reset time if present (e.g. "19. 5. 9:29" or "9:29")
             const timeMatch = text.match(/(\d{1,2}\.\s?\d{1,2}\.\s?)?(\d{1,2}:\d{2})/);
             if (timeMatch) {
                 resetTime = timeMatch[0];
@@ -392,9 +407,17 @@ export async function checkModelStatusAction(
 
             // Map UI name to internal ID
             let id = 'unknown';
-            if (/flash|rychl/i.test(name)) id = 'flash';
+            if (/flash-lite|lite/i.test(name)) id = 'lite';
+            else if (/2\.5\s*flash/i.test(name)) id = 'flash';
+            else if (/flash/i.test(name)) id = 'flash';
+            else if (/3\.1\s*pro/i.test(name)) id = 'pro';
+            else if (/pro/i.test(name)) id = 'pro';
             else if (/think|mysl/i.test(name)) id = 'thinking';
-            else if (/pro|adv/i.test(name)) id = 'pro';
+
+            // Avoid duplicate items
+            if (id !== 'unknown' && results.some(r => r.id === id)) {
+                continue;
+            }
 
             results.push({
                 id,
