@@ -86,4 +86,50 @@ program
       console.log(picocolors.green(`Issue created: ${issue.id}`));
   }));
 
+program
+  .command('report-lean <issueId> <filePath>')
+  .description('Run Lean 4 proof and report results to YouTrack')
+  .action(wrap(async (issueId, filePath) => {
+      const fs = require('fs-extra');
+      const { execSync } = require('child_process');
+      const path = require('path');
+
+      if (!await fs.pathExists(filePath)) {
+          throw new Error(`File not found: ${filePath}`);
+      }
+
+      console.log(picocolors.cyan(`Executing Lean 4 on ${filePath}...`));
+      
+      let leanOutput;
+      let success = true;
+      try {
+          leanOutput = execSync(`lean ${filePath}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      } catch (err) {
+          success = false;
+          leanOutput = err.stdout + err.stderr;
+      }
+
+      const content = await fs.readFile(filePath, 'utf8');
+      const report = [
+          `## 🛡️ Lean 4 Design Critique: \`${path.basename(filePath)}\``,
+          `**Status**: ${success ? '✅ Verified' : '❌ Issues Found'}`,
+          '',
+          '### 📝 Formal Model',
+          '```lean',
+          content,
+          '```',
+          '',
+          '### 🔍 Analysis Output',
+          '```text',
+          leanOutput || (success ? 'No errors.' : 'Unknown error.'),
+          '```',
+          '',
+          `*Generated automatically by Jules VM Opponent suite.*`
+      ].join('\n');
+
+      console.log(picocolors.cyan(`Posting report to ${issueId}...`));
+      await bridge.callTool('napovedayt', 'add_issue_comment', { issueId, text: report });
+      console.log(picocolors.green('Report posted successfully to YouTrack.'));
+  }));
+
 program.parse(process.argv);
