@@ -176,6 +176,7 @@ export interface GeminiSelectors {
     upload: {
         button: string;
         fileInput: string;
+        menu?: string;
         uploadFile: string;
         drive: string;
         photos: string;

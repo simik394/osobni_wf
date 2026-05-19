@@ -162,17 +162,17 @@ chat:
 # ============================================================
 gemini:
   model:
-    trigger: 'button[aria-label*="Změnit model" i], button[aria-label*="Otevřít výběr režimu" i], div[aria-label*="Otevřít výběr režimu" i] button, button:has(mat-icon:has-text("keyboard_arrow_down")), button[aria-label*="Model"], button[aria-label*="model"], [data-testid="model-selector-button"], button:has-text("Gemini")'
+    trigger: '[data-test-id="bard-mode-menu-button"], button[aria-label*="Změnit model" i], button[aria-label*="Otevřít výběr režimu" i], button[aria-label*="mode picker" i], button[aria-label*="výběr režimu" i], button:has(mat-icon:has-text("keyboard_arrow_down")), button[aria-label*="Model"], button[aria-label*="model"], [data-testid="model-selector-button"], button:has-text("Gemini")'
     menu: '[role="menu"], [role="listbox"]'
     item: '[role="menuitem"], [role="option"]'
     advanced: 'button:has-text("Advanced"), button:has-text("Pokročilé")'
-    lite: '[role="menuitem"]:has-text("Flash-Lite"), [role="option"]:has-text("Flash-Lite"), [role="menuitem"]:has-text("3.1 Flash-Lite"), [role="option"]:has-text("3.1 Flash-Lite")'
-    flash: '[role="menuitem"]:has-text("3.5 Flash"), [role="option"]:has-text("3.5 Flash"), [role="menuitem"]:has-text("2.5 Flash"), [role="option"]:has-text("2.5 Flash"), [role="menuitem"]:has-text("Flash"), [role="option"]:has-text("Flash"), [data-test-id*="bard-mode-option-flash"]'
-    pro: '[role="menuitem"]:has-text("3.5 Pro"), [role="option"]:has-text("3.5 Pro"), [role="menuitem"]:has-text("3.1 Pro"), [role="option"]:has-text("3.1 Pro"), [role="menuitem"]:has-text("Pro"), [role="option"]:has-text("Pro"), [data-test-id*="bard-mode-option-pro"]'
+    lite: 'gem-menu-item:has-text("Flash-Lite"), [role="menuitem"]:has-text("Flash-Lite"), [role="option"]:has-text("Flash-Lite"), [role="menuitem"]:has-text("3.1 Flash-Lite"), [role="option"]:has-text("3.1 Flash-Lite")'
+    flash: 'gem-menu-item:has-text("3.5 Flash"), gem-menu-item:has-text("Flash"), [role="menuitem"]:has-text("3.5 Flash"), [role="option"]:has-text("3.5 Flash"), [role="menuitem"]:has-text("2.5 Flash"), [role="option"]:has-text("2.5 Flash"), [role="menuitem"]:has-text("Flash"), [role="option"]:has-text("Flash"), [data-test-id*="bard-mode-option-flash"]'
+    pro: 'gem-menu-item:has-text("3.1 Pro"), gem-menu-item:has-text("Pro"), [role="menuitem"]:has-text("3.5 Pro"), [role="option"]:has-text("3.5 Pro"), [role="menuitem"]:has-text("3.1 Pro"), [role="option"]:has-text("3.1 Pro"), [role="menuitem"]:has-text("Pro"), [role="option"]:has-text("Pro"), [data-test-id*="bard-mode-option-pro"]'
     thinking: '[data-test-id*="bard-mode-option-s"], [data-test-id*="bard-mode-option-think"], text="S myšlením", text="Thinking"'
-    thinkingLevel: '[role="menuitem"]:has-text("Úroveň myšlení"), [role="menuitem"]:has-text("Thinking level"), button:has-text("Úroveň myšlení"), button:has-text("Thinking level"), [role="option"]:has-text("Úroveň myšlení"), [role="option"]:has-text("Thinking level")'
-    thinkingStandard: '[role="menuitem"]:has-text("Standard"), [role="option"]:has-text("Standard")'
-    thinkingExtended: '[role="menuitem"]:has-text("Extended"), [role="option"]:has-text("Extended")'
+    thinkingLevel: 'gem-menu-item:has-text("Úroveň myšlení"), gem-menu-item:has-text("Thinking level"), [role="menuitem"]:has-text("Úroveň myšlení"), [role="menuitem"]:has-text("Thinking level"), button:has-text("Úroveň myšlení"), button:has-text("Thinking level"), [role="option"]:has-text("Úroveň myšlení"), [role="option"]:has-text("Thinking level")'
+    thinkingStandard: 'gem-menu-item:has-text("Standard"), [role="menuitem"]:has-text("Standard"), [role="option"]:has-text("Standard")'
+    thinkingExtended: 'gem-menu-item:has-text("Extended"), gem-menu-item:has-text("Extended"), gem-menu-item:has-text("Extended"), [role="menuitem"]:has-text("Extended"), [role="option"]:has-text("Extended")'
 
   auth:
     acceptAll: 'button:has-text("Accept all"), button:has-text("Přijmout vše"), button:has-text("Souhlasím"), button[aria-label*="Accept" i], button[jsname="higCR"]'
@@ -182,7 +182,7 @@ gemini:
   chat:
     app: 'chat-app, .input-area, textarea, div[contenteditable="true"], rich-textarea, .chat-input, [data-input-container]'
     input: 'rich-textarea div[contenteditable="true"], div[contenteditable="true"], textarea, input[type="text"]'
-    send: 'button.send-button, button.send-button.submit, button[aria-label*="Send" i], button[aria-label*="Odeslat" i], button[aria-label*="Poslat" i], button[data-testid="send-button"], button[type="submit"]'
+    send: 'button:has(mat-icon[data-mat-icon-name="arrow_upward"]), button:has(mat-icon[fonticon="arrow_upward"]), button.send-button, button.send-button.submit, button[aria-label*="Send" i], button[aria-label*="Odeslat" i], button[aria-label*="Poslat" i], button[data-testid="send-button"], button[type="submit"]'
     thoughtToggle: 'button[aria-label*="Show reasoning"], button[aria-label*="Show thoughts"], mat-expansion-panel-header, button[aria-label*="Zobrazit uvažování"], button:has-text("Zobrazit uvažování"), button:has-text("Show reasoning")'
     thoughtContainer: ".thought-process-content, .reasoning-content, .model-response-reasoning, .thoughts-content"
     # Response container - multiple fallbacks for UI changes
@@ -213,7 +213,7 @@ gemini:
     closeButton: 'button[aria-label*="Close Deep Research"], button[aria-label*="Zavřít hloubkový výzkum"], [aria-label*="Deep Research"] button:has(mat-icon), [aria-label*="Deep Research"] svg'
   gems:
     card: '[class*="gem-card"], .bot-row, [class*="gem-item"], [data-gem-id], .gem-tile, a[href*="/gem/"]'
-    name: ".title, .bot-title, .gem-title, .gem-name"
+    name: ".title, .bot-title, .gem-title, .gem-name, .template-gallery-card-title"
     create: 'button.bot-creation-button, button:has-text("Create"), button:has-text("New Gem"), button:has-text("Nový Gem"), button:has-text("Vytvořit"), a:has-text("Create"), [aria-label*="Create" i]'
     nameInput: 'input#gem-name-input, input.name-input, input[placeholder*="name" i], input[aria-label*="name" i], input[aria-label*="Název" i]'
     instructionInput: '.editor-container div[role="textbox"], .editor-container .ql-editor, textarea#gem-description-input'
@@ -225,14 +225,14 @@ gemini:
     deleteOption: '.mat-mdc-menu-item:has-text("Vymazat"), .mat-mdc-menu-item:has-text("Smazat"), .mat-mdc-menu-item:has-text("Delete")'
     confirmDelete: 'mat-dialog-container button:has-text("Smazat"), mat-dialog-container button:has-text("Delete"), button:has-text("Vymazat")'
   upload:
-    button: 'button[mattooltip*="Přidat"], button[mattooltip*="Upload"], button[aria-label*="Přidat"], button[aria-label*="Upload"], .fonticon-plus-new, .fonticon-add-circle'
+    button: 'gem-icon-button:has(mat-icon[data-mat-icon-name="plus"]), gem-icon-button:has(mat-icon[fonticon="plus"]), gem-icon-button[aria-label*="Nahrávání a" i], gem-icon-button[aria-label*="Uploads and tools" i], button:has(mat-icon[data-mat-icon-name="plus"]), button:has(mat-icon[fonticon="plus"]), button[aria-label*="Nahrávání a" i], button[aria-label*="Uploads and tools" i], button[mattooltip*="Přidat"], button[mattooltip*="Upload"], button[aria-label*="Přidat"], button[aria-label*="Upload"], .fonticon-plus-new, .fonticon-add-circle'
     fileInput: 'input[type="file"]'
     menu: '[role="menu"]'
-    uploadFile: 'text="Přidat soubory"|text="Upload files"|text="Nahrát soubory"|text="Upload from computer"'
-    drive: 'button[aria-label*="Přidat z Disku"], button[aria-label*="Drive"], text="Přidat z Disku"|text="Drive"'
-    photos: 'text="Fotky"|text="Photos"'
-    importCode: 'text="Importovat kód"|text="Import code"'
-    notebooklm: 'text="NotebookLM"'
+    uploadFile: 'button:has(mat-icon[data-mat-icon-name="attach_file"]), button:has(mat-icon[fonticon="attach_file"]), button:has-text("Nahrát soubory"), button:has-text("Upload files"), button:has-text("Přidat soubory"), button:has-text("Upload from computer")'
+    drive: 'button:has(mat-icon[data-mat-icon-name="drive"]), button:has(mat-icon[fonticon="drive"]), button[aria-label*="Přidat z Disku"], button[aria-label*="Drive"], button:has-text("Přidat z Disku"), button:has-text("Drive")'
+    photos: 'button:has(mat-icon[data-mat-icon-name="image_create"]), button:has(mat-icon[fonticon="image_create"]), button:has-text("Fotky"), button:has-text("Photos"), button:has-text("Vytvořit obrázek")'
+    importCode: 'button:has-text("Importovat kód"), button:has-text("Import code")'
+    notebooklm: 'button:has-text("NotebookLM"), button[aria-label*="NotebookLM"]'
     picker:
       iframe: 'iframe.picker-frame, iframe[src*="docs.google.com/picker"]'
       search: 'input[type="text"][placeholder*="Vyhledejte"], input[type="text"][placeholder*="Search"]'

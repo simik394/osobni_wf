@@ -8,13 +8,13 @@ export async function listGemsAction(ctx: UniversalContext, deps: GeminiActionDe
     
     // Ensure sidebar is open and Gems section is visible
     // We might need to click a "Gems" or "Gem manager" button
-    const gemsLink = page.locator('a:has-text("Gems"), button:has-text("Gems"), [aria-label*="Gems"]').first();
+    const gemsLink = page.locator('a[href*="/gems/view"], a:has-text("Gems"), button:has-text("Gems"), [aria-label*="Gems" i], [aria-label*="Gem" i]').first();
     if (await gemsLink.isVisible()) {
         await gemsLink.click();
         await page.waitForTimeout(1000);
     } else {
         // Try navigation if sidebar link not visible
-        await page.goto('https://gemini.google.com/gems', { waitUntil: 'networkidle' }).catch(() => {});
+        await page.goto('https://gemini.google.com/gems/view', { waitUntil: 'networkidle' }).catch(() => {});
     }
 
     await page.waitForSelector(selectors.gemini.gems.card, { timeout: 5000 }).catch(() => {
