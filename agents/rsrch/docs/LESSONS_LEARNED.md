@@ -473,3 +473,30 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - Feedback buttons (Like/Dislike) only appear on the *last* response and are often part of a dynamic toolbar. Using `.last()` on the response locator and then finding the child button is more robust than a global button search.
 
 - **Outcome**: Successfully implemented a "Stateless Bridge" for 7+ advanced Gemini features, achieving full GUI parity via CLI and REST.
+
+---
+
+### [[22. Gemini 3 Models & Thinking Level Selection (2026-05-19)]]
+
+**Context**: Implementing support for Gemini 3 base models (Lite, Flash, Pro) and sub-menus for "Thinking Level" (Standard, Extended) alongside dynamic availability/rate-limit parsing and CLI dashboard reporting.
+
+#### LESSONS LEARNED:
+
+1. **Dynamic i18n Rate-Limit & Reset Parsing**:
+   - Google localizes rate-limit status messages and reset schedules based on the user's browser locale (e.g., English vs. Czech).
+   - Dynamic reset times (e.g., `19. 5. 9:29` or `1:45` remaining) are best extracted using robust regexes that capture optional day/month prefixes alongside hours: `const timeMatch = text.match(/(\d{1,2}\.\s?\d{1,2}\.\s?)?(\d{1,2}:\d{2})/);`
+   - Checking `aria-disabled="true"` or `.disabled` class names on dropdown list items is a reliable indicator of active rate-limits.
+
+2. **Double-Pass UI Interactions for Nested Sub-menus**:
+   - In modern SPAs, choosing a base model closes the dropdown menu immediately. To apply secondary sub-options (like "Thinking Level" / "Úroveň myšlení"), the script must perform a **second pass**:
+     1. Click the base model to select it and wait for the dropdown to close.
+     2. Re-click the model selector trigger to open the menu again.
+     3. Click the nested sub-menu trigger ("Úroveň myšlení") to expand the standard/extended buttons, then click the target option.
+
+3. **High-Fidelity Mock Locators in Unit Testing**:
+   - When mocking Playwright locators for unit tests, checking generic substring matches inside `page.locator()` implementations (like `sel.includes('item')`) can cause accidental early matches (e.g., `'[role="menuitem"]'` matching `'item'` before checking if it specifically requested `'pro'`).
+   - **Best Practice**: Load `selectors.yaml` dynamically inside the test and map the exact selector properties to specific mocked element lists.
+   - **Direct References**: Return mock objects directly from list accessors like `.first()` and `.nth(i)` rather than destructuring (`...mockItem`), preserving original `vi.fn()` mock reference tracking and prototype methods.
+
+- **Outcome**: Successfully enabled precise Gemini 3 base model and thinking level configuration via CLI and REST, verified with zero-dependency high-fidelity mock unit tests.
+
