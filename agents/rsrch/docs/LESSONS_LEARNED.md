@@ -521,3 +521,32 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - **Problem**: The outer `model-response` container contains UI clutter, screen-reader text (e.g. "prpt říká"), interactive toolbar buttons (e.g., "Share", "Copy"), and duplicate thought blocks.
    - **Solution**: Target the inner content container (e.g. `structured-content-container` or `.model-response-text`) rather than the outer container for markdown text extraction.
    - **UI Junk Pruning**: Prior to extracting `clone.innerText`, dynamically select and remove UI controls and accessibility labels using `clone.querySelectorAll(selector).forEach(el => el.remove())`. This ensures only the pure, formatted assistant response text is exported.
+
+---
+
+### [[24. Gemini Canvas Inlining and File Attachment Resolution (2026-05-19)]]
+
+**Context**: Implementing dynamic Google Drive and inline file attachment link resolution, alongside assistant-level Canvas side-panel document extraction and unit test decoupling.
+
+#### LESSONS LEARNED:
+
+1. **Stateful Interaction Mapping for Attachment Resolution**:
+   - **Problem**: File previews (like `.gdoc` or `.xlsx`) are stored as interactive UI chips. Simple scraping only yields their text/title, but not their target links (which require opening or downloading).
+   - **Solution**: Click the attachment chips dynamically, intercepting the new tab redirection (`page.context().waitForEvent('page')`) or downloads (`page.waitForEvent('download')`) to capture the canonical resource URL or reference.
+   - **Performance / Robustness**: Standardize on a racing Promise helper (`Promise.race`) with a fast timeout (2.5s) to guarantee resolution without hanging the entire export pipeline if a click fails or opens an unexpected overlay.
+
+2. **Canvas Side-Panel Document Inlining**:
+   - **Problem**: Assistant-generated Documents (Canvas) are displayed as interactive entry chips (`immersive-entry-chip`). Scraping the main chat stream only leaves a placeholder reference.
+   - **Solution**: Click each assistant-level Canvas chip to open the secondary workspace view. Run our custom DOM-to-MD parser inside the viewport, close the side panel (`closeCanvas`), and replace the entry chip with the fully formatted, nested markdown contents in the exported session.
+
+3. **Decoupled Injectable Actions for Playwright Testing**:
+   - **Problem**: Testing Playwright browser-interaction pipelines that dynamically `import()` sub-modules (like `history.ts` dynamically importing `canvas.ts`) is extremely brittle when mocked via standard test framework utilities (like Vitest's `vi.mock`).
+   - **Solution**: Design methods to accept optional action functions directly via the Dependency Injection (`deps`) object:
+     ```typescript
+     const readCanvas = deps.readCanvas || (await import('./canvas')).readCanvasAction;
+     ```
+   - **Benefit**: Keeps the production code cleanly modular, while allowing the test suite to pass high-fidelity mocks directly inside the dependencies, achieving complete environment-independent predictability.
+
+4. **Synchronous vs. Promise evaluate() Mocks in Playwright Tests**:
+   - **Problem**: In Playwright, `page.evaluate()` and `locator.evaluate()` return Promises. If test mocks return values synchronously, any chained `.catch()` on the evaluated result throws a runtime `TypeError` (`not a function`).
+   - **Solution**: Always wrap the returned value in a resolved Promise (`Promise.resolve(...)`) in test mocks to match the Playwright interface perfectly.

@@ -7,6 +7,7 @@ import { listDeepResearchDocsAction, readDeepResearchDocAction } from './researc
 import { exportFullSessionAction } from './history';
 import { extractResponseAction } from './extract-response';
 import { formatContent } from '../utils';
+import { parseSessionId } from '../../clients/gemini';
 
 /**
  * Archives all artifacts from the current Gemini session to local storage.
@@ -26,7 +27,7 @@ export async function archiveArtifactsAction(
 
     // 1. Get current session ID
     const currentUrl = ctx.page.url();
-    const sessionId = currentUrl.includes('/app/') ? currentUrl.split('/app/')[1].split('?')[0] : 'unknown';
+    const sessionId = parseSessionId(currentUrl) || 'unknown';
     
     // Ensure session is registered
     let parentId = 'unknown';

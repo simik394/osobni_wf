@@ -10,6 +10,20 @@ import * as actions from '../actions/gemini';
 const telemetry = getRsrchTelemetry();
 
 /**
+ * Parses the Gemini Session ID from various URL patterns:
+ * - https://gemini.google.com/app/52e272bc92f0d03a
+ * - https://gemini.google.com/gem/f4c0e97957df/52e272bc92f0d03a
+ * - https://gemini.google.com/share/f4c0e97957df/52e272bc92f0d03a
+ */
+export function parseSessionId(url: string): string | null {
+    if (!url) return null;
+    if (url.includes('/app/')) return url.split('/app/')[1].split('?')[0];
+    if (url.includes('/gem/')) return url.split('/gem/')[1].split('?')[0].replace(/\//g, '_');
+    if (url.includes('/share/')) return url.split('/share/')[1].split('?')[0].replace(/\//g, '_');
+    return null;
+}
+
+/**
  * GeminiClient is a lightweight wrapper around modular action modules.
  * It provides a class-based interface for legacy compatibility while
  * delegating all actual logic to stateless, modular actions.
@@ -432,9 +446,7 @@ export class GeminiClient extends EventEmitter {
     }
 
     private getCurrentSessionIdSync() {
-        const url = this.page.url();
-        if (url.includes('/app/')) return url.split('/app/')[1].split('?')[0];
-        return null;
+        return parseSessionId(this.page.url());
     }
 
     async getCurrentSessionId() {
