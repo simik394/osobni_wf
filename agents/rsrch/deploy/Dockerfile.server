@@ -26,6 +26,7 @@ COPY agents/shared/dist agents/shared/dist
 COPY agents/rsrch/dist agents/rsrch/dist
 COPY agents/rsrch/src/selectors.yaml agents/rsrch/selectors.yaml
 COPY agents/rsrch/deploy agents/rsrch/deploy
+COPY agents/rsrch/docs agents/rsrch/docs
 
 # 4. Global Linkage for @agents/shared
 RUN mkdir -p /app/node_modules/@agents && \

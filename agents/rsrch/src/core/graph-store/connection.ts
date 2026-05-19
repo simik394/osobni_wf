@@ -83,7 +83,7 @@ export class GraphConnection {
         }
 
         try {
-            const result = await this.graph.query(cypher, options.params);
+            const result = await this.graph.query(cypher, options);
             this.resetCircuit();
             return {
                 data: (result as any).data as T,

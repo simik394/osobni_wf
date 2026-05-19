@@ -21,8 +21,6 @@ export default defineConfig({
       '**/docker-*.ts',
       '**/verify-registry-demo.ts',
       '**/test-parser-fix.ts',
-      // References dead code (knowledge.ts.disabled)
-      '**/knowledge.test.ts',
     ],
     // Run tests in sequence to avoid port conflicts
     pool: 'forks',

@@ -4,6 +4,8 @@ import { BrowserClient } from '../clients/base';
 import { GraphStore } from '../core/graph-store';
 import { markTabBusy, markTabFree } from '@agents/shared';
 import { discordService } from '../services/notification';
+import * as path from 'path';
+import { parseLessonsLearned } from '../services/lessons-parser';
 
 export interface ResearchRouterDeps {
     browserClient: BrowserClient;
@@ -165,6 +167,30 @@ export function createResearchRouter(deps: ResearchRouterDeps) {
         try {
             const result = await graphStore.migrateCitations();
             res.json({ success: true, result });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/knowledge/sync', async (req: Request, res: Response) => {
+        try {
+            const lessonsPath = path.join(__dirname, '../../docs/LESSONS_LEARNED.md');
+            const lessons = await parseLessonsLearned(lessonsPath);
+            const result = await graphStore.syncLessons(lessons);
+            res.json({ success: true, ...result });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/knowledge/search', async (req: Request, res: Response) => {
+        try {
+            const query = req.body.query || req.query.q || '';
+            if (!query) {
+                return res.status(400).json({ success: false, error: 'Query is required' });
+            }
+            const results = await graphStore.searchKnowledge(String(query));
+            res.json({ success: true, results });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

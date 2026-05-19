@@ -123,6 +123,14 @@ export class GraphStore {
         return this.knowledge.findRelated(entityId, relationshipType);
     }
 
+    async syncLessons(lessons: any[]): Promise<{ topics: number; problems: number; solutions: number }> {
+        return this.knowledge.syncLessons(lessons);
+    }
+
+    async searchKnowledge(queryText: string): Promise<any[]> {
+        return this.knowledge.searchKnowledge(queryText);
+    }
+
     // --- Agent Memory & Conversation ---
 
     async storeFact(agentId: string, fact: string, context?: Record<string, any>): Promise<void> {

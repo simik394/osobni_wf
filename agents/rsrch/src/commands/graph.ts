@@ -173,7 +173,6 @@ graph.command('citation-usage <url>')
             }
         }
     });
-
 graph.command('migrate-citations')
     .description('Migrate existing ResearchDocs to Citations')
     .action(async () => {
@@ -183,6 +182,54 @@ graph.command('migrate-citations')
             console.log(`\n=== Migration Complete ===`);
             console.log(`  Processed: ${result.processed} documents`);
             console.log(`  Created:   ${result.citations} new citation links\n`);
+        }
+    });
+
+graph.command('knowledge-sync')
+    .description('Synchronize LESSONS_LEARNED.md into FalkorDB')
+    .action(async () => {
+        const response = await sendServerRequest('/graph/knowledge/sync', {}, 'POST');
+        if (response?.success) {
+            console.log(`\n\x1b[1m\x1b[32m✅ Structured Knowledge Graph Sync Successful!\x1b[0m`);
+            console.log(`  Topics:    \x1b[33m${response.topics}\x1b[0m created/synced`);
+            console.log(`  Problems:  \x1b[36m${response.problems}\x1b[0m imported`);
+            console.log(`  Solutions: \x1b[32m${response.solutions}\x1b[0m indexed\n`);
+        } else {
+            console.error(`\n❌ Knowledge sync failed:`, response?.error || 'Unknown error');
+        }
+    });
+
+graph.command('knowledge-search <query>')
+    .description('Search the structured knowledge graph for matching solutions')
+    .action(async (query) => {
+        const response = await sendServerRequest('/graph/knowledge/search', { query }, 'POST');
+        if (response?.success) {
+            const results = response.results;
+            console.log(`\n\x1b[1m\x1b[36m=== Structured Knowledge Search Results (${results.length} matches) ===\x1b[0m\n`);
+            if (results.length === 0) {
+                console.log('No matching problems or solutions found in the knowledge graph.\n');
+                return;
+            }
+
+            for (const item of results) {
+                const topicNames = item.topics.map((t: any) => t.name).join(', ');
+                console.log(`\x1b[1m\x1b[33m[Topics: ${topicNames}]\x1b[0m \x1b[1m\x1b[36m${item.problem.name}\x1b[0m`);
+                if (item.problem.properties.referenceUrl) {
+                    console.log(`\x1b[90mReference: ${item.problem.properties.referenceUrl}\x1b[0m`);
+                }
+                console.log(`\x1b[90m--------------------------------------------------------------------------------\x1b[0m`);
+                
+                console.log(`\x1b[1mSymptom / Context:\x1b[0m`);
+                console.log(item.problem.properties.problem || 'N/A');
+                console.log(``);
+                
+                console.log(`\x1b[1m\x1b[32mLessons Learned / Solution:\x1b[0m`);
+                console.log(`\x1b[32m${item.solution.properties.solution || 'N/A'}\x1b[0m`);
+                
+                console.log(`\x1b[90m================================================================================\x1b[0m\n`);
+            }
+        } else {
+            console.error(`\n❌ Knowledge search failed:`, response?.error || 'Unknown error');
         }
     });
 
