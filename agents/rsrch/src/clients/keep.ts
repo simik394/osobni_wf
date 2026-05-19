@@ -22,12 +22,36 @@ export class KeepClient {
         } as NotebookLMActionDeps;
     }
 
-    async listNotes(options: { limit?: number; query?: string } = {}) {
+    async listNotes(options: { limit?: number; offset?: number; query?: string } = {}) {
         return actions.listKeepNotesAction(this.ctx, this.deps, options);
     }
 
     async createNote(title: string, content: string) {
         return actions.createKeepNoteAction(this.ctx, this.deps, title, content);
+    }
+
+    async getNote(identifier: { title?: string; index?: number }) {
+        return actions.getKeepNoteAction(this.ctx, this.deps, identifier);
+    }
+
+    async updateNote(identifier: { title?: string; index?: number }, updates: { newTitle?: string; newContent?: string; replace?: boolean }) {
+        return actions.updateKeepNoteAction(this.ctx, this.deps, identifier, updates);
+    }
+
+    async manageLabels(identifier: { title?: string; index?: number }, labelName: string, action: 'add' | 'remove') {
+        return actions.manageKeepLabelsAction(this.ctx, this.deps, identifier, labelName, action);
+    }
+
+    async grabImageText(identifier: { title?: string; index?: number }) {
+        return actions.grabKeepNoteImageTextAction(this.ctx, this.deps, identifier);
+    }
+
+    async addCollaborator(identifier: { title?: string; index?: number }, email: string) {
+        return actions.addKeepCollaboratorAction(this.ctx, this.deps, identifier, email);
+    }
+
+    async setReminder(identifier: { title?: string; index?: number }, reminderText: string) {
+        return actions.setKeepReminderAction(this.ctx, this.deps, identifier, reminderText);
     }
 
     async deleteNote(title: string) {

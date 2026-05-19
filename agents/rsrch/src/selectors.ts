@@ -324,6 +324,7 @@ export interface KeepSelectors {
     contentInput: string;
     saveButton: string;
     noteItem: string;
+    noteWrapper: string;
     noteTitle: string;
     noteContent: string;
     moreMenu: string;
@@ -331,6 +332,16 @@ export interface KeepSelectors {
     archiveButton: string;
     searchInput: string;
     clearSearch: string;
+    tagChip: string;
+    collaboratorButton: string;
+    reminderButton: string;
+    collaboratorInput: string;
+    collaboratorSave: string;
+    menuOptionGrabText: string;
+    menuOptionChangeLabels: string;
+    labelSearchInput: string;
+    labelCheckbox: string;
+    sidebarLabelItem: string;
 }
 
 export interface NotebookLMSelectors {
@@ -636,13 +647,24 @@ const DEFAULTS: NotebookLMSelectors = {
         contentInput: 'Note',
         saveButton: 'Done',
         noteItem: '.IZ65Hb-n0wRZb',
+        noteWrapper: '.IZ65Hb-s2gQvd',
         noteTitle: '.IZ65Hb-YPqjS-IDT92e',
         noteContent: '.IZ65Hb-sBy40b',
         moreMenu: 'More',
         deleteOption: 'Delete',
         archiveButton: 'Archive',
         searchInput: 'Search',
-        clearSearch: 'Clear'
+        clearSearch: 'Clear',
+        tagChip: '.IZ65Hb-gme1ge',
+        collaboratorButton: 'div[role="button"][aria-label*="collaborator" i]',
+        reminderButton: 'div[role="button"][aria-label*="remind" i]',
+        collaboratorInput: 'input[type="email"]',
+        collaboratorSave: 'button:has-text("Save")',
+        menuOptionGrabText: 'Grab image text',
+        menuOptionChangeLabels: 'Change labels',
+        labelSearchInput: 'input[placeholder*="label" i]',
+        labelCheckbox: 'div[role="menuitemcheckbox"]',
+        sidebarLabelItem: 'div[role="navigation"] a[href*="label/"]'
     },
     googleAuth: {
         accountChooser: {

@@ -590,4 +590,29 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - **Problem**: Port routing mismatches between CLI default contexts and actual production server endpoints force manual server flag configurations on every command execution.
    - **Solution**: Consolidate shared default API port parameters inside `@agents/shared` defaults (`API_PORT: 3055`) and explicitly trigger downstream monorepo builds to propagate changes to all importing clients.
 
+---
+
+### [[27. Advanced Google Keep Stateless Integration (2026-05-19)]]
+
+**Context**: Implementing advanced Google Keep features (limit/offset pagination, numerical index selection, default-append editing, label management, collaborator addition, OCR text grabbing, and reminders) through stateless API/CLI request proxying.
+
+#### LESSONS LEARNED:
+
+1. **Stateless Pagination & Indexing over Dynamic Grids**:
+   - **Problem**: Google Keep's card grid is dynamic and has non-unique/empty titles. Selecting notes by title is highly fragile, while list pagination is not natively exposed by Keep's web UI.
+   - **Solution**: Scrape notes inside a scroll/render loop, collecting at least `offset + limit` items, and then slicing `[offset, offset + limit]` to create a stable paginated list. Target a specific note card using its 1-indexed position (`index`) in the current paginated view, mapping directly to Playwright's `.nth(index - 1)` selector. This completely bypasses empty/duplicate title ambiguity.
+
+2. **Dialog-Scoped Action Isolations**:
+   - **Problem**: Operating on background cards (hovering and clicking "More" or "Labels") frequently misfires in Keep due to screen scrolling or cards shifting.
+   - **Solution**: Always click the card to open its detailed modal/dialog (`.IZ65Hb-s2gQvd`). Perform all subsequent clicks (editing title/content, toggling labels, adding collaborators, grabbing OCR text, setting reminders) inside the modal-scoped locator (`selectors.keep.noteWrapper`), then click the "Done" button to save and close. This is 100% reliable and completely prevents background element targeting mismatches.
+
+3. **Label Change Checkbox State Matching**:
+   - **Problem**: Keep's label pop-up does not show checkmark state in standard HTML `input` fields. Instead, it uses custom `div` elements with `role="menuitemcheckbox"`.
+   - **Solution**: Read the `aria-checked` attribute (`'true'` vs `'false'`) on `div[role="menuitemcheckbox"]`. Toggle the label by clicking the option *only* when the target action (`'add'` or `'remove'`) differs from the current `aria-checked` value. If the label does not exist, type the label name and click the "Create" button which dynamically renders.
+
+4. **Keyboard-Driven Content Appends and Replacements**:
+   - **Problem**: Standard Playwright `.fill()` completely replaces target textbox values. Simply reading, modifying, and re-filling content is expensive and slow for large notes.
+   - **Solution**: Open the note textbox, click it to focus, and use keyboard shortcuts. For replacements: press `Control+A` followed by `Backspace` and `.fill()`. For appends (default): press `Control+End` to position the cursor at the end, then use `.pressSequentially()` to append the text with a pre-pended newline. This perfectly emulates human edits.
+
+
 

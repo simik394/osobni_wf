@@ -22,11 +22,28 @@ export function createKeepRouter(deps: {
     router.get('/notes', async (req: Request, res: Response) => {
         try {
             const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+            const offset = req.query.offset ? parseInt(req.query.offset as string) : undefined;
             const query = req.query.q as string;
             
             const client = await getKeepClient();
-            const notes = await client.listNotes({ limit, query });
+            const notes = await client.listNotes({ limit, offset, query });
             res.json({ success: true, data: notes });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/notes/detail', async (req: Request, res: Response) => {
+        try {
+            const title = req.query.title as string;
+            const index = req.query.index ? parseInt(req.query.index as string) : undefined;
+
+            const client = await getKeepClient();
+            const note = await client.getNote({ title, index });
+            if (!note) {
+                return res.status(404).json({ error: 'Note not found' });
+            }
+            res.json({ success: true, data: note });
         } catch (e: any) {
             res.status(500).json({ error: e.message });
         }
@@ -39,6 +56,83 @@ export function createKeepRouter(deps: {
             
             const client = await getKeepClient();
             const success = await client.createNote(title || '', content);
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.patch('/notes', async (req: Request, res: Response) => {
+        try {
+            const { title, index, newTitle, newContent, replace } = req.body;
+            const client = await getKeepClient();
+            const success = await client.updateNote(
+                { title, index: index !== undefined ? parseInt(index) : undefined },
+                { newTitle, newContent, replace: replace === true || replace === 'true' }
+            );
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/notes/labels', async (req: Request, res: Response) => {
+        try {
+            const { title, index, labelName, action } = req.body;
+            if (!labelName) return res.status(400).json({ error: 'Label name is required' });
+            if (action !== 'add' && action !== 'remove') {
+                return res.status(400).json({ error: 'Action must be "add" or "remove"' });
+            }
+
+            const client = await getKeepClient();
+            const success = await client.manageLabels(
+                { title, index: index !== undefined ? parseInt(index) : undefined },
+                labelName,
+                action
+            );
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/notes/grab-text', async (req: Request, res: Response) => {
+        try {
+            const { title, index } = req.body;
+            const client = await getKeepClient();
+            const success = await client.grabImageText({ title, index: index !== undefined ? parseInt(index) : undefined });
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/notes/collaborator', async (req: Request, res: Response) => {
+        try {
+            const { title, index, email } = req.body;
+            if (!email) return res.status(400).json({ error: 'Email is required' });
+
+            const client = await getKeepClient();
+            const success = await client.addCollaborator(
+                { title, index: index !== undefined ? parseInt(index) : undefined },
+                email
+            );
+            res.json({ success });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post('/notes/reminder', async (req: Request, res: Response) => {
+        try {
+            const { title, index, reminderText } = req.body;
+            if (!reminderText) return res.status(400).json({ error: 'Reminder text is required' });
+
+            const client = await getKeepClient();
+            const success = await client.setReminder(
+                { title, index: index !== undefined ? parseInt(index) : undefined },
+                reminderText
+            );
             res.json({ success });
         } catch (e: any) {
             res.status(500).json({ error: e.message });
