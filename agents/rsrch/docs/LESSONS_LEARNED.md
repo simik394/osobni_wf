@@ -574,3 +574,20 @@ curl -X POST http://localhost:3001/v1/chat/completions \
    - **Problem**: User prompts and assistant responses are rendered in separate DOM trees, making standard container scraping prone to order-scrambling.
    - **Solution**: Query both user prompt elements (`div[jsname="H7tCnf"]`) and assistant turn roots (`div[data-xid="aim-mars-turn-root"]`), then sort them chronologically using their position in the DOM via `compareDocumentPosition` in document tree order.
 
+---
+
+### [[26. Reconciling CLI Request Routing & Port Configuration (2026-05-19)]]
+
+**Context**: Resolving inconsistencies in client-to-server request routing where the CLI context defaults were misaligned with the production port (3055) due to precedence bugs and hardcoded legacy fallbacks.
+
+#### LESSONS LEARNED:
+
+1. **Precedence Hierarchy in Port Resolution**:
+   - **Problem**: In Express servers, resolving the application port like `const port = Number(config.port || process.env.PORT || 3000);` completely overrides dynamic environment overrides if `config.port` is initialized with a schema default (e.g. 3030 via Zod).
+   - **Solution**: Define environment variable parsing first: `const port = Number(process.env.PORT || config.port || 3055);`. This ensures runtime overrides are respected.
+
+2. **Single Source of Truth Recompilation**:
+   - **Problem**: Port routing mismatches between CLI default contexts and actual production server endpoints force manual server flag configurations on every command execution.
+   - **Solution**: Consolidate shared default API port parameters inside `@agents/shared` defaults (`API_PORT: 3055`) and explicitly trigger downstream monorepo builds to propagate changes to all importing clients.
+
+

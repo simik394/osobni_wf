@@ -22,7 +22,7 @@ import { createPerplexityRouter } from './routes/perplexity-router';
 
 // Initialize App
 const app = express();
-const port = Number(config.port || process.env.PORT || 3000);
+const port = Number(process.env.PORT || config.port || 3055);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));

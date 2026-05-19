@@ -10,7 +10,7 @@
 export const DEFAULTS = {
     RSRCH: {
         HOST: 'halvarm',
-        API_PORT: 3030,
+        API_PORT: 3055,
         VNC_PORT: 5900,
         CHROMIUM_PORT: 5902,
         CDP_PORT: 9223,
