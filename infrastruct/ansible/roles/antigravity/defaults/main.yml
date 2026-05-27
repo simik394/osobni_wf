@@ -1,0 +1,3 @@
+---
+antigravity_install_dir: "/usr/share/antigravity"
+antigravity_backup_dir: "/usr/share/antigravity.bak"

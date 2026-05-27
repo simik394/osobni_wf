@@ -68,6 +68,10 @@
       tags: [vnc, extra]
     - role: remarkable-wine
       tags: [remarkable, wine, extra]
+    - role: antigravity
+      tags: [antigravity, extra]
+      become: true
+
 
 # --- SECTION 4: Local Services (Containers) ---
 - name: Local Services (Docker)

@@ -1,0 +1,115 @@
+---
+# Antigravity IDE deployment role
+# Checks current version, handles safety backup, clean extraction, and launcher compatibility
+
+- name: Get current Antigravity version
+  command: cat "{{ antigravity_install_dir }}/VERSION"
+  register: current_antigravity_version_file
+  failed_when: false
+  changed_when: false
+
+- name: Set current version fact
+  set_fact:
+    current_antigravity_version: "{{ current_antigravity_version_file.stdout | default('0.0.0', true) | trim }}"
+
+- name: Detect latest Antigravity IDE version
+  script: get_latest_antigravity.py
+  args:
+    executable: python3
+  register: antigravity_version_check
+  check_mode: false
+  changed_when: false
+  delegate_to: localhost
+  become: false
+
+- name: Set facts from version check
+  set_fact:
+    antigravity_latest_data: "{{ antigravity_version_check.stdout | from_json }}"
+
+- name: Display version information
+  debug:
+    msg: "Current version: {{ current_antigravity_version }}, Latest version detected: {{ antigravity_latest_data.version }}"
+
+- name: Update Antigravity IDE
+  block:
+    - name: Create temporary directory for download
+      tempfile:
+        state: directory
+        suffix: antigravity_update
+      register: temp_dir
+      delegate_to: localhost
+      become: false
+
+    - name: Download Antigravity IDE tarball
+      get_url:
+        url: "{{ antigravity_latest_data.url }}"
+        dest: "{{ temp_dir.path }}/antigravity.tar.gz"
+      delegate_to: localhost
+      become: false
+
+    # Policy compliance: Ensure existing files are backed up first before replacement to prevent data loss
+    - name: Check if current installation directory exists
+      stat:
+        path: "{{ antigravity_install_dir }}"
+      register: install_dir_stat
+
+    - name: Create safety backup of existing installation
+      copy:
+        src: "{{ antigravity_install_dir }}/"
+        dest: "{{ antigravity_backup_dir }}/"
+        remote_src: yes
+        mode: preserve
+      when: install_dir_stat.stat.exists
+
+    - name: Ensure clean installation directory
+      file:
+        path: "{{ antigravity_install_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy and extract archive to target directory
+      unarchive:
+        src: "{{ temp_dir.path }}/antigravity.tar.gz"
+        dest: "{{ antigravity_install_dir }}"
+        owner: root
+        group: root
+        extra_opts:
+          - "--strip-components=1"
+        remote_src: no
+
+    - name: Configure compatibility symlinks inside installation directory
+      file:
+        src: "{{ item.src }}"
+        dest: "{{ antigravity_install_dir }}/{{ item.dest }}"
+        state: link
+        force: yes
+      loop:
+        - { src: "antigravity-ide", dest: "antigravity" }
+        - { src: "antigravity-ide", dest: "bin/antigravity" }
+      ignore_errors: true
+
+    - name: Configure chrome-sandbox setuid permission
+      file:
+        path: "{{ antigravity_install_dir }}/chrome-sandbox"
+        owner: root
+        group: root
+        mode: "4755"
+      ignore_errors: true
+
+    - name: Record version tag file
+      copy:
+        content: "{{ antigravity_latest_data.version }}"
+        dest: "{{ antigravity_install_dir }}/VERSION"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Clean up local temporary download directory
+      file:
+        path: "{{ temp_dir.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+  when: current_antigravity_version != antigravity_latest_data.version
