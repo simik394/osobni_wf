@@ -402,3 +402,43 @@ def test_report_config():
     assert "target_report('Demo Burndown', 'burndown', '', 'current_sprint', 'Story Points', 'null', ['DEMO'])." in facts
     assert "target_report('Global Flow', 'cumulative_flow', '', 'last_30_days', 'null', 'State', ['DEMO'])." in facts
 
+
+def test_lua_config_loading_and_seeding(tmp_path):
+    from src.config.parser import load_config
+    from src.config.translator import config_to_prolog_facts
+    
+    # Create a mock Lua config file using programmatic Lua constructs
+    lua_content = """
+    local function get_welcome_seeds()
+      return {
+        { summary = "Welcome Issue", description = "Get started here", type = "Task", priority = "Normal" }
+      }
+    end
+
+    return {
+      projects = {
+        {
+          name = "Lua Generated Project",
+          shortName = "LUA",
+          seeds = get_welcome_seeds()
+        }
+      }
+    }
+    """
+    lua_file = tmp_path / "project.lua"
+    lua_file.write_text(lua_content, encoding='utf-8')
+    
+    config = load_config(lua_file)
+    assert len(config.projects) == 1
+    project = config.projects[0]
+    assert project.name == "Lua Generated Project"
+    assert project.short_name == "LUA"
+    assert len(project.seeds) == 1
+    assert project.seeds[0].summary == "Welcome Issue"
+    assert project.seeds[0].description == "Get started here"
+    
+    facts = config_to_prolog_facts(config)
+    assert "target_project('LUA', 'Lua Generated Project')." in facts
+    assert "target_issue_seed('LUA', 'Welcome Issue', 'Get started here', 'Task', 'Normal')." in facts
+
+

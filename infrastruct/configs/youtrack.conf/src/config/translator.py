@@ -259,6 +259,15 @@ def _generate_project_facts(project: ProjectConfig) -> Iterator[str]:
         for rep in project.reports:
             yield from _generate_report_facts(rep, project_short_name=short_name)
 
+    # Project Seeds
+    if getattr(project, 'seeds', None):
+        for seed in project.seeds:
+            sum_val = escape_prolog_string(seed.summary)
+            desc_val = escape_prolog_string(seed.description)
+            type_val = escape_prolog_string(seed.type)
+            prio_val = escape_prolog_string(seed.priority)
+            yield f"target_issue_seed('{short_name}', '{sum_val}', '{desc_val}', '{type_val}', '{prio_val}')."
+
 
 
 def _generate_field_facts(field: FieldConfig, project: str) -> Iterator[str]:

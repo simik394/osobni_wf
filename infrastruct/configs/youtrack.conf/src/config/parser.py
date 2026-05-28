@@ -17,6 +17,34 @@ from .templates import TemplateExpander
 
 logger = logging.getLogger(__name__)
 
+LUPA_AVAILABLE = False
+try:
+    from lupa import LuaRuntime
+    LUPA_AVAILABLE = True
+except ImportError:
+    pass
+
+
+def lua_to_python(obj):
+    """Recursively convert Lua tables (from Lupa) to Python dicts or lists."""
+    if not LUPA_AVAILABLE:
+        return obj
+    if type(obj).__name__ == '_LuaTable':
+        keys = list(obj.keys())
+        is_array = True
+        for k in keys:
+            if not isinstance(k, int):
+                is_array = False
+                break
+        if is_array and keys:
+            sorted_keys = sorted(keys)
+            return [lua_to_python(obj[k]) for k in sorted_keys]
+        else:
+            if not keys:
+                return {}  # empty Lua table defaults to dict
+            return {str(k): lua_to_python(v) for k, v in obj.items()}
+    return obj
+
 
 def load_config(path: Union[str, Path], base_path: Optional[Path] = None) -> YouTrackConfig:
     """
@@ -32,8 +60,17 @@ def load_config(path: Union[str, Path], base_path: Optional[Path] = None) -> You
     path = Path(path)
     base_path = base_path or path.parent
     
-    with open(path, 'r', encoding='utf-8') as f:
-        data = yaml.safe_load(f)
+    if path.suffix == '.lua':
+        if not LUPA_AVAILABLE:
+            raise ImportError("lupa is required to load Lua configs. Run: pip install lupa")
+        logger.debug(f"Loading Lua config from {path}")
+        lua_runtime = LuaRuntime(unpack_returned_tuples=True)
+        lua_script = path.read_text(encoding='utf-8')
+        lua_result = lua_runtime.execute(lua_script)
+        data = lua_to_python(lua_result)
+    else:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
     
     # Handle single project format (no 'projects' key)
     if 'project' in data:
@@ -144,6 +181,9 @@ def load_configs_from_dir(directory: Union[str, Path]) -> list[YouTrackConfig]:
         configs.append(load_config(path, base_path=path.parent))
     
     for path in directory.rglob('*.yml'):
+        configs.append(load_config(path, base_path=path.parent))
+        
+    for path in directory.rglob('*.lua'):
         configs.append(load_config(path, base_path=path.parent))
     
     return configs

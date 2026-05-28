@@ -547,4 +547,46 @@ class TestTimeTrackingLinkTypesReportsActuator:
             params={'fields': 'id'}
         )
 
+    @patch('requests.Session')
+    def test_seed_issue(self, mock_session_class):
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock issue creation POST
+        mock_post_issue = Mock()
+        mock_post_issue.status_code = 200
+        mock_post_issue.json.return_value = {"id": "issue-123"}
+        mock_post_issue.raise_for_status = Mock()
+        mock_session.post.return_value = mock_post_issue
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.seed_issue("DEMO", "Welcome Issue", "Initial welcome description", "Task", "Normal")
+        
+        assert result.success is True
+        assert result.resource_id == "issue-123"
+        
+        # Verify 2 POST calls: creation, and then setting type/priority custom fields
+        assert mock_session.post.call_count == 2
+        mock_session.post.assert_any_call(
+            "https://yt.example.com/api/issues",
+            json={
+                "project": {"shortName": "DEMO"},
+                "summary": "Welcome Issue",
+                "description": "Initial welcome description"
+            },
+            params={'fields': 'id'}
+        )
+        mock_session.post.assert_any_call(
+            "https://yt.example.com/api/issues/issue-123",
+            json={
+                "customFields": [
+                    {"$type": "SingleEnumIssueCustomField", "name": "Type", "value": {"name": "Task"}},
+                    {"$type": "SingleEnumIssueCustomField", "name": "Priority", "value": {"name": "Normal"}}
+                ]
+            }
+        )
+
+
 

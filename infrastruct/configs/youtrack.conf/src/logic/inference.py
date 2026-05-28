@@ -107,7 +107,8 @@ class PrologInferenceEngine:
             'target_project_time_tracking(_, _, _)', 'curr_project_time_tracking(_, _, _)',
             'target_project_work_item_type(_, _)', 'curr_project_work_item_type(_, _)',
             'target_issue_link_type(_, _, _, _, _)', 'curr_issue_link_type(_, _, _, _, _, _, _)', 'target_delete_issue_link_type(_)',
-            'target_report(_, _, _, _, _, _, _)', 'curr_report(_, _, _, _, _, _, _, _)', 'target_delete_report(_)'
+            'target_report(_, _, _, _, _, _, _)', 'curr_report(_, _, _, _, _, _, _, _)', 'target_delete_report(_)',
+            'target_issue_seed(_, _, _, _, _)', 'curr_project_empty(_)'
         ]:
             janus.query_once(f"retractall({fact})")
 
@@ -145,7 +146,8 @@ class PrologInferenceEngine:
                              global_time_tracking: dict = None,
                              project_time_tracking: dict[str, dict] = None,
                              issue_link_types: list[dict] = None,
-                             reports: list[dict] = None) -> None:
+                             reports: list[dict] = None,
+                             empty_projects: dict[str, bool] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -495,6 +497,12 @@ class PrologInferenceEngine:
                 projs_str = ", ".join(f"'{self._escape(p.get('shortName', ''))}'" for p in projs)
                 
                 janus.query_once(f"assertz(curr_report('{r_id}', '{r_name}', '{r_type}', '{query}', '{date_range}', '{est_field_escaped}', '{state_field_escaped}', [{projs_str}]))")
+
+        # Assert empty projects
+        if empty_projects:
+            for pshort, is_empty in empty_projects.items():
+                if is_empty:
+                    janus.query_once(f"assertz(curr_project_empty('{self._escape(pshort)}'))")
     
     def assert_target_state(self, prolog_facts: str) -> None:
         """
@@ -577,7 +585,8 @@ def run_inference(fields: list[dict], bundles: list[dict],
                   global_time_tracking: dict = None,
                   project_time_tracking: dict[str, dict] = None,
                   issue_link_types: list[dict] = None,
-                  reports: list[dict] = None) -> list[tuple]:
+                  reports: list[dict] = None,
+                  empty_projects: dict[str, bool] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -600,7 +609,7 @@ def run_inference(fields: list[dict], bundles: list[dict],
     engine.assert_current_state(
         fields, bundles, projects, workflows, project_fields, agiles, tags, saved_queries,
         users, groups, roles, project_roles,
-        global_time_tracking, project_time_tracking, issue_link_types, reports
+        global_time_tracking, project_time_tracking, issue_link_types, reports, empty_projects
     )
     engine.assert_target_state(target_facts)
     

@@ -208,6 +208,15 @@ class YouTrackClient:
         resp.raise_for_status()
         return resp.json()
 
+    def is_project_empty(self, project_short_name: str) -> bool:
+        """Check if project has no issues."""
+        resp = self.session.get(
+            f'{self.url}/api/issues',
+            params={'query': f'project: {project_short_name}', '$top': 1, 'fields': 'id'}
+        )
+        resp.raise_for_status()
+        return len(resp.json()) == 0
+
     def get_workflows(self) -> list[dict]:
         """Fetch all workflows with their rules and usage."""
         # We reuse the WorkflowClient logic which already knows the internal API
@@ -275,6 +284,15 @@ def main():
         issue_link_types = client.get_issue_link_types()
         reports = client.get_reports()
 
+        empty_projects = {}
+        for proj in projects:
+            pshort = proj['shortName']
+            try:
+                empty_projects[pshort] = client.is_project_empty(pshort)
+            except Exception as e:
+                logger.warning(f"Failed to check if project {pshort} is empty: {e}")
+                empty_projects[pshort] = False
+
 
         
         # Merge enum and state bundles
@@ -336,7 +354,7 @@ def main():
     plan = run_inference(
         fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries,
         users, groups, roles, project_roles,
-        global_time_tracking, project_time_tracking, issue_link_types, reports
+        global_time_tracking, project_time_tracking, issue_link_types, reports, empty_projects
     )
     
     if plan:

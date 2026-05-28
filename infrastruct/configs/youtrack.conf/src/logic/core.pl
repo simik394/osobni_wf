@@ -31,6 +31,8 @@
 
 :- dynamic curr_field/3.
 :- dynamic curr_project/3.
+:- dynamic curr_project_empty/1.        %% curr_project_empty(ProjectShortName)
+:- dynamic target_issue_seed/5.         %% target_issue_seed(Project, Summary, Description, Type, Priority)
 :- dynamic curr_bundle/3.
 :- dynamic curr_workflow/3.
 :- dynamic curr_rule/5.
@@ -691,6 +693,12 @@ action(delete_report(Id)) :-
     curr_report(Id, Name, _, _, _, _, _, _).
 
 
+%% 10. Project Seeding
+action(seed_issue(Project, Summary, Description, Type, Priority)) :-
+    target_issue_seed(Project, Summary, Description, Type, Priority),
+    curr_project_empty(Project).
+
+
 %% =============================================================================
 %% DEPENDENCY GRAPH
 %% =============================================================================
@@ -717,6 +725,7 @@ depends_on(delete_user(U), remove_user_from_group(_, U)).
 depends_on(set_project_time_tracking(Proj, _, _), create_project(Proj, _)).
 depends_on(create_work_item_type(Proj, _), create_project(Proj, _)).
 depends_on(create_work_item_type(Proj, _), set_project_time_tracking(Proj, _, _)).
+depends_on(seed_issue(Proj, _, _, _, _), create_project(Proj, _)).
 
 %% Report Dependencies
 depends_on(create_report(_, _, _, _, _, _, Projs), create_project(P, _)) :- member(P, Projs).

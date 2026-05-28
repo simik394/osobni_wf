@@ -43,3 +43,10 @@ Při přechodu mezi Pythonem a Prologem přes Janus je nezbytné striktně dodr�
 
 ## 10. Asynchronní přepočty YouTrack Reportů
 YouTrack REST API zpracovává výpočet nově vytvořených nebo aktualizovaných reportů asynchronně na pozadí. Pokud chce uživatel ihned vidět aktuální data na dashboardu, actuator musí po vytvoření/úpravě reportu odeslat explicitní POST požadavek na `/api/reports/{id}/status` s prázdným tělem, což YouTrack donutí okamžitě spustit přepočet a minimalizuje to dobu, po kterou report zobrazuje prázdná data.
+
+## 11. In-memory Lua integrace pomocí Lupa
+Integrace programovatelných konfigurací v Lua přes knihovnu `lupa` je extrémně rychlá a čistá, protože běží in-memory přímo v Python procesu a nevyžaduje externí subprocesy s `lua` CLI. Při rekurzivním převodu Lua tabulek na Python datové typy je nutné zohlednit, že Lupa neexportuje interní typy jako `LuaTable` přímo v `__init__.py` a jejich název se liší podle zkompilované verze Lua (např. `_LuaTable`). Jako 100% univerzální a přenositelný způsob se osvědčilo typ zjišťovat pomocí řetězcové komparace `type(obj).__name__ == '_LuaTable'`.
+
+## 12. Idempotentní a bezpečné seedování úkolů
+Při zavedení vzorových dat do nově vytvořených projektů (Project Seeding) se osvědčilo popsat startovací úkoly v konfiguraci a v sensing fázi zjišťovat prázdnost projektu (`curr_project_empty/1`). Samotné vytváření úkolu v aktuátoru je bezpečné rozdělit na dva kroky: nejprve odeslat POST pro vytvoření úkolu s titulkem a popisem (který projde vždy) a v druhém kroku se pokusit bezpečně aktualizovat vlastní pole (jako Type a Priority). Pokud tato pole v projektu chybí, zaloguje se pouze varování, ale úkol zůstane úspěšně vytvořen, což zajišťuje safe-default chování.
+

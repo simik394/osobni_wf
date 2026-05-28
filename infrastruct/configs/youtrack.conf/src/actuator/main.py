@@ -1400,6 +1400,49 @@ class YouTrackActuator:
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
 
+    def seed_issue(self, project: str, summary: str, description: str, type_val: str, priority_val: str) -> ActionResult:
+        """Create a seed/sample issue in a newly created project."""
+        action = f"seed_issue('{project}', '{summary}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            payload = {
+                "project": {"shortName": project},
+                "summary": summary,
+                "description": description or ""
+            }
+            resp = self.session.post(f'{self.url}/api/issues', json=payload, params={'fields': 'id'})
+            resp.raise_for_status()
+            issue_id = resp.json().get('id')
+            logger.info(f"Seeded issue '{summary}' in project {project} (id={issue_id})")
+            
+            # Safe update for Type and Priority fields if they exist
+            fields_payload = []
+            try:
+                if type_val and type_val != 'null':
+                    fields_payload.append({
+                        "$type": "SingleEnumIssueCustomField",
+                        "name": "Type",
+                        "value": {"name": type_val}
+                    })
+                if priority_val and priority_val != 'null':
+                    fields_payload.append({
+                        "$type": "SingleEnumIssueCustomField",
+                        "name": "Priority",
+                        "value": {"name": priority_val}
+                    })
+                if fields_payload:
+                    self.session.post(f'{self.url}/api/issues/{issue_id}', json={"customFields": fields_payload}).raise_for_status()
+            except Exception as ex:
+                logger.warning(f"Could not set custom fields for seeded issue {issue_id}: {ex}")
+                
+            return ActionResult(action=action, success=True, resource_id=issue_id)
+        except Exception as e:
+            error = f"Failed to seed issue: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -1989,6 +2032,8 @@ class YouTrackActuator:
                 result = self.update_report(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
             elif action_type == 'delete_report':
                 result = self.delete_report(args[0])
+            elif action_type == 'seed_issue':
+                result = self.seed_issue(args[0], args[1], args[2], args[3], args[4])
 
             # Tag operations
             elif action_type == 'create_tag':

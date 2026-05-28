@@ -284,6 +284,16 @@ class ReportConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+class IssueSeedConfig(BaseModel):
+    """Configuration for seeding a sample issue."""
+    summary: str = Field(description="Issue summary/title")
+    description: str = Field(default="", description="Issue description")
+    type: str = Field(default="Task", description="Issue type (e.g., Task, Bug)")
+    priority: str = Field(default="Normal", description="Issue priority (e.g., Normal, High)")
+
+    model_config = {"populate_by_name": True}
+
+
 class ProjectConfig(BaseModel):
     """Configuration for a YouTrack project."""
     name: str = Field(description="Full project name")
@@ -299,6 +309,7 @@ class ProjectConfig(BaseModel):
     role_assignments: list[RoleAssignmentConfig] = Field(default_factory=list, description="Role assignments for this project")
     time_tracking: Optional[ProjectTimeTrackingConfig] = Field(alias="timeTracking", default=None, description="Project-specific time tracking settings")
     reports: list[ReportConfig] = Field(default_factory=list, description="Reports for this project")
+    seeds: list[IssueSeedConfig] = Field(default_factory=list, description="Initial seed issues for new projects")
     
     model_config = {"populate_by_name": True}  # Allow both short_name and shortName
 
