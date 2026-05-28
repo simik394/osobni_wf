@@ -325,6 +325,20 @@ def main():
             cfg = config_parser.merge_configs(configs)
             
         target_facts = config_to_prolog_facts(cfg)
+        
+        # Transparent Draw.io diagram discovery & parsing
+        drawio_facts = []
+        for path in config_dir.rglob("*.drawio"):
+            logger.info(f"Discovered Draw.io diagram: {path.name}")
+            try:
+                facts = config_parser.parse_drawio_file(path)
+                if facts.strip():
+                    drawio_facts.append(facts)
+            except Exception as e:
+                logger.error(f"Failed to parse Draw.io diagram {path.name}: {e}")
+        
+        if drawio_facts:
+            target_facts += "\n" + "\n".join(drawio_facts)
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         return

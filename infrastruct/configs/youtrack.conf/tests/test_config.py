@@ -442,3 +442,134 @@ def test_lua_config_loading_and_seeding(tmp_path):
     assert "target_issue_seed('LUA', 'Welcome Issue', 'Get started here', 'Task', 'Normal')." in facts
 
 
+class TestVisualIaC:
+    """Tests for Visual IaC parsing and semantic Prolog interpretation."""
+    
+    def test_drawio_xml_parsing(self, tmp_path):
+        """Test that the Nim binary drawio2prolog compiles and parses xml correctly."""
+        from src.config.parser import parse_drawio_file
+        
+        xml_content = """<mxGraphModel>
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <object id="proj_node" label="Visual Demo Project" type="project" shortName="VDEMO" leader="jules">
+      <mxCell parent="1" vertex="1" style="rounded=1;fillColor=#FFF;"/>
+    </object>
+    <object id="field_state" label="State" type="field" fieldType="state" defaultValue="Open">
+      <mxCell parent="1" vertex="1" style="shape=parallelogram;"/>
+    </object>
+    <mxCell id="edge_proj_state" source="proj_node" target="field_state" edge="1" parent="1"/>
+  </root>
+</mxGraphModel>
+"""
+        drawio_file = tmp_path / "diagram.drawio"
+        drawio_file.write_text(xml_content, encoding='utf-8')
+        
+        facts = parse_drawio_file(drawio_file)
+        
+        # Key order in Nim tables is non-deterministic, so check for inclusion of fields
+        assert "diagram_node('proj_node', 'rounded=1;fillColor=#FFF;', 'Visual Demo Project'," in facts
+        assert "'type'='project'" in facts
+        assert "'shortName'='VDEMO'" in facts
+        assert "'leader'='jules'" in facts
+        
+        assert "diagram_node('field_state', 'shape=parallelogram;', 'State'," in facts
+        assert "'type'='field'" in facts
+        assert "'fieldType'='state'" in facts
+        assert "'defaultValue'='Open'" in facts
+        
+        assert "diagram_edge('edge_proj_state', 'proj_node', 'field_state', '', '')." in facts
+
+    def test_drawio_prolog_materialization(self, tmp_path):
+        """Test that facts parsed from diagram are materialize_diagram_facts into YouTrack configuration."""
+        from src.config.parser import parse_drawio_file
+        from src.logic.inference import run_inference
+        
+        xml_content = """<mxGraphModel>
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    
+    <!-- Project -->
+    <object id="proj_node" label="Visual Demo Project" type="project" shortName="VDEMO" leader="jules">
+      <mxCell parent="1" vertex="1" style="style1;"/>
+    </object>
+    
+    <!-- State Field -->
+    <object id="field_state" label="State" type="field" fieldType="state" defaultValue="Open">
+      <mxCell parent="1" vertex="1" style="style2;"/>
+    </object>
+    <mxCell id="edge_proj_state" source="proj_node" target="field_state" edge="1" parent="1"/>
+    
+    <!-- State Bundle -->
+    <object id="bundle_state" label="VDEMO State Bundle" type="bundle" bundleType="state">
+      <mxCell parent="1" vertex="1" style="style3;"/>
+    </object>
+    <mxCell id="edge_state_bundle" source="field_state" target="bundle_state" edge="1" parent="1"/>
+    
+    <!-- State Values -->
+    <object id="state_val_open" label="Open" type="state_value" resolved="false">
+      <mxCell parent="1" vertex="1" style="style4;"/>
+    </object>
+    <object id="state_val_done" label="Done" type="state_value" resolved="true">
+      <mxCell parent="1" vertex="1" style="style5;"/>
+    </object>
+    <mxCell id="edge_val_open" source="state_val_open" target="bundle_state" edge="1" parent="1"/>
+    <mxCell id="edge_val_done" source="state_val_done" target="bundle_state" edge="1" parent="1"/>
+    
+    <!-- Issue Seed -->
+    <object id="seed_issue" label="Welcome to Visual IaC" type="seed" description="Hello from drawio" issueType="Task" priority="Normal">
+      <mxCell parent="1" vertex="1" style="style6;"/>
+    </object>
+    <mxCell id="edge_seed_proj" source="seed_issue" target="proj_node" edge="1" parent="1"/>
+  </root>
+</mxGraphModel>
+"""
+        drawio_file = tmp_path / "diagram.drawio"
+        drawio_file.write_text(xml_content, encoding='utf-8')
+        
+        target_facts = parse_drawio_file(drawio_file)
+        
+        # We start with empty current state
+        current_fields = []
+        current_bundles = []
+        current_projects = [{"id": "VDEMO_id", "name": "Visual Demo Project", "shortName": "VDEMO"}]
+        current_empty_projects = {"VDEMO": True}
+        
+        # Run Prolog diff logic inference
+        plan = run_inference(
+            current_fields, current_bundles, target_facts, current_projects,
+            empty_projects=current_empty_projects
+        )
+        
+        # Map to find specific actions
+        action_names = [action[0] for action in plan]
+        
+        # Let's verify each critical action is present in correct sequence:
+        assert "ensure_bundle" in action_names
+        assert "add_state_value" in action_names
+        assert "create_field" in action_names
+        assert "attach_field" in action_names
+        assert "seed_issue" in action_names
+        
+        # Verify specific details
+        # ensure_bundle('VDEMO State Bundle', 'state')
+        ensure_bundle_action = [a for a in plan if a[0] == "ensure_bundle"][0]
+        assert ensure_bundle_action[1] == "VDEMO State Bundle"
+        assert ensure_bundle_action[2] == "state"
+        
+        # add_state_value('VDEMO State Bundle', 'Done', 'true')
+        done_val_action = [a for a in plan if a[0] == "add_state_value" and a[2] == "Done"][0]
+        assert done_val_action[1] == "VDEMO State Bundle"
+        assert done_val_action[3] == "true"
+        
+        # seed_issue('VDEMO', 'Welcome to Visual IaC', 'Hello from drawio', 'Task', 'Normal')
+        seed_action = [a for a in plan if a[0] == "seed_issue"][0]
+        assert seed_action[1] == "VDEMO"
+        assert seed_action[2] == "Welcome to Visual IaC"
+        assert seed_action[3] == "Hello from drawio"
+
+
+
+

@@ -42,6 +42,9 @@
 :- dynamic curr_project_field/2.        %% curr_project_field(ProjectShortName, FieldName) - field attached to project
 :- dynamic curr_field_default/3.        %% curr_field_default(FieldName, DefaultValueName, ProjectShortName)
 
+:- dynamic diagram_node/4.
+:- dynamic diagram_edge/5.
+
 :- dynamic target_field/3.
 :- dynamic target_project/2.
 :- dynamic target_project/3.
@@ -770,12 +773,145 @@ depends_on(delete_workflow(WfId), delete_rule(WfId, _)).
 %% TOPOLOGICAL SORT
 %% =============================================================================
 
+%% Materialize diagram facts into target facts dynamically
+materialize_diagram_facts :-
+    % 1. Target Projects
+    forall(
+        (
+            diagram_node(_, _, Name, Meta),
+            member('type'='project', Meta),
+            member('shortName'=ShortName, Meta)
+        ),
+        (
+            (
+                member('leader'=Leader, Meta) ->
+                ( \+ target_project(ShortName, _, _) -> assertz(target_project(ShortName, Name, Leader)) ; true )
+                ;
+                ( \+ target_project(ShortName, _) -> assertz(target_project(ShortName, Name)) ; true )
+            )
+        )
+    ),
+    % 2. Target Fields (must link to a project node or have explicit project metadata)
+    forall(
+        (
+            diagram_node(FieldId, _, FieldName, Meta),
+            member('type'='field', Meta),
+            member('fieldType'=FieldType, Meta),
+            (
+                (
+                    diagram_edge(_, FieldId, ProjectId, _, _) ;
+                    diagram_edge(_, ProjectId, FieldId, _, _)
+                ),
+                diagram_node(ProjectId, _, _, ProjMeta),
+                member('type'='project', ProjMeta),
+                member('shortName'=ProjectShortName, ProjMeta)
+            ;
+                member('project'=ProjectShortName, Meta)
+            )
+        ),
+        (
+            \+ target_field(FieldName, _, ProjectShortName) -> assertz(target_field(FieldName, FieldType, ProjectShortName)) ; true
+        )
+    ),
+    % 3. Field Uses Bundle
+    forall(
+        (
+            diagram_node(FieldId, _, FieldName, FieldMeta),
+            member('type'='field', FieldMeta),
+            (
+                (
+                    diagram_edge(_, FieldId, BundleId, _, _) ;
+                    diagram_edge(_, BundleId, FieldId, _, _)
+                ),
+                diagram_node(BundleId, _, BundleName, BundleMeta),
+                member('type'='bundle', BundleMeta)
+            ;
+                member('bundle'=BundleName, FieldMeta)
+            )
+        ),
+        (
+            \+ field_uses_bundle(FieldName, BundleName) -> assertz(field_uses_bundle(FieldName, BundleName)) ; true
+        )
+    ),
+    % 4. Bundle Values (enum type)
+    forall(
+        (
+            diagram_node(ValId, _, ValueName, ValMeta),
+            (member('type'='value', ValMeta) ; member('type'='enum_value', ValMeta)),
+            (
+                diagram_edge(_, ValId, BundleId, _, _) ;
+                diagram_edge(_, BundleId, ValId, _, _)
+            ),
+            diagram_node(BundleId, _, BundleName, BundleMeta),
+            member('type'='bundle', BundleMeta),
+            \+ member('bundleType'='state', BundleMeta)
+        ),
+        (
+            \+ target_bundle_value(BundleName, ValueName) -> assertz(target_bundle_value(BundleName, ValueName)) ; true
+        )
+    ),
+    % 5. State Values (state type)
+    forall(
+        (
+            diagram_node(ValId, _, ValueName, ValMeta),
+            (member('type'='state_value', ValMeta) ; member('type'='value', ValMeta)),
+            (
+                diagram_edge(_, ValId, BundleId, _, _) ;
+                diagram_edge(_, BundleId, ValId, _, _)
+            ),
+            diagram_node(BundleId, _, BundleName, BundleMeta),
+            member('type'='bundle', BundleMeta),
+            member('bundleType'='state', BundleMeta),
+            (
+                (member('resolved'='true', ValMeta) ; member('isResolved'='true', ValMeta)) -> IsResolved = 'true'
+                ; IsResolved = 'false'
+            )
+        ),
+        (
+            \+ target_state_value(BundleName, ValueName, IsResolved) -> assertz(target_state_value(BundleName, ValueName, IsResolved)) ; true
+        )
+    ),
+    % 6. Field Default Value
+    forall(
+        (
+            diagram_node(_, _, FieldName, FieldMeta),
+            member('type'='field', FieldMeta),
+            member('defaultValue'=DefaultValue, FieldMeta),
+            target_field(FieldName, _, ProjectShortName)
+        ),
+        (
+            \+ target_field_default(FieldName, DefaultValue, ProjectShortName) -> assertz(target_field_default(FieldName, DefaultValue, ProjectShortName)) ; true
+        )
+    ),
+    % 7. Issue Seeds
+    forall(
+        (
+            diagram_node(SeedId, _, Summary, SeedMeta),
+            (member('type'='issue_seed', SeedMeta) ; member('type'='seed', SeedMeta)),
+            (
+                diagram_edge(_, SeedId, ProjectId, _, _) ;
+                diagram_edge(_, ProjectId, SeedId, _, _)
+            ),
+            diagram_node(ProjectId, _, _, ProjMeta),
+            member('type'='project', ProjMeta),
+            member('shortName'=ProjectShortName, ProjMeta),
+            (member('description'=Description, SeedMeta) -> true ; Description = ""),
+            (member('issueType'=Type, SeedMeta) -> true ; Type = "Task"),
+            (member('priority'=Priority, SeedMeta) -> true ; Priority = "Normal")
+        ),
+        (
+            \+ target_issue_seed(ProjectShortName, Summary, _, _, _) -> assertz(target_issue_seed(ProjectShortName, Summary, Description, Type, Priority)) ; true
+        )
+    ).
+
 %% Collect all actions and sort by dependencies
 %% Collect all actions and sort by dependencies
 plan(OrderedActions) :-
+    materialize_diagram_facts,
     findall(A, action(A), UnsortedWithDups),
     list_to_set(UnsortedWithDups, Unsorted),
     topological_sort(Unsorted, OrderedActions).
+
 
 %% Simple topological sort (Kahn's algorithm)
 %% Simple topological sort (Kahn's algorithm)

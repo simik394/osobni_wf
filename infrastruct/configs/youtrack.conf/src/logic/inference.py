@@ -131,6 +131,10 @@ class PrologInferenceEngine:
         janus.query_once("retractall(curr_board(_, _, _))")
         janus.query_once("retractall(curr_project_field(_, _))")
         
+        # Diagram facts (Visual IaC)
+        janus.query_once("retractall(diagram_node(_, _, _, _))")
+        janus.query_once("retractall(diagram_edge(_, _, _, _, _))")
+        
         logger.debug("Cleared all dynamic facts")
     
     def assert_current_state(self, fields: list[dict], bundles: list[dict],
