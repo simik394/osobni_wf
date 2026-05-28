@@ -372,7 +372,7 @@ export class BrowserClient extends BaseClient {
             console.error('Failed to save auth on shutdown:', e.message);
         }
 
-        if (!this.browser) return;
+        if (!this.browser && !this.context) return;
         if (this.isConnectedOverCDP) {
             // Over CDP, we just want to disconnect. Playwright does this on process exit or browser.close().
             // To be safe and silent, we just nullify references.
@@ -385,7 +385,11 @@ export class BrowserClient extends BaseClient {
                 await session.page.close().catch(() => { });
             }
             this.sessions = [];
-            await this.browser.close().catch(() => {});
+            if (this.browser) {
+                await this.browser.close().catch(() => {});
+            } else if (this.context) {
+                await this.context.close().catch(() => {});
+            }
             this.browser = null;
             this.context = null;
             this.isInitialized = false;
