@@ -75,11 +75,83 @@ let check_state_machine_triviality (config : config) =
       | _ -> acc
     ) [] config.fields
 
+(* reachability and stuck state checks *)
+let check_workflow_reachability (config : config) =
+  let bundle_names = List.fold_left (fun acc (sv : state_value) ->
+      if List.mem sv.bundle_name acc then acc else sv.bundle_name :: acc
+    ) [] config.state_values in
+  
+  List.fold_left (fun acc bundle_name ->
+      let transitions = List.filter (fun (t : state_transition) -> t.bundle_name = bundle_name) config.transitions in
+      if transitions = [] then acc
+      else begin
+        let all_states = List.filter (fun (sv : state_value) -> sv.bundle_name = bundle_name) config.state_values in
+        let resolved_states = List.filter (fun (sv : state_value) -> sv.is_resolved) all_states |> List.map (fun (sv : state_value) -> sv.value) in
+        
+        let is_stuck state =
+          let rec dfs current visited =
+            if List.mem current resolved_states then false
+            else if List.mem current visited then true
+            else
+              let next = List.filter (fun (t : state_transition) -> t.from_value = current) transitions
+                         |> List.map (fun t -> t.to_value) in
+              if next = [] then true
+              else List.for_all (fun n -> dfs n (current :: visited)) next
+          in
+          dfs state []
+        in
+        
+        let stuck_errors = List.fold_left (fun acc_err (sv : state_value) ->
+            if is_stuck sv.value then
+              let msg = Printf.sprintf "[reachability_stuck_state]: State '%s' in bundle '%s' is a dead end (cannot reach any resolved state)."
+                          sv.value bundle_name in
+              msg :: acc_err
+            else acc_err
+          ) [] all_states in
+          
+        let initial_state =
+          match List.find_opt (fun (b : field_bundle) -> b.bundle_name = bundle_name) config.bundles with
+          | Some fb ->
+             (match List.find_opt (fun (d : default_value) -> d.field_name = fb.field_name) config.defaults with
+              | Some d -> d.value
+              | None -> if all_states <> [] then (List.hd all_states : state_value).value else "")
+          | None -> if all_states <> [] then (List.hd all_states : state_value).value else ""
+        in
+        
+        let is_reachable start target =
+          let rec dfs current visited =
+            if current = target then true
+            else if List.mem current visited then false
+            else
+              let next = List.filter (fun (t : state_transition) -> t.from_value = current) transitions
+                         |> List.map (fun t -> t.to_value) in
+              List.exists (fun n -> dfs n (current :: visited)) next
+          in
+          dfs start []
+        in
+        
+        let unreachable_errors =
+          if initial_state = "" then []
+          else
+            List.fold_left (fun acc_err (sv : state_value) ->
+                if not (is_reachable initial_state sv.value) then
+                  let msg = Printf.sprintf "[reachability_unreachable_state]: State '%s' in bundle '%s' is unreachable from the initial state '%s'."
+                              sv.value bundle_name initial_state in
+                  msg :: acc_err
+                else acc_err
+              ) [] all_states
+        in
+        
+        stuck_errors @ unreachable_errors @ acc
+      end
+    ) [] bundle_names
+
 (* Check all invariants and return list of all error messages *)
 let verify_all (config : config) =
   let ref_integrity = check_referential_integrity config in
   let def_soundness = check_default_value_soundness config in
   let proj_uniqueness = check_project_identity_uniqueness config in
   let state_triviality = check_state_machine_triviality config in
-  ref_integrity @ def_soundness @ proj_uniqueness @ state_triviality
+  let reachability = check_workflow_reachability config in
+  ref_integrity @ def_soundness @ proj_uniqueness @ state_triviality @ reachability
 

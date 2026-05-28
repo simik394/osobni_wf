@@ -50,6 +50,7 @@
 :- dynamic target_project/3.
 :- dynamic target_bundle_value/2.
 :- dynamic target_state_value/3.
+:- dynamic target_state_transition/3.
 :- dynamic target_workflow/3.
 :- dynamic target_rule/4.
 :- dynamic target_rule/4.
@@ -869,6 +870,25 @@ materialize_diagram_facts :-
         ),
         (
             \+ target_state_value(BundleName, ValueName, IsResolved) -> assertz(target_state_value(BundleName, ValueName, IsResolved)) ; true
+        )
+    ),
+    % 5b. State Transitions (directed edges between state values in the same state bundle)
+    forall(
+        (
+            diagram_edge(_, FromId, ToId, _, _),
+            diagram_node(FromId, _, FromValue, FromMeta),
+            (member('type'='state_value', FromMeta) ; member('type'='value', FromMeta)),
+            (diagram_edge(_, FromId, BundleId, _, _) ; diagram_edge(_, BundleId, FromId, _, _)),
+            diagram_node(BundleId, _, BundleName, BundleMeta),
+            member('type'='bundle', BundleMeta),
+            member('bundleType'='state', BundleMeta),
+            
+            diagram_node(ToId, _, ToValue, ToMeta),
+            (member('type'='state_value', ToMeta) ; member('type'='value', ToMeta)),
+            (diagram_edge(_, ToId, BundleId, _, _) ; diagram_edge(_, BundleId, ToId, _, _))
+        ),
+        (
+            \+ target_state_transition(BundleName, FromValue, ToValue) -> assertz(target_state_transition(BundleName, FromValue, ToValue)) ; true
         )
     ),
     % 6. Field Default Value

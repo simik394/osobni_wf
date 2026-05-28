@@ -140,6 +140,64 @@ class TestPrologInferenceEngine:
         assert "FORMAL SEMANTIC VERIFICATION FAILURE" in str(excinfo.value)
         assert "referential_integrity" in str(excinfo.value)
 
+    def test_reachability_stuck_state_failure(self):
+        """Test that a stuck state (dead end with no resolved states reachable) fails verification."""
+        from src.logic.inference import PrologInferenceEngine
+        
+        engine = PrologInferenceEngine()
+        engine.clear_facts()
+        
+        # Target state: state field using 'BugStateBundle'
+        # Values: 'Open' (unresolved), 'StuckState' (unresolved), 'Done' (resolved)
+        # Transitions: 'Open' -> 'StuckState' but NO transitions from 'StuckState' to 'Done'.
+        # This makes 'StuckState' stuck!
+        target_facts = """
+        target_field('State', 'state', 'DEMO').
+        field_uses_bundle('State', 'BugStateBundle').
+        target_state_value('BugStateBundle', 'Open', 'false').
+        target_state_value('BugStateBundle', 'StuckState', 'false').
+        target_state_value('BugStateBundle', 'Done', 'true').
+        target_state_transition('BugStateBundle', 'Open', 'StuckState').
+        target_field_default('State', 'Open', 'DEMO').
+        """
+        engine.assert_target_state(target_facts)
+        engine.assert_current_state([], [])
+        
+        with pytest.raises(ValueError) as excinfo:
+            engine.compute_plan()
+            
+        assert "FORMAL SEMANTIC VERIFICATION FAILURE" in str(excinfo.value)
+        assert "reachability_stuck_state" in str(excinfo.value)
+
+    def test_reachability_unreachable_state_failure(self):
+        """Test that an unreachable state (no transition path from default state) fails verification."""
+        from src.logic.inference import PrologInferenceEngine
+        
+        engine = PrologInferenceEngine()
+        engine.clear_facts()
+        
+        # Target state: state field using 'BugStateBundle'
+        # Values: 'Open' (unresolved), 'SecretState' (unresolved), 'Done' (resolved)
+        # Transitions: 'Open' -> 'Done', but 'SecretState' is unconnected!
+        # 'Open' is default, so 'SecretState' is unreachable!
+        target_facts = """
+        target_field('State', 'state', 'DEMO').
+        field_uses_bundle('State', 'BugStateBundle').
+        target_state_value('BugStateBundle', 'Open', 'false').
+        target_state_value('BugStateBundle', 'SecretState', 'false').
+        target_state_value('BugStateBundle', 'Done', 'true').
+        target_state_transition('BugStateBundle', 'Open', 'Done').
+        target_field_default('State', 'Open', 'DEMO').
+        """
+        engine.assert_target_state(target_facts)
+        engine.assert_current_state([], [])
+        
+        with pytest.raises(ValueError) as excinfo:
+            engine.compute_plan()
+            
+        assert "FORMAL SEMANTIC VERIFICATION FAILURE" in str(excinfo.value)
+        assert "reachability_unreachable_state" in str(excinfo.value)
+
 
 class TestInferenceWithoutJanus:
     """Tests that work without Janus."""

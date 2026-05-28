@@ -33,6 +33,12 @@ type default_value = {
   project : string;
 }
 
+type state_transition = {
+  bundle_name : string;
+  from_value : string;
+  to_value : string;
+}
+
 type config = {
   projects : project list;
   fields : field list;
@@ -40,6 +46,7 @@ type config = {
   bundle_values : bundle_value list;
   state_values : state_value list;
   defaults : default_value list;
+  transitions : state_transition list;
 }
 
 (* Action types for topological sort *)

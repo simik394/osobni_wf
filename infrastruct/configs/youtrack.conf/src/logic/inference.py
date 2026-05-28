@@ -134,6 +134,7 @@ class PrologInferenceEngine:
         # Diagram facts (Visual IaC)
         janus.query_once("retractall(diagram_node(_, _, _, _))")
         janus.query_once("retractall(diagram_edge(_, _, _, _, _))")
+        janus.query_once("retractall(target_state_transition(_, _, _))")
         
         logger.debug("Cleared all dynamic facts")
     
@@ -581,6 +582,12 @@ class PrologInferenceEngine:
             for res in state_res["States"]:
                 facts_list.append(f"target_state_value('{res[0]}', '{res[1]}', '{res[2]}').")
             
+        # State Transitions
+        trans_res = janus.query_once("findall([_Bundle, _From, _To], target_state_transition(_Bundle, _From, _To), Trans)")
+        if trans_res and "Trans" in trans_res:
+            for res in trans_res["Trans"]:
+                facts_list.append(f"target_state_transition('{res[0]}', '{res[1]}', '{res[2]}').")
+
         # Default Values
         def_res = janus.query_once("findall([_Field, _Val, _Project], target_field_default(_Field, _Val, _Project), Defs)")
         if def_res and "Defs" in def_res:

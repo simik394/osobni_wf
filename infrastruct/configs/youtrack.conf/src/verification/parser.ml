@@ -41,6 +41,7 @@ type parse_state = {
   bundle_values : bundle_value list;
   state_values : state_value list;
   defaults : default_value list;
+  transitions : state_transition list;
   actions : action list;
   edges : edge list;
 }
@@ -52,6 +53,7 @@ let empty_state = {
   bundle_values = [];
   state_values = [];
   defaults = [];
+  transitions = [];
   actions = [];
   edges = [];
 }
@@ -87,6 +89,8 @@ let parse_line state line =
           { state with state_values = { bundle_name; value; is_resolved } :: state.state_values }
        | "target_field_default", [field_name; value; project] ->
           { state with defaults = { field_name; value; project } :: state.defaults }
+       | "target_state_transition", [bundle_name; from_value; to_value] ->
+          { state with transitions = { bundle_name; from_value; to_value } :: state.transitions }
        | _ -> state
 
 let parse_channel ic =
@@ -104,5 +108,6 @@ let parse_channel ic =
     bundle_values = List.rev final_state.bundle_values;
     state_values = List.rev final_state.state_values;
     defaults = List.rev final_state.defaults;
+    transitions = List.rev final_state.transitions;
   } in
   (config, List.rev final_state.actions, List.rev final_state.edges)
