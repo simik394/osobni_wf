@@ -2,5 +2,7 @@ __pycache__/
 *.txt
 debug_*.py
 .pytest_cache/
+.bin/
+nimcache/
 
 /.luarc.json
