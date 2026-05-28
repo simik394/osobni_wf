@@ -530,7 +530,7 @@ class PrologInferenceEngine:
     
     def compute_plan(self) -> list[tuple]:
         """
-        Run Prolog inference to compute the action plan.
+        Run Prolog inference and OCaml formal verification to compute the action plan.
         
         Returns:
             List of action tuples, e.g.:
@@ -538,41 +538,145 @@ class PrologInferenceEngine:
              ('create_field', 'Priority', 'enum', 'DEMO')]
         """
         self.initialize()
+        janus.query_once("materialize_diagram_facts")
         
-        # 1. Run Formal Semantic Invariant Checks
-        verify_res = janus.query_once("verify_invariants(Violations)")
-        if verify_res and verify_res.get("Violations"):
-            violations = verify_res["Violations"]
-            error_msgs = []
-            for v in violations:
-                if isinstance(v, list) and len(v) >= 3:
-                    error_msgs.append(f"[{v[1]}]: {v[2]}")
-                else:
-                    error_msgs.append(str(v))
-            raise ValueError("FORMAL SEMANTIC VERIFICATION FAILURE:\n" + "\n".join(error_msgs))
+        import ast
+        import subprocess
         
-        # 2. Query the plan
-        # We transform terms to lists (univ =..) to assume robust conversion 
-        # by Janus (which might fail on compound terms in some envs)
-        # We underscore _Actions to prevent Janus from trying to return the 
-        # intermediate term list (which would cause a py_term domain error)
-        query = "plan(_Actions), maplist(=.., _Actions, ActionLists)"
-        result = janus.query_once(query)
+        # 1. Export facts, actions, and edges from Prolog to OCaml verifier
+        facts_list = []
         
-        if result is None:
-            logger.warning("Prolog plan query returned no results")
-            return []
+        # Projects
+        proj_res = janus.query_once("findall([_Short, _Name], target_project(_Short, _Name), Projects)")
+        if proj_res and "Projects" in proj_res:
+            for res in proj_res["Projects"]:
+                facts_list.append(f"target_project('{res[0]}', '{res[1]}').")
+                
+        proj_res_desc = janus.query_once("findall([_Short, _Name, _Desc], target_project(_Short, _Name, _Desc), Projects)")
+        if proj_res_desc and "Projects" in proj_res_desc:
+            for res in proj_res_desc["Projects"]:
+                facts_list.append(f"target_project('{res[0]}', '{res[1]}', '{res[2]}').")
+            
+        # Fields
+        field_res = janus.query_once("findall([_Name, _Type, _Project], target_field(_Name, _Type, _Project), Fields)")
+        if field_res and "Fields" in field_res:
+            for res in field_res["Fields"]:
+                facts_list.append(f"target_field('{res[0]}', '{res[1]}', '{res[2]}').")
+            
+        # Field Bundles
+        bundle_res = janus.query_once("findall([_Field, _Bundle], field_uses_bundle(_Field, _Bundle), Bundles)")
+        if bundle_res and "Bundles" in bundle_res:
+            for res in bundle_res["Bundles"]:
+                facts_list.append(f"field_uses_bundle('{res[0]}', '{res[1]}').")
+            
+        # Bundle Values
+        val_res = janus.query_once("findall([_Bundle, _Val], target_bundle_value(_Bundle, _Val), Vals)")
+        if val_res and "Vals" in val_res:
+            for res in val_res["Vals"]:
+                facts_list.append(f"target_bundle_value('{res[0]}', '{res[1]}').")
+            
+        # State Values
+        state_res = janus.query_once("findall([_Bundle, _Val, _Res], target_state_value(_Bundle, _Val, _Res), States)")
+        if state_res and "States" in state_res:
+            for res in state_res["States"]:
+                facts_list.append(f"target_state_value('{res[0]}', '{res[1]}', '{res[2]}').")
+            
+        # Default Values
+        def_res = janus.query_once("findall([_Field, _Val, _Project], target_field_default(_Field, _Val, _Project), Defs)")
+        if def_res and "Defs" in def_res:
+            for res in def_res["Defs"]:
+                facts_list.append(f"target_field_default('{res[0]}', '{res[1]}', '{res[2]}').")
+
+        # Fetch unsorted actions as lists
+        act_res = janus.query_once(
+            "findall(_A, action(_A), _UnsortedWithDups), list_to_set(_UnsortedWithDups, _Unsorted), "
+            "maplist(=.., _Unsorted, ActionLists)"
+        )
+        action_lists = act_res.get("ActionLists", []) if act_res else []
         
-        action_lists = result.get("ActionLists", [])
-        if action_lists is None:
-             # Logic failed
-             return []
-        
-        # Convert lists to tuples for consistency
-        plan = [tuple(a) for a in action_lists]
-        
-        logger.info(f"Computed plan with {len(plan)} actions")
-        return plan
+        # Fetch dependency edges
+        edge_query = (
+            "findall(_A, action(_A), _UnsortedWithDups), list_to_set(_UnsortedWithDups, _Unsorted), "
+            "findall([_A2, _B2], (member(_A2, _Unsorted), member(_B2, _Unsorted), depends_on(_A2, _B2)), _Pairs), "
+            "findall([_AList, _BList], (member([_A2, _B2], _Pairs), _A2 =.. _AList, _B2 =.. _BList), EdgeLists)"
+        )
+        edge_res = janus.query_once(edge_query)
+        edge_lists = edge_res.get("EdgeLists", []) if edge_res else []
+
+        for act_list in action_lists:
+            # Format each action as a pipe-separated string
+            parts = [str(x) for x in act_list]
+            act_str = "|".join(parts)
+            facts_list.append(f"action:{act_str}")
+            
+        for edge in edge_lists:
+            src_parts = [str(x) for x in edge[0]]
+            dst_parts = [str(x) for x in edge[1]]
+            src_str = "|".join(src_parts)
+            dst_str = "|".join(dst_parts)
+            facts_list.append(f"edge:{src_str};{dst_str}")
+
+        input_data = "\n".join(facts_list)
+
+        # 2. Run OCaml formal verification binary
+        verifier_path = Path(__file__).parent.parent / "verification" / "youtrack_verify"
+        if not verifier_path.exists():
+            logger.warning("OCaml verifier binary not found, falling back to Prolog invariants.")
+            # Fallback to Prolog verify_invariants
+            verify_res = janus.query_once("verify_invariants(Violations)")
+            if verify_res and verify_res.get("Violations"):
+                violations = verify_res["Violations"]
+                error_msgs = []
+                for v in violations:
+                    if isinstance(v, list) and len(v) >= 3:
+                        error_msgs.append(f"[{v[1]}]: {v[2]}")
+                    else:
+                        error_msgs.append(str(v))
+                raise ValueError("FORMAL SEMANTIC VERIFICATION FAILURE:\n" + "\n".join(error_msgs))
+            
+            # Fallback plan query
+            query = "plan(_Actions), maplist(=.., _Actions, ActionLists)"
+            result = janus.query_once(query)
+            if result is None:
+                return []
+            action_lists = result.get("ActionLists", [])
+            return [tuple(a) for a in action_lists] if action_lists else []
+
+        try:
+            res = subprocess.run(
+                [str(verifier_path.absolute())],
+                input=input_data,
+                text=True,
+                capture_output=True,
+                check=True
+            )
+            
+            # Parse sorted actions from stdout
+            sorted_lines = res.stdout.strip().split('\n')
+            sorted_actions = []
+            for line in sorted_lines:
+                line = line.strip()
+                if line:
+                    parts = line.split('|')
+                    functor = parts[0]
+                    args = []
+                    for part in parts[1:]:
+                        if part.startswith('[') and part.endswith(']'):
+                            try:
+                                args.append(ast.literal_eval(part))
+                            except Exception:
+                                args.append(part)
+                        else:
+                            args.append(part)
+                    sorted_actions.append((functor, *args))
+            
+            logger.info(f"Computed formally verified plan with {len(sorted_actions)} actions")
+            return sorted_actions
+
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.strip() if e.stderr else e.stdout.strip()
+            raise ValueError(error_msg)
+
     
     def _term_to_tuple(self, term) -> tuple:
         """Convert a Janus Prolog term to a Python tuple."""
