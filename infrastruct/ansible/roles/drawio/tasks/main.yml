@@ -54,6 +54,8 @@
       Categories=Graphics;Office;
       MimeType=application/vnd.jgraph.mxfile;application/vnd.visio;
       StartupNotify=true
+      StartupWMClass=draw-io
+
 
 - name: Update desktop database
   command: update-desktop-database {{ ansible_env.HOME }}/.local/share/applications

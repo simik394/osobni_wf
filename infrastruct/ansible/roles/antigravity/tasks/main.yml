@@ -113,3 +113,40 @@
       delegate_to: localhost
       become: false
   when: current_antigravity_version != antigravity_latest_data.version
+
+- name: Ensure user local applications directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.local/share/applications"
+    state: directory
+    mode: "0755"
+  become: false
+
+- name: Check if system-wide Antigravity desktop entry exists
+  stat:
+    path: "/usr/share/applications/antigravity.desktop"
+  register: system_desktop_stat
+
+- name: Deploy user local Antigravity desktop entry
+  copy:
+    src: "/usr/share/applications/antigravity.desktop"
+    dest: "{{ ansible_env.HOME }}/.local/share/applications/antigravity.desktop"
+    remote_src: yes
+    mode: "0644"
+  become: false
+  when: system_desktop_stat.stat.exists
+
+- name: Ensure correct StartupWMClass in user local desktop entry
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.local/share/applications/antigravity.desktop"
+    regexp: '^StartupWMClass='
+    line: 'StartupWMClass=Antigravity IDE'
+    state: present
+  become: false
+  when: system_desktop_stat.stat.exists
+
+- name: Update local desktop database
+  command: "update-desktop-database {{ ansible_env.HOME }}/.local/share/applications"
+  changed_when: false
+  failed_when: false
+  become: false
+
