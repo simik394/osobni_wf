@@ -100,6 +100,17 @@ class PrologInferenceEngine:
             'curr_project_role(_, _, _, _)', 'target_project_role(_, _, _, _)', 'target_delete_project_role(_, _, _, _)'
         ]:
             janus.query_once(f"retractall({fact})")
+        
+        # Time Tracking, Custom Issue Link Types, and Reports facts
+        for fact in [
+            'target_global_time_tracking(_, _, _)', 'curr_global_time_tracking(_, _, _)',
+            'target_project_time_tracking(_, _, _)', 'curr_project_time_tracking(_, _, _)',
+            'target_project_work_item_type(_, _)', 'curr_project_work_item_type(_, _)',
+            'target_issue_link_type(_, _, _, _, _)', 'curr_issue_link_type(_, _, _, _, _, _)', 'target_delete_issue_link_type(_)',
+            'target_report(_, _, _, _, _, _, _)', 'curr_report(_, _, _, _, _, _, _, _)', 'target_delete_report(_)'
+        ]:
+            janus.query_once(f"retractall({fact})")
+
         janus.query_once("retractall(curr_workflow_usage(_, _, _))")
         janus.query_once("retractall(curr_field_default(_, _, _))")
         janus.query_once("retractall(target_workflow(_, _, _))")
@@ -130,7 +141,11 @@ class PrologInferenceEngine:
                              users: list[dict] = None,
                              groups: list[dict] = None,
                              roles: list[dict] = None,
-                             project_roles: dict[str, list[dict]] = None) -> None:
+                             project_roles: dict[str, list[dict]] = None,
+                             global_time_tracking: dict = None,
+                             project_time_tracking: dict[str, dict] = None,
+                             issue_link_types: list[dict] = None,
+                             reports: list[dict] = None) -> None:
         """
         Assert current YouTrack state as Prolog facts.
         
@@ -415,6 +430,70 @@ class PrologInferenceEngine:
                 sqquery = self._escape(sq.get('query', ''))
                 janus.query_once(f"assertz(curr_saved_query('{sqid}', '{sqname}', '{sqquery}'))")
             logger.debug(f"Asserted {len(saved_queries)} current saved queries")
+
+        # Assert global time tracking
+        if global_time_tracking:
+            work_time = global_time_tracking.get('workTimeSettings') or {}
+            first_day = work_time.get('firstDayOfWeek', 1)
+            limit = work_time.get('minutesLimit', 480)
+            days = work_time.get('daysOfWeek') or [1, 2, 3, 4, 5]
+            days_str = ", ".join(str(d) for d in days)
+            janus.query_once(f"assertz(curr_global_time_tracking({first_day}, {limit}, [{days_str}]))")
+
+        # Assert project-specific time tracking
+        if project_time_tracking:
+            for p_short, p_tt in project_time_tracking.items():
+                p_short_escaped = self._escape(p_short)
+                enabled = 'true' if p_tt.get('enabled', False) else 'false'
+                
+                # Estimate field name
+                est = p_tt.get('estimate') or {}
+                est_field = est.get('field', {}).get('name', 'null')
+                est_field_escaped = self._escape(est_field) if est_field != 'null' else 'null'
+                
+                janus.query_once(f"assertz(curr_project_time_tracking('{p_short_escaped}', {enabled}, '{est_field_escaped}'))")
+                
+                # Work item types
+                for wit in p_tt.get('workItemTypes', []):
+                    wit_name = self._escape(wit.get('name', ''))
+                    janus.query_once(f"assertz(curr_project_work_item_type('{p_short_escaped}', '{wit_name}'))")
+
+        # Assert custom issue link types
+        if issue_link_types:
+            for lt in issue_link_types:
+                lt_id = self._escape(lt.get('id', ''))
+                lt_name = self._escape(lt.get('name', ''))
+                s_to_t = self._escape(lt.get('sourceToTarget', ''))
+                t_to_s = self._escape(lt.get('targetToSource', ''))
+                directed = 'true' if lt.get('directed', True) else 'false'
+                aggregation = 'true' if lt.get('aggregation', False) else 'false'
+                janus.query_once(f"assertz(curr_issue_link_type('{lt_id}', '{lt_name}', '{s_to_t}', '{t_to_s}', {directed}, {aggregation}))")
+
+        # Assert reports
+        if reports:
+            for rep in reports:
+                r_id = self._escape(rep.get('id', ''))
+                r_name = self._escape(rep.get('name', ''))
+                raw_type = rep.get('$type', '')
+                r_type = 'burndown' if 'Burndown' in raw_type else ('cumulative_flow' if 'CumulativeFlow' in raw_type else 'unknown')
+                
+                query = self._escape(rep.get('query', ''))
+                
+                r_range = rep.get('range', {})
+                date_range = self._escape(r_range.get('name', '')) if r_range else 'null'
+                
+                est = rep.get('estimationField') or {}
+                est_field = est.get('field', {}).get('name', 'null')
+                est_field_escaped = self._escape(est_field) if est_field != 'null' else 'null'
+                
+                state = rep.get('stateField') or {}
+                state_field = state.get('field', {}).get('name', 'null')
+                state_field_escaped = self._escape(state_field) if state_field != 'null' else 'null'
+                
+                projs = rep.get('projects', [])
+                projs_str = ", ".join(f"'{self._escape(p.get('shortName', ''))}'" for p in projs)
+                
+                janus.query_once(f"assertz(curr_report('{r_id}', '{r_name}', '{r_type}', '{query}', '{date_range}', '{est_field_escaped}', '{state_field_escaped}', [{projs_str}]))")
     
     def assert_target_state(self, prolog_facts: str) -> None:
         """
@@ -493,7 +572,11 @@ def run_inference(fields: list[dict], bundles: list[dict],
                   users: list[dict] = None,
                   groups: list[dict] = None,
                   roles: list[dict] = None,
-                  project_roles: dict[str, list[dict]] = None) -> list[tuple]:
+                  project_roles: dict[str, list[dict]] = None,
+                  global_time_tracking: dict = None,
+                  project_time_tracking: dict[str, dict] = None,
+                  issue_link_types: list[dict] = None,
+                  reports: list[dict] = None) -> list[tuple]:
     """
     Convenience function to run complete inference.
     
@@ -513,7 +596,12 @@ def run_inference(fields: list[dict], bundles: list[dict],
     """
     engine = PrologInferenceEngine()
     engine.clear_facts()
-    engine.assert_current_state(fields, bundles, projects, workflows, project_fields, agiles, tags, saved_queries, users, groups, roles, project_roles)
+    engine.assert_current_state(
+        fields, bundles, projects, workflows, project_fields, agiles, tags, saved_queries,
+        users, groups, roles, project_roles,
+        global_time_tracking, project_time_tracking, issue_link_types, reports
+    )
     engine.assert_target_state(target_facts)
     
     return engine.compute_plan()
+

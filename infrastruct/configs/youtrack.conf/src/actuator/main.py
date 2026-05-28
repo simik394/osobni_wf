@@ -1156,6 +1156,240 @@ class YouTrackActuator:
             logger.error(error)
             return ActionResult(action=action, success=False, error=error)
 
+    # ==========================================================================
+    # TIME TRACKING
+    # ==========================================================================
+    
+    def set_global_time_tracking(self, first_day: int, limit: int, days: list) -> ActionResult:
+        """Set global time tracking settings."""
+        action = f"set_global_time_tracking({first_day}, {limit}, {days})"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            payload = {
+                "workTimeSettings": {
+                    "firstDayOfWeek": int(first_day),
+                    "minutesLimit": int(limit),
+                    "daysOfWeek": [int(d) for d in days]
+                }
+            }
+            self.session.post(f'{self.url}/api/admin/timeTrackingSettings', json=payload).raise_for_status()
+            logger.info("Updated global time tracking settings")
+            return ActionResult(action=action, success=True)
+        except Exception as e:
+            error = f"Failed to set global time tracking: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    def set_project_time_tracking(self, project_short: str, enabled: bool, estimation_field: str) -> ActionResult:
+        """Set project-specific time tracking settings."""
+        action = f"set_project_time_tracking('{project_short}', {enabled}, '{estimation_field}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            p_id = next((p['id'] for p in self.session.get(f'{self.url}/api/admin/projects', params={'fields': 'id,shortName'}).json() if p['shortName'] == project_short), None)
+            if not p_id:
+                return ActionResult(action=action, success=False, error=f"Project {project_short} not found")
+
+            payload = {"enabled": enabled}
+            if estimation_field and estimation_field != 'null':
+                p_fields = self.session.get(f'{self.url}/api/admin/projects/{p_id}/customFields', params={'fields': 'id,field(name)'}).json()
+                pf_id = next((pf['id'] for pf in p_fields if pf.get('field', {}).get('name') == estimation_field), None)
+                if pf_id:
+                    payload["estimate"] = {"id": pf_id}
+
+            self.session.post(f'{self.url}/api/admin/projects/{p_id}/timeTrackingSettings', json=payload).raise_for_status()
+            logger.info(f"Updated time tracking settings for project {project_short}")
+            return ActionResult(action=action, success=True)
+        except Exception as e:
+            error = f"Failed to set project time tracking: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    def create_work_item_type(self, project_short: str, name: str) -> ActionResult:
+        """Add a work item type to a project."""
+        action = f"create_work_item_type('{project_short}', '{name}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            p_id = next((p['id'] for p in self.session.get(f'{self.url}/api/admin/projects', params={'fields': 'id,shortName'}).json() if p['shortName'] == project_short), None)
+            if not p_id:
+                return ActionResult(action=action, success=False, error=f"Project {project_short} not found")
+
+            payload = {"name": name}
+            self.session.post(f'{self.url}/api/admin/projects/{p_id}/timeTrackingSettings/workItemTypes', json=payload).raise_for_status()
+            logger.info(f"Added work item type '{name}' to project {project_short}")
+            return ActionResult(action=action, success=True)
+        except Exception as e:
+            error = f"Failed to create work item type: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    # ==========================================================================
+    # ISSUE LINK TYPES
+    # ==========================================================================
+    
+    def create_issue_link_type(self, name: str, source_to_target: str, target_to_source: str, directed: bool, aggregation: bool) -> ActionResult:
+        """Create a custom issue link type."""
+        action = f"create_issue_link_type('{name}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            payload = {
+                "name": name,
+                "sourceToTarget": source_to_target,
+                "targetToSource": target_to_source,
+                "directed": directed,
+                "aggregation": aggregation
+            }
+            resp = self.session.post(f'{self.url}/api/issueLinkTypes', json=payload, params={'fields': 'id'})
+            resp.raise_for_status()
+            lt_id = resp.json().get('id')
+            logger.info(f"Created issue link type '{name}' (id={lt_id})")
+            return ActionResult(action=action, success=True, resource_id=lt_id)
+        except Exception as e:
+            error = f"Failed to create issue link type: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    def update_issue_link_type(self, lt_id: str, name: str, source_to_target: str, target_to_source: str, directed: bool, aggregation: bool) -> ActionResult:
+        """Update a custom issue link type."""
+        action = f"update_issue_link_type('{name}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            payload = {
+                "name": name,
+                "sourceToTarget": source_to_target,
+                "targetToSource": target_to_source,
+                "directed": directed,
+                "aggregation": aggregation
+            }
+            self.session.post(f'{self.url}/api/issueLinkTypes/{lt_id}', json=payload).raise_for_status()
+            logger.info(f"Updated issue link type '{name}' (id={lt_id})")
+            return ActionResult(action=action, success=True, resource_id=lt_id)
+        except Exception as e:
+            error = f"Failed to update issue link type: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    def delete_issue_link_type(self, lt_id: str) -> ActionResult:
+        """Delete an issue link type."""
+        action = f"delete_issue_link_type({lt_id})"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            self.session.delete(f'{self.url}/api/issueLinkTypes/{lt_id}').raise_for_status()
+            logger.info(f"Deleted issue link type (id={lt_id})")
+            return ActionResult(action=action, success=True, resource_id=lt_id)
+        except Exception as e:
+            error = f"Failed to delete issue link type: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    # ==========================================================================
+    # REPORTS
+    # ==========================================================================
+    
+    def create_report(self, name: str, r_type: str, query: str, date_range: str, estimation_field: str, state_field: str, projects: list) -> ActionResult:
+        """Create a YouTrack report."""
+        action = f"create_report('{name}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            jb_type = 'BurndownReport' if r_type == 'burndown' else 'CumulativeFlowReport'
+            all_projs = self.session.get(f'{self.url}/api/admin/projects', params={'fields': 'id,shortName'}).json()
+            proj_ids = [p['id'] for p in all_projs if p['shortName'] in projects]
+            
+            payload = {
+                "name": name,
+                "$type": jb_type,
+                "projects": [{"id": pid} for pid in proj_ids],
+                "query": query or ""
+            }
+            
+            if date_range and date_range != 'null':
+                payload["range"] = {"id": date_range}
+                
+            if estimation_field and estimation_field != 'null':
+                fid = self._resolve_field_id(estimation_field)
+                if fid:
+                    payload["estimationField"] = {"field": {"id": fid}}
+            
+            if state_field and state_field != 'null':
+                fid = self._resolve_field_id(state_field)
+                if fid:
+                    payload["stateField"] = {"field": {"id": fid}}
+            
+            resp = self.session.post(f'{self.url}/api/reports', json=payload, params={'fields': 'id'})
+            resp.raise_for_status()
+            r_id = resp.json().get('id')
+            logger.info(f"Created report '{name}' (id={r_id})")
+            return ActionResult(action=action, success=True, resource_id=r_id)
+        except Exception as e:
+            error = f"Failed to create report: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    def update_report(self, r_id: str, name: str, r_type: str, query: str, date_range: str, estimation_field: str, state_field: str, projects: list) -> ActionResult:
+        """Update an existing report."""
+        action = f"update_report('{name}')"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            all_projs = self.session.get(f'{self.url}/api/admin/projects', params={'fields': 'id,shortName'}).json()
+            proj_ids = [p['id'] for p in all_projs if p['shortName'] in projects]
+            
+            payload = {
+                "name": name,
+                "projects": [{"id": pid} for pid in proj_ids],
+                "query": query or ""
+            }
+            
+            if date_range and date_range != 'null':
+                payload["range"] = {"id": date_range}
+                
+            if estimation_field and estimation_field != 'null':
+                fid = self._resolve_field_id(estimation_field)
+                if fid:
+                    payload["estimationField"] = {"field": {"id": fid}}
+            
+            if state_field and state_field != 'null':
+                fid = self._resolve_field_id(state_field)
+                if fid:
+                    payload["stateField"] = {"field": {"id": fid}}
+                    
+            self.session.post(f'{self.url}/api/reports/{r_id}', json=payload).raise_for_status()
+            logger.info(f"Updated report '{name}' (id={r_id})")
+            return ActionResult(action=action, success=True, resource_id=r_id)
+        except Exception as e:
+            error = f"Failed to update report: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
+    def delete_report(self, r_id: str) -> ActionResult:
+        """Delete a report."""
+        action = f"delete_report({r_id})"
+        if self.dry_run:
+            logger.info(f"[DRY RUN] {action}")
+            return ActionResult(action=action, success=True)
+        try:
+            self.session.delete(f'{self.url}/api/reports/{r_id}').raise_for_status()
+            logger.info(f"Deleted report (id={r_id})")
+            return ActionResult(action=action, success=True, resource_id=r_id)
+        except Exception as e:
+            error = f"Failed to delete report: {e}"
+            logger.error(error)
+            return ActionResult(action=action, success=False, error=error)
+
     def _resolve_field_info(self, name_or_id: str) -> tuple[str, str]:
         """
         Resolve a field name to its (ID, fieldTypeId).
@@ -1726,6 +1960,25 @@ class YouTrackActuator:
                 result = ActionResult(action="error_max_users_exceeded", success=False, error="Max 10 users allowed")
 
 
+
+            elif action_type == 'set_global_time_tracking':
+                result = self.set_global_time_tracking(args[0], args[1], args[2])
+            elif action_type == 'set_project_time_tracking':
+                result = self.set_project_time_tracking(args[0], str(args[1]).lower() == 'true', args[2])
+            elif action_type == 'create_work_item_type':
+                result = self.create_work_item_type(args[0], args[1])
+            elif action_type == 'create_issue_link_type':
+                result = self.create_issue_link_type(args[0], args[1], args[2], str(args[3]).lower() == 'true', str(args[4]).lower() == 'true')
+            elif action_type == 'update_issue_link_type':
+                result = self.update_issue_link_type(args[0], args[1], args[2], args[3], str(args[4]).lower() == 'true', str(args[5]).lower() == 'true')
+            elif action_type == 'delete_issue_link_type':
+                result = self.delete_issue_link_type(args[0])
+            elif action_type == 'create_report':
+                result = self.create_report(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+            elif action_type == 'update_report':
+                result = self.update_report(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
+            elif action_type == 'delete_report':
+                result = self.delete_report(args[0])
 
             # Tag operations
             elif action_type == 'create_tag':

@@ -156,6 +156,58 @@ class YouTrackClient:
                 pass
         return assignments
 
+    def get_global_time_tracking(self) -> dict:
+        """Fetch global time tracking settings."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/timeTrackingSettings',
+            params={'fields': 'id,workTimeSettings(id,daysOfWeek,minutesLimit,firstDayOfWeek)'}
+        )
+        if resp.status_code == 404:
+            return {}
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_project_time_tracking(self, project_id: str) -> dict:
+        """Fetch project-specific time tracking settings."""
+        resp = self.session.get(
+            f'{self.url}/api/admin/projects/{project_id}/timeTrackingSettings',
+            params={'fields': 'id,enabled,estimate(field(name)),workItemTypes(id,name)'}
+        )
+        if resp.status_code == 404:
+            return {}
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_all_projects_time_tracking(self, projects: list[dict]) -> dict:
+        """Fetch time tracking for all given projects."""
+        project_tt = {}
+        for proj in projects:
+            try:
+                tt = self.get_project_time_tracking(proj['id'])
+                if tt:
+                    project_tt[proj['shortName']] = tt
+            except Exception:
+                pass
+        return project_tt
+
+    def get_issue_link_types(self) -> list[dict]:
+        """Fetch custom issue link types."""
+        resp = self.session.get(
+            f'{self.url}/api/issueLinkTypes',
+            params={'fields': 'id,name,sourceToTarget,targetToSource,directed,aggregation,readOnly'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_reports(self) -> list[dict]:
+        """Fetch all reports."""
+        resp = self.session.get(
+            f'{self.url}/api/reports',
+            params={'fields': 'id,name,$type,query,projects(id,shortName),sprint(id,name),estimationField(field(name)),stateField(field(name)),range(id,name)'}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def get_workflows(self) -> list[dict]:
         """Fetch all workflows with their rules and usage."""
         # We reuse the WorkflowClient logic which already knows the internal API
@@ -218,6 +270,12 @@ def main():
         roles = client.get_roles()
         project_roles = client.get_all_project_role_assignments(projects)
 
+        global_time_tracking = client.get_global_time_tracking()
+        project_time_tracking = client.get_all_projects_time_tracking(projects)
+        issue_link_types = client.get_issue_link_types()
+        reports = client.get_reports()
+
+
         
         # Merge enum and state bundles
         all_bundles = bundles + state_bundles
@@ -275,7 +333,11 @@ def main():
     
     
     # Pass workflows and project fields to inference
-    plan = run_inference(fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries, users, groups, roles, project_roles)
+    plan = run_inference(
+        fields, all_bundles, target_facts, projects, workflows, project_fields, agiles, tags, saved_queries,
+        users, groups, roles, project_roles,
+        global_time_tracking, project_time_tracking, issue_link_types, reports
+    )
     
     if plan:
         # Defense-in-depth: skip create_field for fields confirmed to exist globally.

@@ -8,7 +8,8 @@ from typing import Iterator
 
 from .schema import (
     YouTrackConfig, ProjectConfig, FieldConfig, BundleValueConfig,
-    WorkflowConfig, WorkflowRuleConfig, AgileBoardConfig, TagConfig, SavedQueryConfig
+    WorkflowConfig, WorkflowRuleConfig, AgileBoardConfig, TagConfig, SavedQueryConfig,
+    GlobalTimeTrackingConfig, ProjectTimeTrackingConfig, IssueLinkTypeConfig, ReportConfig
 )
 
 
@@ -113,10 +114,35 @@ def _generate_facts(config: YouTrackConfig) -> Iterator[str]:
                 yield f"target_delete_saved_query('{name}')."
             else:
                 yield f"target_saved_query('{name}', '{query}', '{visible}')."
+
+    # Global Time Tracking
+    if getattr(config, 'time_tracking', None):
+        tt = config.time_tracking
+        days = ", ".join(str(d) for d in tt.days_of_week)
+        yield f"target_global_time_tracking({tt.first_day_of_week}, {tt.minutes_limit}, [{days}])."
+
+    # Custom Issue Link Types
+    if getattr(config, 'issue_link_types', None):
+        for lt in config.issue_link_types:
+            lt_name = escape_prolog_string(lt.name)
+            source_to_target = escape_prolog_string(lt.source_to_target)
+            target_to_source = escape_prolog_string(lt.target_to_source)
+            directed = 'true' if lt.directed else 'false'
+            aggregation = 'true' if lt.aggregation else 'false'
+            if lt.state == 'absent':
+                yield f"target_delete_issue_link_type('{lt_name}')."
+            else:
+                yield f"target_issue_link_type('{lt_name}', '{source_to_target}', '{target_to_source}', {directed}, {aggregation})."
+
+    # Global Reports
+    if getattr(config, 'reports', None):
+        for rep in config.reports:
+            yield from _generate_report_facts(rep)
     
     # Projects
     for project in config.projects:
         yield from _generate_project_facts(project)
+
 
 
 def _generate_workflow_facts(workflow: WorkflowConfig, project_short_name: str = None) -> Iterator[str]:
@@ -218,6 +244,21 @@ def _generate_project_facts(project: ProjectConfig) -> Iterator[str]:
     if project.boards:
         for board in project.boards:
             yield from _generate_agile_board_facts(board, main_project=short_name)
+
+    # Project Time Tracking
+    if getattr(project, 'time_tracking', None):
+        pt = project.time_tracking
+        enabled_val = 'true' if pt.enabled else 'false'
+        est_field_val = escape_prolog_string(pt.estimation_field) if pt.estimation_field else 'null'
+        yield f"target_project_time_tracking('{short_name}', {enabled_val}, '{est_field_val}')."
+        for wit in pt.work_item_types:
+            yield f"target_project_work_item_type('{short_name}', '{escape_prolog_string(wit)}')."
+
+    # Project Reports
+    if getattr(project, 'reports', None):
+        for rep in project.reports:
+            yield from _generate_report_facts(rep, project_short_name=short_name)
+
 
 
 def _generate_field_facts(field: FieldConfig, project: str) -> Iterator[str]:
@@ -330,3 +371,25 @@ def _generate_agile_board_facts(board: AgileBoardConfig, main_project: str) -> I
     if board.backlog_query:
         query = escape_prolog_string(board.backlog_query)
         yield f"target_board_backlog('{name}', '{query}')."
+
+
+def _generate_report_facts(report: ReportConfig, project_short_name: str = None) -> Iterator[str]:
+    """Generate facts for a report."""
+    name = escape_prolog_string(report.name)
+    if report.state == 'absent':
+        yield f"target_delete_report('{name}')."
+        return
+
+    r_type = escape_prolog_string(report.type)
+    date_range = escape_prolog_string(report.date_range)
+    est_field = escape_prolog_string(report.estimation_field) if report.estimation_field else 'null'
+    state_field = escape_prolog_string(report.field) if report.field else 'null'
+
+    # Collect project list
+    projects = list(report.projects)
+    if project_short_name and project_short_name not in projects:
+        projects.append(project_short_name)
+    
+    projs_str = ", ".join(f"'{escape_prolog_string(p)}'" for p in projects)
+    yield f"target_report('{name}', '{r_type}', '', '{date_range}', '{est_field}', '{state_field}', [{projs_str}])."
+

@@ -343,3 +343,62 @@ def test_role_config():
     role = RoleConfig(name="Admin", permissions=["Read Issue", "Update Issue"])
     assert role.name == "Admin"
     assert role.permissions == ["Read Issue", "Update Issue"]
+
+def test_time_tracking_config():
+    from src.config.schema import YouTrackConfig, ProjectConfig, GlobalTimeTrackingConfig, ProjectTimeTrackingConfig
+    from src.config.translator import config_to_prolog_facts
+
+    config = YouTrackConfig(
+        projects=[
+            ProjectConfig(
+                name="Demo Project",
+                short_name="DEMO",
+                time_tracking=ProjectTimeTrackingConfig(enabled=True, estimation_field="Story Points", work_item_types=["Development", "Testing"])
+            )
+        ],
+        time_tracking=GlobalTimeTrackingConfig(first_day_of_week=1, minutes_limit=480, days_of_week=[1, 2, 3, 4, 5])
+    )
+
+    facts = config_to_prolog_facts(config)
+    assert "target_global_time_tracking(1, 480, [1, 2, 3, 4, 5])." in facts
+    assert "target_project_time_tracking('DEMO', true, 'Story Points')." in facts
+    assert "target_project_work_item_type('DEMO', 'Development')." in facts
+    assert "target_project_work_item_type('DEMO', 'Testing')." in facts
+
+def test_issue_link_type_config():
+    from src.config.schema import YouTrackConfig, IssueLinkTypeConfig
+    from src.config.translator import config_to_prolog_facts
+
+    config = YouTrackConfig(
+        projects=[],
+        issue_link_types=[
+            IssueLinkTypeConfig(name="Blocks Release", source_to_target="blocks release", target_to_source="is blocked by release", directed=True, aggregation=False)
+        ]
+    )
+
+    facts = config_to_prolog_facts(config)
+    assert "target_issue_link_type('Blocks Release', 'blocks release', 'is blocked by release', true, false)." in facts
+
+def test_report_config():
+    from src.config.schema import YouTrackConfig, ProjectConfig, ReportConfig
+    from src.config.translator import config_to_prolog_facts
+
+    config = YouTrackConfig(
+        projects=[
+            ProjectConfig(
+                name="Demo Project",
+                short_name="DEMO",
+                reports=[
+                    ReportConfig(name="Demo Burndown", type="burndown", date_range="current_sprint", estimation_field="Story Points")
+                ]
+            )
+        ],
+        reports=[
+            ReportConfig(name="Global Flow", type="cumulative_flow", projects=["DEMO"], date_range="last_30_days", field="State")
+        ]
+    )
+
+    facts = config_to_prolog_facts(config)
+    assert "target_report('Demo Burndown', 'burndown', '', 'current_sprint', 'Story Points', 'null', ['DEMO'])." in facts
+    assert "target_report('Global Flow', 'cumulative_flow', '', 'last_30_days', 'null', 'State', ['DEMO'])." in facts
+

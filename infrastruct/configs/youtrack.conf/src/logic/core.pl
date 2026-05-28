@@ -82,6 +82,25 @@
 :- dynamic curr_saved_query/3.        %% curr_saved_query(Id, Name, Query)
 :- dynamic target_delete_saved_query/1. %% target_delete_saved_query(Name)
 
+%% Time Tracking
+:- dynamic target_global_time_tracking/3. %% target_global_time_tracking(FirstDayOfWeek, MinutesLimit, DaysOfWeekList)
+:- dynamic curr_global_time_tracking/3.   %% curr_global_time_tracking(FirstDayOfWeek, MinutesLimit, DaysOfWeekList)
+:- dynamic target_project_time_tracking/3. %% target_project_time_tracking(ProjShort, Enabled, EstField)
+:- dynamic curr_project_time_tracking/3.   %% curr_project_time_tracking(ProjShort, Enabled, EstField)
+:- dynamic target_project_work_item_type/2. %% target_project_work_item_type(ProjShort, Name)
+:- dynamic curr_project_work_item_type/2.   %% curr_project_work_item_type(ProjShort, Name)
+
+%% Custom Issue Link Types
+:- dynamic target_issue_link_type/5.      %% target_issue_link_type(Name, Outward, Inward, Directed, Aggregation)
+:- dynamic curr_issue_link_type/6.        %% curr_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation)
+:- dynamic target_delete_issue_link_type/1. %% target_delete_issue_link_type(Name)
+
+%% Reports
+:- dynamic target_report/7.               %% target_report(Name, Type, Query, DateRange, EstField, StateField, ProjectsList)
+:- dynamic curr_report/8.                 %% curr_report(Id, Name, Type, Query, DateRange, EstField, StateField, ProjectsList)
+:- dynamic target_delete_report/1.        %% target_delete_report(Name)
+
+
 :- dynamic bundle_value/3.
 :- dynamic field_uses_bundle/2.
 :- dynamic field_required/2.
@@ -579,6 +598,99 @@ deletable_saved_query(Id, Name) :-
 action(delete_saved_query(Id)) :-
     deletable_saved_query(Id, _).
 
+%% 7. Time Tracking Settings
+
+missing_global_time_tracking(FirstDay, Limit, Days) :-
+    target_global_time_tracking(FirstDay, Limit, Days),
+    \+ curr_global_time_tracking(_, _, _).
+
+drifted_global_time_tracking(FirstDay, Limit, Days) :-
+    target_global_time_tracking(FirstDay, Limit, Days),
+    curr_global_time_tracking(CurrFirstDay, CurrLimit, CurrDays),
+    (FirstDay \= CurrFirstDay ; Limit \= CurrLimit ; Days \= CurrDays).
+
+action(set_global_time_tracking(FirstDay, Limit, Days)) :-
+    missing_global_time_tracking(FirstDay, Limit, Days) ;
+    drifted_global_time_tracking(FirstDay, Limit, Days).
+
+missing_project_time_tracking(Project, Enabled, EstField) :-
+    target_project_time_tracking(Project, Enabled, EstField),
+    curr_project(_, _, Project),
+    \+ curr_project_time_tracking(Project, _, _).
+
+drifted_project_time_tracking(Project, Enabled, EstField) :-
+    target_project_time_tracking(Project, Enabled, EstField),
+    curr_project_time_tracking(Project, CurrEnabled, CurrEstField),
+    (Enabled \= CurrEnabled ; EstField \= CurrEstField).
+
+action(set_project_time_tracking(Project, Enabled, EstField)) :-
+    missing_project_time_tracking(Project, Enabled, EstField) ;
+    drifted_project_time_tracking(Project, Enabled, EstField).
+
+missing_work_item_type(Project, Name) :-
+    target_project_work_item_type(Project, Name),
+    curr_project(_, _, Project),
+    \+ curr_project_work_item_type(Project, Name).
+
+action(create_work_item_type(Project, Name)) :-
+    missing_work_item_type(Project, Name).
+
+%% 8. Custom Issue Link Types
+
+missing_issue_link_type(Name, Outward, Inward, Directed, Aggregation) :-
+    target_issue_link_type(Name, Outward, Inward, Directed, Aggregation),
+    \+ curr_issue_link_type(_, Name, _, _, _, _).
+
+drifted_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation) :-
+    target_issue_link_type(Name, Outward, Inward, Directed, Aggregation),
+    curr_issue_link_type(Id, Name, CurrOutward, CurrInward, CurrDirected, CurrAggregation),
+    (Outward \= CurrOutward ; Inward \= CurrInward ; Directed \= CurrDirected ; Aggregation \= CurrAggregation).
+
+action(create_issue_link_type(Name, Outward, Inward, Directed, Aggregation)) :-
+    missing_issue_link_type(Name, Outward, Inward, Directed, Aggregation).
+
+action(update_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation)) :-
+    drifted_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation).
+
+action(delete_issue_link_type(Id)) :-
+    target_delete_issue_link_type(Name),
+    curr_issue_link_type(Id, Name, _, _, _, _).
+
+%% 9. Reports
+
+report_est_match(Target, Curr) :- Target = 'null', (Curr = '' ; Curr = 'null'), !.
+report_est_match(Target, Target).
+
+report_state_match(Target, Curr) :- Target = 'null', (Curr = '' ; Curr = 'null'), !.
+report_state_match(Target, Target).
+
+missing_report(Name, Type, Query, Range, EstField, StateField, Projects) :-
+    target_report(Name, Type, Query, Range, EstField, StateField, Projects),
+    \+ curr_report(_, Name, _, _, _, _, _, _).
+
+drifted_report(Id, Name, Type, Query, Range, EstField, StateField, Projects) :-
+    target_report(Name, Type, Query, Range, EstField, StateField, Projects),
+    curr_report(Id, Name, CurrType, CurrQuery, CurrRange, CurrEstField, CurrStateField, CurrProjects),
+    (
+        Type \= CurrType ;
+        Query \= CurrQuery ;
+        Range \= CurrRange ;
+        Projects \= CurrProjects ;
+        \+ report_est_match(EstField, CurrEstField) ;
+        \+ report_state_match(StateField, CurrStateField)
+    ).
+
+action(create_report(Name, Type, Query, Range, EstField, StateField, Projects)) :-
+    missing_report(Name, Type, Query, Range, EstField, StateField, Projects).
+
+action(update_report(Id, Name, Type, Query, Range, EstField, StateField, Projects)) :-
+    drifted_report(Id, Name, Type, Query, Range, EstField, StateField, Projects).
+
+action(delete_report(Id)) :-
+    target_delete_report(Name),
+    curr_report(Id, Name, _, _, _, _, _, _).
+
+
 %% =============================================================================
 %% DEPENDENCY GRAPH
 %% =============================================================================
@@ -600,6 +712,15 @@ depends_on(grant_project_role(_, _, _, R), create_role(R)).
 depends_on(delete_group(G), remove_user_from_group(G, _)).
 depends_on(delete_role(R), remove_role_from_group(_, R)).
 depends_on(delete_user(U), remove_user_from_group(_, U)).
+
+%% Time Tracking & Work Item Dependencies
+depends_on(set_project_time_tracking(Proj, _, _), create_project(Proj, _)).
+depends_on(create_work_item_type(Proj, _), create_project(Proj, _)).
+depends_on(create_work_item_type(Proj, _), set_project_time_tracking(Proj, _, _)).
+
+%% Report Dependencies
+depends_on(create_report(_, _, _, _, _, _, Projs), create_project(P, _)) :- member(P, Projs).
+
 
 %% Value addition depends on bundle creation
 depends_on(add_bundle_value(B, _, _), ensure_bundle(B, _)).

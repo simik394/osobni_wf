@@ -32,3 +32,10 @@ When using `plunit` test framework, tests run inside a generated module (e.g., `
 When the inference engine (Prolog) generates `create_field` actions, there's always a risk that sensing missed an existing field (API pagination, name/type mismatch). The original "fix" was a blanket controller-side filter that skipped ALL `create_field` actions — a "NUCLEAR OPTION" that prevented any new fields from ever being created.
 **Lesson**: Idempotency must be implemented at the **lowest possible level** (actuator, not controller). The actuator should: (1) pre-check existence before calling POST, and (2) handle 409 Conflict gracefully. The controller filter should only act as "defense-in-depth" for confirmed-existing fields, never as a blanket skip.
 
+## 7. Janus Dynamic Fact Clearing in Polymorphic Models
+When introducing new dynamic and polymorphic Prolog predicates (such as reports or issue link types) into a system bridged with Janus, it is essential to list all of them explicitly within python's `clear_facts` method. Missing dynamic facts will survive across test cases, bleeding state and causing non-deterministic unit/integration test failures.
+
+## 8. Pydantic 2 Alias & Field Name Mapping
+When adding new configuration blocks to root Pydantic models containing field aliases (e.g. `issueLinkTypes` for `issue_link_types`), we must explicitly set `model_config = {"populate_by_name": True}` in the configuration model (e.g. `YouTrackConfig`). Without this configuration, instantiating the model using snake_case field names directly (which is standard in tests or manual objects creation) will silently ignore the passed parameters, resulting in empty models.
+
+

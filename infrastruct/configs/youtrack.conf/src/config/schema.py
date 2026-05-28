@@ -239,6 +239,51 @@ class RoleAssignmentConfig(BaseModel):
         description="Set to 'absent' to revoke this role assignment"
     )
 
+class GlobalTimeTrackingConfig(BaseModel):
+    """Global configuration for YouTrack Time Tracking."""
+    first_day_of_week: int = Field(alias="firstDayOfWeek", default=1, description="First day of the week (1=Monday, 7=Sunday)")
+    minutes_limit: int = Field(alias="minutesLimit", default=480, description="Daily limit in minutes (e.g. 480 = 8h)")
+    days_of_week: list[int] = Field(alias="daysOfWeek", default_factory=lambda: [1, 2, 3, 4, 5], description="Working days of week")
+
+    model_config = {"populate_by_name": True}
+
+class ProjectTimeTrackingConfig(BaseModel):
+    """Project-specific time tracking configuration."""
+    enabled: bool = Field(default=False, description="Enable time tracking for the project")
+    estimation_field: Optional[str] = Field(alias="estimationField", default=None, description="Custom field for estimation")
+    work_item_types: list[str] = Field(alias="workItemTypes", default_factory=list, description="Work item types for this project")
+
+    model_config = {"populate_by_name": True}
+
+class IssueLinkTypeConfig(BaseModel):
+    """Configuration for custom issue link type."""
+    name: str = Field(description="Name of the link type")
+    source_to_target: str = Field(alias="sourceToTarget", description="Outward name (e.g. blocks)")
+    target_to_source: str = Field(alias="targetToSource", description="Inward name (e.g. is blocked by)")
+    directed: bool = Field(default=True, description="Whether the link type is directed")
+    aggregation: bool = Field(default=False, description="Whether the link type aggregates values")
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this link type"
+    )
+
+    model_config = {"populate_by_name": True}
+
+class ReportConfig(BaseModel):
+    """Configuration for YouTrack Reports."""
+    name: str = Field(description="Report name")
+    type: Literal['burndown', 'cumulative_flow'] = Field(description="Report type")
+    projects: list[str] = Field(default_factory=list, description="Project shortNames to include")
+    date_range: str = Field(alias="dateRange", default="last_30_days", description="E.g. last_30_days, current_sprint")
+    estimation_field: Optional[str] = Field(alias="estimationField", default=None, description="For burndown reports")
+    field: Optional[str] = Field(default=None, description="For cumulative flow reports (e.g., State)")
+    state: Literal['present', 'absent'] = Field(
+        default='present',
+        description="Set to 'absent' to delete this report"
+    )
+
+    model_config = {"populate_by_name": True}
+
 class ProjectConfig(BaseModel):
     """Configuration for a YouTrack project."""
     name: str = Field(description="Full project name")
@@ -252,6 +297,8 @@ class ProjectConfig(BaseModel):
     workflows: list[WorkflowConfig] = Field(default_factory=list)
     boards: list[AgileBoardConfig] = Field(default_factory=list, description="Agile boards for this project")
     role_assignments: list[RoleAssignmentConfig] = Field(default_factory=list, description="Role assignments for this project")
+    time_tracking: Optional[ProjectTimeTrackingConfig] = Field(alias="timeTracking", default=None, description="Project-specific time tracking settings")
+    reports: list[ReportConfig] = Field(default_factory=list, description="Reports for this project")
     
     model_config = {"populate_by_name": True}  # Allow both short_name and shortName
 
@@ -288,3 +335,16 @@ class YouTrackConfig(BaseModel):
         default=None,
         description="Saved search definitions"
     )
+
+    # Time tracking
+    time_tracking: Optional[GlobalTimeTrackingConfig] = Field(alias="timeTracking", default=None, description="Global time tracking settings")
+
+    # Custom issue link types
+    issue_link_types: Optional[list[IssueLinkTypeConfig]] = Field(alias="issueLinkTypes", default=None, description="Custom issue link types")
+
+    # Global reports
+    reports: Optional[list[ReportConfig]] = Field(default=None, description="Global reports")
+
+    model_config = {"populate_by_name": True}
+
+

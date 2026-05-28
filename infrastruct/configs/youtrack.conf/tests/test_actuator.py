@@ -385,3 +385,99 @@ class TestControllerFieldFilter:
         # Priority should be filtered
         assert ('create_field', 'Priority', 'enum', 'PriorityBundle') not in filtered_plan
 
+
+class TestTimeTrackingLinkTypesReportsActuator:
+    """Tests for Time Tracking, Custom Link Types, and Reports actuator methods."""
+    
+    @patch('requests.Session')
+    def test_set_global_time_tracking(self, mock_session_class):
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = Mock()
+        mock_session.post.return_value = mock_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.set_global_time_tracking(1, 480, [1, 2, 3, 4, 5])
+        
+        assert result.success is True
+        mock_session.post.assert_called_once_with(
+            "https://yt.example.com/api/admin/timeTrackingSettings",
+            json={
+                "workTimeSettings": {
+                    "firstDayOfWeek": 1,
+                    "minutesLimit": 480,
+                    "daysOfWeek": [1, 2, 3, 4, 5]
+                }
+            }
+        )
+
+    @patch('requests.Session')
+    def test_create_issue_link_type(self, mock_session_class):
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": "lt-uuid-456"}
+        mock_response.raise_for_status = Mock()
+        mock_session.post.return_value = mock_response
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.create_issue_link_type("Blocks Release", "blocks", "is blocked by", True, False)
+        
+        assert result.success is True
+        assert result.resource_id == "lt-uuid-456"
+        mock_session.post.assert_called_once_with(
+            "https://yt.example.com/api/issueLinkTypes",
+            json={
+                "name": "Blocks Release",
+                "sourceToTarget": "blocks",
+                "targetToSource": "is blocked by",
+                "directed": True,
+                "aggregation": False
+            },
+            params={'fields': 'id'}
+        )
+
+    @patch('requests.Session')
+    def test_create_report(self, mock_session_class):
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock project lookup
+        mock_get_projs = Mock()
+        mock_get_projs.json.return_value = [{"id": "p-1", "shortName": "DEMO"}]
+        mock_get_projs.raise_for_status = Mock()
+        
+        # Mock field resolution
+        mock_get_fields = Mock()
+        mock_get_fields.json.return_value = [{"id": "f-story-points", "name": "Story Points", "fieldType": {"id": "integer"}}]
+        mock_get_fields.raise_for_status = Mock()
+        
+        mock_session.get.side_effect = lambda url, **kwargs: (
+            mock_get_fields if "customFields" in url else mock_get_projs
+        )
+        
+        # Mock report creation POST
+        mock_post_rep = Mock()
+        mock_post_rep.status_code = 200
+        mock_post_rep.json.return_value = {"id": "rep-uuid-789"}
+        mock_post_rep.raise_for_status = Mock()
+        mock_session.post.return_value = mock_post_rep
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.create_report("Demo Burndown", "burndown", "", "current_sprint", "Story Points", "null", ["DEMO"])
+        
+        assert result.success is True
+        assert result.resource_id == "rep-uuid-789"
+
+
