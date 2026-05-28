@@ -1332,6 +1332,11 @@ class YouTrackActuator:
             resp.raise_for_status()
             r_id = resp.json().get('id')
             logger.info(f"Created report '{name}' (id={r_id})")
+            try:
+                self.session.post(f'{self.url}/api/reports/{r_id}/status', params={'fields': 'id'}).raise_for_status()
+                logger.info(f"Triggered recalculation for report '{name}' (id={r_id})")
+            except Exception as e:
+                logger.warning(f"Failed to trigger recalculation for report {r_id}: {e}")
             return ActionResult(action=action, success=True, resource_id=r_id)
         except Exception as e:
             error = f"Failed to create report: {e}"
@@ -1369,6 +1374,11 @@ class YouTrackActuator:
                     
             self.session.post(f'{self.url}/api/reports/{r_id}', json=payload).raise_for_status()
             logger.info(f"Updated report '{name}' (id={r_id})")
+            try:
+                self.session.post(f'{self.url}/api/reports/{r_id}/status', params={'fields': 'id'}).raise_for_status()
+                logger.info(f"Triggered recalculation for report '{name}' (id={r_id})")
+            except Exception as e:
+                logger.warning(f"Failed to trigger recalculation for report {r_id}: {e}")
             return ActionResult(action=action, success=True, resource_id=r_id)
         except Exception as e:
             error = f"Failed to update report: {e}"

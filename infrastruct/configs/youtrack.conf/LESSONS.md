@@ -38,4 +38,8 @@ When introducing new dynamic and polymorphic Prolog predicates (such as reports 
 ## 8. Pydantic 2 Alias & Field Name Mapping
 When adding new configuration blocks to root Pydantic models containing field aliases (e.g. `issueLinkTypes` for `issue_link_types`), we must explicitly set `model_config = {"populate_by_name": True}` in the configuration model (e.g. `YouTrackConfig`). Without this configuration, instantiating the model using snake_case field names directly (which is standard in tests or manual objects creation) will silently ignore the passed parameters, resulting in empty models.
 
+## 9. Typová a arity konzistence u Prolog dynamic predikátů a Janus převodů
+Při přechodu mezi Pythonem a Prologem přes Janus je nezbytné striktně dodržovat aritu dynamic predikátů napříč všemi vrstvami (sensing, retracting, diff logic pravidla). Nesoulad (např. asertování arity 7, ale mazání s arity 8) vede k tomu, že Prolog pravidla tichým způsobem selžou. Dále je nutné pamatovat, že booleovské atomy (`true`/`false`) asertované v Prologu se přes Janus-SWI do Pythonu vrací jako řetězce (`"true"`/`"false"`), nikoliv jako nativní Python `True`/`False`. Aserce v integračních testech musí s tímto chováním počítat.
 
+## 10. Asynchronní přepočty YouTrack Reportů
+YouTrack REST API zpracovává výpočet nově vytvořených nebo aktualizovaných reportů asynchronně na pozadí. Pokud chce uživatel ihned vidět aktuální data na dashboardu, actuator musí po vytvoření/úpravě reportu odeslat explicitní POST požadavek na `/api/reports/{id}/status` s prázdným tělem, což YouTrack donutí okamžitě spustit přepočet a minimalizuje to dobu, po kterou report zobrazuje prázdná data.

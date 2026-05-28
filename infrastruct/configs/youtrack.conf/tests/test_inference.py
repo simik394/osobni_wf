@@ -34,15 +34,36 @@ class TestPrologInferenceEngine:
     def test_assert_current_state(self):
         """Test asserting current state."""
         from src.logic.inference import PrologInferenceEngine
+        import janus_swi as janus
         
         engine = PrologInferenceEngine()
         engine.clear_facts()
         
         fields = [{"id": "f1", "name": "Priority", "fieldType": {"name": "enum"}}]
         bundles = [{"id": "b1", "name": "PriorityBundle", "values": []}]
+        issue_link_types = [
+            {
+                "id": "lt1",
+                "name": "Blocks Release",
+                "sourceToTarget": "blocks",
+                "targetToSource": "is blocked by",
+                "directed": True,
+                "aggregation": False,
+                "readOnly": True
+            }
+        ]
         
-        engine.assert_current_state(fields, bundles)
-        # Should not raise
+        engine.assert_current_state(fields, bundles, issue_link_types=issue_link_types)
+        
+        # Verify asserted facts
+        res = janus.query_once("curr_issue_link_type(Id, Name, Out, In, Dir, Agg, RO)")
+        assert res["Id"] == "lt1"
+        assert res["Name"] == "Blocks Release"
+        assert res["Out"] == "blocks"
+        assert res["In"] == "is blocked by"
+        assert res["Dir"] == "true"
+        assert res["Agg"] == "false"
+        assert res["RO"] == "true"
     
     def test_compute_plan_empty(self):
         """Test computing plan when in sync."""

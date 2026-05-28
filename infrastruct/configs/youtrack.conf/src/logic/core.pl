@@ -92,7 +92,7 @@
 
 %% Custom Issue Link Types
 :- dynamic target_issue_link_type/5.      %% target_issue_link_type(Name, Outward, Inward, Directed, Aggregation)
-:- dynamic curr_issue_link_type/6.        %% curr_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation)
+:- dynamic curr_issue_link_type/7.        %% curr_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation, ReadOnly)
 :- dynamic target_delete_issue_link_type/1. %% target_delete_issue_link_type(Name)
 
 %% Reports
@@ -639,11 +639,11 @@ action(create_work_item_type(Project, Name)) :-
 
 missing_issue_link_type(Name, Outward, Inward, Directed, Aggregation) :-
     target_issue_link_type(Name, Outward, Inward, Directed, Aggregation),
-    \+ curr_issue_link_type(_, Name, _, _, _, _).
+    \+ curr_issue_link_type(_, Name, _, _, _, _, _).
 
 drifted_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation) :-
     target_issue_link_type(Name, Outward, Inward, Directed, Aggregation),
-    curr_issue_link_type(Id, Name, CurrOutward, CurrInward, CurrDirected, CurrAggregation),
+    curr_issue_link_type(Id, Name, CurrOutward, CurrInward, CurrDirected, CurrAggregation, false),
     (Outward \= CurrOutward ; Inward \= CurrInward ; Directed \= CurrDirected ; Aggregation \= CurrAggregation).
 
 action(create_issue_link_type(Name, Outward, Inward, Directed, Aggregation)) :-
@@ -654,7 +654,7 @@ action(update_issue_link_type(Id, Name, Outward, Inward, Directed, Aggregation))
 
 action(delete_issue_link_type(Id)) :-
     target_delete_issue_link_type(Name),
-    curr_issue_link_type(Id, Name, _, _, _, _).
+    curr_issue_link_type(Id, Name, _, _, _, _, false).
 
 %% 9. Reports
 

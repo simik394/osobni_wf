@@ -106,7 +106,7 @@ class PrologInferenceEngine:
             'target_global_time_tracking(_, _, _)', 'curr_global_time_tracking(_, _, _)',
             'target_project_time_tracking(_, _, _)', 'curr_project_time_tracking(_, _, _)',
             'target_project_work_item_type(_, _)', 'curr_project_work_item_type(_, _)',
-            'target_issue_link_type(_, _, _, _, _)', 'curr_issue_link_type(_, _, _, _, _, _)', 'target_delete_issue_link_type(_)',
+            'target_issue_link_type(_, _, _, _, _)', 'curr_issue_link_type(_, _, _, _, _, _, _)', 'target_delete_issue_link_type(_)',
             'target_report(_, _, _, _, _, _, _)', 'curr_report(_, _, _, _, _, _, _, _)', 'target_delete_report(_)'
         ]:
             janus.query_once(f"retractall({fact})")
@@ -467,7 +467,8 @@ class PrologInferenceEngine:
                 t_to_s = self._escape(lt.get('targetToSource', ''))
                 directed = 'true' if lt.get('directed', True) else 'false'
                 aggregation = 'true' if lt.get('aggregation', False) else 'false'
-                janus.query_once(f"assertz(curr_issue_link_type('{lt_id}', '{lt_name}', '{s_to_t}', '{t_to_s}', {directed}, {aggregation}))")
+                read_only = 'true' if lt.get('readOnly', False) else 'false'
+                janus.query_once(f"assertz(curr_issue_link_type('{lt_id}', '{lt_name}', '{s_to_t}', '{t_to_s}', {directed}, {aggregation}, {read_only}))")
 
         # Assert reports
         if reports:

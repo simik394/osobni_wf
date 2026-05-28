@@ -479,5 +479,72 @@ class TestTimeTrackingLinkTypesReportsActuator:
         
         assert result.success is True
         assert result.resource_id == "rep-uuid-789"
+        
+        # Verify report creation and recalculation trigger (2 POST calls total)
+        assert mock_session.post.call_count == 2
+        mock_session.post.assert_any_call(
+            "https://yt.example.com/api/reports",
+            json={
+                "name": "Demo Burndown",
+                "$type": "BurndownReport",
+                "projects": [{"id": "p-1"}],
+                "query": "",
+                "range": {"id": "current_sprint"},
+                "estimationField": {"field": {"id": "f-story-points"}}
+            },
+            params={'fields': 'id'}
+        )
+        mock_session.post.assert_any_call(
+            "https://yt.example.com/api/reports/rep-uuid-789/status",
+            params={'fields': 'id'}
+        )
+
+    @patch('requests.Session')
+    def test_update_report(self, mock_session_class):
+        from src.actuator import YouTrackActuator
+        
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        
+        # Mock project lookup
+        mock_get_projs = Mock()
+        mock_get_projs.json.return_value = [{"id": "p-1", "shortName": "DEMO"}]
+        mock_get_projs.raise_for_status = Mock()
+        
+        # Mock field resolution
+        mock_get_fields = Mock()
+        mock_get_fields.json.return_value = [{"id": "f-story-points", "name": "Story Points", "fieldType": {"id": "integer"}}]
+        mock_get_fields.raise_for_status = Mock()
+        
+        mock_session.get.side_effect = lambda url, **kwargs: (
+            mock_get_fields if "customFields" in url else mock_get_projs
+        )
+        
+        mock_post_rep = Mock()
+        mock_post_rep.status_code = 200
+        mock_post_rep.raise_for_status = Mock()
+        mock_session.post.return_value = mock_post_rep
+        
+        actuator = YouTrackActuator("https://yt.example.com", "token")
+        result = actuator.update_report("rep-uuid-789", "Demo Burndown", "burndown", "", "current_sprint", "Story Points", "null", ["DEMO"])
+        
+        assert result.success is True
+        
+        # Verify update and recalculation trigger (2 POST calls total)
+        assert mock_session.post.call_count == 2
+        mock_session.post.assert_any_call(
+            "https://yt.example.com/api/reports/rep-uuid-789",
+            json={
+                "name": "Demo Burndown",
+                "projects": [{"id": "p-1"}],
+                "query": "",
+                "range": {"id": "current_sprint"},
+                "estimationField": {"field": {"id": "f-story-points"}}
+            }
+        )
+        mock_session.post.assert_any_call(
+            "https://yt.example.com/api/reports/rep-uuid-789/status",
+            params={'fields': 'id'}
+        )
 
 
