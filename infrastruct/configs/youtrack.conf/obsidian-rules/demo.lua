@@ -1,0 +1,45 @@
+-- obsidian-rules/demo.lua
+-- Programovatelná konfigurace YouTracku pro projekt DEMO (převod z demo.yaml)
+
+return {
+  project = {
+    name = "Demo Project",
+    shortName = "DEMO",
+    leader = "admin" -- Username of project lead (optional)
+  },
+
+  fields = {
+    -- State field for issue workflow
+    {
+      name = "State",
+      type = "state",
+      bundle = "DemoStates",
+      values = {
+        { name = "Open", resolved = false },
+        { name = "In Progress", resolved = false },
+        { name = "Done", resolved = true }
+      }
+    },
+
+    -- Priority dropdown
+    {
+      name = "Priority",
+      type = "enum",
+      bundle = "PriorityBundle",
+      values = { "Critical", "High", "Medium", "Low" }
+    },
+
+    -- Simple text field
+    {
+      name = "Description",
+      type = "text",
+      can_be_empty = true
+    },
+
+    -- Estimated time
+    {
+      name = "Estimation",
+      type = "period"
+    }
+  }
+}
