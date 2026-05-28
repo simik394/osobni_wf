@@ -1,9 +1,13 @@
 import { Command } from 'commander';
+import { GEMINI_API_ROUTES } from '@agents/shared';
 import { 
     executeGeminiCommand, 
+    executeGeminiGet,
     sendServerRequest 
 } from '../../cli/utils';
 import { cliContext } from '../../cli/context';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
 export function registerSessionCommands(gemini: Command) {
     gemini.command('open-session <identifier>')
@@ -26,7 +30,7 @@ export function registerSessionCommands(gemini: Command) {
         .action(async (opts) => {
             const { serverUrl } = cliContext.get();
             try {
-                const result = await executeGeminiCommand('list-sessions', {
+                const result = await executeGeminiGet(GEMINI_API_ROUTES.SESSIONS, {
                     limit: parseInt(opts.limit),
                     offset: parseInt(opts.offset),
                     query: opts.query,
@@ -78,7 +82,7 @@ export function registerSessionCommands(gemini: Command) {
             const { serverUrl } = cliContext.get();
 
             try {
-                const result = await executeGeminiCommand('get-responses', { sessionId }, { server: serverUrl });
+                const result = await executeGeminiGet(GEMINI_API_ROUTES.RESPONSES, { sessionId }, { server: serverUrl });
                 const responses = result.data || [];
 
                 console.log(`\n--- Response (index: ${idx}) ---`);
@@ -102,7 +106,7 @@ export function registerSessionCommands(gemini: Command) {
             const { serverUrl } = cliContext.get();
 
             try {
-                const result = await executeGeminiCommand('get-responses', { sessionId }, { server: serverUrl });
+                const result = await executeGeminiGet(GEMINI_API_ROUTES.RESPONSES, { sessionId }, { server: serverUrl });
                 const responses = result.data || [];
                 console.log('\n--- All Responses ---');
                 if (responses.length === 0) console.log('No responses found');
@@ -125,7 +129,7 @@ export function registerSessionCommands(gemini: Command) {
             const { serverUrl } = cliContext.get();
 
             try {
-                const result = await executeGeminiCommand('get-research-info', { sessionId }, { server: serverUrl });
+                const result = await executeGeminiGet(GEMINI_API_ROUTES.INFO, { sessionId }, { server: serverUrl });
                 const info = result.data || result;
                 console.log('\n--- Research Info ---');
                 console.log(`Session ID: ${info.sessionId || 'N/A'}`);
@@ -152,15 +156,94 @@ export function registerSessionCommands(gemini: Command) {
             const { serverUrl } = cliContext.get();
 
             try {
-                const result = await executeGeminiCommand('list-research-docs', { limit, sessionId }, { server: serverUrl });
+                const result = await executeGeminiGet(GEMINI_API_ROUTES.RESEARCH_DOCS, { limit, sessionId }, { server: serverUrl });
                 const docs = result.data || [];
                 console.log('\n--- Deep Research Documents ---');
+                if (docs.length === 0) console.log('No documents found.');
                 docs.forEach((doc: any, idx: number) => {
                     console.log(`\n[Document ${idx + 1}]`);
                     console.log(`Title: ${doc.title}`);
-                    console.log(`Session ID: ${doc.sessionId}`);
+                    if (doc.sessionId) console.log(`Session ID: ${doc.sessionId}`);
                 });
                 console.log('----------------------------------\n');
+            } catch (e: any) {
+                console.error(`[CLI] Error: ${e.message}`);
+                process.exit(1);
+            }
+        });
+
+    gemini.command('download-research-doc <index> [outputPath]')
+        .description('Download a research document by index (1-based)')
+        .action(async (index, outputPath) => {
+            const { serverUrl } = cliContext.get();
+            const idx = parseInt(index) - 1; // 0-based for API
+
+            try {
+                console.log(`[CLI] Downloading research document at index ${index}...`);
+                const result = await sendServerRequest(`/gemini/research/doc/${idx}`, {}, 'GET');
+                if (result?.success && result.data) {
+                    const doc = result.data;
+                    const fs = await import('node:fs');
+                    const path = await import('node:path');
+                    const targetPath = outputPath || path.join(process.cwd(), `${doc.title.replace(/[^a-z0-9]/gi, '_')}.md`);
+                    
+                    let content = `# ${doc.title}\n\n`;
+                    if (doc.thoughts) content += `## Thoughts\n\n${doc.thoughts}\n\n`;
+                    content += doc.markdown;
+                    if (doc.references?.length > 0) {
+                        content += `\n\n## References\n\n${doc.references.map((r: string) => `- ${r}`).join('\n')}`;
+                    }
+
+                    fs.writeFileSync(targetPath, content);
+                    console.log(`✅ Document saved to: ${targetPath}`);
+                } else {
+                    console.error('❌ Failed to download document.');
+                }
+            } catch (e: any) {
+                console.error(`[CLI] Error: ${e.message}`);
+                process.exit(1);
+            }
+        });
+
+    gemini.command('download-all-research-docs [outputDir]')
+        .description('Download all research documents from the current session')
+        .action(async (outputDir) => {
+            const { serverUrl } = cliContext.get();
+            const targetDir = outputDir || path.join(process.cwd(), 'research_docs');
+
+            try {
+                const fs = await import('node:fs');
+                if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+                console.log(`[CLI] Listing all research documents in session...`);
+                const listRes = await executeGeminiGet(GEMINI_API_ROUTES.RESEARCH_DOCS, { sessionId: 'current' }, { server: serverUrl });
+                const docs = listRes.data || [];
+
+                if (docs.length === 0) {
+                    console.log('No documents found in session.');
+                    return;
+                }
+
+                console.log(`[CLI] Downloading ${docs.length} documents to ${targetDir}...`);
+                for (let i = 0; i < docs.length; i++) {
+                    const result = await sendServerRequest(`/gemini/research/doc/${i}`, {}, 'GET');
+                    if (result?.success && result.data) {
+                        const doc = result.data;
+                        const filename = `${doc.title.replace(/[^a-z0-9]/gi, '_')}.md`;
+                        const targetPath = path.join(targetDir, filename);
+                        
+                        let content = `# ${doc.title}\n\n`;
+                        if (doc.thoughts) content += `## Thoughts\n\n${doc.thoughts}\n\n`;
+                        content += doc.markdown;
+                        if (doc.references?.length > 0) {
+                            content += `\n\n## References\n\n${doc.references.map((r: string) => `- ${r}`).join('\n')}`;
+                        }
+
+                        fs.writeFileSync(targetPath, content);
+                        console.log(`✅ [${i + 1}/${docs.length}] Saved: ${filename}`);
+                    }
+                }
+                console.log(`\n🎉 All documents downloaded to ${targetDir}`);
             } catch (e: any) {
                 console.error(`[CLI] Error: ${e.message}`);
                 process.exit(1);
@@ -170,7 +253,7 @@ export function registerSessionCommands(gemini: Command) {
     gemini.command('model-status')
         .description('Check Gemini model availability and rate limits')
         .action(async () => {
-            const data = await sendServerRequest('/gemini/environment/model-status', {}, 'GET');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.MODEL_STATUS}`, {}, 'GET');
             if (data?.success) {
                 console.log('\n--- Gemini Model Status ---');
                 data.data.forEach((s: any) => {
@@ -187,7 +270,7 @@ export function registerSessionCommands(gemini: Command) {
         .action(async (sessionId) => {
             // shareSession endpoint uses active session but passing ID doesn't switch yet on server? 
             // We'll just call the server endpoint
-            const data = await sendServerRequest('/gemini/session/share', { sessionId }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.SESSION_SHARE || 'session/share'}`, { sessionId }, 'POST');
             if (data?.success && data.link) {
                 console.log(`\nPublic share link: ${data.link}\n`);
             } else {
@@ -199,7 +282,7 @@ export function registerSessionCommands(gemini: Command) {
         .description('Pin a session in the sidebar')
         .action(async (sessionId) => {
             const { serverUrl } = cliContext.get();
-            const result = await executeGeminiCommand('pin', { sessionId }, { server: serverUrl });
+            const result = await executeGeminiCommand(GEMINI_API_ROUTES.SESSION_PIN, { sessionId }, { server: serverUrl });
             if (result?.success) console.log(`Session ${sessionId || 'current'} pinned.`);
         });
 
@@ -207,7 +290,7 @@ export function registerSessionCommands(gemini: Command) {
         .description('Unpin a session in the sidebar')
         .action(async (sessionId) => {
             const { serverUrl } = cliContext.get();
-            const result = await executeGeminiCommand('unpin', { sessionId }, { server: serverUrl });
+            const result = await executeGeminiCommand(GEMINI_API_ROUTES.SESSION_UNPIN, { sessionId }, { server: serverUrl });
             if (result?.success) console.log(`Session ${sessionId || 'current'} unpinned.`);
         });
 
@@ -215,7 +298,7 @@ export function registerSessionCommands(gemini: Command) {
         .description('Rename a session')
         .action(async (newName, sessionId) => {
             const { serverUrl } = cliContext.get();
-            const result = await executeGeminiCommand('rename', { newName, sessionId }, { server: serverUrl });
+            const result = await executeGeminiCommand(GEMINI_API_ROUTES.SESSION_RENAME, { newName, sessionId }, { server: serverUrl });
             if (result?.success) console.log(`Session renamed to "${newName}".`);
         });
 
@@ -223,7 +306,7 @@ export function registerSessionCommands(gemini: Command) {
         .description('Delete a session')
         .action(async (sessionId) => {
             const { serverUrl } = cliContext.get();
-            const result = await executeGeminiCommand('delete', { sessionId }, { server: serverUrl });
+            const result = await executeGeminiCommand(GEMINI_API_ROUTES.SESSION_DELETE, { sessionId }, { server: serverUrl });
             if (result?.success) console.log(`Session deleted.`);
         });
 

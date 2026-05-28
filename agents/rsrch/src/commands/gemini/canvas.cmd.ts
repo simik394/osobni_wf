@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { GEMINI_API_ROUTES } from '@agents/shared';
 import { sendServerRequest } from '../../cli/utils';
 import { getRegistry } from '../../core/artifact-registry';
 
@@ -9,7 +10,7 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('list')
         .description('List all artifacts in the current session (includes history scroll)')
         .action(async () => {
-            const data = await sendServerRequest('/gemini/canvas/list', {}, 'GET');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_LIST}`, {}, 'GET');
             if (data?.success) {
                 console.log('\n--- Session Artifacts ---');
                 if (data.data.length === 0) {
@@ -26,7 +27,7 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('read')
         .description('Read content from the currently open Canvas panel')
         .action(async () => {
-            const data = await sendServerRequest('/gemini/canvas/read', {}, 'GET');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_READ}`, {}, 'GET');
             if (data?.success) {
                 if (!data.data) {
                     console.log('No Canvas panel is currently open.');
@@ -41,7 +42,7 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('open <name>')
         .description('Open a specific artifact by name')
         .action(async (name) => {
-            const data = await sendServerRequest('/gemini/canvas/open', { name }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_OPEN}`, { name }, 'POST');
             if (data?.success && data.data) {
                 console.log(`Artifact "${name}" opened successfully.`);
             } else {
@@ -52,13 +53,13 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('save <name> [path]')
         .description('Save an artifact to a local file')
         .action(async (name, filePath) => {
-            const openRes = await sendServerRequest('/canvas/open', { name });
+            const openRes = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_OPEN}`, { name });
             if (!openRes?.success || !openRes.data) {
                 console.log(`Could not find or open artifact "${name}".`);
                 return;
             }
             
-            const readRes = await sendServerRequest('/canvas/read');
+            const readRes = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_READ}`, {}, 'GET');
             if (!readRes?.success || !readRes.data) {
                 console.log('Failed to read canvas content.');
                 return;
@@ -79,7 +80,7 @@ export function registerCanvasCommands(gemini: Command) {
         .option('-i, --incremental', 'Skip already archived artifacts', false)
         .action(async (opts) => {
             console.log(`[CLI] Archiving session artifacts (format: ${opts.format}, incremental: ${!!opts.incremental})...`);
-            const data = await sendServerRequest('/gemini/canvas/archive', { 
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_ARCHIVE}`, { 
                 outputDir: opts.output, 
                 format: opts.format,
                 incremental: !!opts.incremental
@@ -169,7 +170,7 @@ export function registerCanvasCommands(gemini: Command) {
                 });
             }
 
-            const data = await sendServerRequest('/gemini/canvas/update', { content: finalContent, mode: opts.append ? 'append' : 'replace' }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_UPDATE}`, { content: finalContent, mode: opts.append ? 'append' : 'replace' }, 'POST');
             if (data?.success && data.data) console.log('Canvas updated successfully.');
         });
 
@@ -180,21 +181,21 @@ export function registerCanvasCommands(gemini: Command) {
                 console.error('Invalid tab name. Use "preview" or "code".');
                 return;
             }
-            const data = await sendServerRequest('/gemini/canvas/tab', { tab }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_TAB}`, { tab }, 'POST');
             if (data?.success && data.data) console.log(`Switched to ${tab} tab.`);
         });
 
     canvas.command('close')
         .description('Close the Canvas side panel')
         .action(async () => {
-            const data = await sendServerRequest('/gemini/canvas/close', {}, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_CLOSE}`, {}, 'POST');
             if (data?.success && data.data) console.log('Canvas closed.');
         });
 
     canvas.command('versions')
         .description('List history versions of the current Canvas artifact')
         .action(async () => {
-            const data = await sendServerRequest('/gemini/canvas/versions', {}, 'GET');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_VERSIONS}`, {}, 'GET');
             if (data?.success) {
                 console.log('\n--- Canvas Version History ---');
                 if (data.data.length === 0) {
@@ -211,7 +212,7 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('restore <versionId>')
         .description('Restore the Canvas artifact to a specific version')
         .action(async (versionId) => {
-            const data = await sendServerRequest('/gemini/canvas/restore', { versionId }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_RESTORE}`, { versionId }, 'POST');
             if (data?.success && data.data) console.log(`Successfully restored version ${versionId}.`);
             else console.log(`Failed to restore version ${versionId}.`);
         });
@@ -219,7 +220,7 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('prompt <instruction>')
         .description('Send a modification prompt to the active Canvas')
         .action(async (instruction) => {
-            const data = await sendServerRequest('/gemini/canvas/prompt', { instruction }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_PROMPT}`, { instruction }, 'POST');
             if (data?.success && data.data) console.log('Prompt sent to Canvas.');
             else console.log('Failed to send prompt to Canvas.');
         });
@@ -227,7 +228,7 @@ export function registerCanvasCommands(gemini: Command) {
     canvas.command('export [target]')
         .description('Export the Canvas artifact (default: docs)')
         .action(async (target) => {
-            const data = await sendServerRequest('/gemini/canvas/export', { target: target || 'docs' }, 'POST');
+            const data = await sendServerRequest(`/gemini/${GEMINI_API_ROUTES.CANVAS_EXPORT}`, { target: target || 'docs' }, 'POST');
             if (data?.success && data.data) console.log(`Export to ${target || 'docs'} triggered.`);
             else console.log('Failed to trigger export.');
         });

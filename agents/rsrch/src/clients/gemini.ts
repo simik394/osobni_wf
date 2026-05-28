@@ -425,6 +425,10 @@ export class GeminiClient extends EventEmitter {
         return actions.getAllResearchDocsInSessionAction(this.ctx, this.deps as GeminiActionDeps);
     }
 
+    async readDeepResearchDocument(index: number) {
+        return actions.readDeepResearchDocAction(this.ctx, this.deps as GeminiActionDeps, index);
+    }
+
     // --- Utilities ---
 
     async uploadFile(filePath: string) {

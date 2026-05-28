@@ -1,4 +1,5 @@
 import { GeminiActionDeps, UniversalContext } from '../types';
+import { uploadFilesAction } from './upload';
 
 export async function listGemsAction(ctx: UniversalContext, deps: GeminiActionDeps): Promise<any[]> {
     const { page } = ctx;
@@ -80,8 +81,8 @@ export async function createGemAction(ctx: UniversalContext, deps: GeminiActionD
     await page.fill(selectors.gemini.gems.instructionInput, options.instructions);
     
     if (options.files && options.files.length > 0) {
-        ctx.log('Uploading files for Gem...');
-        // TODO: Reuse uploadFilesAction
+        ctx.log(`Uploading ${options.files.length} files for Gem...`);
+        await uploadFilesAction(ctx, deps, options.files);
     }
 
     await page.click(selectors.gemini.gems.save);
@@ -103,6 +104,11 @@ export async function updateGemAction(ctx: UniversalContext, deps: GeminiActionD
     
     if (options.name) await page.fill(selectors.gemini.gems.nameInput, options.name);
     if (options.instructions) await page.fill(selectors.gemini.gems.instructionInput, options.instructions);
+    
+    if (options.files && options.files.length > 0) {
+        ctx.log(`Uploading ${options.files.length} additional files for Gem...`);
+        await uploadFilesAction(ctx, deps, options.files);
+    }
     
     await page.click(selectors.gemini.gems.save);
     await page.waitForNavigation({ waitUntil: 'networkidle' });

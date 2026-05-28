@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { GEMINI_API_ROUTES } from '@agents/shared';
 import { GeminiClient } from '../clients/gemini';
 import { BrowserClient } from '../clients/base';
 import { config } from '../config';
@@ -234,7 +235,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.get('/info', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.INFO}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const info = await gemini.getResearchInfo();
@@ -250,7 +251,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.get('/sessions', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.SESSIONS}`, async (req: Request, res: Response) => {
         try {
             const { limit, offset, query, pinnedOnly, strategy } = req.query;
             const gemini = await getGeminiClient();
@@ -267,7 +268,45 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/pin', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.RESPONSES}`, async (req: Request, res: Response) => {
+        try {
+            const { sessionId } = req.query;
+            const gemini = await getGeminiClient();
+            if (sessionId) {
+                await gemini.openSession(sessionId as string);
+            }
+            const responses = await gemini.getResponses();
+            res.json({ success: true, data: responses });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get(`/${GEMINI_API_ROUTES.RESEARCH_DOCS}`, async (req: Request, res: Response) => {
+        try {
+            const { limit, sessionId } = req.query;
+            const gemini = await getGeminiClient();
+            const docs = sessionId 
+                ? await gemini.getAllResearchDocsInSession()
+                : await gemini.listDeepResearchDocuments(limit ? parseInt(limit as string) : undefined);
+            res.json({ success: true, data: docs });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.get('/research/doc/:index', async (req: Request, res: Response) => {
+        try {
+            const index = parseInt(req.params.index);
+            const gemini = await getGeminiClient();
+            const doc = await gemini.readDeepResearchDocument(index);
+            res.json({ success: true, data: doc });
+        } catch (e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    router.post(`/${GEMINI_API_ROUTES.SESSION_PIN}`, async (req: Request, res: Response) => {
         try {
             const { sessionId } = req.body;
             const gemini = await getGeminiClient();
@@ -278,7 +317,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/unpin', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.SESSION_UNPIN}`, async (req: Request, res: Response) => {
         try {
             const { sessionId } = req.body;
             const gemini = await getGeminiClient();
@@ -290,7 +329,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
     });
 
     // --- Canvas Actions ---
-    router.get('/canvas/list', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.CANVAS_LIST}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const artifacts = await gemini.listArtifacts();
@@ -300,7 +339,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.get('/canvas/read', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.CANVAS_READ}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const content = await gemini.readCanvas();
@@ -310,7 +349,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/open', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_OPEN}`, async (req: Request, res: Response) => {
         try {
             const { name } = req.body;
             const gemini = await getGeminiClient();
@@ -321,7 +360,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/update', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_UPDATE}`, async (req: Request, res: Response) => {
         try {
             const { content, mode } = req.body;
             const gemini = await getGeminiClient();
@@ -332,7 +371,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/tab', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_TAB}`, async (req: Request, res: Response) => {
         try {
             const { tab } = req.body;
             const gemini = await getGeminiClient();
@@ -343,7 +382,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/close', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_CLOSE}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const success = await gemini.closeCanvas();
@@ -353,7 +392,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.get('/canvas/versions', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.CANVAS_VERSIONS}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const versions = await gemini.listCanvasVersions();
@@ -363,7 +402,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/restore', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_RESTORE}`, async (req: Request, res: Response) => {
         try {
             const { versionId } = req.body;
             const gemini = await getGeminiClient();
@@ -374,7 +413,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/prompt', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_PROMPT}`, async (req: Request, res: Response) => {
         try {
             const { instruction } = req.body;
             const gemini = await getGeminiClient();
@@ -385,7 +424,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/canvas/export', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.CANVAS_EXPORT}`, async (req: Request, res: Response) => {
         try {
             const { target } = req.body;
             const gemini = await getGeminiClient();
@@ -396,7 +435,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/session/rename', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.SESSION_RENAME}`, async (req: Request, res: Response) => {
         try {
             const { sessionId, newName } = req.body;
             const gemini = await getGeminiClient();
@@ -407,7 +446,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.post('/session/delete', async (req: Request, res: Response) => {
+    router.post(`/${GEMINI_API_ROUTES.SESSION_DELETE}`, async (req: Request, res: Response) => {
         try {
             const { sessionId } = req.body;
             const gemini = await getGeminiClient();
@@ -433,13 +472,13 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         try {
             const gemini = await getGeminiClient();
             const extensions = await gemini.listExtensions();
-            res.json({ extensions });
+            res.json({ success: true, data: extensions });
         } catch (e: any) {
             res.status(500).json({ error: e.message });
         }
     });
 
-    router.post('/environment/extensions/toggle', async (req: Request, res: Response) => {
+    router.post('/environment/toggle-extension', async (req: Request, res: Response) => {
         try {
             const { name, enabled } = req.body;
             const gemini = await getGeminiClient();
@@ -589,7 +628,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.get('/environment/model-status', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.MODEL_STATUS}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const statuses = await gemini.getModelStatus();
@@ -776,7 +815,7 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
         }
     });
 
-    router.get('/environment/model-status', async (req: Request, res: Response) => {
+    router.get(`/${GEMINI_API_ROUTES.MODEL_STATUS}`, async (req: Request, res: Response) => {
         try {
             const gemini = await getGeminiClient();
             const statuses = await gemini.getModelStatus();
@@ -842,34 +881,6 @@ export function createGeminiRouter(deps: { getGeminiClient: () => Promise<Gemini
             });
             
             res.json({ success: true, count });
-        } catch (e: any) {
-            res.status(500).json({ error: e.message });
-        }
-    });
-
-    router.get('/canvas/list-archived', async (req: Request, res: Response) => {
-        try {
-            const { type = 'all' } = req.query;
-            const { getRegistry } = await import('../core/artifact-registry');
-            const registry = getRegistry();
-            const ids = type === 'all' 
-                ? registry.listIds() 
-                : registry.listIds().filter(id => registry.get(id)?.type === type);
-            
-            const artifacts = ids.map(id => ({ id, ...registry.get(id) }));
-            res.json({ success: true, data: artifacts });
-        } catch (e: any) {
-            res.status(500).json({ error: e.message });
-        }
-    });
-
-    router.post('/sync-registry', async (req: Request, res: Response) => {
-        try {
-            const gemini = await getGeminiClient();
-            const { getGraphStore } = await import('../core/graph-store');
-            const store = getGraphStore();
-            const result = await gemini.syncRegistryToGraph(store);
-            res.json({ success: true, data: result });
         } catch (e: any) {
             res.status(500).json({ error: e.message });
         }

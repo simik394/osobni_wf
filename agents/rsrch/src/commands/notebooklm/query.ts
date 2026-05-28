@@ -15,9 +15,11 @@ export function registerQueryCommands(notebook: Command) {
 
     notebook.command('ask <title> <message>')
         .description('Ask a question to a notebook')
-        .action(async (title, message) => {
+        .option('-s, --sources <names>', 'Specific sources to use (comma-separated names or range like 1,3-5)')
+        .action(async (title, message, opts) => {
             console.log(`[CLI] Asking notebook "${title}": ${message}...`);
-            const data = await sendServerRequest('/notebook/ask', { title, message });
+            const sources = opts.sources ? opts.sources.split(',').map((s: string) => s.trim()) : undefined;
+            const data = await sendServerRequest('/notebook/ask', { title, message, sources });
             if (data?.success) {
                 console.log('\n--- NotebookLM Response ---\n');
                 console.log(data.data);
