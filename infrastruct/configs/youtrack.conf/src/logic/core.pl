@@ -904,6 +904,51 @@ materialize_diagram_facts :-
         )
     ).
 
+%% =============================================================================
+%% FORMAL SEMANTIC VERIFICATION (INVARIANTS)
+%% =============================================================================
+
+% 1. Referential Integrity: A field of type enum/state must have an associated bundle.
+violation(referential_integrity, Message) :-
+    target_field(FieldName, Type, Project),
+    member(Type, ['enum', 'state']),
+    \+ field_uses_bundle(FieldName, _),
+    format(string(Message), "Field '~w' in project '~w' is of type '~w' but has no associated bundle.", [FieldName, Project, Type]).
+
+% 2. Default Value Soundness: A default value of a field must exist in its bundle.
+violation(default_value_soundness, Message) :-
+    target_field_default(FieldName, DefaultVal, Project),
+    field_uses_bundle(FieldName, BundleName),
+    \+ target_bundle_value(BundleName, DefaultVal),
+    \+ target_state_value(BundleName, DefaultVal, _),
+    format(string(Message), "Default value '~w' for field '~w' in project '~w' does not exist in bundle '~w'.", [DefaultVal, FieldName, Project, BundleName]).
+
+% 3. Project Identity Uniqueness: ShortName must uniquely identify a project name.
+violation(project_identity_uniqueness, Message) :-
+    (target_project(ShortName, Name1) ; target_project(ShortName, Name1, _)),
+    (target_project(ShortName, Name2) ; target_project(ShortName, Name2, _)),
+    Name1 \= Name2,
+    format(string(Message), "Project ShortName '~w' is assigned to two different names: '~w' and '~w'.", [ShortName, Name1, Name2]).
+
+% 4. State Value Soundness: IsResolved must be 'true' or 'false'
+violation(state_value_soundness, Message) :-
+    target_state_value(BundleName, ValueName, IsResolved),
+    \+ member(IsResolved, ['true', 'false']),
+    format(string(Message), "State value '~w' in bundle '~w' has invalid resolution flag '~w' (must be true or false).", [ValueName, BundleName, IsResolved]).
+
+% 5. State Machine Triviality: A state bundle must have at least one unresolved state.
+violation(state_machine_triviality, Message) :-
+    field_uses_bundle(FieldName, BundleName),
+    target_field(FieldName, 'state', Project),
+    \+ target_state_value(BundleName, _, 'false'),
+    format(string(Message), "State bundle '~w' for field '~w' in project '~w' has no unresolved states.", [BundleName, FieldName, Project]).
+
+% Check all invariants and return as a list of lists: [['violation', Code, Message], ...]
+verify_invariants(ViolationsLists) :-
+    materialize_diagram_facts,
+    findall(violation(Code, Message), violation(Code, Message), Violations),
+    maplist(=.., Violations, ViolationsLists).
+
 %% Collect all actions and sort by dependencies
 %% Collect all actions and sort by dependencies
 plan(OrderedActions) :-
@@ -911,6 +956,7 @@ plan(OrderedActions) :-
     findall(A, action(A), UnsortedWithDups),
     list_to_set(UnsortedWithDups, Unsorted),
     topological_sort(Unsorted, OrderedActions).
+
 
 
 %% Simple topological sort (Kahn's algorithm)

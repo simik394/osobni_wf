@@ -539,7 +539,19 @@ class PrologInferenceEngine:
         """
         self.initialize()
         
-        # Query the plan
+        # 1. Run Formal Semantic Invariant Checks
+        verify_res = janus.query_once("verify_invariants(Violations)")
+        if verify_res and verify_res.get("Violations"):
+            violations = verify_res["Violations"]
+            error_msgs = []
+            for v in violations:
+                if isinstance(v, list) and len(v) >= 3:
+                    error_msgs.append(f"[{v[1]}]: {v[2]}")
+                else:
+                    error_msgs.append(str(v))
+            raise ValueError("FORMAL SEMANTIC VERIFICATION FAILURE:\n" + "\n".join(error_msgs))
+        
+        # 2. Query the plan
         # We transform terms to lists (univ =..) to assume robust conversion 
         # by Janus (which might fail on compound terms in some envs)
         # We underscore _Actions to prevent Janus from trying to return the 

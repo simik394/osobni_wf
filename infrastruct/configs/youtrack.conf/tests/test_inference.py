@@ -120,6 +120,25 @@ class TestPrologInferenceEngine:
             val_idx = actions.index('add_bundle_value')
             assert bundle_idx < val_idx
 
+    def test_formal_verification_failure(self):
+        """Test that invalid config invariants raise a formal verification ValueError."""
+        from src.logic.inference import PrologInferenceEngine
+        
+        engine = PrologInferenceEngine()
+        engine.clear_facts()
+        
+        # Target state: 'State' field of type 'state' but NO bundle associated (referential integrity violation)
+        target_facts = """
+        target_field('State', 'state', 'DEMO').
+        """
+        engine.assert_target_state(target_facts)
+        engine.assert_current_state([], [])
+        
+        with pytest.raises(ValueError) as excinfo:
+            engine.compute_plan()
+            
+        assert "FORMAL SEMANTIC VERIFICATION FAILURE" in str(excinfo.value)
+        assert "referential_integrity" in str(excinfo.value)
 
 
 class TestInferenceWithoutJanus:
