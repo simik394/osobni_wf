@@ -41,6 +41,8 @@ export const SERVICE_URLS = {
     aimode: 'https://www.google.com',
     keep: 'https://keep.google.com',
     angrav: 'chrome-extension://', // Angrav is an extension, URL pattern varies
+    gdocs: 'https://docs.google.com',
+    jules: 'https://jules.google.com',
 } as const;
 
 export type ServiceType = keyof typeof SERVICE_URLS;
@@ -211,6 +213,7 @@ export async function getTab(
                 const isBusy = await isTabBusy(page);
                 if (!isBusy) {
                     console.log(`🎯 Found existing tab for session ${sessionId}`);
+                    await markTabBusy(page);
                     return page;
                 }
                 // Tab exists but is busy - we need to wait (Windmill queue handles this)
@@ -222,6 +225,7 @@ export async function getTab(
     // 2. Find a free tab for this service
     const freeTab = await findFreeTab(browser, service);
     if (freeTab) {
+        await markTabBusy(freeTab);
         return freeTab;
     }
 
@@ -231,7 +235,13 @@ export async function getTab(
     if (totalTabs < maxTabs) {
         console.log(`✨ Opening new tab (${totalTabs + 1}/${maxTabs})`);
         const newPage = await context.newPage();
-        await newPage.goto(SERVICE_URLS[service]);
+        if (serviceUrl) {
+            await newPage.goto(serviceUrl);
+        } else {
+            console.log(`⚠️ [TabPool] No service URL mapped for "${service}". Opening blank page.`);
+            await newPage.goto('about:blank');
+        }
+        await markTabBusy(newPage);
         return newPage;
     }
 

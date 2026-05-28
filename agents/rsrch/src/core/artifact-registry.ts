@@ -70,7 +70,9 @@ export class ArtifactRegistry {
      */
     save(): void {
         try {
-            fs.writeFileSync(this.filePath, JSON.stringify(this.registry, null, 2), 'utf-8');
+            const tempPath = `${this.filePath}.tmp`;
+            fs.writeFileSync(tempPath, JSON.stringify(this.registry, null, 2), 'utf-8');
+            fs.renameSync(tempPath, this.filePath);
         } catch (e) {
             console.error('[Registry] Failed to save:', e);
         }

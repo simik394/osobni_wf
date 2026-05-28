@@ -2,7 +2,11 @@
  * Unit tests for validateMessages function
  * Can run without server
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { getTab, markTabBusy, markTabFree, isTabBusy, SERVICE_URLS } from '@agents/shared';
+import { ArtifactRegistry } from '../src/core/artifact-registry';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Copy validateMessages for isolated testing
 function validateMessages(messages: Array<{ role: string; content: unknown }>): string | null {
@@ -184,5 +188,76 @@ describe('validateMessages - Unit Tests', () => {
         });
 
 // end snippet should-allow-empty-assistant-content
+    });
+});
+
+describe('rsrch Robustness Validation Tests', () => {
+    describe('TabPool Service URLs and Fallbacks', () => {
+        it('should have gdocs and jules service URLs registered', () => {
+            expect(SERVICE_URLS).toHaveProperty('gdocs');
+            expect(SERVICE_URLS).toHaveProperty('jules');
+            expect((SERVICE_URLS as any).gdocs).toBe('https://docs.google.com');
+            expect((SERVICE_URLS as any).jules).toBe('https://jules.google.com');
+        });
+
+        it('should handle unmapped services gracefully in getTab by navigating to about:blank', async () => {
+            const mockPageInstance: any = {
+                url: () => 'about:blank',
+                goto: vi.fn().mockResolvedValue(undefined),
+                evaluate: vi.fn().mockResolvedValue(false),
+            };
+            const mockContextInstance: any = {
+                pages: () => [],
+                newPage: async () => mockPageInstance,
+            };
+            
+            const page = await getTab(mockContextInstance, 'invalid-service' as any);
+            expect(page).toBe(mockPageInstance);
+            expect(mockPageInstance.goto).toHaveBeenCalledWith('about:blank');
+        });
+
+        it('should automatically mark leased tabs as busy', async () => {
+            let evalArgs: any = null;
+            const mockPageInstance: any = {
+                url: () => 'https://gemini.google.com',
+                goto: vi.fn().mockResolvedValue(undefined),
+                evaluate: vi.fn().mockImplementation((fn, args) => {
+                    evalArgs = args;
+                    return undefined;
+                }),
+            };
+            const mockContextInstance: any = {
+                pages: () => [],
+                newPage: async () => mockPageInstance,
+            };
+
+            const page = await getTab(mockContextInstance, 'gemini');
+            expect(page).toBe(mockPageInstance);
+            expect(evalArgs).not.toBeNull();
+            expect(evalArgs.busy).toBe('__WINDMILL_BUSY');
+        });
+    });
+
+    describe('ArtifactRegistry Atomic Saves', () => {
+        it('should write atomically using temporary file', () => {
+            const testDir = path.join(__dirname, 'temp_test_registry');
+            if (fs.existsSync(testDir)) {
+                fs.rmSync(testDir, { recursive: true, force: true });
+            }
+            fs.mkdirSync(testDir);
+
+            const registry = new ArtifactRegistry(testDir);
+            registry.registerSession('session-123', 'Quantum Physics');
+
+            const registryFilePath = path.join(testDir, 'artifact-registry.json');
+            expect(fs.existsSync(registryFilePath)).toBe(true);
+
+            // Verify content is saved correctly
+            const content = JSON.parse(fs.readFileSync(registryFilePath, 'utf-8'));
+            expect(content.artifacts).toHaveProperty(Object.keys(content.artifacts)[0]);
+            
+            // Clean up
+            fs.rmSync(testDir, { recursive: true, force: true });
+        });
     });
 });

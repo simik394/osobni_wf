@@ -11,6 +11,7 @@ import { graphCommand } from '../commands/graph';
 import { registryCommand } from '../commands/registry';
 import { aimodeCommand } from '../commands/aimode';
 import { keepCommand } from '../commands/keep';
+import { gdocsCommand } from '../commands/gdocs';
 import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from '../commands/misc';
 import { initTelemetry, shutdownTelemetry } from '../core/telemetry';
 
@@ -51,6 +52,7 @@ program.addCommand(graphCommand);
 program.addCommand(registryCommand);
 program.addCommand(aimodeCommand);
 program.addCommand(keepCommand);
+program.addCommand(gdocsCommand);
 
 async function main() {
     try {
