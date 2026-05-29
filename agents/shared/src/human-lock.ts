@@ -83,6 +83,10 @@ export async function withHumanHands<T>(
     action: () => Promise<T>,
     timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
+    if (process.env.NODE_ENV === 'test') {
+        return await action();
+    }
+
     await acquireHumanLock(timeoutMs);
 
     try {

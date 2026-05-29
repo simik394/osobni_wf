@@ -138,16 +138,19 @@ export async function startJob(agent: AgentType, profile?: string): Promise<{ su
         if (profile) {
             // Locate the task config
             const taskGroup = job.TaskGroups?.[0];
-            const task = taskGroup?.Tasks?.find((t: any) => t.Name === 'chromium');
+            const task = taskGroup?.Tasks?.find((t: any) => t.Name === 'chromium' || t.Name === 'angrav-browser');
 
             if (task && task.Config && Array.isArray(task.Config.volumes)) {
-                // We expect volume format "/opt/rsrch/profiles/XXX:/app/user-data"
-                // Pass only the profile name, construct absolute path
-                const newVolume = `/opt/rsrch/profiles/${profile}:/app/user-data`;
+                // Determine host and container path based on agent type
+                const isRsrch = agent === 'rsrch';
+                const hostPath = isRsrch ? `/opt/rsrch/profiles/${profile}` : `/opt/angrav/profiles/${profile}`;
+                const containerPath = isRsrch ? '/app/user-data' : '/home/angrav/.config/Antigravity';
+                const newVolume = `${hostPath}:${containerPath}`;
+
                 task.Config.volumes = [newVolume];
-                console.log(`🔧 Patching job ${jobName} to use profile: ${profile}`);
+                console.log(`🔧 Patching job ${jobName} to use profile: ${profile} (Volume: ${newVolume})`);
             } else {
-                console.warn(`⚠️ Could not find task 'chromium' or volumes config in job ${jobName}. Profile patching may fail.`);
+                console.warn(`⚠️ Could not find task 'chromium' or 'angrav-browser' or volumes config in job ${jobName}. Profile patching may fail.`);
             }
         }
 

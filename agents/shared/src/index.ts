@@ -6,3 +6,5 @@ export * from './logger';
 export * from './errors';
 export * from './config/loader';
 export * from './tab-pool';
+export * from './api-routes';
+export * from './human-lock';
