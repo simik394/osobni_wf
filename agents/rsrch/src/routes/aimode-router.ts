@@ -9,7 +9,9 @@ import {
 import {
     setAIModeModelAction,
     uploadAIModeFileAction,
-    saveActiveAIModeChatAction
+    saveActiveAIModeChatAction,
+    exportAIModeToGDocAction,
+    exportAIModeToKeepAction
 } from '../actions/aimode/chat';
 import { selectors } from '../selectors';
 import { config } from '../config';
@@ -168,6 +170,30 @@ export function createAIModeRouter(deps: any) {
                 return await saveActiveAIModeChatAction(ctx, deps, { outputFile });
             });
             res.json({ success: true, data: result });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/export/gdocs', async (req, res) => {
+        try {
+            const { title, docUrl, tabName, append } = req.body;
+            const url = await runAIModeAction(async (ctx, deps) => {
+                return await exportAIModeToGDocAction(ctx, deps, { title, docUrl, tabName, append });
+            });
+            res.json({ success: true, data: { url } });
+        } catch (e: any) {
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+
+    router.post('/export/keep', async (req, res) => {
+        try {
+            const { title, labels } = req.body;
+            const success = await runAIModeAction(async (ctx, deps) => {
+                return await exportAIModeToKeepAction(ctx, deps, { title, labels });
+            });
+            res.json({ success: true, data: { success } });
         } catch (e: any) {
             res.status(500).json({ success: false, error: e.message });
         }

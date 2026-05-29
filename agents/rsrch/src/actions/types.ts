@@ -106,6 +106,14 @@ export type AIModeActionDeps = ActionDeps & {
     getGraphStore?: () => any;
 };
 /**
+ * Google Docs action dependencies.
+ */
+export type GDocsActionDeps = ActionDeps & {
+    humanDelay?: (ms: number, variance?: number) => Promise<void>;
+    dumpState?: (prefix: string) => Promise<any>;
+};
+
+/**
  * Shared Google Authentication action dependencies.
  */
 export type GoogleAuthActionDeps = ActionDeps;

@@ -132,6 +132,37 @@ aimode.command('save-active')
         }
     });
 
+aimode.command('export <target>')
+    .description('Export active AI Mode session to GDocs or Keep')
+    .option('--title <string>', 'Title for the exported content')
+    .option('--doc-url <url>', 'Target GDoc URL (if exporting to existing doc)')
+    .option('--tab <name>', 'Target tab name in GDoc')
+    .option('--append', 'Append to existing content instead of overwriting')
+    .action(async (target, opts) => {
+        const t = target.toLowerCase();
+        if (!['gdocs', 'keep'].includes(t)) {
+            console.error(chalk.red('Error: target must be "gdocs" or "keep"'));
+            process.exit(1);
+        }
+        
+        const path = t === 'gdocs' ? '/aimode/export/gdocs' : '/aimode/export/keep';
+        console.log(chalk.yellow(`Exporting active session to ${target}...`));
+        
+        const data = await sendServerRequest(path, {
+            title: opts.title,
+            docUrl: opts.docUrl,
+            tabName: opts.tab,
+            append: opts.append
+        });
+        
+        if (data?.success) {
+            console.log(chalk.green(`\n✅ Exported successfully!`));
+            if (data.data?.url) console.log(`   URL: ${data.data.url}`);
+        } else {
+            console.error(chalk.red(`Failed to export: ${data?.error || 'Unknown error'}`));
+        }
+    });
+
 export const aimodeCommand = aimode;
 export default aimodeCommand;
 

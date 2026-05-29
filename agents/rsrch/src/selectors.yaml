@@ -459,6 +459,28 @@ perplexity:
   followUpInput: 'textarea[placeholder*="follow-up"]'
   answerContainer: "div.prose, .answer-content, [class*='answer-']"
 # ============================================================
+# GOOGLE DOCS SELECTORS
+# ============================================================
+gdocs:
+  titleInput: 'input.docs-title-input'
+  editor: '.docs-tex-container, .kix-editor, .docs-item-container'
+  shareBtn: 'button:has-text("Share"), button:has-text("Sdílet")'
+  tabs:
+    # Sidebar toggle for tabs & outline
+    toggleSidebar: 'button[aria-label*="Show tabs" i], button[aria-label*="Zobrazit záložky" i], button[aria-label*="Tabs & outline" i]'
+    # Plus button to add a new tab
+    addTab: 'button[aria-label*="Add tab" i], button[aria-label*="Přidat záložku" i]'
+    # Individual tab item in the sidebar
+    tabItem: 'div[role="tab"]'
+    # The three-dot menu for a specific tab
+    tabOptions: 'button[aria-label*="Tab options" i], button[aria-label*="Možnosti záložky" i]'
+    # Menu items (regex-like for multi-lang)
+    rename: "Rename|Přejmenovat|Upravit název"
+    delete: "Delete|Smazat|Odstranit"
+    duplicate: "Duplicate|Duplikovat"
+    addSubtab: "Add subtab|Přidat podzáložku"
+
+# ============================================================
 # GOOGLE AUTHENTICATION
 # ============================================================
 googleAuth:

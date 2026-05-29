@@ -2,8 +2,116 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { UniversalContext, AIModeActionDeps } from '../types';
 import { AIModeConversation } from './history';
+import { createGDocAction, writeToGDocAction, addGDocTabAction, switchGDocTabAction } from '../gdocs';
+import { createKeepNoteAction } from '../keep';
 
 export type Turn = AIModeConversation['turns'][number];
+
+/**
+ * Exports the active AI Mode conversation to a Google Doc.
+ */
+export async function exportAIModeToGDocAction(
+    ctx: UniversalContext,
+    deps: AIModeActionDeps,
+    options: { 
+        title?: string; 
+        docUrl?: string; 
+        tabName?: string;
+        append?: boolean;
+    } = {}
+): Promise<string | null> {
+    const { page, log } = ctx;
+    
+    // 1. Scrape the active conversation
+    const scrapeResult = await saveActiveAIModeChatAction(ctx, deps);
+    if (scrapeResult.turnCount === 0) {
+        log('No conversation turns found to export.', 'warn');
+        return null;
+    }
+    
+    const sessionData = JSON.parse(fs.readFileSync(scrapeResult.filePath, 'utf-8')) as AIModeConversation;
+    const content = sessionData.turns.map(t => {
+        const roleName = t.role === 'user' ? 'User' : 'AI';
+        return `## ${roleName}\n\n${t.content}\n\n---\n`;
+    }).join('\n');
+
+    const title = options.title || sessionData.query || `AI Mode Export ${new Date().toLocaleString()}`;
+
+    // 2. Target document
+    let targetUrl: string | undefined | null = options.docUrl;
+    if (targetUrl) {
+        await page.goto(targetUrl);
+    } else {
+        targetUrl = await createGDocAction(ctx, title);
+    }
+
+    if (!targetUrl) return null;
+
+    // 3. Target tab management
+    if (options.tabName) {
+        const tabExists = await switchGDocTabAction(ctx, { ...deps, selectors: ctx.config.selectors }, options.tabName);
+        if (!tabExists) {
+            log(`Creating new tab: ${options.tabName}`);
+            await addGDocTabAction(ctx, { ...deps, selectors: ctx.config.selectors }, options.tabName);
+        }
+    }
+
+    // 4. Write content
+    const success = await writeToGDocAction(ctx, content, { append: options.append });
+    if (success) {
+        log(`Successfully exported AI Mode session to GDoc: ${targetUrl}`);
+        return targetUrl;
+    }
+
+    return null;
+}
+
+/**
+ * Exports the active AI Mode conversation to Google Keep.
+ */
+export async function exportAIModeToKeepAction(
+    ctx: UniversalContext,
+    deps: AIModeActionDeps,
+    options: { title?: string; labels?: string[] } = {}
+): Promise<boolean> {
+    const { log } = ctx;
+    
+    const scrapeResult = await saveActiveAIModeChatAction(ctx, deps);
+    if (scrapeResult.turnCount === 0) return false;
+    
+    const sessionData = JSON.parse(fs.readFileSync(scrapeResult.filePath, 'utf-8')) as AIModeConversation;
+    const content = sessionData.turns.map(t => {
+        const roleName = t.role === 'user' ? 'User' : 'AI';
+        return `${roleName}: ${t.content}\n`;
+    }).join('\n');
+
+    const title = options.title || sessionData.query || `AI Mode Export ${new Date().toLocaleString()}`;
+
+    const keepDeps = {
+        ...deps,
+        selectors: ctx.config.selectors,
+        humanDelay: deps.humanDelay || (async (ms: number) => new Promise(resolve => setTimeout(resolve, ms)))
+    } as any;
+
+    const success = await createKeepNoteAction(ctx, keepDeps, title, content);
+
+    if (success && options.labels && options.labels.length > 0) {
+        const { manageKeepLabelsAction } = await import('../keep');
+        for (const label of options.labels) {
+            try {
+                await manageKeepLabelsAction(ctx, keepDeps, { title }, label, 'add');
+            } catch (e: any) {
+                log(`Failed to add label "${label}" to Keep note: ${e.message}`, 'warn');
+            }
+        }
+    }
+
+    if (success) {
+        log('Successfully exported AI Mode session to Google Keep.');
+    }
+
+    return success;
+}
 
 
 /**

@@ -31,4 +31,13 @@ export * from './perplexity/query';
 export * from './aimode/history';
 export * from './aimode/chat';
 
+// Google Docs Actions
+export * from './gdocs';
+
+// Google Keep Actions
+export * from './keep';
+
+// Shared Google Auth
+export * from './google-auth';
+
 

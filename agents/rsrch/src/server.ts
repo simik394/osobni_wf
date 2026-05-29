@@ -19,6 +19,7 @@ import { createChatRouter, createGeminiRouter } from './routes/chat-router';
 import { createSystemRouter } from './routes/system-router';
 import { createAIModeRouter } from './routes/aimode-router';
 import { createPerplexityRouter } from './routes/perplexity-router';
+import { createGDocsRouter } from './routes/gdocs-router';
 
 // Initialize App
 const app = express();
@@ -130,6 +131,7 @@ app.use('/notebooklm', notebookLMRouter);
 app.use('/keep', createKeepRouter(dependencies));
 app.use('/webhook', webhookRouter);
 app.use('/aimode', createAIModeRouter(dependencies));
+app.use('/gdocs', createGDocsRouter(dependencies));
 
 // 2. Deep Research & Jobs & Graph
 const researchRouter = createResearchRouter(dependencies);

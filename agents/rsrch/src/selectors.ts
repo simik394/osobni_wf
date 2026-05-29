@@ -345,6 +345,22 @@ export interface KeepSelectors {
     sidebarLabelItem: string;
 }
 
+export interface GDocsSelectors {
+    titleInput: string;
+    editor: string;
+    shareBtn: string;
+    tabs: {
+        toggleSidebar: string;
+        addTab: string;
+        tabItem: string;
+        tabOptions: string;
+        rename: string;
+        delete: string;
+        duplicate: string;
+        addSubtab: string;
+    };
+}
+
 export interface NotebookLMSelectors {
     home: HomeSelectors;
     notebook: NotebookSelectors;
@@ -357,6 +373,7 @@ export interface NotebookLMSelectors {
     perplexity: PerplexitySelectors;
     aiMode: AIModeSelectors;
     keep: KeepSelectors;
+    gdocs: GDocsSelectors;
     googleAuth: GoogleAuthSelectors;
 }
 
@@ -667,6 +684,21 @@ const DEFAULTS: NotebookLMSelectors = {
         labelCheckbox: 'div[role="menuitemcheckbox"]',
         sidebarLabelItem: 'div[role="navigation"] a[href*="label/"]'
     },
+    gdocs: {
+        titleInput: 'input.docs-title-input',
+        editor: '.docs-tex-container, .kix-editor',
+        shareBtn: 'button:has-text("Share")',
+        tabs: {
+            toggleSidebar: 'button[aria-label*="Show tabs" i], button[aria-label*="Zobrazit záložky" i]',
+            addTab: 'button[aria-label*="Add tab" i], button[aria-label*="Přidat záložku" i]',
+            tabItem: 'div[role="tab"]',
+            tabOptions: 'button[aria-label*="Tab options" i], button[aria-label*="Možnosti záložky" i]',
+            rename: 'Rename|Přejmenovat',
+            delete: 'Delete|Smazat',
+            duplicate: 'Duplicate|Duplikovat',
+            addSubtab: 'Add subtab|Přidat podzáložku'
+        }
+    },
     googleAuth: {
         accountChooser: {
             container: 'div[jsname="tJHJj"], #accountchooser, h1:has-text("Choose an account"), h1:has-text("Zvolte účet")',
@@ -680,6 +712,7 @@ const DEFAULTS: NotebookLMSelectors = {
         }
     }
 };
+
 
 let cachedSelectors: NotebookLMSelectors | null = null;
 
