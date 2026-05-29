@@ -6,3 +6,8 @@ debug_*.py
 nimcache/
 
 /.luarc.json
+
+# OCaml build artifacts
+*.cmi
+*.cmx
+*.o
