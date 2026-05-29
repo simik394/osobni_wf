@@ -15,6 +15,8 @@ Tento log slouží jako **trvalý a perzistentní záznam** o auditu, asimilaci 
 | **`archive/jules-sandbox-probe-results`** | Vzdálená | 1 | Obsahuje pouze staré výsledky testování sandboxu z dřívějších pokusů. Naše nová verifikace (`verify`) je mnohem dokonalejší. | **Smazat** (Delete) | Testovací data jsou zastaralá, verifikační engine je plně asimilován. |
 | **`archive/jules-youtrack-iac-uam-massive`** | Vzdálená | 2 | Obsahuje implementaci User Access Management (UAM) pro YouTrack IaC. Důkladný grep potvrdil, že tyto UAM změny (např. `# UAM facts` v `inference.py`) jsou již plně sloučeny a aktivní v naší větvi. | **Smazat** (Delete) | Změny jsou již plně integrovány v hlavním kódu. |
 | **`experiment/jules-git-nesting`** | Vzdálená | 1 | Identická s `main` větví. Obsahuje pouze opravu TS typů. | **Smazat** (Delete) | Větev je již plně sloučená do `main`. |
+| **`experiment/jules-sandbox-probe-v2`** | Lokální / Vzdálená | ~50+ | Hlavní vývojová větev obsahující veškeré nové featury (Lua config, verify CLI, falkordb, nomad atd.). | **Sloučit** (Merge) | Kompletně a bezpečně sloučena do `main` (fast-forward) a následně odstraněna. |
+
 
 ---
 
@@ -54,3 +56,9 @@ Tento log slouží jako **trvalý a perzistentní záznam** o auditu, asimilaci 
 *   **Commity navíc**: 1 (identická s main)
 *   **Analýza**: Žádné rozdíly oproti `main`.
 *   **Rozhodnutí**: Smazat vzdálenou větev.
+
+### 8. `experiment/jules-sandbox-probe-v2`
+*   **Commity navíc**: ~50+
+*   **Analýza**: Hlavní pracovní a experimentální větev, kde probíhal veškerý vývoj (verifikační engine, integrace falkordb, nomad, lua skripty).
+*   **Rozhodnutí**: Sloučit do `main` (Merge) a následně bezpečně smazat z lokálu i origin.
+
