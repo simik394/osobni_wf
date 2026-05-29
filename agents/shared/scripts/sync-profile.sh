@@ -20,11 +20,13 @@ case $AGENT in
     REMOTE_PATH="/opt/rsrch/chrome-profile"
     JOB_NAME="rsrch-browser"
     JOB_FILE="rsrch-browser.nomad.hcl"
+    CDP_PORT="9223"
     ;;
   angrav)
     REMOTE_PATH="/opt/angrav/data"
     JOB_NAME="angrav-browser"
     JOB_FILE="angrav-browser.nomad.hcl"
+    CDP_PORT="9224"
     ;;
   *)
     echo "❌ Unknown agent: $AGENT"
@@ -61,10 +63,10 @@ echo "🚀 Starting ${JOB_NAME}..."
 ssh "$REMOTE_HOST" "nomad job run /opt/nomad/jobs/${JOB_FILE}"
 
 # Wait for health check
-echo "⏳ Waiting for CDP to become available..."
+echo "⏳ Waiting for CDP to become available on port ${CDP_PORT}..."
 for i in {1..30}; do
-  if curl -s "http://${REMOTE_HOST}:9223/json/version" > /dev/null 2>&1; then
-    echo "✅ Done! Browser is ready at ${REMOTE_HOST}:9223"
+  if curl -s "http://${REMOTE_HOST}:${CDP_PORT}/json/version" > /dev/null 2>&1; then
+    echo "✅ Done! Browser is ready at ${REMOTE_HOST}:${CDP_PORT}"
     exit 0
   fi
   sleep 1

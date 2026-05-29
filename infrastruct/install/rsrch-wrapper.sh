@@ -14,15 +14,20 @@ if [ ! -f "$CONFIG_FILE" ] && [ -f "$PROJECT_DIR/config.json" ]; then
     cp "$PROJECT_DIR/config.json" "$CONFIG_FILE"
 fi
 
-# Default Port
-PORT=3000
-
-# Read Config for Port
+# Read Config for Host and Ports
 if [ -f "$CONFIG_FILE" ]; then
-    # Simple grep/sed json parser for specific key "port"
+    # Simple grep/sed JSON parser for specific keys
     READ_PORT=$(grep -o '"port": *[0-9]*' "$CONFIG_FILE" | grep -o '[0-9]*')
     if [ ! -z "$READ_PORT" ]; then
         PORT="$READ_PORT"
+    fi
+    READ_HOST=$(grep -o '"host": *"[^"]*"' "$CONFIG_FILE" | head -n1 | cut -d'"' -f4)
+    if [ ! -z "$READ_HOST" ]; then
+        RSRCH_HOST="$READ_HOST"
+    fi
+    READ_VNC_PORT=$(grep -o '"vncPort": *[0-9]*' "$CONFIG_FILE" | head -n1 | grep -o '[0-9]*')
+    if [ ! -z "$READ_VNC_PORT" ]; then
+        RSRCH_VNC_PORT="$READ_VNC_PORT"
     fi
 fi
 
@@ -31,7 +36,7 @@ export PORT
 # Handle project directory
 if [ ! -d "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/docker-compose.yml" ]; then
     # Fallback to local workspace if we are in the repo
-    WORKSPACE_DIR="/home/sim/Obsi/Prods/01-pwf/agents/rsrch"
+    WORKSPACE_DIR="/home/sim/Prods/01-pwf/agents/rsrch"
     if [ -d "$WORKSPACE_DIR" ]; then
         PROJECT_DIR="$WORKSPACE_DIR"
     fi
@@ -79,7 +84,12 @@ case "$1" in
     docker compose restart
     ;;
   status)
-    docker compose ps
+    shift
+    if [ -f "$PROJECT_DIR/dist/cli/main.js" ]; then
+         node "$PROJECT_DIR/dist/cli/main.js" status "$@"
+    else
+         docker compose ps
+    fi
     ;;
   logs)
     docker compose logs -f
@@ -146,32 +156,51 @@ case "$1" in
   vnc)
     echo "📡 [CLI Path: $(which rsrch)]"
     HOST="${RSRCH_HOST:-halvarm}"
-    PORT="${RSRCH_VNC_PORT:-5902}"
-    echo "📡 Connecting to Production Browser VNC on $HOST:$PORT..."
     
-    # Check if port is reachable
-    if ! nc -z -w 2 "$HOST" "$PORT" >/dev/null 2>&1; then
-         echo "⚠️  Warning: $HOST:$PORT unreachable. Checking fallback..."
-         # Fallback logic could be config driven too, but kept simple for now
+    # Try configured port first, fallback to common ports
+    PORTS_TO_TRY=()
+    if [ ! -z "$RSRCH_VNC_PORT" ]; then
+        PORTS_TO_TRY+=("$RSRCH_VNC_PORT")
     fi
-         echo "⚠️  Warning: $HOST:5902 unreachable. Checking legacy port 5955..."
-         PORT=5955
-         if ! nc -z -w 2 "$HOST" 5955 >/dev/null 2>&1; then
-             echo "❌ Error: Could not connect to VNC on $HOST:5902 or $HOST:5955."
-             echo "Diagnose: 'nc -v -z $HOST 5902' or 'nc -v -z $HOST 5955'"
-             exit 1
-         fi
+    PORTS_TO_TRY+=(5900 5901 5902 5955)
+
+    PORT=""
+    for p in "${PORTS_TO_TRY[@]}"; do
+        echo "📡 Probing VNC connection on $HOST:$p..."
+        if nc -z -w 2 "$HOST" "$p" >/dev/null 2>&1; then
+             PORT="$p"
+             break
+        fi
+    done
+
+    if [ -z "$PORT" ]; then
+         echo "❌ Error: Could not connect to VNC on $HOST on tried ports (${PORTS_TO_TRY[*]})."
+         echo "Diagnose: Try checking if the browser Nomad job is running:"
+         echo "          ssh $HOST 'nomad job status rsrch-browser'"
+         echo "          Or check ports manually: 'nc -v -z $HOST 5900'"
+         exit 1
     fi
 
-    echo "✅ Connected to $HOST:$PORT"
+    echo "✅ Connected to VNC server at $HOST:$PORT"
 
+    # List of common viewers to try
+    VIEWER_CMD=""
     if command -v vncviewer >/dev/null 2>&1; then
-        vncviewer "$HOST":$PORT &
+        VIEWER_CMD="vncviewer"
     elif command -v xtightvncviewer >/dev/null 2>&1; then
-        xtightvncviewer "$HOST":$PORT &
-    else
-        echo "Error: No VNC viewer found. Please connect manually to $HOST:$PORT."
+        VIEWER_CMD="xtightvncviewer"
+    elif command -v remmina >/dev/null 2>&1; then
+        VIEWER_CMD="remmina -c vnc://"
     fi
+
+    if [ -z "$VIEWER_CMD" ]; then
+        echo "Error: No VNC viewer found on your system. Please connect manually to $HOST:$PORT."
+        exit 1
+    fi
+
+    echo "🚀 Launching $VIEWER_CMD $HOST:$PORT..."
+    $VIEWER_CMD "$HOST":$PORT &
+    echo "✅ Viewer launched in background. Happy researching!"
     ;;
 
   *)

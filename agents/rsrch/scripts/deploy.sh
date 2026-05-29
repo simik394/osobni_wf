@@ -1,37 +1,42 @@
 #!/bin/bash
+# --- The Ultimate rsrch Deployment Script ---
+# This script is intended to be run on halvarm (the target server).
+# It automates the local build of Docker images and Nomad job updates.
+
 set -e
 
-# Configuration
-REMOTE_HOST="halvarm"
-BUILD_CTX="/tmp/build-ctx"
-APP_DIR="agents/rsrch"
-IMAGE_NAME="localhost:5001/rsrch:v$(date +%s)"
+REPO_ROOT="/home/ubuntu/Prods/01pwf"
+APP_DIR="${REPO_ROOT}/agents/rsrch"
+REGISTRY="localhost:5001"
+IMAGE_NAME="rsrch"
+NOMAD_JOB="rsrch"
 
-echo "🚀 Starting deployment to $REMOTE_HOST..."
+echo "🚀 [Deploy] Starting deployment from ${APP_DIR}..."
 
-# 1. Prepare remote build context
-echo "📂 Preparing remote build context..."
-ssh $REMOTE_HOST "rm -rf $BUILD_CTX && mkdir -p $BUILD_CTX/agents"
+cd "${REPO_ROOT}"
 
-# 2. Sync files
-echo "🔄 Syncing files..."
-rsync -avz package.json $REMOTE_HOST:$BUILD_CTX/
-rsync -avz --exclude node_modules --exclude data ../shared $REMOTE_HOST:$BUILD_CTX/agents/
-rsync -avz --exclude node_modules --exclude data . $REMOTE_HOST:$BUILD_CTX/agents/rsrch/
+# 1. Update source code (assuming this script is called after a git pull/push)
+# If this is called from a post-receive hook, the code is already updated in the work-tree.
 
-# 3. Build and Push Docker image
-echo "🐳 Building Docker images (using cache)..."
-ssh $REMOTE_HOST "cd $BUILD_CTX && docker build -f agents/rsrch/deploy/Dockerfile.server -t $IMAGE_NAME ."
+# 2. Build Shared Library (since rsrch depends on it)
+echo "📦 [Deploy] Building @agents/shared..."
+cd agents/shared
+npm install --silent
+npm run build
 
-echo "📤 Pushing images to local registry..."
-ssh $REMOTE_HOST "docker push $IMAGE_NAME"
+# 3. Build rsrch Docker Image
+echo "🐳 [Deploy] Building Docker image: ${REGISTRY}/${IMAGE_NAME}:latest..."
+cd "${APP_DIR}"
+# Note: Docker context is 'agents' to allow access to '../shared'
+docker build -t "${REGISTRY}/${IMAGE_NAME}:latest" -f Dockerfile ../
 
-# 4. Deploy Nomad job
-echo "🚀 Running Nomad job..."
-ssh $REMOTE_HOST "sed -i 's|image = .*|image = \"$IMAGE_NAME\"|' $BUILD_CTX/$APP_DIR/deploy/rsrch.nomad && nomad job run $BUILD_CTX/$APP_DIR/deploy/rsrch.nomad"
+# 4. Push to Local Registry
+echo "⬆️ [Deploy] Pushing to local registry..."
+docker push "${REGISTRY}/${IMAGE_NAME}:latest"
 
-# 5. Check status
-echo "📊 Deployment status:"
-ssh $REMOTE_HOST "nomad job status rsrch"
+# 5. Update Nomad Job
+echo "🏗️ [Deploy] Triggering Nomad job update..."
+# We use 'nomad job restart' which is the cleanest way to cycle the containers with the new image
+nomad job restart "${NOMAD_JOB}"
 
-echo "✅ Deployment complete!"
+echo "✅ [Deploy] Finished successfully!"
