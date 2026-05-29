@@ -11,6 +11,8 @@ const configSchema = z.object({
   port: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.API_PORT),
   vncPort: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.VNC_PORT),
   chromiumPort: z.coerce.number().int().positive().default(DEFAULTS.RSRCH.CHROMIUM_PORT),
+  slowMo: z.coerce.boolean().default(false),
+  selectors: z.any().optional(),
   browserWsEndpoint: z.string().optional(),
   browserCdpEndpoint: z.string().optional(),
   remoteDebuggingPort: z.coerce.number().int().positive().optional(),
@@ -61,6 +63,7 @@ const configSchema = z.object({
     enabled: z.coerce.boolean().default(true),
     endpoint: z.string().url().default('http://halvarm.tail288db.ts.net:3000/api/public/otel/v1/traces'),
   }).default({}),
+  hooks: z.any().optional(),
 });
 
 /**
@@ -70,13 +73,25 @@ const configSchema = z.object({
  * 3. Environment Variables (Priority)
  */
 function loadConfig() {
-  const configPath = path.join(process.cwd(), 'config.json');
+  const globalConfigPath = path.join(os.homedir(), '.config', 'rsrch', 'config.json');
+  const localConfigPath = path.join(process.cwd(), 'config.json');
   let localConfig: any = {};
-  if (fs.existsSync(configPath)) {
+
+  // 1. Load global config
+  if (fs.existsSync(globalConfigPath)) {
     try {
-      localConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      localConfig = { ...localConfig, ...JSON.parse(fs.readFileSync(globalConfigPath, 'utf-8')) };
     } catch (e) {
-      console.warn('Failed to parse config.json', e);
+      console.warn('Failed to parse global config.json', e);
+    }
+  }
+
+  // 2. Load local config (takes precedence over global config)
+  if (fs.existsSync(localConfigPath)) {
+    try {
+      localConfig = { ...localConfig, ...JSON.parse(fs.readFileSync(localConfigPath, 'utf-8')) };
+    } catch (e) {
+      console.warn('Failed to parse local config.json', e);
     }
   }
 
@@ -138,8 +153,62 @@ function loadConfig() {
     telemetry: {
       enabled: process.env.TELEMETRY_ENABLED !== undefined ? process.env.TELEMETRY_ENABLED === 'true' : localConfig.telemetry?.enabled,
       endpoint: process.env.TELEMETRY_ENDPOINT || localConfig.telemetry?.endpoint,
-    }
+    },
+    slowMo: process.env.SLOW_MO !== undefined ? process.env.SLOW_MO === 'true' : localConfig.slowMo,
+    selectors: localConfig.selectors,
   };
+
+  // 3. Evaluate Lua config if it exists
+  const globalLuaPath = path.join(os.homedir(), '.config', 'rsrch', 'status_layout.lua');
+  const localLuaPath = path.join(process.cwd(), 'status_layout.lua');
+  
+  let luaPathToLoad: string | null = null;
+  if (fs.existsSync(localLuaPath)) {
+    luaPathToLoad = localLuaPath;
+  } else if (fs.existsSync(globalLuaPath)) {
+    luaPathToLoad = globalLuaPath;
+  }
+
+  if (luaPathToLoad) {
+    try {
+      const fengari = require('fengari');
+      const interop = require('fengari-interop');
+      const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
+      
+      const L = lauxlib.luaL_newstate();
+      lualib.luaL_openlibs(L);
+      lauxlib.luaL_requiref(L, to_luastring("js"), interop.luaopen_js, 1);
+      lua.lua_pop(L, 1);
+
+      (merged as any).hooks = {};
+
+      interop.push(L, merged);
+      lua.lua_setglobal(L, to_luastring('RSRCH'));
+
+      const script = fs.readFileSync(luaPathToLoad, 'utf-8');
+      
+      const wrappedScript = `
+        local config = RSRCH
+        local userScript = function()
+          ${script}
+        end
+        local overrides = userScript()
+        if type(overrides) == "table" then
+          for k, v in pairs(overrides) do
+            config[k] = v
+          end
+        end
+        return config
+      `;
+
+      const loadStatus = lauxlib.luaL_dostring(L, to_luastring(wrappedScript));
+      if (loadStatus !== lua.LUA_OK) {
+        console.error("Failed to evaluate Lua config:", to_jsstring(lua.lua_tostring(L, -1)));
+      }
+    } catch (e) {
+      console.warn("Error during Lua config initialization:", e);
+    }
+  }
 
   return configSchema.parse(merged);
 }
