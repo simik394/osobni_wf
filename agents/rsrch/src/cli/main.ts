@@ -13,6 +13,8 @@ import { aimodeCommand } from '../commands/aimode';
 import { keepCommand } from '../commands/keep';
 import { gdocsCommand } from '../commands/gdocs';
 import { unifiedCommand, watchCommand, notifyCommand, vncCommand } from '../commands/misc';
+import { statusCommand } from '../commands/status';
+import { verifyCommand } from '../commands/verify';
 import { initTelemetry, shutdownTelemetry } from '../core/telemetry';
 
 const program = new Command();
@@ -43,6 +45,8 @@ program.addCommand(unifiedCommand);
 program.addCommand(watchCommand);
 program.addCommand(notifyCommand);
 program.addCommand(vncCommand);
+program.addCommand(statusCommand);
+program.addCommand(verifyCommand);
 
 // Command Groups
 program.addCommand(profileCommand);
